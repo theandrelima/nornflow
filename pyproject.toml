@@ -1,5 +1,5 @@
 [project]
-name = "norsible"
+name = "nornflow"
 version = "0.0.1"
 author = "André Lima"
 description = "For the moment, just a tiny CLI wrapper around Nornir"
