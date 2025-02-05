@@ -1,0 +1,7 @@
+# Path for Nornir's config file
+nornir_config_file: "nornir_configs/config.yaml"
+
+# List of paths to directories containing the Nornir tasks to be included in NornFlow's task registry
+tasks:
+  - "tasks"
+
