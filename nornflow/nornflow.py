@@ -117,16 +117,13 @@ class NornFlow:
 
     def run(self) -> bool:
         """
-        Run NornFlow.
-
-        Returns:
-            bool: True if successful, False otherwise.
+        Runs the NornFlow job.
         """
         if self.config.parallel_exec:
             self._run_tasks_individually()
         else:
             self._run_grouped_tasks()
-        return True
+
     
     def _run_tasks_individually(self) -> None:
         """
@@ -138,20 +135,32 @@ class NornFlow:
             result = self.nornir.run(task=task_func)
             print_result(result)
     
-
     def _run_grouped_tasks(self) -> None:
-        print("Running tasks grouped")
+        """
+        Run tasks grouped together.
+    
+        This method runs the tasks grouped by calling the `_parent_task` method
+        and then prints the aggregated result.
+        """
+        print("Running grouped tasks")
         result = self.nornir.run(task=self._parent_task)
         print_result(result)
-        
-
+    
     def _parent_task(self, task: Task) -> AggregatedResult:
+        """
+        Parent task that runs all tasks in the tasks catalog.
+    
+        Args:
+            task (Task): The Nornir task object.
+    
+        Returns:
+            AggregatedResult: The aggregated result of all tasks.
+        """
         aggregated_result = AggregatedResult(task.name)
         for task_func in self.tasks_catalog.values():
             result = task.run(task=task_func)
             aggregated_result[task_func.__name__] = result
         return aggregated_result
-
 
 # for testing purposes only
 if __name__ == "__main__":
