@@ -181,3 +181,6 @@ nornir_configs/
 
 # local tasks dir
 tasks/
+
+# ruff
+.ruff*/
