@@ -12,10 +12,10 @@ from nornflow.settings import NornFlowSettings
 
 class NornFlow:
     def __init__(self, nornflow_settings: NornFlowSettings = None, **kwargs: Any):
-        self.config = nornflow_settings or NornFlowSettings(**kwargs)
+        self.settings = nornflow_settings or NornFlowSettings(**kwargs)
         self.nornir = InitNornir(
-            config_file=self.config.nornir_config_file,
-            dry_run=self.config.dry_run,
+            config_file=self.settings.nornir_config_file,
+            dry_run=self.settings.dry_run,
             **kwargs,
         )
         self._tasks_catalog: dict[str, Callable] = {}
@@ -27,7 +27,7 @@ class NornFlow:
         the NornFlow configuration.
         """
         self._tasks_catalog = {}
-        for task_dir in self.config.tasks:
+        for task_dir in self.settings.tasks:
             self._load_tasks_from_directory(task_dir)
 
     def _load_tasks_from_directory(self, task_dir: str) -> None:
@@ -126,7 +126,7 @@ class NornFlow:
         """
         Runs the NornFlow job.
         """
-        if self.config.parallel_exec:
+        if self.settings.parallel_exec:
             self._run_tasks_individually()
         else:
             self._run_grouped_tasks()

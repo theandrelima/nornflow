@@ -52,7 +52,7 @@ class NornFlowSettings:
 
     def _load_config(self) -> None:
         config_data = read_yaml_file(self.config_file)
-        self.config = defaultdict(lambda: None, config_data)
+        self.loaded_settings = defaultdict(lambda: None, config_data)
 
     def _check_mandatory_settings(self) -> None:
         """
@@ -62,9 +62,9 @@ class NornFlowSettings:
             ValueError: If a mandatory setting is missing or empty.
         """
         for setting in self.MANDATORY_SETTINGS:
-            if setting not in self.config:
+            if setting not in self.loaded_settings:
                 raise ValueError(f"Missing mandatory setting: {setting}.")
-            if not self.config[setting]:
+            if not self.loaded_settings[setting]:
                 raise ValueError(f"Setting {setting} can't be empty.")
 
     def _set_optional_settings(self, **kwargs: Any) -> None:
@@ -80,7 +80,7 @@ class NornFlowSettings:
 
     @property
     def nornir_configs(self) -> dict[str, Any]:
-        return read_yaml_file(self.config["nornir_config_file"])
+        return read_yaml_file(self.loaded_settings["nornir_config_file"])
 
     def __getattr__(self, name: str) -> Any:
-        return self.config[name]
+        return self.loaded_settings[name]
