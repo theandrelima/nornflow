@@ -3,6 +3,7 @@ from collections import defaultdict
 from typing import Any
 
 from nornflow.utils import read_yaml_file
+from nornflow.exceptions import MissingMandatorySettingException, EmptyMandatorySettingException
 
 
 class NornFlowSettings:
@@ -63,9 +64,9 @@ class NornFlowSettings:
         """
         for setting in self.MANDATORY_SETTINGS:
             if setting not in self.loaded_settings:
-                raise ValueError(f"Missing mandatory setting: {setting}.")
+                raise MissingMandatorySettingException(setting)
             if not self.loaded_settings[setting]:
-                raise ValueError(f"Setting {setting} can't be empty.")
+                raise EmptyMandatorySettingException(setting)
 
     def _set_optional_settings(self, **kwargs: Any) -> None:
         """
