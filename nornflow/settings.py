@@ -1,18 +1,19 @@
 import os
-import yaml
 from collections import defaultdict
 from typing import Any
 
-from nornflow.utils import read_yaml_file
+import yaml
+
 from nornflow.exceptions import (
-    NornFlowException,
-    MissingMandatorySettingException,
-    EmptyMandatorySettingException,
-    SettingsFileNotFoundException,
-    SettingsFilePermissionException,
-    SettingsFileParsingException,
-    SettingsDataTypeException,
+    EmptyMandatorySettingError,
+    MissingMandatorySettingError,
+    NornFlowError,
+    SettingsDataTypeError,
+    SettingsFileNotFoundError,
+    SettingsFileParsingError,
+    SettingsFilePermissionError,
 )
+from nornflow.utils import read_yaml_file
 
 
 class NornFlowSettings:
@@ -53,31 +54,42 @@ class NornFlowSettings:
     MANDATORY_SETTINGS = ("nornir_config_file", "tasks")
     OPTIONAL_SETTINGS = ("dry_run", "parallel_execution")
 
-    def __init__(self, config_file: str = "nornflow.yaml", **kwargs):
+    def __init__(self, settings_file: str = "nornflow.yaml", **kwargs):
         # Use environment variable to override config file path if set
-        self.config_file = os.getenv("NORNFLOW_CONFIG_FILE", config_file)
-        self._load_config()
+        self.settings_file = os.getenv("NORNFLOW_CONFIG_FILE", settings_file)
+        self._load_settings()
         self._check_mandatory_settings()
         self._set_optional_settings(**kwargs)
 
-    def _load_config(self) -> None:
+    def _load_settings(self) -> None:
+        """
+        This method reads the configuration file specified by `self.settings_file`, parses its
+        contents, and stores them in `self.loaded_settings`. If any errors occur during this
+        process, appropriate custom exceptions are raised.
+
+        Raises:
+            SettingsFileNotFoundException: If the configuration file does not exist.
+            SettingsFilePermissionException: If there is a permission error accessing the configuration file.
+            SettingsFileParsingException: If there is an error parsing the YAML file.
+            SettingsDataTypeException: If the configuration data is not a dictionary.
+        """
         try:
-            config_data = read_yaml_file(self.config_file)
-            
+            config_data = read_yaml_file(self.settings_file)
+
             if not isinstance(config_data, dict):
-                raise SettingsDataTypeException()
-            
+                raise SettingsDataTypeError()
+
             self.loaded_settings = defaultdict(lambda: None, config_data)
-        except FileNotFoundError:
-            raise SettingsFileNotFoundException(self.config_file)
-        except PermissionError:
-            raise SettingsFilePermissionException(self.config_file)
+        except FileNotFoundError as e:
+            raise SettingsFileNotFoundError(self.settings_file) from e
+        except PermissionError as e:
+            raise SettingsFilePermissionError(self.settings_file) from e
         except yaml.YAMLError as e:
-            raise SettingsFileParsingException(self.config_file, str(e))
+            raise SettingsFileParsingError(self.settings_file, str(e)) from e
         except TypeError as e:
-            raise SettingsDataTypeException()
+            raise SettingsDataTypeError() from e
         except Exception as e:
-            raise NornFlowException(f"An unexpected error occurred: {e}")
+            raise NornFlowError(f"An unexpected error occurred: {e}") from e
 
     def _check_mandatory_settings(self) -> None:
         """
@@ -88,9 +100,9 @@ class NornFlowSettings:
         """
         for setting in self.MANDATORY_SETTINGS:
             if setting not in self.loaded_settings:
-                raise MissingMandatorySettingException(setting)
+                raise MissingMandatorySettingError(setting)
             if not self.loaded_settings[setting]:
-                raise EmptyMandatorySettingException(setting)
+                raise EmptyMandatorySettingError(setting)
 
     def _set_optional_settings(self, **kwargs: Any) -> None:
         """

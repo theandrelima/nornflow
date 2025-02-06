@@ -1,13 +1,14 @@
-import importlib.util
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from nornir import InitNornir
-from nornir.core.task import AggregatedResult, Result, Task
+from nornir.core.task import AggregatedResult, Task
 from nornir_utils.plugins.functions import print_result
 
+from nornflow.exceptions import TaskLoadingError, TasksCatalogModificationError
 from nornflow.settings import NornFlowSettings
+from nornflow.utils import import_module, is_nornir_task
 
 
 class NornFlow:
@@ -48,27 +49,17 @@ class NornFlow:
 
         Args:
             py_file (Path): Path to the Python file.
-        """
-        module_name = py_file.stem
-        module_path = str(py_file)
-        module = self._import_module(module_name, module_path)
-        self._register_tasks_from_module(module)
 
-    def _import_module(self, module_name: str, module_path: str) -> Any:
+        Raises:
+            TaskLoadingException: If there is an error loading tasks from the file.
         """
-        Import a module from a given file path.
-
-        Args:
-            module_name (str): Name of the module.
-            module_path (str): Path to the module file.
-
-        Returns:
-            Any: Imported module.
-        """
-        spec = importlib.util.spec_from_file_location(module_name, module_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
+        try:
+            module_name = py_file.stem
+            module_path = str(py_file)
+            module = import_module(module_name, module_path)
+            self._register_tasks_from_module(module)
+        except Exception as e:
+            raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e
 
     def _register_tasks_from_module(self, module: Any) -> None:
         """
@@ -79,25 +70,8 @@ class NornFlow:
         """
         for attr_name in dir(module):
             attr = getattr(module, attr_name)
-            if self._is_nornir_task(attr):
+            if is_nornir_task(attr):
                 self._tasks_catalog[attr_name] = attr
-
-    def _is_nornir_task(self, attr: Any) -> bool:
-        """
-        Check if an attribute is a Nornir task.
-
-        Args:
-            attr (Any): Attribute to check.
-
-        Returns:
-            bool: True if the attribute is a Nornir task, False otherwise.
-        """
-        if callable(attr) and hasattr(attr, "__annotations__"):
-            annotations = attr.__annotations__
-            has_task_param = any(param == Task for param in annotations.values())
-            returns_result = annotations.get("return") == Result
-            return has_task_param and returns_result
-        return False
 
     @property
     def tasks_catalog(self) -> dict[str, Any]:
@@ -120,7 +94,7 @@ class NornFlow:
         Raises:
             AttributeError: Always raised to prevent direct setting of the tasks catalog.
         """
-        raise AttributeError("Cannot set tasks catalog directly.")
+        raise TasksCatalogModificationError("Cannot set tasks catalog directly.")
 
     def run(self) -> bool:
         """

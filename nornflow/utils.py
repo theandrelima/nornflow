@@ -1,8 +1,12 @@
+import importlib.util
 from pathlib import Path
+from typing import Any
 
 import yaml
+from nornir.core.task import Result, Task
 
 from nornflow.constants import FALSY, TRUTHY
+from nornflow.exceptions import ModuleImportError
 
 
 def read_yaml_file(file_path: str) -> dict:
@@ -51,3 +55,45 @@ def is_falsy(value: str | None) -> bool:
         return True
 
     return value.lower() in FALSY
+
+
+def import_module(module_name: str, module_path: str) -> Any:
+    """
+    Import a module from a given file path.
+
+    Args:
+        module_name (str): Name of the module.
+        module_path (str): Path to the module file.
+
+    Returns:
+        Any: Imported module.
+
+    Raises:
+        ModuleImportException: If there is an error importing the module.
+    """
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except Exception as e:
+        raise ModuleImportError(module_name, module_path, str(e)) from e
+
+    return module
+
+
+def is_nornir_task(attr: Any) -> bool:
+    """
+    Check if an attribute is a Nornir task.
+
+    Args:
+        attr (Any): Attribute to check.
+
+    Returns:
+        bool: True if the attribute is a Nornir task, False otherwise.
+    """
+    if callable(attr) and hasattr(attr, "__annotations__"):
+        annotations = attr.__annotations__
+        has_task_param = any(param == Task for param in annotations.values())
+        returns_result = annotations.get("return") == Result
+        return has_task_param and returns_result
+    return False
