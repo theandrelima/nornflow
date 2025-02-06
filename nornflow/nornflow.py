@@ -1,15 +1,16 @@
 import importlib.util
 from nornir import InitNornir
 from pathlib import Path
-from typing import Any, Dict
-from nornir.core.task import Task, Result
+from typing import Any, Dict, Callable
+from nornir.core.task import Task, Result, AggregatedResult
+from nornir_utils.plugins.functions import print_result
 from settings import NornFlowSettings
 
 class NornFlow:
     def __init__(self, nornflow_settings: NornFlowSettings = None, **kwargs: Any):
         self.config = nornflow_settings or NornFlowSettings(**kwargs)
         self.nornir = InitNornir(config_file=self.config.nornir_config_file, dry_run=self.config.dry_run, **kwargs)
-        self._tasks_catalog: Dict[str, Any] = {}
+        self._tasks_catalog: Dict[str, Callable] = {}
         self._load_tasks()
 
     def _load_tasks(self) -> None:
@@ -99,6 +100,19 @@ class NornFlow:
             Dict[str, Any]: Dictionary of task names and their corresponding functions.
         """
         return self._tasks_catalog
+    
+    @tasks_catalog.setter
+    def tasks_catalog(self, value: Dict[str, Any]) -> None:
+        """
+        Prevent setting the tasks catalog directly.
+    
+        Args:
+            value (Dict[str, Any]): Dictionary of task names and their corresponding functions.
+    
+        Raises:
+            AttributeError: Always raised to prevent direct setting of the tasks catalog.
+        """
+        raise AttributeError("Cannot set tasks catalog directly.")
 
 
     def run(self) -> bool:
@@ -108,4 +122,38 @@ class NornFlow:
         Returns:
             bool: True if successful, False otherwise.
         """
-        pass
+        if self.config.parallel_exec:
+            self._run_tasks_individually()
+        else:
+            self._run_grouped_tasks()
+        return True
+    
+    def _run_tasks_individually(self) -> None:
+        """
+        Run all tasks individually.
+        """
+        print("Running tasks individually")
+        for task_name, task_func in self.tasks_catalog.items():
+            print(f"Running task: {task_name}")
+            result = self.nornir.run(task=task_func)
+            print_result(result)
+    
+
+    def _run_grouped_tasks(self) -> None:
+        print("Running tasks grouped")
+        result = self.nornir.run(task=self._parent_task)
+        print_result(result)
+        
+
+    def _parent_task(self, task: Task) -> AggregatedResult:
+        aggregated_result = AggregatedResult(task.name)
+        for task_func in self.tasks_catalog.values():
+            result = task.run(task=task_func)
+            aggregated_result[task_func.__name__] = result
+        return aggregated_result
+
+
+# for testing purposes only
+if __name__ == "__main__":
+    nornflow = NornFlow()
+    nornflow.run()

@@ -1,6 +1,12 @@
 # Path for Nornir's config file
 nornir_config_file: "nornir_configs/config.yaml"
 
+# If set to True, NornFlow will invoke Nornir in dry-run mode
+dry_run: False
+
+# If set to True, NornFlow will execute Nornir tasks individually in parallel, instead of as grouped tasks within a single parent Nornir Task.
+parallel_exec: True
+
 # List of paths to directories containing the Nornir tasks to be included in NornFlow's task registry
 tasks:
   - "tasks"
