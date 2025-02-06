@@ -1,9 +1,18 @@
 import os
+import yaml
 from collections import defaultdict
 from typing import Any
 
 from nornflow.utils import read_yaml_file
-from nornflow.exceptions import MissingMandatorySettingException, EmptyMandatorySettingException
+from nornflow.exceptions import (
+    NornFlowException,
+    MissingMandatorySettingException,
+    EmptyMandatorySettingException,
+    SettingsFileNotFoundException,
+    SettingsFilePermissionException,
+    SettingsFileParsingException,
+    SettingsDataTypeException,
+)
 
 
 class NornFlowSettings:
@@ -52,8 +61,23 @@ class NornFlowSettings:
         self._set_optional_settings(**kwargs)
 
     def _load_config(self) -> None:
-        config_data = read_yaml_file(self.config_file)
-        self.loaded_settings = defaultdict(lambda: None, config_data)
+        try:
+            config_data = read_yaml_file(self.config_file)
+            
+            if not isinstance(config_data, dict):
+                raise SettingsDataTypeException()
+            
+            self.loaded_settings = defaultdict(lambda: None, config_data)
+        except FileNotFoundError:
+            raise SettingsFileNotFoundException(self.config_file)
+        except PermissionError:
+            raise SettingsFilePermissionException(self.config_file)
+        except yaml.YAMLError as e:
+            raise SettingsFileParsingException(self.config_file, str(e))
+        except TypeError as e:
+            raise SettingsDataTypeException()
+        except Exception as e:
+            raise NornFlowException(f"An unexpected error occurred: {e}")
 
     def _check_mandatory_settings(self) -> None:
         """
