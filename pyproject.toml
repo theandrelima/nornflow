@@ -12,3 +12,60 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "pyyaml>=6.0.2",
 ]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "isort>=6.0.0",
+    "mypy>=1.15.0",
+    "ruff>=0.9.4",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "A",
+    "ANN003",
+    "ANN204",
+    "ANN205",
+    "ANN401",
+    "ARG",
+    "BLE001",
+    "C901",
+    "COM",
+    "D",
+    "EM",
+    "ERA001",
+    "FBT001",
+    "FBT003",
+    "G004",
+    "PLW2901",
+    "RET504",
+    "RSE",
+    "SIM102",
+    "TCH",
+    "TRY003",
+    "TRY400",
+    "PLR0915",
+    "PLE0604"
+]
+extend-select = ["I"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint.isort]
+case-sensitive = false
+order-by-type = false
+combine-as-imports = true
+no-lines-before = ["local-folder"]
+
+[tool.black]
+line-length = 110
+
+[tool.isort]
+profile = "black"
