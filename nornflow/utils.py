@@ -1,9 +1,11 @@
+from pathlib import Path
+
 import yaml
-from typing import Dict, Union
-from constants import TRUTHY, FALSY
+
+from nornflow.constants import FALSY, TRUTHY
 
 
-def read_yaml_file(file_path: str) -> Dict:
+def read_yaml_file(file_path: str) -> dict:
     """
     Reads a YAML file and returns its contents as a dictionary.
 
@@ -14,11 +16,12 @@ def read_yaml_file(file_path: str) -> Dict:
         Dict: Dictionary containing the YAML file contents.
     """
     print(f"Reading YAML file: {file_path}")
-    with open(file_path, 'r') as file:
+    path = Path(file_path)
+    with path.open() as file:
         return yaml.safe_load(file)
-    
-    
-def is_truthy(value: Union[str, None]) -> bool:
+
+
+def is_truthy(value: str | None) -> bool:
     """
     Checks if a value is truthy.
 
@@ -30,10 +33,11 @@ def is_truthy(value: Union[str, None]) -> bool:
     """
     if not value:
         return False
-    
+
     return value.lower() in TRUTHY
 
-def is_falsy(value: Union[str, None]) -> bool:
+
+def is_falsy(value: str | None) -> bool:
     """
     Checks if a value is falsy.
 
@@ -45,5 +49,5 @@ def is_falsy(value: Union[str, None]) -> bool:
     """
     if not value:
         return True
-    
+
     return value.lower() in FALSY

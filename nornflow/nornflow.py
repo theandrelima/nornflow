@@ -1,21 +1,29 @@
 import importlib.util
-from nornir import InitNornir
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Dict, Callable
-from nornir.core.task import Task, Result, AggregatedResult
+from typing import Any
+
+from nornir import InitNornir
+from nornir.core.task import AggregatedResult, Result, Task
 from nornir_utils.plugins.functions import print_result
-from settings import NornFlowSettings
+
+from nornflow.settings import NornFlowSettings
+
 
 class NornFlow:
     def __init__(self, nornflow_settings: NornFlowSettings = None, **kwargs: Any):
         self.config = nornflow_settings or NornFlowSettings(**kwargs)
-        self.nornir = InitNornir(config_file=self.config.nornir_config_file, dry_run=self.config.dry_run, **kwargs)
-        self._tasks_catalog: Dict[str, Callable] = {}
+        self.nornir = InitNornir(
+            config_file=self.config.nornir_config_file,
+            dry_run=self.config.dry_run,
+            **kwargs,
+        )
+        self._tasks_catalog: dict[str, Callable] = {}
         self._load_tasks()
 
     def _load_tasks(self) -> None:
         """
-        Entrypoint method to find all Nornir tasks from directories specified in 
+        Entrypoint method to find all Nornir tasks from directories specified in
         the NornFlow configuration.
         """
         self._tasks_catalog = {}
@@ -24,7 +32,7 @@ class NornFlow:
 
     def _load_tasks_from_directory(self, task_dir: str) -> None:
         """
-        Start the recursive loading process for all Nornir tasks found in 
+        Start the recursive loading process for all Nornir tasks found in
         all python modules from a specific directory.
 
         Args:
@@ -87,12 +95,12 @@ class NornFlow:
         if callable(attr) and hasattr(attr, "__annotations__"):
             annotations = attr.__annotations__
             has_task_param = any(param == Task for param in annotations.values())
-            returns_result = annotations.get('return') == Result
+            returns_result = annotations.get("return") == Result
             return has_task_param and returns_result
         return False
 
     @property
-    def tasks_catalog(self) -> Dict[str, Any]:
+    def tasks_catalog(self) -> dict[str, Any]:
         """
         Get the tasks catalog.
 
@@ -100,20 +108,19 @@ class NornFlow:
             Dict[str, Any]: Dictionary of task names and their corresponding functions.
         """
         return self._tasks_catalog
-    
+
     @tasks_catalog.setter
-    def tasks_catalog(self, value: Dict[str, Any]) -> None:
+    def tasks_catalog(self, value: dict[str, Any]) -> None:
         """
         Prevent setting the tasks catalog directly.
-    
+
         Args:
             value (Dict[str, Any]): Dictionary of task names and their corresponding functions.
-    
+
         Raises:
             AttributeError: Always raised to prevent direct setting of the tasks catalog.
         """
         raise AttributeError("Cannot set tasks catalog directly.")
-
 
     def run(self) -> bool:
         """
@@ -124,7 +131,6 @@ class NornFlow:
         else:
             self._run_grouped_tasks()
 
-    
     def _run_tasks_individually(self) -> None:
         """
         Run all tasks individually.
@@ -134,25 +140,25 @@ class NornFlow:
             print(f"Running task: {task_name}")
             result = self.nornir.run(task=task_func)
             print_result(result)
-    
+
     def _run_grouped_tasks(self) -> None:
         """
         Run tasks grouped together.
-    
+
         This method runs the tasks grouped by calling the `_parent_task` method
         and then prints the aggregated result.
         """
         print("Running grouped tasks")
         result = self.nornir.run(task=self._parent_task)
         print_result(result)
-    
+
     def _parent_task(self, task: Task) -> AggregatedResult:
         """
         Parent task that runs all tasks in the tasks catalog.
-    
+
         Args:
             task (Task): The Nornir task object.
-    
+
         Returns:
             AggregatedResult: The aggregated result of all tasks.
         """
@@ -161,6 +167,7 @@ class NornFlow:
             result = task.run(task=task_func)
             aggregated_result[task_func.__name__] = result
         return aggregated_result
+
 
 # for testing purposes only
 if __name__ == "__main__":
