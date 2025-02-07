@@ -51,11 +51,54 @@ class SettingsDataTypeError(NornFlowError):
         super().__init__("The configuration file must contain a dictionary.")
 
 
+class SettingsModificationError(Exception):
+    """Exception raised when attempting to modify the settings directly."""
+
+    def __init__(self):
+        super().__init__(
+            "Cannot set settings directly. Settings must be either passed as a NornFlowSettings object or as keyword arguments to the NornFlow initializer."
+        )
+
+
+class NornirConfigsModificationError(Exception):
+    """Exception raised when attempting to modify the Nornir configs directly."""
+
+    def __init__(self):
+        super().__init__(
+            "Cannot set Nornir configs directly. Nornir configs must be set through it's own separate .yaml file and informed to NornFlow using the 'nornir_config_file' setting."
+        )
+
+
 class TaskLoadingError(NornFlowError):
     """Exception raised when there is an error loading tasks."""
 
     def __init__(self, message: str):
         super().__init__(message)
+
+
+class TaskDoesNotExistError(NornFlowError):
+    """Exception raised when a task does not exist."""
+
+    def __init__(self, task_names: str | list):
+
+        if isinstance(task_names, list):
+            task_names = ", ".join(task_names)
+
+        super().__init__(f"Some informed tasks are not present in the Tasks Catalog: {task_names}")
+
+
+class NoTasksToRunError(NornFlowError):
+    """Exception raised when there are no tasks to run."""
+
+    def __init__(self):
+        super().__init("No tasks to run informed.")
+
+
+class EmptyTaskCatalogError(NornFlowError):
+    """Exception raised when no tasks are found."""
+
+    def __init__(self):
+        super().__init__("No tasks were found. The Tasks Catalog can't be empty.")
 
 
 class ModuleImportError(NornFlowError):

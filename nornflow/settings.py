@@ -4,6 +4,7 @@ from typing import Any
 
 import yaml
 
+from nornflow.constants import NONRFLOW_MANDATORY_SETTINGS, NONRFLOW_OPTIONAL_SETTINGS
 from nornflow.exceptions import (
     EmptyMandatorySettingError,
     MissingMandatorySettingError,
@@ -31,28 +32,22 @@ class NornFlowSettings:
         1 - NornFlow settings and Nornir settings are kept separate, hence the need for a
            `nornir_config_file` setting in the NornFlow YAML settings file (see '2' below).
 
-        2 - a minimal set of REQUIRED settings:
-            - `nornir_config_file`
-            - `tasks`
+        2 - a minimal set of REQUIRED settings.
 
         3 - a minimal set of OPTIONAL settings that can also be passed explicitly to the Class
             initializer as keyword arguments.
-            - `dry_run`: defaults to False
-            - `parallel_execution` defaults to True
 
         4 - there's no fixed set of "acceptable settings". Users can add more settings if
-            they want to extend NornFlow to support custom use-cases.
+            they want to extend NornFlow to support custom use-cases, but currently this is
+            only supported through the YAML file, not through keyword arguments.
 
         5 - settings can be accessed as attributes of a NornFlowSettings object:
-            NornFlowSettings().tasks # returns the 'tasks' setting
+            NornFlowSettings().local_tasks_dirs # returns the 'local_tasks_dirs' setting
 
-        6 - trying to access settings that were not informe in the YAMLS nor passed as a keyword
-            args will simply return None:
-            NornFlowSettings().non_existing_setting  # returns None
+        6 - trying to access non-supported settings also not informed in the YAML file
+            will simply return None:
+            NornFlowSettings().non_existing_setting_not_informed_in_yaml_either  # returns None
     """
-
-    MANDATORY_SETTINGS = ("nornir_config_file", "tasks")
-    OPTIONAL_SETTINGS = ("dry_run", "parallel_execution")
 
     def __init__(self, settings_file: str = "nornflow.yaml", **kwargs):
         # Use environment variable to override config file path if set
@@ -98,7 +93,7 @@ class NornFlowSettings:
         Raises:
             ValueError: If a mandatory setting is missing or empty.
         """
-        for setting in self.MANDATORY_SETTINGS:
+        for setting in NONRFLOW_MANDATORY_SETTINGS:
             if setting not in self.loaded_settings:
                 raise MissingMandatorySettingError(setting)
             if not self.loaded_settings[setting]:
@@ -109,11 +104,18 @@ class NornFlowSettings:
         Set optional settings from kwargs or default to existing attributes.
         This enforces preference for optional settings passed as keyword arguments.
 
+        The preference algorithm is as follows:
+        1. Use the value passed explicitly in kwargs.
+        2. If not in kwargs, use the value read from the YAML file.
+        3. If not in the YAML file, use the default value from NONRFLOW_OPTIONAL_SETTINGS.
+
         Args:
             **kwargs (Any): Keyword arguments containing optional settings.
         """
-        for setting in self.OPTIONAL_SETTINGS:
-            setattr(self, setting, kwargs.get(setting, getattr(self, setting)))
+        for setting, default_value in NONRFLOW_OPTIONAL_SETTINGS.items():
+            self.loaded_settings[setting] = kwargs.get(
+                setting, self.loaded_settings.get(setting, default_value)
+            )
 
     @property
     def nornir_configs(self) -> dict[str, Any]:
@@ -121,3 +123,10 @@ class NornFlowSettings:
 
     def __getattr__(self, name: str) -> Any:
         return self.loaded_settings[name]
+
+    def __str__(self) -> str:
+        """
+        Return a string representation of the NornFlowSettings instance,
+        excluding the 'loaded_settings' attribute.
+        """
+        return str(dict(self.loaded_settings))

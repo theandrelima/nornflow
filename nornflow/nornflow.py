@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -6,32 +5,112 @@ from nornir import InitNornir
 from nornir.core.task import AggregatedResult, Task
 from nornir_utils.plugins.functions import print_result
 
-from nornflow.exceptions import TaskLoadingError, TasksCatalogModificationError
+from nornflow.exceptions import (
+    EmptyTaskCatalogError,
+    NornirConfigsModificationError,
+    NoTasksToRunError,
+    SettingsModificationError,
+    TaskDoesNotExistError,
+    TaskLoadingError,
+    TasksCatalogModificationError,
+)
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import import_module, is_nornir_task
 
 
 class NornFlow:
-    def __init__(self, nornflow_settings: NornFlowSettings = None, **kwargs: Any):
-        self.settings = nornflow_settings or NornFlowSettings(**kwargs)
+    def __init__(
+        self, nornflow_settings: NornFlowSettings = None, tasks_to_run: list[str] = None, **kwargs: Any
+    ):
+        self._settings = nornflow_settings or NornFlowSettings(**kwargs)
+        self._nornir_configs = self.settings.nornir_configs
+        self.tasks_to_run = tasks_to_run
+        self._load_tasks_catalog()
+
         self.nornir = InitNornir(
             config_file=self.settings.nornir_config_file,
             dry_run=self.settings.dry_run,
             **kwargs,
         )
-        self._tasks_catalog: dict[str, Callable] = {}
-        self._load_tasks()
 
-    def _load_tasks(self) -> None:
+    @property
+    def nornir_configs(self) -> dict[str, Any]:
+        return self._nornir_configs
+
+    @nornir_configs.setter
+    def nornir_configs(self, value: Any) -> None:
+        raise NornirConfigsModificationError()
+
+    @property
+    def settings(self) -> str:
         """
-        Entrypoint method to find all Nornir tasks from directories specified in
-        the NornFlow configuration.
+        Get the NornFlow settings.
+
+        Returns:
+            NornFlowSettings: The NornFlow settings.
+        """
+        return self._settings
+
+    @settings.setter
+    def settings(self, value: Any) -> None:
+        """
+        Prevent setting the settings directly. Settings must be either passed as a
+        NornFlowSettings object or as keyword arguments to the NornFlow initializer.
+
+        Args:
+            value (Any): Attempted value to set.
+
+        Raises:
+            SettingsModificationError: Always raised to prevent direct setting of the settings.
+        """
+        raise SettingsModificationError()
+
+    @property
+    def tasks_catalog(self) -> dict[str, Any]:
+        """
+        Get the tasks catalog.
+
+        Returns:
+            Dict[str, Any]: Dictionary of task names and their corresponding functions.
+        """
+        return self._tasks_catalog
+
+    @tasks_catalog.setter
+    def tasks_catalog(self, value: dict[str, Any]) -> None:
+        """
+        Prevent setting the tasks catalog directly.
+
+        Args:
+            value (Dict[str, Any]): Dictionary of task names and their corresponding functions.
+
+        Raises:
+            AttributeError: Always raised to prevent direct setting of the tasks catalog.
+        """
+        raise TasksCatalogModificationError("Cannot set tasks catalog directly.")
+
+    @property
+    def filtered_tasks_catalog(self) -> dict[str, Any]:
+        """
+        Get the tasks catalog filtered by the tasks to run.
+
+        Returns:
+            Dict[str, Any]: Dictionary of task names and their corresponding functions.
+        """
+        return {k: v for k, v in self.tasks_catalog.items() if k in self.tasks_to_run}
+
+    def _load_tasks_catalog(self) -> None:
+        """
+        Entrypoint method that will put in motion the logic to discover and load
+        all Nornir tasks from directories specified in the NornFlow configuration.
         """
         self._tasks_catalog = {}
-        for task_dir in self.settings.tasks:
-            self._load_tasks_from_directory(task_dir)
+        for task_dir in self.settings.local_tasks_dirs:
+            self._discover_tasks_in_directory(task_dir)
 
-    def _load_tasks_from_directory(self, task_dir: str) -> None:
+        if not self._tasks_catalog:
+            raise EmptyTaskCatalogError()
+
+    def _discover_tasks_in_directory(self, task_dir: str) -> None:
         """
         Start the recursive loading process for all Nornir tasks found in
         all python modules from a specific directory.
@@ -41,9 +120,9 @@ class NornFlow:
         """
         task_path = Path(task_dir)
         for py_file in task_path.rglob("*.py"):
-            self._load_tasks_from_file(py_file)
+            self._fetch_tasks_from_module(py_file)
 
-    def _load_tasks_from_file(self, py_file: Path) -> None:
+    def _fetch_tasks_from_module(self, py_file: Path) -> None:
         """
         Load tasks from a specific Python module.
 
@@ -73,33 +152,34 @@ class NornFlow:
             if is_nornir_task(attr):
                 self._tasks_catalog[attr_name] = attr
 
-    @property
-    def tasks_catalog(self) -> dict[str, Any]:
+    def _check_tasks_to_run(self) -> None:
         """
-        Get the tasks catalog.
-
-        Returns:
-            Dict[str, Any]: Dictionary of task names and their corresponding functions.
-        """
-        return self._tasks_catalog
-
-    @tasks_catalog.setter
-    def tasks_catalog(self, value: dict[str, Any]) -> None:
-        """
-        Prevent setting the tasks catalog directly.
-
-        Args:
-            value (Dict[str, Any]): Dictionary of task names and their corresponding functions.
+        Check if the tasks to run are in the tasks catalog.
 
         Raises:
-            AttributeError: Always raised to prevent direct setting of the tasks catalog.
+            TaskLoadingError: If a task to run is not in the tasks catalog.
         """
-        raise TasksCatalogModificationError("Cannot set tasks catalog directly.")
+        missing_tasks = [task_name for task_name in self.tasks_to_run if task_name not in self.tasks_catalog]
+        print(f"Missing tasks: {missing_tasks}")
 
-    def run(self) -> bool:
+        if missing_tasks:
+            if not self.settings.ignore_missing_tasks:
+                raise TaskDoesNotExistError(missing_tasks)
+
+            print(
+                "The following tasks were not found in the tasks catalog and will be ignored:\n"
+                f"  - {'\n  - '.join(missing_tasks)}"
+            )
+
+    def run(self) -> None:
         """
         Runs the NornFlow job.
         """
+        if not self.tasks_to_run:
+            raise NoTasksToRunError("No tasks selected to run.")
+
+        self._check_tasks_to_run()
+
         if self.settings.parallel_exec:
             self._run_tasks_individually()
         else:
@@ -110,8 +190,7 @@ class NornFlow:
         Run all tasks individually.
         """
         print("Running tasks individually")
-        for task_name, task_func in self.tasks_catalog.items():
-            print(f"Running task: {task_name}")
+        for task_func in self.filtered_tasks_catalog.values():
             result = self.nornir.run(task=task_func)
             print_result(result)
 
@@ -137,7 +216,7 @@ class NornFlow:
             AggregatedResult: The aggregated result of all tasks.
         """
         aggregated_result = AggregatedResult(task.name)
-        for task_func in self.tasks_catalog.values():
+        for task_func in self.filtered_tasks_catalog.values():
             result = task.run(task=task_func)
             aggregated_result[task_func.__name__] = result
         return aggregated_result
@@ -145,5 +224,9 @@ class NornFlow:
 
 # for testing purposes only
 if __name__ == "__main__":
-    nornflow = NornFlow()
-    nornflow.run()
+    nornflow = NornFlow(tasks_to_run=["task1", "task2", "no_task", "shitty_task"])
+    # nornflow.run()
+    print(nornflow.settings)
+    print(nornflow.nornir_configs)
+    # nornflow.settings = {}
+    # nornflow.nornir_configs = {}
