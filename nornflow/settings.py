@@ -55,6 +55,14 @@ class NornFlowSettings:
         self._load_settings()
         self._check_mandatory_settings()
         self._set_optional_settings(**kwargs)
+        
+    @property
+    def nornir_configs(self) -> dict[str, Any]:
+        return read_yaml_file(self.loaded_settings["nornir_config_file"])
+    
+    @property
+    def as_dict(self) -> dict[str, Any]:
+        return dict(self.loaded_settings)
 
     def _load_settings(self) -> None:
         """
@@ -116,10 +124,6 @@ class NornFlowSettings:
             self.loaded_settings[setting] = kwargs.get(
                 setting, self.loaded_settings.get(setting, default_value)
             )
-
-    @property
-    def nornir_configs(self) -> dict[str, Any]:
-        return read_yaml_file(self.loaded_settings["nornir_config_file"])
 
     def __getattr__(self, name: str) -> Any:
         return self.loaded_settings[name]

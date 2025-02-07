@@ -1,4 +1,5 @@
 import inspect
+from typing import Any
 
 import click
 from tabulate import tabulate
@@ -9,57 +10,81 @@ from nornflow.nornflow import NornFlow
 
 @click.command()
 @click.option("--catalog", "-c", is_flag=True, help="Display the task catalog")
-@click.option("--settings", "-s", is_flag=True, help="Display current NornFlow Settings and Nornir Configs")
-def show(catalog: bool, settings: bool) -> None:
+@click.option("--settings", "-s", is_flag=True, help="Display current NornFlow Settings")
+@click.option("--nornir-configs", "-n", is_flag=True, help="Display current Nornir Configs")
+@click.option("--all", "-a", is_flag=True, help="Display all information")
+def show(catalog: bool, settings: bool, nornir_configs: bool, all: bool) -> None:
     """
     Displays summary info about NornFlow.
     """
-    if catalog:
-        show_task_catalog()
-    if settings:
-        show_settings()
-
-
-def show_task_catalog() -> None:
-    """
-    Display the task catalog in a formatted table.
-    """
-    # Instantiate a NornFlow object
     nornflow = NornFlow()
 
+    if all:
+        show_catalog(nornflow)
+        show_nornflow_settings(nornflow)
+        show_nornir_configs(nornflow)
+    else:
+        if catalog:
+            show_catalog(nornflow)
+        if settings:
+            show_nornflow_settings(nornflow)
+        if nornir_configs:
+            show_nornir_configs(nornflow)
+
+
+def show_catalog(nornflow: NornFlow) -> None:
+    """
+    Display the task catalog.
+    """
+    show_formatted_table("TASKS CATALOG", render_task_catalog_table_data, ["Task Name", "Description", "Location"], nornflow)
+
+
+def show_nornflow_settings(nornflow: NornFlow) -> None:
+    """
+    Display the NornFlow settings.
+    """
+    show_formatted_table("NORNFLOW SETTINGS", render_settings_table_data, ["Setting", "Value"], nornflow)
+
+
+def show_nornir_configs(nornflow: NornFlow) -> None:
+    """
+    Display the Nornir configs.
+    """
+    show_formatted_table("NORNIR CONFIGS", render_nornir_cfgs_table_data, ["Config", "Value"], nornflow)
+
+
+def show_formatted_table(banner_text: str, table_data_renderer: callable, headers: list[str], nornflow: NornFlow) -> None:
+    """
+    Display information in a formatted table.
+
+    Args:
+        banner_text (str): The text to display in the banner.
+        table_data_renderer (function): The function to prepare the data for the table.
+        headers (list[str]): The headers for the table.
+        nornflow (NornFlow): The NornFlow object.
+    """
     # Prepare the data for the table
-    table_data = prepare_table_data(nornflow)
+    table_data = table_data_renderer(nornflow)
 
     # Colorize and bold the headers
-    headers = get_colored_headers()
+    colored_headers = get_colored_headers(headers, "blue")
+
+    # Determine column alignment based on the number of headers
+    colalign = ["center"] + ["left"] * (len(headers) - 1)
 
     # Display the table to get its width
-    table = tabulate(table_data, headers=headers, tablefmt="fancy_grid", colalign=("center", "left", "left"))
+    table = tabulate(table_data, headers=colored_headers, tablefmt="rounded_grid", colalign=colalign)
 
     # Create and display the banner
-    display_banner(table)
+    display_banner(banner_text, table)
 
     # Display the table
     click.echo(table)
 
 
-def show_settings() -> None:
+def render_task_catalog_table_data(nornflow: NornFlow) -> list[list[str]]:
     """
-    Display the NornFlow settings and Nornir configs.
-    """
-    # Instantiate a NornFlow object
-    nornflow = NornFlow()
-
-    # Display the settings and Nornir configs
-    click.echo(colored("NornFlow Settings:", "green", attrs=["bold"]))
-    click.echo(nornflow.settings)
-    click.echo(colored("\nNornir Configs:", "green", attrs=["bold"]))
-    click.echo(nornflow.nornir_configs)
-
-
-def prepare_table_data(nornflow: NornFlow) -> list[list[str]]:
-    """
-    Prepare the data for the table.
+    Prepare the data for the task catalog table.
 
     Args:
         nornflow (NornFlow): The NornFlow object containing the task catalog.
@@ -89,28 +114,82 @@ def prepare_table_data(nornflow: NornFlow) -> list[list[str]]:
     return table_data
 
 
-def get_colored_headers() -> list[str]:
+def render_settings_table_data(nornflow: NornFlow) -> list[list[str]]:
+    """
+    Prepare the data for the settings table.
+
+    Args:
+        nornflow (NornFlow): The NornFlow object containing the settings.
+
+    Returns:
+        List[List[str]]: The prepared settings table data.
+    """
+    settings_data = []
+    for key, value in nornflow.settings.as_dict.items():
+        colored_key = colored(key, "cyan", attrs=["bold"])
+        colored_value = format_value(value)
+        settings_data.append([colored_key, colored_value])
+    return settings_data
+
+
+def render_nornir_cfgs_table_data(nornflow: NornFlow) -> list[list[str]]:
+    """
+    Prepare the data for the Nornir configs table.
+
+    Args:
+        nornflow (NornFlow): The NornFlow object containing the Nornir configs.
+
+    Returns:
+        List[List[str]]: The prepared Nornir configs table data.
+    """
+    nornir_configs_data = []
+    for key, value in nornflow.nornir_configs.items():
+        colored_key = colored(key, "cyan", attrs=["bold"])
+        colored_value = format_value(value)
+        nornir_configs_data.append([colored_key, colored_value])
+    return nornir_configs_data
+
+
+def format_value(value: Any) -> str:
+    """
+    Format the value for display in the table.
+
+    Args:
+        value (Any): The value to format.
+
+    Returns:
+        str: The formatted value.
+    """
+    if isinstance(value, dict):
+        # Convert the dictionary to a formatted table string
+        value_str = tabulate(value.items(), headers=["Key", "Value"], tablefmt="simple")
+    else:
+        value_str = str(value)
+    return colored(value_str, "yellow")
+
+
+def get_colored_headers(headers: list[str], color: str) -> list[str]:
     """
     Return the colorized and bold headers.
+
+    Args:
+        headers (list[str]): The list of headers to be colorized and bolded.
+        color (str): The color to be used for the headers.
 
     Returns:
         List[str]: The colorized and bold headers.
     """
-    return [
-        colored("Task Name", "blue", attrs=["bold"]),
-        colored("Description", "blue", attrs=["bold"]),
-        colored("Location", "blue", attrs=["bold"]),
-    ]
+    return [colored(header, color, attrs=["bold"]) for header in headers]
 
 
-def display_banner(table: str) -> None:
+def display_banner(banner_text: str, table: str) -> None:
     """
-    Create and display the banner.
+    Create a banner with the given text and display it above the table.
 
     Args:
+        banner_text (str): The text to display in the banner.
         table (str): The table string to determine the width for centering the banner.
     """
-    banner_text = "TASKS CATALOG"
     banner = colored(banner_text, "magenta", attrs=["bold", "underline"])
 
     # Center the banner with the table
