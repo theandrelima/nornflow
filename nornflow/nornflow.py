@@ -13,6 +13,7 @@ from nornflow.exceptions import (
     TaskDoesNotExistError,
     TaskLoadingError,
     TasksCatalogModificationError,
+    LocalTaskDirectoryNotFoundError,
 )
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import import_module, is_nornir_task
@@ -117,8 +118,14 @@ class NornFlow:
 
         Args:
             task_dir (str): Path to the directory containing task files.
+
+        Raises:
+            DirectoryNotFoundError: If the specified directory does not exist.
         """
         task_path = Path(task_dir)
+        if not task_path.is_dir():
+            raise LocalTaskDirectoryNotFoundError(task_dir.get_absolute())
+        
         for py_file in task_path.rglob("*.py"):
             self._fetch_tasks_from_module(py_file)
 
@@ -205,6 +212,7 @@ class NornFlow:
         result = self.nornir.run(task=self._parent_task)
         print_result(result)
 
+    # TODO: this should probably be extracted from here into the utils module.
     def _parent_task(self, task: Task) -> AggregatedResult:
         """
         Parent task that runs all tasks in the tasks catalog.

@@ -106,3 +106,9 @@ class ModuleImportError(NornFlowError):
 
     def __init__(self, module_name: str, module_path: str, error: str):
         super().__init__(f"Error importing module '{module_name}' from '{module_path}': {error}")
+        
+    
+class LocalTaskDirectoryNotFoundError(NornFlowError):
+    """Exception raised when a specified directory is not found."""
+    def __init__(self, directory: str):
+        super().__init__(f"Directory not found: {directory}")
