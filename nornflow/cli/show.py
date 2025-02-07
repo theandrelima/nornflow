@@ -1,12 +1,14 @@
+import inspect
+
 import click
 from tabulate import tabulate
 from termcolor import colored
+
 from nornflow.nornflow import NornFlow
-import inspect
-from typing import List
+
 
 @click.command()
-@click.option('--catalog', is_flag=True, help="Display the task catalog")
+@click.option("--catalog", is_flag=True, help="Display the task catalog")
 def show(catalog: bool) -> None:
     """
     Show command that displays the task catalog if the --catalog flag is provided.
@@ -18,6 +20,7 @@ def show(catalog: bool) -> None:
         display_task_catalog()
     else:
         click.echo("This is the show command")
+
 
 def display_task_catalog() -> None:
     """
@@ -34,14 +37,15 @@ def display_task_catalog() -> None:
 
     # Display the table to get its width
     table = tabulate(table_data, headers=headers, tablefmt="fancy_grid", colalign=("center", "left", "left"))
-    
+
     # Create and display the banner
     display_banner(table)
 
     # Display the table
     click.echo(table)
 
-def prepare_table_data(nornflow: NornFlow) -> List[List[str]]:
+
+def prepare_table_data(nornflow: NornFlow) -> list[list[str]]:
     """
     Prepare the data for the table.
 
@@ -54,7 +58,7 @@ def prepare_table_data(nornflow: NornFlow) -> List[List[str]]:
     table_data = []
     for task_name, task_func in nornflow.tasks_catalog.items():
         docstring = (task_func.__doc__ or "No description available").strip()
-        docstring = ' '.join(docstring.split())  # Remove extra spaces, new lines, and tabs
+        docstring = " ".join(docstring.split())  # Remove extra spaces, new lines, and tabs
 
         # Get the Python dotted path to the function
         module = inspect.getmodule(task_func)
@@ -66,13 +70,14 @@ def prepare_table_data(nornflow: NornFlow) -> List[List[str]]:
             file_path = inspect.getfile(task_func)
             function_path = file_path
 
-        colored_task_name = colored(task_name, 'cyan', attrs=['bold'])
-        colored_docstring = colored(docstring, 'yellow')
-        colored_location = colored(function_path, 'light_green')
+        colored_task_name = colored(task_name, "cyan", attrs=["bold"])
+        colored_docstring = colored(docstring, "yellow")
+        colored_location = colored(function_path, "light_green")
         table_data.append([colored_task_name, colored_docstring, colored_location])
     return table_data
 
-def get_colored_headers() -> List[str]:
+
+def get_colored_headers() -> list[str]:
     """
     Return the colorized and bold headers.
 
@@ -80,10 +85,11 @@ def get_colored_headers() -> List[str]:
         List[str]: The colorized and bold headers.
     """
     return [
-        colored("Task Name", 'blue', attrs=['bold']),
-        colored("Description", 'blue', attrs=['bold']),
-        colored("Location", 'blue', attrs=['bold'])
+        colored("Task Name", "blue", attrs=["bold"]),
+        colored("Description", "blue", attrs=["bold"]),
+        colored("Location", "blue", attrs=["bold"]),
     ]
+
 
 def display_banner(table: str) -> None:
     """
@@ -93,10 +99,10 @@ def display_banner(table: str) -> None:
         table (str): The table string to determine the width for centering the banner.
     """
     banner_text = "TASKS CATALOG"
-    banner = colored(banner_text, 'magenta', attrs=['bold', 'underline'])
-    
+    banner = colored(banner_text, "magenta", attrs=["bold", "underline"])
+
     # Center the banner with the table
-    table_width = len(table.split('\n')[0])
+    table_width = len(table.split("\n")[0])
     centered_banner = banner.center(table_width)
 
     # Add blank spaces before the banner

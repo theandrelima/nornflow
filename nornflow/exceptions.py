@@ -56,7 +56,8 @@ class SettingsModificationError(Exception):
 
     def __init__(self):
         super().__init__(
-            "Cannot set settings directly. Settings must be either passed as a NornFlowSettings object or as keyword arguments to the NornFlow initializer."
+            "Cannot set settings directly. Settings must be either passed as a NornFlowSettings object or as "
+            "keyword arguments to the NornFlow initializer."
         )
 
 
@@ -65,7 +66,8 @@ class NornirConfigsModificationError(Exception):
 
     def __init__(self):
         super().__init__(
-            "Cannot set Nornir configs directly. Nornir configs must be set through it's own separate .yaml file and informed to NornFlow using the 'nornir_config_file' setting."
+            "Cannot set Nornir configs directly. Nornir configs must be set through its own separate .yaml "
+            "file and informed to NornFlow using the 'nornir_config_file' setting."
         )
 
 
@@ -80,7 +82,6 @@ class TaskDoesNotExistError(NornFlowError):
     """Exception raised when a task does not exist."""
 
     def __init__(self, task_names: str | list):
-
         if isinstance(task_names, list):
             task_names = ", ".join(task_names)
 
@@ -91,7 +92,7 @@ class NoTasksToRunError(NornFlowError):
     """Exception raised when there are no tasks to run."""
 
     def __init__(self):
-        super().__init("No tasks to run informed.")
+        super().__init__("No tasks to run informed.")
 
 
 class EmptyTaskCatalogError(NornFlowError):
@@ -106,9 +107,10 @@ class ModuleImportError(NornFlowError):
 
     def __init__(self, module_name: str, module_path: str, error: str):
         super().__init__(f"Error importing module '{module_name}' from '{module_path}': {error}")
-        
-    
+
+
 class LocalTaskDirectoryNotFoundError(NornFlowError):
     """Exception raised when a specified directory is not found."""
+
     def __init__(self, directory: str):
         super().__init__(f"Directory not found: {directory}")

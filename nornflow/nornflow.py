@@ -7,13 +7,13 @@ from nornir_utils.plugins.functions import print_result
 
 from nornflow.exceptions import (
     EmptyTaskCatalogError,
+    LocalTaskDirectoryNotFoundError,
     NornirConfigsModificationError,
     NoTasksToRunError,
     SettingsModificationError,
     TaskDoesNotExistError,
     TaskLoadingError,
     TasksCatalogModificationError,
-    LocalTaskDirectoryNotFoundError,
 )
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import import_module, is_nornir_task
@@ -125,7 +125,7 @@ class NornFlow:
         task_path = Path(task_dir)
         if not task_path.is_dir():
             raise LocalTaskDirectoryNotFoundError(task_dir.get_absolute())
-        
+
         for py_file in task_path.rglob("*.py"):
             self._fetch_tasks_from_module(py_file)
 
