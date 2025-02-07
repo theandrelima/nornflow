@@ -106,46 +106,34 @@ class NornFlow:
         """
         self._tasks_catalog = {}
         for task_dir in self.settings.local_tasks_dirs:
-            self._discover_tasks_in_directory(task_dir)
+            self._discover_tasks_in_dir(task_dir)
 
         if not self._tasks_catalog:
             raise EmptyTaskCatalogError()
 
-    def _discover_tasks_in_directory(self, task_dir: str) -> None:
+    def _discover_tasks_in_dir(self, task_dir: str) -> None:
         """
-        Start the recursive loading process for all Nornir tasks found in
-        all python modules from a specific directory.
+        Discover and load tasks from all Python modules in a specific directory.
 
         Args:
             task_dir (str): Path to the directory containing task files.
 
         Raises:
-            DirectoryNotFoundError: If the specified directory does not exist.
+            LocalTaskDirectoryNotFoundError: If the specified directory does not exist.
+            TaskLoadingError: If there is an error loading tasks from a file.
         """
         task_path = Path(task_dir)
         if not task_path.is_dir():
-            raise LocalTaskDirectoryNotFoundError(task_dir.get_absolute())
+            raise LocalTaskDirectoryNotFoundError(task_dir)
 
         for py_file in task_path.rglob("*.py"):
-            self._fetch_tasks_from_module(py_file)
-
-    def _fetch_tasks_from_module(self, py_file: Path) -> None:
-        """
-        Load tasks from a specific Python module.
-
-        Args:
-            py_file (Path): Path to the Python file.
-
-        Raises:
-            TaskLoadingException: If there is an error loading tasks from the file.
-        """
-        try:
-            module_name = py_file.stem
-            module_path = str(py_file)
-            module = import_module(module_name, module_path)
-            self._register_tasks_from_module(module)
-        except Exception as e:
-            raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e
+            try:
+                module_name = py_file.stem
+                module_path = str(py_file)
+                module = import_module(module_name, module_path)
+                self._register_tasks_from_module(module)
+            except Exception as e:
+                raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e
 
     def _register_tasks_from_module(self, module: Any) -> None:
         """
@@ -232,7 +220,7 @@ class NornFlow:
 
 # for testing purposes only
 if __name__ == "__main__":
-    nornflow = NornFlow(tasks_to_run=["task1", "task2", "no_task", "shitty_task"])
+    nornflow = NornFlow(tasks_to_run=["task1", "task2", "no_task"])
     # nornflow.run()
     print(nornflow.settings)
     print(nornflow.nornir_configs)
