@@ -8,21 +8,19 @@ from nornflow.nornflow import NornFlow
 
 
 @click.command()
-@click.option("--catalog", is_flag=True, help="Display the task catalog")
-def show(catalog: bool) -> None:
+@click.option("--catalog", "-c", is_flag=True, help="Display the task catalog")
+@click.option("--settings", "-s", is_flag=True, help="Display current NornFlow Settings and Nornir Configs")
+def show(catalog: bool, settings: bool) -> None:
     """
-    Show command that displays the task catalog if the --catalog flag is provided.
-
-    Args:
-        catalog (bool): Flag to indicate whether to display the task catalog.
+    Displays summary info about NornFlow.
     """
     if catalog:
-        display_task_catalog()
-    else:
-        click.echo("This is the show command")
+        show_task_catalog()
+    if settings:
+        show_settings()
 
 
-def display_task_catalog() -> None:
+def show_task_catalog() -> None:
     """
     Display the task catalog in a formatted table.
     """
@@ -43,6 +41,20 @@ def display_task_catalog() -> None:
 
     # Display the table
     click.echo(table)
+
+
+def show_settings() -> None:
+    """
+    Display the NornFlow settings and Nornir configs.
+    """
+    # Instantiate a NornFlow object
+    nornflow = NornFlow()
+
+    # Display the settings and Nornir configs
+    click.echo(colored("NornFlow Settings:", "green", attrs=["bold"]))
+    click.echo(nornflow.settings)
+    click.echo(colored("\nNornir Configs:", "green", attrs=["bold"]))
+    click.echo(nornflow.nornir_configs)
 
 
 def prepare_table_data(nornflow: NornFlow) -> list[list[str]]:
