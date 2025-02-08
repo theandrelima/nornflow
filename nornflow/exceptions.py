@@ -119,6 +119,6 @@ class LocalTaskDirectoryNotFoundError(NornFlowError):
 class NornFlowInitializationError(NornFlowError):
     """Exception raised when invalid kwargs are passed to the NornFlow initializer."""
 
-    def __init__(self, invalid_kwargs: list[str]):
-        super().__init__(f"Invalid kwargs passed to NornFlow initializer: {', '.join(invalid_kwargs)}")
+    def __init__(self, invalid_kwargs: list[str], extra_message: str = ""):
+        super().__init__(f"Invalid kwarg(s) passed to NornFlow initializer: {', '.join(invalid_kwargs)} {extra_message}")
         self.invalid_kwargs = invalid_kwargs

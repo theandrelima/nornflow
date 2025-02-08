@@ -28,12 +28,14 @@ class NornFlow:
         # Some kwargs should only be set through the YAML settings file.
         self._check_invalid_kwargs(kwargs)
         self._settings = nornflow_settings or NornFlowSettings(**kwargs)
-        self._nornir_configs = self.settings.nornir_configs
         self.tasks_to_run = tasks_to_run
+        self._invetory_filters = self._get_inventory_filters(kwargs)
         self._load_tasks_catalog()
         # kwargs need to be cleaned up before passing them to InitNornir
         self._remove_optional_settings_from_kwargs(kwargs)
-
+        
+        # print(f"KWARGS: {kwargs}")
+        # raise Exception("stop")
         self.nornir = InitNornir(
             config_file=self.settings.nornir_config_file,
             dry_run=self.settings.dry_run,
