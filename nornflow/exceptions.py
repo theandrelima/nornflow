@@ -114,3 +114,11 @@ class LocalTaskDirectoryNotFoundError(NornFlowError):
 
     def __init__(self, directory: str):
         super().__init__(f"Directory not found: {directory}")
+
+
+class NornFlowInitializationError(NornFlowError):
+    """Exception raised when invalid kwargs are passed to the NornFlow initializer."""
+
+    def __init__(self, invalid_kwargs: list[str]):
+        super().__init__(f"Invalid kwargs passed to NornFlow initializer: {', '.join(invalid_kwargs)}")
+        self.invalid_kwargs = invalid_kwargs

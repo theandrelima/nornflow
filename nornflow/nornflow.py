@@ -14,19 +14,25 @@ from nornflow.exceptions import (
     TaskDoesNotExistError,
     TaskLoadingError,
     TasksCatalogModificationError,
+    NornFlowInitializationError,
 )
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import import_module_from_path, is_nornir_task
+from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL, NORNFLOW_INVALID_INIT_KWARGS
 
 
 class NornFlow:
     def __init__(
         self, nornflow_settings: NornFlowSettings = None, tasks_to_run: list[str] = None, **kwargs: Any
     ):
+        # Some kwargs should only be set through the YAML settings file.
+        self._check_invalid_kwargs(kwargs)
         self._settings = nornflow_settings or NornFlowSettings(**kwargs)
         self._nornir_configs = self.settings.nornir_configs
         self.tasks_to_run = tasks_to_run
         self._load_tasks_catalog()
+        # kwargs need to be cleaned up before passing them to InitNornir
+        self._remove_optional_settings_from_kwargs(kwargs)
 
         self.nornir = InitNornir(
             config_file=self.settings.nornir_config_file,
@@ -155,7 +161,6 @@ class NornFlow:
             TaskLoadingError: If a task to run is not in the tasks catalog.
         """
         missing_tasks = [task_name for task_name in self.tasks_to_run if task_name not in self.tasks_catalog]
-        print(f"Missing tasks: {missing_tasks}")
 
         if missing_tasks:
             if not self.settings.ignore_missing_tasks:
@@ -216,6 +221,31 @@ class NornFlow:
             result = task.run(task=task_func)
             aggregated_result[task_func.__name__] = result
         return aggregated_result
+
+    def _remove_optional_settings_from_kwargs(self, kwargs: dict[str, Any]) -> None:
+        """
+        Remove keys from kwargs that match the keys in NONRFLOW_OPTIONAL_SETTINGS.
+
+        Args:
+            kwargs (dict[str, Any]): The kwargs dictionary to modify.
+        """
+        for key in NONRFLOW_SETTINGS_OPTIONAL:
+            if key in kwargs:
+                del kwargs[key]
+                
+    def _check_invalid_kwargs(self, kwargs: dict[str, Any]) -> None:
+        """
+        Check if kwargs contains any keys in NORNFLOW_INVALID_INIT_KWARGS and raise an error if found.
+
+        Args:
+            kwargs (dict[str, Any]): The kwargs dictionary to check.
+
+        Raises:
+            NornFlowInitializationError: If any invalid keys are found in kwargs.
+        """
+        invalid_keys = [key for key in kwargs if key in NORNFLOW_INVALID_INIT_KWARGS]
+        if invalid_keys:
+            raise NornFlowInitializationError(invalid_keys)
 
 
 # for testing purposes only

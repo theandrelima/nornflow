@@ -4,7 +4,7 @@ from typing import Any
 
 import yaml
 
-from nornflow.constants import NONRFLOW_MANDATORY_SETTINGS, NONRFLOW_OPTIONAL_SETTINGS
+from nornflow.constants import NONRFLOW_SETTINGS_MANDATORY, NONRFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import (
     EmptyMandatorySettingError,
     MissingMandatorySettingError,
@@ -101,7 +101,7 @@ class NornFlowSettings:
         Raises:
             ValueError: If a mandatory setting is missing or empty.
         """
-        for setting in NONRFLOW_MANDATORY_SETTINGS:
+        for setting in NONRFLOW_SETTINGS_MANDATORY:
             if setting not in self.loaded_settings:
                 raise MissingMandatorySettingError(setting)
             if not self.loaded_settings[setting]:
@@ -120,7 +120,7 @@ class NornFlowSettings:
         Args:
             **kwargs (Any): Keyword arguments containing optional settings.
         """
-        for setting, default_value in NONRFLOW_OPTIONAL_SETTINGS.items():
+        for setting, default_value in NONRFLOW_SETTINGS_OPTIONAL.items():
             self.loaded_settings[setting] = kwargs.get(
                 setting, self.loaded_settings.get(setting, default_value)
             )
