@@ -16,7 +16,7 @@ from nornflow.exceptions import (
     TasksCatalogModificationError,
 )
 from nornflow.settings import NornFlowSettings
-from nornflow.utils import import_module, is_nornir_task
+from nornflow.utils import import_module_from_path, is_nornir_task
 
 
 class NornFlow:
@@ -130,7 +130,7 @@ class NornFlow:
             try:
                 module_name = py_file.stem
                 module_path = str(py_file)
-                module = import_module(module_name, module_path)
+                module = import_module_from_path(module_name, module_path)
                 self._register_tasks_from_module(module)
             except Exception as e:
                 raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e

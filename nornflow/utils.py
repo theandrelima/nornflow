@@ -57,7 +57,7 @@ def is_falsy(value: str | None) -> bool:
     return value.lower() in FALSY
 
 
-def import_module(module_name: str, module_path: str) -> Any:
+def import_module_from_path(module_name: str, module_path: str) -> Any:
     """
     Import a module from a given file path.
 
