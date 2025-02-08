@@ -28,14 +28,13 @@ class NornFlow:
         # Some kwargs should only be set through the YAML settings file.
         self._check_invalid_kwargs(kwargs)
         self._settings = nornflow_settings or NornFlowSettings(**kwargs)
-        self.tasks_to_run = tasks_to_run
-        self._invetory_filters = self._get_inventory_filters(kwargs)
+        self._inventory_filters = self._get_inventory_filters(kwargs)
         self._load_tasks_catalog()
+        self.tasks_to_run = tasks_to_run or []
+        
         # kwargs need to be cleaned up before passing them to InitNornir
         self._remove_optional_settings_from_kwargs(kwargs)
-        
-        # print(f"KWARGS: {kwargs}")
-        # raise Exception("stop")
+
         self.nornir = InitNornir(
             config_file=self.settings.nornir_config_file,
             dry_run=self.settings.dry_run,
@@ -248,6 +247,33 @@ class NornFlow:
         invalid_keys = [key for key in kwargs if key in NORNFLOW_INVALID_INIT_KWARGS]
         if invalid_keys:
             raise NornFlowInitializationError(invalid_keys)
+
+    def _get_inventory_filters(self, kwargs: dict[str, Any]) -> dict[str, str]:
+        """
+        Check if 'inventory_filters' exists in kwargs and validate it.
+
+        Args:
+            kwargs (dict[str, Any]): The kwargs dictionary to check.
+
+        Returns:
+            dict[str, str]: The inventory filters dictionary.
+
+        Raises:
+            NornFlowInitializationError: If 'inventory_filters' is not a dict or contains invalid keys.
+        """
+        inventory_filters = kwargs.pop("inventory_filters", None)
+        if inventory_filters is None:
+            return {}
+
+        if not isinstance(inventory_filters, dict):
+            raise NornFlowInitializationError(["inventory_filters"], " is not a dict")
+
+        valid_keys = {"hosts", "groups"}
+        invalid_keys = set(inventory_filters.keys()) - valid_keys
+        if invalid_keys:
+            raise NornFlowInitializationError(["inventory_filters"], f"unknown filter keys included: {', '.join(invalid_keys)}")
+
+        return inventory_filters
 
 
 # for testing purposes only
