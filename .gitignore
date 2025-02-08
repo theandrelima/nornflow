@@ -184,3 +184,7 @@ tasks/
 
 # ruff
 .ruff*/
+
+# bkp files and dirs
+*.bkp
+*_bkp
