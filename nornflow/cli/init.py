@@ -1,5 +1,5 @@
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import click
 import yaml
@@ -10,17 +10,21 @@ from nornflow.cli.constants import (
 from nornflow.cli.show import show_catalog, show_nornflow_settings, show_nornir_configs
 from nornflow.nornflow import NornFlow
 
+
 @click.command()
 def init() -> None:
     """
     Initialize NornFlow by setting up the necessary configuration files and directories.
 
     This command performs the following actions:
-    1. If a 'nornir_configs' directory does not exist in the current working directory, it copies the entire 'nornflow/cli/samples/nornir_configs' directory to the current working directory.
+    1. If a 'nornir_configs' directory does not exist in the current working directory, it copies
+    the entire 'nornflow/cli/samples/nornir_configs' directory to the current working directory.
     2. Copies a sample 'nornflow.yaml' file to the current working directory if it does not exist.
-    3. Creates a 'tasks' directory and copies a sample 'hello_world.py' task file into it if the directory does not exist.
+    3. Creates a 'tasks' directory and copies a sample 'hello_world.py' task file into it if the
+    directory does not exist.
 
-    The paths for the configuration files and sample files are determined relative to the location of this script.
+    The paths for the configuration files and sample files are determined relative to the location
+    of this script.
     """
     nornir_config_dir = Path.cwd() / NORNIR_DEFAULT_CONFIG_DIR
     tasks_dir = Path.cwd() / "tasks"
@@ -37,7 +41,9 @@ def init() -> None:
                 shutil.copytree(item, nornir_config_dir / item.name)
             else:
                 shutil.copy(item, nornir_config_dir / item.name)
-        click.echo(click.style(f"Created a sample 'nornir_configs' directory: {nornir_config_dir}", fg="green"))
+        click.echo(
+            click.style(f"Created a sample 'nornir_configs' directory: {nornir_config_dir}", fg="green")
+        )
 
     if not nornflow_file.exists():
         shutil.copy(sample_nornflow_file, nornflow_file)
@@ -47,8 +53,12 @@ def init() -> None:
 
     if create_directory(tasks_dir):
         shutil.copy(sample_task_file, tasks_dir / sample_task_file.name)
-        click.echo(click.style(f"Created a sample 'hello_world' task: {tasks_dir / sample_task_file.name}", fg="green"))
-        
+        click.echo(
+            click.style(
+                f"Created a sample 'hello_world' task: {tasks_dir / sample_task_file.name}", fg="green"
+            )
+        )
+
     show_all()
 
 
@@ -65,9 +75,8 @@ def create_directory(dir_path: Path) -> bool:
         dir_path.mkdir(parents=True, exist_ok=True)
         click.echo(click.style(f"Created directory: {dir_path}", fg="green"))
         return True
-    else:
-        click.echo(click.style(f"Directory already exists: {dir_path}", fg="yellow"))
-        return False
+    click.echo(click.style(f"Directory already exists: {dir_path}", fg="yellow"))
+    return False
 
 
 def create_file(file_path: Path, content: dict = None) -> None:

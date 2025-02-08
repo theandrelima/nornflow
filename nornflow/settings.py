@@ -55,11 +55,11 @@ class NornFlowSettings:
         self._load_settings()
         self._check_mandatory_settings()
         self._set_optional_settings(**kwargs)
-        
+
     @property
     def nornir_configs(self) -> dict[str, Any]:
         return read_yaml_file(self.loaded_settings["nornir_config_file"])
-    
+
     @property
     def as_dict(self) -> dict[str, Any]:
         return dict(self.loaded_settings)

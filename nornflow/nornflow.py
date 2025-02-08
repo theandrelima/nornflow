@@ -5,20 +5,20 @@ from nornir import InitNornir
 from nornir.core.task import AggregatedResult, Task
 from nornir_utils.plugins.functions import print_result
 
+from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL, NORNFLOW_INVALID_INIT_KWARGS
 from nornflow.exceptions import (
     EmptyTaskCatalogError,
     LocalTaskDirectoryNotFoundError,
+    NornFlowInitializationError,
     NornirConfigsModificationError,
     NoTasksToRunError,
     SettingsModificationError,
     TaskDoesNotExistError,
     TaskLoadingError,
     TasksCatalogModificationError,
-    NornFlowInitializationError,
 )
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import import_module_from_path, is_nornir_task
-from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL, NORNFLOW_INVALID_INIT_KWARGS
 
 
 class NornFlow:
@@ -232,7 +232,7 @@ class NornFlow:
         for key in NONRFLOW_SETTINGS_OPTIONAL:
             if key in kwargs:
                 del kwargs[key]
-                
+
     def _check_invalid_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
         Check if kwargs contains any keys in NORNFLOW_INVALID_INIT_KWARGS and raise an error if found.

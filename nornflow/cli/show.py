@@ -36,7 +36,9 @@ def show_catalog(nornflow: NornFlow) -> None:
     """
     Display the task catalog.
     """
-    show_formatted_table("TASKS CATALOG", render_task_catalog_table_data, ["Task Name", "Description", "Location"], nornflow)
+    show_formatted_table(
+        "TASKS CATALOG", render_task_catalog_table_data, ["Task Name", "Description", "Location"], nornflow
+    )
 
 
 def show_nornflow_settings(nornflow: NornFlow) -> None:
@@ -53,7 +55,9 @@ def show_nornir_configs(nornflow: NornFlow) -> None:
     show_formatted_table("NORNIR CONFIGS", render_nornir_cfgs_table_data, ["Config", "Value"], nornflow)
 
 
-def show_formatted_table(banner_text: str, table_data_renderer: callable, headers: list[str], nornflow: NornFlow) -> None:
+def show_formatted_table(
+    banner_text: str, table_data_renderer: callable, headers: list[str], nornflow: NornFlow
+) -> None:
     """
     Display information in a formatted table.
 
