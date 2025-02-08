@@ -1,35 +1,43 @@
-# This file is a sample of NornFlow settings. Alter it as needed to fit your project's requirements.
-# You can create your own '<something>.yaml' file in the root of your project, keeping in mind that 
-# NornFlow will try to find a settings YAML file through the following order:
+# This file is a sample of NornFlow settings. Modify it as needed to fit your project's requirements.
+# You can create your own '<something>.yaml' file in the root of your project. NornFlow will look for a settings YAML file in the following order:
 # 1. The path specified in the environment variable 'NORNFLOW_SETTINGS'
-# 2. The path passed to NornFlowSettings initializer (meaning using the 'nornflow run --settings' argument)
+# 2. The path passed to NornFlowSettings initializer (using the 'nornflow run --settings' argument)
 # 3. The path 'nornflow.yaml' in the root of the project
 
 ######################
-# MANDATORY SETTINGS #
+# Mandatory Settings #
 ######################
 
 # Path for Nornir's config file
 nornir_config_file: "nornir_configs/config.yaml"
 
 ######################
-# OPTIONAL SETTINGS  #
+# Optional Settings  #
 ######################
 
-# List of paths to directories containing the Nornir tasks to be included in NornFlow's task_catalog. It
-# defaults to a 'tasks' directory in the root of the project.
-# The search is recursive, meaning that all subdirectories will be searched as well. Be careful with this.
+# List of paths to directories containing the Nornir tasks to be included in NornFlow's task catalog.
+# Defaults to a 'tasks' directory in the root of the project.
+# The search is recursive, so all subdirectories will be searched as well.
 local_tasks_dirs:
   - "tasks"
 
-# List of python packages installed to your environment that contain Nornir tasks to be included in NornFlow's task_catalog.
+# List of Python packages installed in your environment that contain Nornir tasks to be included in NornFlow's task catalog.
 imported_tasks_packages: []
 
-# If set to True, NornFlow will invoke Nornir in dry-run mode
+
+# IMPORTANT NOTE:
+# The above settings can only be set through a NorFlow YAML settings file, whether mandatory or optional.
+# The following settings are still optional and can be set either through a NorFlow YAML settings file or CLI arguments.
+# CLI arguments will always take precedence over config file settings.
+
+
+
+# 'dry_run' is a Nornir-specific config that makes sense from a NornFlow perspective.
+# If set to True, NornFlow will invoke Nornir in dry-run mode.
 dry_run: False
 
-# If set to True, NornFlow will execute Nornir tasks individually in parallel, instead of as grouped tasks within a single parent Nornir Task.
+# If set to True, NornFlow will execute Nornir tasks individually in parallel, instead of as grouped tasks within a single parent Nornir task.
 parallel_exec: True
 
-# If set to True tasks not in the task registry will be ignored if this is set to True
-ignore_missing_tasks: True
+# If set to True, attempting to run tasks not tracked in the Task Catalog will be warned, but not raise an error.
+warn_missing_tasks: True
