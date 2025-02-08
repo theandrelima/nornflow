@@ -20,9 +20,9 @@ def show(catalog: bool, settings: bool, nornir_configs: bool, all: bool) -> None
     nornflow = NornFlow()
 
     if all:
-        show_catalog(nornflow)
         show_nornflow_settings(nornflow)
         show_nornir_configs(nornflow)
+        show_catalog(nornflow)
     else:
         if catalog:
             show_catalog(nornflow)
