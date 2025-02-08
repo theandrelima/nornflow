@@ -24,7 +24,7 @@ def load_subcommands() -> None:
     ignoring specified modules.
     """
     package: ModuleType = nornflow.cli
-    ignore_modules: list[str] = ["main", "constants"]
+    ignore_modules: list[str] = ["entrypoint", "constants"]
     for _, module_name, _ in pkgutil.iter_modules(package.__path__, package.__name__ + "."):
         if module_name.split(".")[-1] not in ignore_modules:
             module = import_module(module_name)
