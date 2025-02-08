@@ -27,6 +27,7 @@ imported_tasks_packages: []
 
 # IMPORTANT NOTE:
 # The above settings can only be set through a NorFlow YAML settings file, whether mandatory or optional.
+# This is because these settings are required for NornFlow CLI to work properly, meaning they will be needed before NornFlow itself is instantiated.
 # The following settings are still optional and can be set either through a NorFlow YAML settings file or CLI arguments.
 # CLI arguments will always take precedence over config file settings.
 
