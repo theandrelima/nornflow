@@ -43,7 +43,13 @@ class NornFlow:
 
     @property
     def nornir_configs(self) -> dict[str, Any]:
-        return self._nornir_configs
+        """
+        Get the Nornir configurations as a dict.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing the Nornir configurations.
+        """
+        return self.nornir.config.dict()
 
     @nornir_configs.setter
     def nornir_configs(self, value: Any) -> None:
@@ -280,7 +286,7 @@ class NornFlow:
 if __name__ == "__main__":
     nornflow = NornFlow(tasks_to_run=["task1", "task2", "no_task"])
     # nornflow.run()
-    print(nornflow.settings)
+    # print(nornflow.settings)
     print(nornflow.nornir_configs)
     # nornflow.settings = {}
     # nornflow.nornir_configs = {}
