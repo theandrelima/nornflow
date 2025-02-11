@@ -29,6 +29,9 @@ def init() -> None:
     3. Creates a 'tasks' directory and copies a sample 'hello_world.py' task file into it if the
     directory does not exist.
     """
+    #TODO: 'nornflow init' should open a dialog to ask the user where to create stuff and with what name (showing defaults)
+    # an option to skip the dialog and use defaults should be available as well (e.g. 'nornflow init --with-defaults')
+    
     typer.secho(f"NornFlow will be initialized at {NORNIR_DEFAULT_CONFIG_DIR.parent}", fg=typer.colors.GREEN)
 
     if create_directory(NORNIR_DEFAULT_CONFIG_DIR):
