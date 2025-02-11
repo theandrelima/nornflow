@@ -35,7 +35,3 @@ def run(
         fg=typer.colors.GREEN,
     )
     nornflow.run()
-
-
-if __name__ == "__main__":
-    app()
