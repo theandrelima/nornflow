@@ -6,13 +6,18 @@ import yaml
 
 from nornflow.cli.constants import (
     NORNIR_DEFAULT_CONFIG_DIR,
+    TASKS_DIR,
+    NORNFLOW_CONFIG_FILE,
+    SAMPLE_TASK_FILE,
+    SAMPLE_NORNFLOW_FILE,
+    SAMPLE_NORNIR_CONFIGS_DIR,
 )
-from nornflow.cli.show import show_catalog, show_nornflow_settings, show_nornir_configs
+from nornflow.cli.show import show_catalog, show_nornflow_settings
 from nornflow.nornflow import NornFlow
 
 app = typer.Typer()
 
-@app.command()  # Remove app. and use typer.command directly
+@app.command()
 def init() -> None:
     """
     Initialize NornFlow by setting up the necessary configuration files and directories.
@@ -23,44 +28,37 @@ def init() -> None:
     2. Copies a sample 'nornflow.yaml' file to the current working directory if it does not exist.
     3. Creates a 'tasks' directory and copies a sample 'hello_world.py' task file into it if the
     directory does not exist.
-
-    The paths for the configuration files and sample files are determined relative to the location
-    of this script.
     """
-    nornir_config_dir = Path.cwd() / NORNIR_DEFAULT_CONFIG_DIR
-    tasks_dir = Path.cwd() / "tasks"
-    sample_task_file = Path(__file__).parent / "samples" / "hello_world.py"
-    sample_nornflow_file = Path(__file__).parent / "samples" / "nornflow.yaml"
-    sample_nornir_configs_dir = Path(__file__).parent / "samples" / "nornir_configs"
-    nornflow_file = Path.cwd() / "nornflow.yaml"
+    #TODO: 'nornflow init' should open a dialog to ask the user where to create stuff and with what name (showing defaults)
+    # an option to skip the dialog and use defaults should be available as well (e.g. 'nornflow init --with-defaults')
+    
+    typer.secho(f"NornFlow will be initialized at {NORNIR_DEFAULT_CONFIG_DIR.parent}", fg=typer.colors.GREEN)
 
-    typer.secho(f"NornFlow will be initialized at {Path.cwd()}", fg=typer.colors.GREEN)
-
-    if create_directory(nornir_config_dir):
-        for item in sample_nornir_configs_dir.iterdir():
+    if create_directory(NORNIR_DEFAULT_CONFIG_DIR):
+        for item in SAMPLE_NORNIR_CONFIGS_DIR.iterdir():
             if item.is_dir():
-                shutil.copytree(item, nornir_config_dir / item.name)
+                shutil.copytree(item, NORNIR_DEFAULT_CONFIG_DIR / item.name)
             else:
-                shutil.copy(item, nornir_config_dir / item.name)
+                shutil.copy(item, NORNIR_DEFAULT_CONFIG_DIR / item.name)
         typer.secho(
-            f"Created a sample 'nornir_configs' directory: {nornir_config_dir}", 
+            f"Created a sample 'nornir_configs' directory: {NORNIR_DEFAULT_CONFIG_DIR}", 
             fg=typer.colors.GREEN
         )
 
-    if not nornflow_file.exists():
-        shutil.copy(sample_nornflow_file, nornflow_file)
-        typer.secho(f"Created a sample 'nornflow.yaml': {nornflow_file}", fg=typer.colors.GREEN)
+    if not NORNFLOW_CONFIG_FILE.exists():
+        shutil.copy(SAMPLE_NORNFLOW_FILE, NORNFLOW_CONFIG_FILE)
+        typer.secho(f"Created a sample 'nornflow.yaml': {NORNFLOW_CONFIG_FILE}", fg=typer.colors.GREEN)
     else:
-        typer.secho(f"File already exists: {nornflow_file}", fg=typer.colors.YELLOW)
+        typer.secho(f"File already exists: {NORNFLOW_CONFIG_FILE}", fg=typer.colors.YELLOW)
 
-    if create_directory(tasks_dir):
-        shutil.copy(sample_task_file, tasks_dir / sample_task_file.name)
+    if create_directory(TASKS_DIR):
+        shutil.copy(SAMPLE_TASK_FILE, TASKS_DIR / SAMPLE_TASK_FILE.name)
         typer.secho(
-            f"Created a sample 'hello_world' task: {tasks_dir / sample_task_file.name}", 
+            f"Created a sample 'hello_world' task: {TASKS_DIR / SAMPLE_TASK_FILE.name}", 
             fg=typer.colors.GREEN
         )
 
-    show_all()
+    show_info_post_init()
 
 
 def create_directory(dir_path: Path) -> bool:
@@ -100,15 +98,10 @@ def create_file(file_path: Path, content: dict = None) -> None:
         typer.secho(f"File already exists: {file_path}", fg=typer.colors.YELLOW)
 
 
-def show_all() -> None:
+def show_info_post_init() -> None:
     """
     Display all information about NornFlow, equivalent to running 'nornflow show --all'.
     """
     nornflow = NornFlow()
-    show_catalog(nornflow)
     show_nornflow_settings(nornflow)
-    show_nornir_configs(nornflow)
-
-
-if __name__ == "__main__":
-    typer.run(init)  # Use typer.run to run the command directly
+    show_catalog(nornflow)
