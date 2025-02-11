@@ -16,6 +16,13 @@ dependencies = [
     "termcolor>=2.5.0",
 ]
 
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+package = true
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["nornflow*"]
