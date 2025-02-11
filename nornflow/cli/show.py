@@ -1,19 +1,21 @@
 import inspect
 from typing import Any
 
-import click
+import typer
 from tabulate import tabulate
 from termcolor import colored
 
 from nornflow.nornflow import NornFlow
 
+app = typer.Typer()
 
-@click.command()
-@click.option("--catalog", "-c", is_flag=True, help="Display the task catalog")
-@click.option("--settings", "-s", is_flag=True, help="Display current NornFlow Settings")
-@click.option("--nornir-configs", "-n", is_flag=True, help="Display current Nornir Configs")
-@click.option("--all", "-a", is_flag=True, help="Display all information")
-def show(catalog: bool, settings: bool, nornir_configs: bool, all: bool) -> None:
+@app.command()
+def show(
+    catalog: bool = typer.Option(False, "--catalog", "-c", help="Display the task catalog"),
+    settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
+    nornir_configs: bool = typer.Option(False, "--nornir-configs", "-n", help="Display current Nornir Configs"),
+    all: bool = typer.Option(False, "--all", "-a", help="Display all information"),
+) -> None:
     """
     Displays summary info about NornFlow.
     """
@@ -83,7 +85,7 @@ def show_formatted_table(
     display_banner(banner_text, table)
 
     # Display the table
-    click.echo(table)
+    typer.echo(table)
 
 
 def render_task_catalog_table_data(nornflow: NornFlow) -> list[list[str]]:
@@ -201,4 +203,4 @@ def display_banner(banner_text: str, table: str) -> None:
     centered_banner = banner.center(table_width)
 
     # Add blank spaces before the banner
-    click.echo("\n\n" + centered_banner)
+    typer.echo("\n\n" + centered_banner)

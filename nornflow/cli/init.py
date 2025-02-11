@@ -1,7 +1,7 @@
 import shutil
 from pathlib import Path
 
-import click
+import typer
 import yaml
 
 from nornflow.cli.constants import (
@@ -10,8 +10,9 @@ from nornflow.cli.constants import (
 from nornflow.cli.show import show_catalog, show_nornflow_settings, show_nornir_configs
 from nornflow.nornflow import NornFlow
 
+app = typer.Typer()
 
-@click.command()
+@app.command()  # Remove app. and use typer.command directly
 def init() -> None:
     """
     Initialize NornFlow by setting up the necessary configuration files and directories.
@@ -33,7 +34,7 @@ def init() -> None:
     sample_nornir_configs_dir = Path(__file__).parent / "samples" / "nornir_configs"
     nornflow_file = Path.cwd() / "nornflow.yaml"
 
-    click.echo(click.style(f"NornFlow will be initialized at {Path.cwd()}", fg="green"))
+    typer.secho(f"NornFlow will be initialized at {Path.cwd()}", fg=typer.colors.GREEN)
 
     if create_directory(nornir_config_dir):
         for item in sample_nornir_configs_dir.iterdir():
@@ -41,22 +42,22 @@ def init() -> None:
                 shutil.copytree(item, nornir_config_dir / item.name)
             else:
                 shutil.copy(item, nornir_config_dir / item.name)
-        click.echo(
-            click.style(f"Created a sample 'nornir_configs' directory: {nornir_config_dir}", fg="green")
+        typer.secho(
+            f"Created a sample 'nornir_configs' directory: {nornir_config_dir}", 
+            fg=typer.colors.GREEN
         )
 
     if not nornflow_file.exists():
         shutil.copy(sample_nornflow_file, nornflow_file)
-        click.echo(click.style(f"Created a sample 'nornflow.yaml': {nornflow_file}", fg="green"))
+        typer.secho(f"Created a sample 'nornflow.yaml': {nornflow_file}", fg=typer.colors.GREEN)
     else:
-        click.echo(click.style(f"File already exists: {nornflow_file}", fg="yellow"))
+        typer.secho(f"File already exists: {nornflow_file}", fg=typer.colors.YELLOW)
 
     if create_directory(tasks_dir):
         shutil.copy(sample_task_file, tasks_dir / sample_task_file.name)
-        click.echo(
-            click.style(
-                f"Created a sample 'hello_world' task: {tasks_dir / sample_task_file.name}", fg="green"
-            )
+        typer.secho(
+            f"Created a sample 'hello_world' task: {tasks_dir / sample_task_file.name}", 
+            fg=typer.colors.GREEN
         )
 
     show_all()
@@ -73,9 +74,9 @@ def create_directory(dir_path: Path) -> bool:
     """
     if not dir_path.exists():
         dir_path.mkdir(parents=True, exist_ok=True)
-        click.echo(click.style(f"Created directory: {dir_path}", fg="green"))
+        typer.secho(f"Created directory: {dir_path}", fg=typer.colors.GREEN)
         return True
-    click.echo(click.style(f"Directory already exists: {dir_path}", fg="yellow"))
+    typer.secho(f"Directory already exists: {dir_path}", fg=typer.colors.YELLOW)
     return False
 
 
@@ -91,9 +92,12 @@ def create_file(file_path: Path, content: dict = None) -> None:
         if content:
             with Path.open(file_path, "w") as yaml_file:
                 yaml.dump(content, yaml_file, default_flow_style=False)
-        click.echo(click.style(f"Created {'empty ' if not content else ''}file: {file_path}", fg="green"))
+        typer.secho(
+            f"Created {'empty ' if not content else ''}file: {file_path}", 
+            fg=typer.colors.GREEN
+        )
     else:
-        click.echo(click.style(f"File already exists: {file_path}", fg="yellow"))
+        typer.secho(f"File already exists: {file_path}", fg=typer.colors.YELLOW)
 
 
 def show_all() -> None:
@@ -104,3 +108,7 @@ def show_all() -> None:
     show_catalog(nornflow)
     show_nornflow_settings(nornflow)
     show_nornir_configs(nornflow)
+
+
+if __name__ == "__main__":
+    typer.run(init)  # Use typer.run to run the command directly

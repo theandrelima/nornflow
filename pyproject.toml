@@ -91,4 +91,4 @@ line-length = 110
 profile = "black"
 
 [project.scripts]
-nornflow = "nornflow.cli.entrypoint:nornflow_cli"
+nornflow = "nornflow.cli.entrypoint:app"

@@ -1,21 +1,19 @@
-import click
+import typer
 
 from nornflow.nornflow import NornFlow
 
-@click.command()
-@click.argument("target", type=str)
-@click.option("--dry-run", "-d", is_flag=True, default=None, help="Run in dry-run mode")
-@click.option("--hosts", "-h", type=str, help="Specify the hosts to run the task on")
-@click.option("--groups", "-g", type=str, help="Specify the groups to run the task on")
-def run(target: str, dry_run: bool, hosts: str, groups: str) -> None:
+app = typer.Typer(help="Run NornFlow tasks and workflows")
+
+
+@app.command()
+def run(
+    target: str = typer.Argument(..., help="The name of the task or workflow to run"),
+    dry_run: bool = typer.Option(None, "--dry-run", "-d", help="Run in dry-run mode"),
+    hosts: str = typer.Option(None, "--hosts", "-h", help="Specify the hosts to run the task on"),
+    groups: str = typer.Option(None, "--groups", "-g", help="Specify the groups to run the task on"),
+) -> None:
     """
     Runs either a cataloged task or workflow - for workflows, the '.yaml' must be included.
-
-    Args:
-        target (str): The name of the task to run.
-        dry_run (bool): Flag to run the task in dry-run mode.
-        hosts (str): The hosts to run the task on.
-        groups (str): The groups to run the task on.
     """
     nornflow_kwargs = {"tasks_to_run": [target]}
 
@@ -32,9 +30,12 @@ def run(target: str, dry_run: bool, hosts: str, groups: str) -> None:
         nornflow_kwargs["inventory_filters"] = inventory_filters
 
     nornflow = NornFlow(**nornflow_kwargs)
-    click.echo(
-        click.style(
-            f"Running task: {target} (dry-run: {dry_run}, hosts: {hosts}, groups: {groups})", fg="green"
-        )
+    typer.secho(
+        f"Running task: {target} (dry-run: {dry_run}, hosts: {hosts}, groups: {groups})",
+        fg=typer.colors.GREEN,
     )
     nornflow.run()
+
+
+if __name__ == "__main__":
+    app()
