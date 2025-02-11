@@ -1,7 +1,8 @@
 import click
+
 from nornflow.nornflow import NornFlow
 
-@click.command(context_settings=dict(max_content_width=120))
+
 @click.argument("target", type=str)
 @click.option("--dry-run", "-d", is_flag=True, default=None, help="Run in dry-run mode")
 @click.option("--hosts", "-h", type=str, help="Specify the hosts to run the task on")
@@ -31,5 +32,9 @@ def run(target: str, dry_run: bool, hosts: str, groups: str) -> None:
         nornflow_kwargs["inventory_filters"] = inventory_filters
 
     nornflow = NornFlow(**nornflow_kwargs)
-    click.echo(click.style(f"Running task: {target} (dry-run: {dry_run}, hosts: {hosts}, groups: {groups})", fg="green"))
+    click.echo(
+        click.style(
+            f"Running task: {target} (dry-run: {dry_run}, hosts: {hosts}, groups: {groups})", fg="green"
+        )
+    )
     nornflow.run()

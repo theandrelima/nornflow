@@ -31,7 +31,7 @@ class NornFlow:
         self._inventory_filters = self._get_inventory_filters(kwargs)
         self._load_tasks_catalog()
         self.tasks_to_run = tasks_to_run or []
-        
+
         # kwargs need to be cleaned up before passing them to InitNornir
         self._remove_optional_settings_from_kwargs(kwargs)
 
@@ -277,7 +277,9 @@ class NornFlow:
         valid_keys = {"hosts", "groups"}
         invalid_keys = set(inventory_filters.keys()) - valid_keys
         if invalid_keys:
-            raise NornFlowInitializationError(["inventory_filters"], f"unknown filter keys included: {', '.join(invalid_keys)}")
+            raise NornFlowInitializationError(
+                ["inventory_filters"], f"unknown filter keys included: {', '.join(invalid_keys)}"
+            )
 
         return inventory_filters
 
