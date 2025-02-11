@@ -8,7 +8,6 @@ authors = [
     { name = "Andre Lima"}
 ]
 dependencies = [
-    "click>=8.1.8",
     "nornir>=3.5.0",
     "nornir-utils>=0.2.0",
     "python-dotenv>=1.0.1",

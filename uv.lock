@@ -94,7 +94,6 @@ name = "nornflow"
 version = "0.0.1"
 source = { virtual = "." }
 dependencies = [
-    { name = "click" },
     { name = "nornir" },
     { name = "nornir-utils" },
     { name = "python-dotenv" },
@@ -113,7 +112,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "click", specifier = ">=8.1.8" },
     { name = "nornir", specifier = ">=3.5.0" },
     { name = "nornir-utils", specifier = ">=0.2.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
