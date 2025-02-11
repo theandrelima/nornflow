@@ -2,7 +2,7 @@ import click
 
 from nornflow.nornflow import NornFlow
 
-
+@click.command()
 @click.argument("target", type=str)
 @click.option("--dry-run", "-d", is_flag=True, default=None, help="Run in dry-run mode")
 @click.option("--hosts", "-h", type=str, help="Specify the hosts to run the task on")
