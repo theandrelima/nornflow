@@ -1,0 +1,4 @@
+local:
+  data:
+    location: "local"
+    role: "localhost"

@@ -1,0 +1,6 @@
+localhost:
+  hostname: "127.0.0.1"
+  groups:
+    - local
+  data:
+    os: "linux"

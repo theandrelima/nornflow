@@ -177,7 +177,7 @@ cython_debug/
 todo*
 
 # local nornir configs dir
-nornir_configs/
+/nornir_configs/
 
 # local tasks dir
 tasks/
