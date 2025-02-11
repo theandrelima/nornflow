@@ -1,4 +1,5 @@
 import typer
+
 from nornflow.cli import init, run, show
 
 app = typer.Typer(

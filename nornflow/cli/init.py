@@ -5,17 +5,18 @@ import typer
 import yaml
 
 from nornflow.cli.constants import (
-    NORNIR_DEFAULT_CONFIG_DIR,
-    TASKS_DIR,
     NORNFLOW_CONFIG_FILE,
-    SAMPLE_TASK_FILE,
+    NORNIR_DEFAULT_CONFIG_DIR,
     SAMPLE_NORNFLOW_FILE,
     SAMPLE_NORNIR_CONFIGS_DIR,
+    SAMPLE_TASK_FILE,
+    TASKS_DIR,
 )
 from nornflow.cli.show import show_catalog, show_nornflow_settings
 from nornflow.nornflow import NornFlow
 
 app = typer.Typer()
+
 
 @app.command()
 def init() -> None:
@@ -29,9 +30,11 @@ def init() -> None:
     3. Creates a 'tasks' directory and copies a sample 'hello_world.py' task file into it if the
     directory does not exist.
     """
-    #TODO: 'nornflow init' should open a dialog to ask the user where to create stuff and with what name (showing defaults)
-    # an option to skip the dialog and use defaults should be available as well (e.g. 'nornflow init --with-defaults')
-    
+      # TODO: 'nornflow init' should open a dialog to ask the user where to create
+    # stuff and with what name (showing defaults)
+    # an option to skip the dialog and use defaults should be available as well
+    # (e.g. 'nornflow init --with-defaults')
+
     typer.secho(f"NornFlow will be initialized at {NORNIR_DEFAULT_CONFIG_DIR.parent}", fg=typer.colors.GREEN)
 
     if create_directory(NORNIR_DEFAULT_CONFIG_DIR):
@@ -41,8 +44,7 @@ def init() -> None:
             else:
                 shutil.copy(item, NORNIR_DEFAULT_CONFIG_DIR / item.name)
         typer.secho(
-            f"Created a sample 'nornir_configs' directory: {NORNIR_DEFAULT_CONFIG_DIR}", 
-            fg=typer.colors.GREEN
+            f"Created a sample 'nornir_configs' directory: {NORNIR_DEFAULT_CONFIG_DIR}", fg=typer.colors.GREEN
         )
 
     if not NORNFLOW_CONFIG_FILE.exists():
@@ -54,8 +56,7 @@ def init() -> None:
     if create_directory(TASKS_DIR):
         shutil.copy(SAMPLE_TASK_FILE, TASKS_DIR / SAMPLE_TASK_FILE.name)
         typer.secho(
-            f"Created a sample 'hello_world' task: {TASKS_DIR / SAMPLE_TASK_FILE.name}", 
-            fg=typer.colors.GREEN
+            f"Created a sample 'hello_world' task: {TASKS_DIR / SAMPLE_TASK_FILE.name}", fg=typer.colors.GREEN
         )
 
     show_info_post_init()
@@ -90,10 +91,7 @@ def create_file(file_path: Path, content: dict = None) -> None:
         if content:
             with Path.open(file_path, "w") as yaml_file:
                 yaml.dump(content, yaml_file, default_flow_style=False)
-        typer.secho(
-            f"Created {'empty ' if not content else ''}file: {file_path}", 
-            fg=typer.colors.GREEN
-        )
+        typer.secho(f"Created {'empty ' if not content else ''}file: {file_path}", fg=typer.colors.GREEN)
     else:
         typer.secho(f"File already exists: {file_path}", fg=typer.colors.YELLOW)
 

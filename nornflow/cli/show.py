@@ -2,36 +2,49 @@ import inspect
 from typing import Any
 
 import typer
+from nornir.core.exceptions import PluginNotRegistered
 from tabulate import tabulate
 from termcolor import colored
 
+from nornflow.cli.exceptions import NornFlowCLIShowError
 from nornflow.nornflow import NornFlow
 
 app = typer.Typer()
+
 
 @app.command()
 def show(
     catalog: bool = typer.Option(False, "--catalog", "-c", help="Display the task catalog"),
     settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
-    nornir_configs: bool = typer.Option(False, "--nornir-configs", "-n", help="Display current Nornir Configs"),
+    nornir_configs: bool = typer.Option(
+        False, "--nornir-configs", "-n", help="Display current Nornir Configs"
+    ),
     all: bool = typer.Option(False, "--all", "-a", help="Display all information"),
 ) -> None:
     """
     Displays summary info about NornFlow.
     """
-    nornflow = NornFlow()
+    try:
+        nornflow = NornFlow()
 
-    if all:
-        show_catalog(nornflow)
-        show_nornflow_settings(nornflow)
-        show_nornir_configs(nornflow)
-    else:
-        if catalog:
+        if all:
             show_catalog(nornflow)
-        if settings:
             show_nornflow_settings(nornflow)
-        if nornir_configs:
             show_nornir_configs(nornflow)
+        else:
+            if catalog:
+                show_catalog(nornflow)
+            if settings:
+                show_nornflow_settings(nornflow)
+            if nornir_configs:
+                show_nornir_configs(nornflow)
+    except PluginNotRegistered as e:
+        NornFlowCLIShowError(
+            message=f"{e!s}",
+            hint="Make sure you have the required Nornir plugin(s) installed in the environment.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2) # noqa: B904
 
 
 def show_catalog(nornflow: NornFlow) -> None:
