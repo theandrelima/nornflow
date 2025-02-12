@@ -175,6 +175,7 @@ class NornFlow:
         """
         if not inventory_filters:
             self._inventory_filters = {}
+            return
     
         if not isinstance(inventory_filters, dict):
             raise NornFlowInitializationError(["inventory_filters"], "is not a dict")
