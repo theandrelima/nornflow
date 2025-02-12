@@ -13,5 +13,7 @@ NONRFLOW_SETTINGS_OPTIONAL = {
     "imported_tasks_packages": [],
 }
 
-# used to check if the CLI kwargs passed to a NornFlow initializer are valid
+# Used to check if the kwargs passed to a NornFlow initializer are valid.
+# The args listed here are can only be passed through a nornflow settings YAML file
+# that will be used to initialize a NornFlowSettings object
 NORNFLOW_INVALID_INIT_KWARGS = ("nornir_config_file", "local_tasks_dirs", "imported_tasks_packages")

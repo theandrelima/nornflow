@@ -282,18 +282,6 @@ class NornFlow:
                 f"  - {'\n  - '.join(missing_tasks)}"
             )
 
-    def run(self) -> None:
-        """
-        Runs the NornFlow job.
-        """
-        print(self.inventory_filters)
-        self._check_tasks_to_run()
-
-        if self.settings.parallel_exec:
-            self._run_tasks_individually()
-        else:
-            self._run_grouped_tasks()
-
     def _run_tasks_individually(self) -> None:
         """
         Run all tasks individually.
@@ -356,6 +344,17 @@ class NornFlow:
         if invalid_keys:
             raise NornFlowInitializationError(invalid_keys)
 
+    def run(self) -> None:
+        """
+        Runs the NornFlow job.
+        """
+        print(self.inventory_filters)
+        self._check_tasks_to_run()
+
+        if self.settings.parallel_exec:
+            self._run_tasks_individually()
+        else:
+            self._run_grouped_tasks()
 
 # for testing purposes only
 if __name__ == "__main__":
