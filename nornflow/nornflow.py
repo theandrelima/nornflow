@@ -345,12 +345,21 @@ class NornFlow:
         if invalid_keys:
             raise NornFlowInitializationError(invalid_keys)
 
+    def _filter_inventory(self) -> None:
+        """
+        Filter the inventory based on the inventory_filters attribute.
+        """
+        if not self.inventory_filters:
+            return
+    
+        self.nornir.filter(**self.inventory_filters)
+        
     def run(self) -> None:
         """
         Runs the NornFlow job.
         """
-        print(self.inventory_filters)
         self._check_tasks_to_run()
+        self._filter_inventory()
 
         if self.settings.parallel_exec:
             self._run_tasks_individually()
