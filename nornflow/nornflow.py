@@ -23,14 +23,14 @@ from nornflow.utils import import_module_from_path, is_nornir_task
 
 class NornFlow:
     def __init__(
-        self, nornflow_settings: NornFlowSettings = None, tasks_to_run: list[str] = None, **kwargs: Any
+        self, nornflow_settings: NornFlowSettings = None, tasks_to_run: list[str] = None, inventory_filters: dict[str, list[str]] = None, **kwargs: Any
     ):
         # Some kwargs should only be set through the YAML settings file.
         self._check_invalid_kwargs(kwargs)
         self._settings = nornflow_settings or NornFlowSettings(**kwargs)
-        self._inventory_filters = self._get_inventory_filters(kwargs)
         self._load_tasks_catalog()
-        self.tasks_to_run = tasks_to_run or []
+        self.tasks_to_run = tasks_to_run
+        self.inventory_filters = inventory_filters
 
         # kwargs need to be cleaned up before passing them to InitNornir
         self._remove_optional_settings_from_kwargs(kwargs)
@@ -103,6 +103,107 @@ class NornFlow:
         raise TasksCatalogModificationError("Cannot set tasks catalog directly.")
 
     @property
+    def tasks_to_run(self) -> list[str]:
+        """
+        Get the tasks to run.
+
+        Returns:
+            list[str]: List of task names to run.
+        """
+        return self._tasks_to_run
+    
+    @tasks_to_run.setter
+    def tasks_to_run(self, tasks_to_run: list[str]) -> list[str]:
+        """
+        Validates the tasks_to_run input and sets the self._tasks_to_run attribute.
+    
+        Args:
+            tasks_to_run (list[str]): List of task names to run.
+    
+        Returns:
+            list[str]: The validated tasks to run list.
+    
+        Raises:
+            NornFlowInitializationError: If:
+                - tasks_to_run is not a list
+                - any item in the list is not a string
+        """
+        if not tasks_to_run:
+            self._tasks_to_run = []
+            return
+    
+        if not isinstance(tasks_to_run, list):
+            raise NornFlowInitializationError(["tasks_to_run"], "is not a list")
+    
+        if not all(isinstance(task, str) for task in tasks_to_run):
+            raise NornFlowInitializationError(
+                ["tasks_to_run"], 
+                "all items must be strings"
+            )
+    
+        self._tasks_to_run = tasks_to_run
+    
+    @property
+    def inventory_filters(self) -> dict[str, list[str]]:
+        """
+        Get the inventory filters.
+
+        Returns:
+            dict[str, list[str]]: Dictionary with 'hosts' and/or 'groups' keys,
+                each containing a list of strings.
+        """
+        return self._inventory_filters
+    
+    @inventory_filters.setter
+    def inventory_filters(self, inventory_filters: dict[str, list[str]]) -> dict[str, list[str]]:
+        """
+        Validates the inventory_filters input and sets the self._inventory_filters attribute.
+    
+        Args:
+            inventory_filters (dict[str, list[str]]): Dictionary with 'hosts' and/or 'groups' keys,
+                each containing a list of strings.
+    
+        Returns:
+            dict[str, list[str]]: The validated inventory filters dictionary.
+    
+        Raises:
+            NornFlowInitializationError: If:
+                - inventory_filters is not a dict
+                - contains invalid keys
+                - values are not lists
+                - list items are not strings
+        """
+        if not inventory_filters:
+            self._inventory_filters = {}
+    
+        if not isinstance(inventory_filters, dict):
+            raise NornFlowInitializationError(["inventory_filters"], "is not a dict")
+    
+        valid_keys = {"hosts", "groups"}
+        invalid_keys = set(inventory_filters.keys()) - valid_keys
+        if invalid_keys:
+            raise NornFlowInitializationError(
+                ["inventory_filters"], 
+                f"unknown filter keys included: {', '.join(invalid_keys)}"
+            )
+    
+        # Validate that values are lists of strings
+        for key, value in inventory_filters.items():
+            if not isinstance(value, list):
+                raise NornFlowInitializationError(
+                    ["inventory_filters"], 
+                    f"value for '{key}' is not a list"
+                )
+            
+            if not all(isinstance(item, str) for item in value):
+                raise NornFlowInitializationError(
+                    ["inventory_filters"], 
+                    f"all items in '{key}' must be strings"
+                )
+    
+        self._inventory_filters = inventory_filters
+
+    @property
     def filtered_tasks_catalog(self) -> dict[str, Any]:
         """
         Get the tasks catalog filtered by the tasks to run.
@@ -167,6 +268,9 @@ class NornFlow:
         Raises:
             TaskLoadingError: If a task to run is not in the tasks catalog.
         """
+        if not self.tasks_to_run:
+            raise NoTasksToRunError("No tasks selected to run.")
+
         missing_tasks = [task_name for task_name in self.tasks_to_run if task_name not in self.tasks_catalog]
 
         if missing_tasks:
@@ -182,9 +286,7 @@ class NornFlow:
         """
         Runs the NornFlow job.
         """
-        if not self.tasks_to_run:
-            raise NoTasksToRunError("No tasks selected to run.")
-
+        print(self.inventory_filters)
         self._check_tasks_to_run()
 
         if self.settings.parallel_exec:
@@ -253,35 +355,6 @@ class NornFlow:
         invalid_keys = [key for key in kwargs if key in NORNFLOW_INVALID_INIT_KWARGS]
         if invalid_keys:
             raise NornFlowInitializationError(invalid_keys)
-
-    def _get_inventory_filters(self, kwargs: dict[str, Any]) -> dict[str, str]:
-        """
-        Check if 'inventory_filters' exists in kwargs and validate it.
-
-        Args:
-            kwargs (dict[str, Any]): The kwargs dictionary to check.
-
-        Returns:
-            dict[str, str]: The inventory filters dictionary.
-
-        Raises:
-            NornFlowInitializationError: If 'inventory_filters' is not a dict or contains invalid keys.
-        """
-        inventory_filters = kwargs.pop("inventory_filters", None)
-        if inventory_filters is None:
-            return {}
-
-        if not isinstance(inventory_filters, dict):
-            raise NornFlowInitializationError(["inventory_filters"], " is not a dict")
-
-        valid_keys = {"hosts", "groups"}
-        invalid_keys = set(inventory_filters.keys()) - valid_keys
-        if invalid_keys:
-            raise NornFlowInitializationError(
-                ["inventory_filters"], f"unknown filter keys included: {', '.join(invalid_keys)}"
-            )
-
-        return inventory_filters
 
 
 # for testing purposes only
