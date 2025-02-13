@@ -10,6 +10,7 @@ authors = [
 dependencies = [
     "nornir>=3.5.0",
     "nornir-utils>=0.2.0",
+    "pydantic-serdes>=1.0.1",
     "pyyaml>=6.0.2",
     "tabulate>=0.9.0",
     "termcolor>=2.5.0",
