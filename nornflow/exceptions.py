@@ -2,11 +2,11 @@ class NornFlowError(Exception):
     """Base exception class for NornFlow."""
 
 
-class TasksCatalogModificationError(NornFlowError):
+class CatalogModificationError(NornFlowError):
     """Exception raised when attempting to modify the tasks catalog directly."""
 
-    def __init__(self):
-        super().__init__("Cannot set tasks catalog directly.")
+    def __init__(self, catalog_name: str):
+        super().__init__(f"Cannot set {catalog_name} catalog directly.")
 
 
 class MissingMandatorySettingError(NornFlowError):
@@ -51,7 +51,7 @@ class SettingsDataTypeError(NornFlowError):
         super().__init__("The configuration file must contain a dictionary.")
 
 
-class SettingsModificationError(Exception):
+class SettingsModificationError(NornFlowError):
     """Exception raised when attempting to modify the settings directly."""
 
     def __init__(self):
@@ -61,7 +61,7 @@ class SettingsModificationError(Exception):
         )
 
 
-class NornirConfigsModificationError(Exception):
+class NornirConfigsModificationError(NornFlowError):
     """Exception raised when attempting to modify the Nornir configs directly."""
 
     def __init__(self):
@@ -73,19 +73,6 @@ class NornirConfigsModificationError(Exception):
 
 class TaskLoadingError(NornFlowError):
     """Exception raised when there is an error loading tasks."""
-
-    def __init__(self, message: str):
-        super().__init__(message)
-
-
-class TaskDoesNotExistError(NornFlowError):
-    """Exception raised when a task does not exist."""
-
-    def __init__(self, task_names: str | list):
-        if isinstance(task_names, list):
-            task_names = ", ".join(task_names)
-
-        super().__init__(f"Some informed tasks are not present in the Tasks Catalog: {task_names}")
 
 
 class NoTasksToRunError(NornFlowError):
@@ -109,11 +96,11 @@ class ModuleImportError(NornFlowError):
         super().__init__(f"Error importing module '{module_name}' from '{module_path}': {error}")
 
 
-class LocalTaskDirectoryNotFoundError(NornFlowError):
+class LocalDirectoryNotFoundError(NornFlowError):
     """Exception raised when a specified directory is not found."""
 
-    def __init__(self, directory: str):
-        super().__init__(f"Directory not found: {directory}")
+    def __init__(self, directory: str, extra_message: str = ""):
+        super().__init__(f"Directory not found: {directory}{ - extra_message if extra_message else '.'}")
 
 
 class NornFlowInitializationError(NornFlowError):
@@ -124,3 +111,40 @@ class NornFlowInitializationError(NornFlowError):
             f"Invalid kwarg(s) passed to NornFlow initializer: {', '.join(invalid_kwargs)} {extra_message}"
         )
         self.invalid_kwargs = invalid_kwargs
+
+
+class NornFlowRunError(NornFlowError):
+    """Exception raised when there is an error executing a task."""
+
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
+class WorkflowError(Exception):
+    """Base exception class for Workflow-related errors."""
+
+    def __init__(self, message: str):
+        super().__init__(message)
+
+
+class WorkflowInitializationError(WorkflowError):
+    """Exception raised when there is an error initializing a Workflow."""
+
+    def __init__(self, message: str):
+        super().__init__(
+            message or "Either workflow_path or workflow_dict must be provided. If you want to create an empty workflow, initialize with 'empty_workflow' set to True."
+        )
+
+
+class TaskDoesNotExistError(WorkflowError):
+    """Exception raised when a task does not exist."""
+
+    def __init__(self, task_names: str | list):
+        if isinstance(task_names, list):
+            task_names = ", ".join(task_names)
+
+        super().__init__(f"Some informed tasks are not present in the Tasks Catalog: {task_names}")
+
+
+class WorkflowInventoryFilterError(WorkflowError):
+    """Exception raised when there is an error with the inventory filters in a Workflow."""

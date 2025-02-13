@@ -180,10 +180,10 @@ todo*
 /nornir_configs/
 
 # local tasks dir
-tasks/
+/tasks/
 
 # local workflows dir
-workflows/
+/workflows/
 
 # ruff
 .ruff*/

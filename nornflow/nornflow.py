@@ -1,42 +1,46 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Optional, Union
 
 from nornir import InitNornir
-from nornir.core.task import AggregatedResult, Task
 from nornir_utils.plugins.functions import print_result
 
-from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL, NORNFLOW_INVALID_INIT_KWARGS
+from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL, NORNFLOW_INVALID_INIT_KWARGS, NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS
+
 from nornflow.exceptions import (
+    NornFlowError,
     EmptyTaskCatalogError,
-    LocalTaskDirectoryNotFoundError,
+    LocalDirectoryNotFoundError,
     NornFlowInitializationError,
     NornirConfigsModificationError,
-    NoTasksToRunError,
     SettingsModificationError,
-    TaskDoesNotExistError,
     TaskLoadingError,
-    TasksCatalogModificationError,
+    CatalogModificationError,
+    NornFlowRunError,
 )
-from nornflow.inventory_filters import filter_by_groups, filter_by_hostname
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import import_module_from_path, is_nornir_task
+from nornflow.workflow import Workflow, WorkflowFactory
 
 
 class NornFlow:
     def __init__(
         self,
-        nornflow_settings: NornFlowSettings = None,
-        tasks_to_run: list[str] = None,
-        inventory_filters: dict[str, list[str]] = None,
+        nornflow_settings: Optional[NornFlowSettings] = None,
+        workflow: Optional[Workflow] = None,
         **kwargs: Any,
     ):
         # Some kwargs should only be set through the YAML settings file.
         self._check_invalid_kwargs(kwargs)
+        
+        # a NornFlow object must have a NornFlowSettings object
         self._settings = nornflow_settings or NornFlowSettings(**kwargs)
+        
+        # a NornFlow object can exist without a Workflow object BEFORE the run() method is called
+        self._workflow = workflow
+        
         self._load_tasks_catalog()
-        self.tasks_to_run = tasks_to_run
-        self.inventory_filters = inventory_filters
-
+        self._load_workflows_catalog()
+        
         # kwargs need to be cleaned up before passing them to InitNornir
         self._remove_optional_settings_from_kwargs(kwargs)
 
@@ -85,131 +89,67 @@ class NornFlow:
         raise SettingsModificationError()
 
     @property
-    def tasks_catalog(self) -> dict[str, Any]:
+    def tasks_catalog(self) -> dict[str, Callable]:
         """
         Get the tasks catalog.
 
         Returns:
-            Dict[str, Any]: Dictionary of task names and their corresponding functions.
+            Dict[str, Callable]: Dictionary of task names and their corresponding functions.
         """
         return self._tasks_catalog
 
     @tasks_catalog.setter
-    def tasks_catalog(self, value: dict[str, Any]) -> None:
+    def tasks_catalog(self, _: Any) -> None:
         """
         Prevent setting the tasks catalog directly.
-
-        Args:
-            value (Dict[str, Any]): Dictionary of task names and their corresponding functions.
 
         Raises:
             AttributeError: Always raised to prevent direct setting of the tasks catalog.
         """
-        raise TasksCatalogModificationError("Cannot set tasks catalog directly.")
+        raise CatalogModificationError("tasks")
 
     @property
-    def tasks_to_run(self) -> list[str]:
+    def workflows_catalog(self) -> dict[str, Path]:
         """
-        Get the tasks to run.
+        Get the workflows catalog.
 
         Returns:
-            list[str]: List of task names to run.
+            Dict[str, Callable]: Dictionary of workflows names and the correspoding file Path to it.
         """
-        return self._tasks_to_run
+        return self._workflows_catalog
 
-    @tasks_to_run.setter
-    def tasks_to_run(self, tasks_to_run: list[str]) -> list[str]:
+    @workflows_catalog.setter
+    def workflows_catalog(self, _: Any) -> None:
         """
-        Validates the tasks_to_run input and sets the self._tasks_to_run attribute.
-
-        Args:
-            tasks_to_run (list[str]): List of task names to run.
-
-        Returns:
-            list[str]: The validated tasks to run list.
+        Prevent setting the workflows catalog directly.
 
         Raises:
-            NornFlowInitializationError: If:
-                - tasks_to_run is not a list
-                - any item in the list is not a string
+            AttributeError: Always raised to prevent direct setting of the tasks catalog.
         """
-        if not tasks_to_run:
-            self._tasks_to_run = []
-            return
-
-        if not isinstance(tasks_to_run, list):
-            raise NornFlowInitializationError(["tasks_to_run"], "is not a list")
-
-        if not all(isinstance(task, str) for task in tasks_to_run):
-            raise NornFlowInitializationError(["tasks_to_run"], "all items must be strings")
-
-        self._tasks_to_run = tasks_to_run
+        raise CatalogModificationError("workflows")
 
     @property
-    def inventory_filters(self) -> dict[str, list[str]]:
+    def workflow(self) -> Union[str, Workflow]:
         """
-        Get the inventory filters.
+        Get the workflow object.
 
         Returns:
-            dict[str, list[str]]: Dictionary with 'hosts' and/or 'groups' keys,
-                each containing a list of strings.
+            Union[str, Workflow]: The workflow object.
         """
-        return self._inventory_filters
-
-    @inventory_filters.setter
-    def inventory_filters(self, inventory_filters: dict[str, list[str]]) -> dict[str, list[str]]:
+        return self._workflow
+    
+    @workflow.setter
+    def workflow(self, value: "Workflow") -> None:
         """
-        Validates the inventory_filters input and sets the self._inventory_filters attribute.
+        Set the workflow object.
 
         Args:
-            inventory_filters (dict[str, list[str]]): Dictionary with 'hosts' and/or 'groups' keys,
-                each containing a list of strings.
-
-        Returns:
-            dict[str, list[str]]: The validated inventory filters dictionary.
-
-        Raises:
-            NornFlowInitializationError: If:
-                - inventory_filters is not a dict
-                - contains invalid keys
-                - values are not lists
-                - list items are not strings
+            value (Any): The workflow object to set.
         """
-        if not inventory_filters:
-            self._inventory_filters = {}
-            return
-
-        if not isinstance(inventory_filters, dict):
-            raise NornFlowInitializationError(["inventory_filters"], "is not a dict")
-
-        valid_keys = {"hosts", "groups"}
-        invalid_keys = set(inventory_filters.keys()) - valid_keys
-        if invalid_keys:
-            raise NornFlowInitializationError(
-                ["inventory_filters"], f"unknown filter keys included: {', '.join(invalid_keys)}"
-            )
-
-        # Validate that values are lists of strings
-        for key, value in inventory_filters.items():
-            if not isinstance(value, list):
-                raise NornFlowInitializationError(["inventory_filters"], f"value for '{key}' is not a list")
-
-            if not all(isinstance(item, str) for item in value):
-                raise NornFlowInitializationError(
-                    ["inventory_filters"], f"all items in '{key}' must be strings"
-                )
-
-        self._inventory_filters = inventory_filters
-
-    @property
-    def filtered_tasks_catalog(self) -> dict[str, Any]:
-        """
-        Get the tasks catalog filtered by the tasks to run.
-
-        Returns:
-            Dict[str, Any]: Dictionary of task names and their corresponding functions.
-        """
-        return {k: v for k, v in self.tasks_catalog.items() if k in self.tasks_to_run}
+        if not isinstance(value, Workflow):
+            raise NornFlowError(f"NornFlow.workflow MUST be a Workflow object, but and object of  {type(value)} was provided: {value}")
+        
+        self._workflow = value
 
     def _load_tasks_catalog(self) -> None:
         """
@@ -236,18 +176,18 @@ class NornFlow:
         """
         task_path = Path(task_dir)
         if not task_path.is_dir():
-            raise LocalTaskDirectoryNotFoundError(task_dir)
+            raise LocalDirectoryNotFoundError(directory=task_dir, extra_message="Couldn't load tasks.")
 
         for py_file in task_path.rglob("*.py"):
             try:
                 module_name = py_file.stem
                 module_path = str(py_file)
                 module = import_module_from_path(module_name, module_path)
-                self._register_tasks_from_module(module)
+                self._register_nornir_tasks_from_module(module)
             except Exception as e:
                 raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e
 
-    def _register_tasks_from_module(self, module: Any) -> None:
+    def _register_nornir_tasks_from_module(self, module: Any) -> None:
         """
         Register tasks from a module.
 
@@ -259,64 +199,34 @@ class NornFlow:
             if is_nornir_task(attr):
                 self._tasks_catalog[attr_name] = attr
 
-    def _check_tasks_to_run(self) -> None:
+    def _load_workflows_catalog(self) -> None:
         """
-        Check if the tasks to run are in the tasks catalog.
-
-        Raises:
-            TaskLoadingError: If a task to run is not in the tasks catalog.
+        Entrypoint method that will put in motion the logic to discover and load
+        all Nornir tasks from directories specified in the NornFlow configuration.
         """
-        if not self.tasks_to_run:
-            raise NoTasksToRunError("No tasks selected to run.")
+        self._workflows_catalog = {}
+        for workflow_dir in self.settings.local_workflows_dirs:
+            self._discover_workflows_in_dir(workflow_dir)
 
-        missing_tasks = [task_name for task_name in self.tasks_to_run if task_name not in self.tasks_catalog]
-
-        if missing_tasks:
-            if not self.settings.ignore_missing_tasks:
-                raise TaskDoesNotExistError(missing_tasks)
-
-            print(
-                "The following tasks were not found in the tasks catalog and will be ignored:\n"
-                f"  - {'\n  - '.join(missing_tasks)}"
-            )
-
-    def _run_tasks_individually(self) -> None:
+    def _discover_workflows_in_dir(self, workflow_dir: str) -> None:
         """
-        Run all tasks individually.
-        """
-        print("Running tasks individually")
-        for task_func in self.filtered_tasks_catalog.values():
-            result = self.nornir.run(task=task_func)
-            print_result(result)
-
-    def _run_grouped_tasks(self) -> None:
-        """
-        Run tasks grouped together.
-
-        This method runs the tasks grouped by calling the `_parent_task` method
-        and then prints the aggregated result.
-        """
-        print("Running grouped tasks")
-        result = self.nornir.run(task=self._parent_task)
-        print_result(result)
-
-    # TODO: this should probably be extracted from here into the utils module.
-    def _parent_task(self, task: Task) -> AggregatedResult:
-        """
-        Parent task that runs all tasks in the tasks catalog.
+        Discover and load workflows from all files in a specific directory that match the supported extensions.
 
         Args:
-            task (Task): The Nornir task object.
+            workflow_dir (str): Path to the directory containing workflow files.
 
-        Returns:
-            AggregatedResult: The aggregated result of all tasks.
+        Raises:
+            LocalTaskDirectoryNotFoundError: If the specified directory does not exist.
         """
-        aggregated_result = AggregatedResult(task.name)
-        for task_func in self.filtered_tasks_catalog.values():
-            result = task.run(task=task_func)
-            aggregated_result[task_func.__name__] = result
-        return aggregated_result
+        workflow_path = Path(workflow_dir)
+        if not workflow_path.is_dir():
+            raise LocalDirectoryNotFoundError(directory=workflow_dir, extra_message="Couldn't load workflows.")
 
+        for file in workflow_path.rglob("*"):
+            if file.suffix in NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS:
+                self._workflows_catalog[file.name] = file
+
+    
     def _remove_optional_settings_from_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
         Remove keys from kwargs that match the keys in NONRFLOW_OPTIONAL_SETTINGS.
@@ -342,47 +252,157 @@ class NornFlow:
         if invalid_keys:
             raise NornFlowInitializationError(invalid_keys)
 
-    def _filter_inventory(self) -> None:
+    def _ensure_workflow(self) -> None:
         """
-        Filter the inventory based on the inventory_filters attribute.
+        Checks if self.workflow is set. If not, raises NornFlowRunError.
+        
+        Otherwise, if self.workflow contains a string, assumes it is workflow name, and attempts to 
+        set self.workflow to a Workflow object created from a file path in self.workflows_catalog 
+        associated with that workflow name. If none is found, raises a NornFlowRunError.
+        
+        If self.workflow is a Workflow object, does nothing.
+
+        Raises:
+            NornFlowRunError: If self.workflow is not set or if the workflow name is not found in the workflows catalog.
         """
-        print("inventory_filters: ", self.inventory_filters)
+        if not self.workflow:
+            raise NornFlowRunError("No Workflow object set was provided.")
+        
+        if isinstance(self.workflow, str):
+            workflow_name = self.workflow
+            workflow_path = self.workflows_catalog.get(workflow_name)
 
-        hosts, groups = self.inventory_filters.get("hosts"), self.inventory_filters.get("groups")
+            if not workflow_path:
+                raise NornFlowRunError(f"Workflow '{workflow_name}' not found in the workflows catalog.")
 
-        if hosts:
-            self.nornir = self.nornir.filter(
-                filter_func=filter_by_hostname, hostnames=self.inventory_filters["hosts"]
-            )
-
-        if groups:
-            self.nornir = self.nornir.filter(
-                filter_func=filter_by_groups, groups=self.inventory_filters["groups"]
-            )
-
+            self.workflow = WorkflowFactory(workflow_path=workflow_path).create()
+    
     def run(self) -> None:
         """
         Runs the NornFlow job.
         """
-        self._check_tasks_to_run()
-        self._filter_inventory()
-
-        if self.settings.parallel_exec:
-            self._run_tasks_individually()
-        else:
-            self._run_grouped_tasks()
+        self._ensure_workflow()
+        self.workflow.run(self.nornir, self.tasks_catalog)
 
 
-# for testing purposes only
-if __name__ == "__main__":
-    nornflow = NornFlow(tasks_to_run=["task1", "task2", "no_task"])
-    # nornflow.run()
-    # print(nornflow.settings)
-    # print(dir(nornflow.nornir.inventory.hosts["leaf1-ios"]))
-    # print(nornflow.nornir.inventory.hosts["leaf1-ios"].platform)
-    from nornflow.inventory_filters import filter_by_groups, filter_by_hostname
+class NornFlowBuilder:
+    """
+    Builder class for constructing NornFlow objects.
 
-    # print(nornflow.nornir.filter(filter_func=filter_by_hostname, hostnames=["leaf1-ios"]).inventory.hosts["leaf1-ios"].dict())
-    print(nornflow.nornir.filter(filter_func=filter_by_groups, groups=["device_role__leaf"]).inventory.hosts)
+    Usage:
+        - Use the with_settings(), with_workflow_path(), with_workflow_dict(), with_workflow_object(), with_workflow_name(), and with_kwargs() 
+          methods to set configurations.
+        - Call the build() method to create a NornFlow object.
+        - If both a workflow_object and a workflow_name are provided, the workflow object will be preferred.
+    """
 
-    # print(nornflow.nornir.inventory.dict())
+    def __init__(self):
+        """
+        Initialize the NornFlowBuilder with default values.
+        """
+        self._settings: Optional[NornFlowSettings] = None
+        self._workflow_path: Optional[Union[str, Path]] = None
+        self._workflow_dict: Optional[dict[str, Any]] = None
+        self._workflow_object: Optional[Workflow] = None
+        self._workflow_name: Optional[str] = None
+        self._kwargs: dict[str, Any] = {}
+
+    def with_settings(self, settings: NornFlowSettings) -> 'NornFlowBuilder':
+        """
+        Set the NornFlowSettings for the builder.
+
+        Args:
+            settings (NornFlowSettings): The NornFlowSettings object.
+
+        Returns:
+            NornFlowBuilder: The builder instance.
+        """
+        self._settings = settings
+        return self
+
+    def with_workflow_path(self, workflow_path: Union[str, Path]) -> 'NornFlowBuilder':
+        """
+        Set the workflow path for the builder.
+
+        Args:
+            workflow_path (Union[str, Path]): Path to the workflow file.
+
+        Returns:
+            NornFlowBuilder: The builder instance.
+        """
+        self._workflow_path = workflow_path
+        return self
+
+    def with_workflow_dict(self, workflow_dict: dict[str, Any]) -> 'NornFlowBuilder':
+        """
+        Set the workflow dictionary for the builder.
+
+        Args:
+            workflow_dict (dict[str, Any]): Dictionary representing the workflow.
+
+        Returns:
+            NornFlowBuilder: The builder instance.
+        """
+        self._workflow_dict = workflow_dict
+        return self
+
+    def with_workflow_object(self, workflow_object: Workflow) -> 'NornFlowBuilder':
+        """
+        Set the workflow object for the builder.
+
+        Args:
+            workflow_object (Workflow): A fully formed Workflow object.
+
+        Returns:
+            NornFlowBuilder: The builder instance.
+        """
+        self._workflow_object = workflow_object
+        return self
+    
+    def with_workflow_name(self, workflow_name: str) -> 'NornFlowBuilder':
+        """
+        Set the workflow name for the builder.
+
+        Args:
+            workflow_name (str): The name of the workflow to set.
+
+        Returns:
+            NornFlowBuilder: The builder instance.
+        """
+        self._workflow_name = workflow_name
+        return self
+
+    def with_kwargs(self, **kwargs: Any) -> 'NornFlowBuilder':
+        """
+        Set additional keyword arguments for the builder.
+
+        Args:
+            **kwargs (Any): Additional keyword arguments.
+
+        Returns:
+            NornFlowBuilder: The builder instance.
+        """
+        self._kwargs.update(kwargs)
+        return self
+
+    def build(self) -> NornFlow:
+        """
+        Build and return a NornFlow object based on the provided configurations.
+
+        Returns:
+            NornFlow: The constructed NornFlow object.
+        """
+        workflow = self._workflow_object or self._workflow_name
+        if not workflow:
+            if self._workflow_path or self._workflow_dict:
+                workflow_factory = WorkflowFactory(
+                    workflow_path=self._workflow_path,
+                    workflow_dict=self._workflow_dict
+                )
+                workflow = workflow_factory.create()
+
+        return NornFlow(
+            nornflow_settings=self._settings,
+            workflow=workflow,
+            **self._kwargs
+        )
