@@ -19,7 +19,7 @@ from nornflow.exceptions import (
 )
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import import_module_from_path, is_nornir_task
-
+from nornflow.inventory_filters import filter_by_hostname, filter_by_groups
 
 class NornFlow:
     def __init__(
@@ -349,10 +349,15 @@ class NornFlow:
         """
         Filter the inventory based on the inventory_filters attribute.
         """
-        if not self.inventory_filters:
-            return
-    
-        self.nornir.filter(**self.inventory_filters)
+        print("inventory_filters: ", self.inventory_filters)
+
+        hosts, groups = self.inventory_filters.get("hosts"), self.inventory_filters.get("groups")
+        
+        if hosts:
+            self.nornir = self.nornir.filter(filter_func=filter_by_hostname, hostnames=self.inventory_filters["hosts"])
+        
+        if groups:
+            self.nornir = self.nornir.filter(filter_func=filter_by_groups, groups=self.inventory_filters["groups"])
         
     def run(self) -> None:
         """
@@ -371,6 +376,10 @@ if __name__ == "__main__":
     nornflow = NornFlow(tasks_to_run=["task1", "task2", "no_task"])
     # nornflow.run()
     # print(nornflow.settings)
-    print(nornflow.nornir_configs)
-    # nornflow.settings = {}
-    # nornflow.nornir_configs = {}
+    # print(dir(nornflow.nornir.inventory.hosts["leaf1-ios"]))
+    # print(nornflow.nornir.inventory.hosts["leaf1-ios"].platform)
+    from nornflow.inventory_filters import filter_by_groups, filter_by_hostname
+    # print(nornflow.nornir.filter(filter_func=filter_by_hostname, hostnames=["leaf1-ios"]).inventory.hosts["leaf1-ios"].dict())
+    print(nornflow.nornir.filter(filter_func=filter_by_groups, groups=["device_role__leaf"]).inventory.hosts)
+
+    # print(nornflow.nornir.inventory.dict())
