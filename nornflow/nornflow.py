@@ -17,13 +17,18 @@ from nornflow.exceptions import (
     TaskLoadingError,
     TasksCatalogModificationError,
 )
+from nornflow.inventory_filters import filter_by_groups, filter_by_hostname
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import import_module_from_path, is_nornir_task
-from nornflow.inventory_filters import filter_by_hostname, filter_by_groups
+
 
 class NornFlow:
     def __init__(
-        self, nornflow_settings: NornFlowSettings = None, tasks_to_run: list[str] = None, inventory_filters: dict[str, list[str]] = None, **kwargs: Any
+        self,
+        nornflow_settings: NornFlowSettings = None,
+        tasks_to_run: list[str] = None,
+        inventory_filters: dict[str, list[str]] = None,
+        **kwargs: Any,
     ):
         # Some kwargs should only be set through the YAML settings file.
         self._check_invalid_kwargs(kwargs)
@@ -111,18 +116,18 @@ class NornFlow:
             list[str]: List of task names to run.
         """
         return self._tasks_to_run
-    
+
     @tasks_to_run.setter
     def tasks_to_run(self, tasks_to_run: list[str]) -> list[str]:
         """
         Validates the tasks_to_run input and sets the self._tasks_to_run attribute.
-    
+
         Args:
             tasks_to_run (list[str]): List of task names to run.
-    
+
         Returns:
             list[str]: The validated tasks to run list.
-    
+
         Raises:
             NornFlowInitializationError: If:
                 - tasks_to_run is not a list
@@ -131,18 +136,15 @@ class NornFlow:
         if not tasks_to_run:
             self._tasks_to_run = []
             return
-    
+
         if not isinstance(tasks_to_run, list):
             raise NornFlowInitializationError(["tasks_to_run"], "is not a list")
-    
+
         if not all(isinstance(task, str) for task in tasks_to_run):
-            raise NornFlowInitializationError(
-                ["tasks_to_run"], 
-                "all items must be strings"
-            )
-    
+            raise NornFlowInitializationError(["tasks_to_run"], "all items must be strings")
+
         self._tasks_to_run = tasks_to_run
-    
+
     @property
     def inventory_filters(self) -> dict[str, list[str]]:
         """
@@ -153,19 +155,19 @@ class NornFlow:
                 each containing a list of strings.
         """
         return self._inventory_filters
-    
+
     @inventory_filters.setter
     def inventory_filters(self, inventory_filters: dict[str, list[str]]) -> dict[str, list[str]]:
         """
         Validates the inventory_filters input and sets the self._inventory_filters attribute.
-    
+
         Args:
             inventory_filters (dict[str, list[str]]): Dictionary with 'hosts' and/or 'groups' keys,
                 each containing a list of strings.
-    
+
         Returns:
             dict[str, list[str]]: The validated inventory filters dictionary.
-    
+
         Raises:
             NornFlowInitializationError: If:
                 - inventory_filters is not a dict
@@ -176,32 +178,27 @@ class NornFlow:
         if not inventory_filters:
             self._inventory_filters = {}
             return
-    
+
         if not isinstance(inventory_filters, dict):
             raise NornFlowInitializationError(["inventory_filters"], "is not a dict")
-    
+
         valid_keys = {"hosts", "groups"}
         invalid_keys = set(inventory_filters.keys()) - valid_keys
         if invalid_keys:
             raise NornFlowInitializationError(
-                ["inventory_filters"], 
-                f"unknown filter keys included: {', '.join(invalid_keys)}"
+                ["inventory_filters"], f"unknown filter keys included: {', '.join(invalid_keys)}"
             )
-    
+
         # Validate that values are lists of strings
         for key, value in inventory_filters.items():
             if not isinstance(value, list):
-                raise NornFlowInitializationError(
-                    ["inventory_filters"], 
-                    f"value for '{key}' is not a list"
-                )
-            
+                raise NornFlowInitializationError(["inventory_filters"], f"value for '{key}' is not a list")
+
             if not all(isinstance(item, str) for item in value):
                 raise NornFlowInitializationError(
-                    ["inventory_filters"], 
-                    f"all items in '{key}' must be strings"
+                    ["inventory_filters"], f"all items in '{key}' must be strings"
                 )
-    
+
         self._inventory_filters = inventory_filters
 
     @property
@@ -352,13 +349,17 @@ class NornFlow:
         print("inventory_filters: ", self.inventory_filters)
 
         hosts, groups = self.inventory_filters.get("hosts"), self.inventory_filters.get("groups")
-        
+
         if hosts:
-            self.nornir = self.nornir.filter(filter_func=filter_by_hostname, hostnames=self.inventory_filters["hosts"])
-        
+            self.nornir = self.nornir.filter(
+                filter_func=filter_by_hostname, hostnames=self.inventory_filters["hosts"]
+            )
+
         if groups:
-            self.nornir = self.nornir.filter(filter_func=filter_by_groups, groups=self.inventory_filters["groups"])
-        
+            self.nornir = self.nornir.filter(
+                filter_func=filter_by_groups, groups=self.inventory_filters["groups"]
+            )
+
     def run(self) -> None:
         """
         Runs the NornFlow job.
@@ -371,6 +372,7 @@ class NornFlow:
         else:
             self._run_grouped_tasks()
 
+
 # for testing purposes only
 if __name__ == "__main__":
     nornflow = NornFlow(tasks_to_run=["task1", "task2", "no_task"])
@@ -379,6 +381,7 @@ if __name__ == "__main__":
     # print(dir(nornflow.nornir.inventory.hosts["leaf1-ios"]))
     # print(nornflow.nornir.inventory.hosts["leaf1-ios"].platform)
     from nornflow.inventory_filters import filter_by_groups, filter_by_hostname
+
     # print(nornflow.nornir.filter(filter_func=filter_by_hostname, hostnames=["leaf1-ios"]).inventory.hosts["leaf1-ios"].dict())
     print(nornflow.nornir.filter(filter_func=filter_by_groups, groups=["device_role__leaf"]).inventory.hosts)
 

@@ -47,4 +47,3 @@ class NornFlowCLIError(Exception):
 
 class NornFlowCLIShowError(NornFlowCLIError):
     """Raised when there are errors displaying information."""
-

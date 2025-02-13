@@ -44,7 +44,7 @@ def show(
             hint="Make sure you have the required Nornir plugin(s) installed in the environment.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2) # noqa: B904
+        raise typer.Exit(code=2)  # noqa: B904
 
 
 def show_catalog(nornflow: NornFlow) -> None:

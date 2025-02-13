@@ -1,7 +1,8 @@
-from typing import List
+
 from nornir.core.inventory import Host
 
-def filter_by_hostname(host: Host, hostnames: List[str]) -> bool:
+
+def filter_by_hostname(host: Host, hostnames: list[str]) -> bool:
     """
     Filter hosts by hostname.
 
@@ -15,7 +16,7 @@ def filter_by_hostname(host: Host, hostnames: List[str]) -> bool:
     return host.name in hostnames
 
 
-def filter_by_groups(host: Host, groups: List[str]) -> bool:
+def filter_by_groups(host: Host, groups: list[str]) -> bool:
     """
     Filter hosts by group membership.
 

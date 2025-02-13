@@ -1,12 +1,12 @@
+
 import typer
 
 from nornflow.nornflow import NornFlow
-from typing import List, Optional
 
 app = typer.Typer(help="Run NornFlow tasks and workflows")
 
 
-def csv_to_list(value: str | list | None) -> List[str]:
+def csv_to_list(value: str | list | None) -> list[str]:
     """
     Convert a comma-separated string or list into a list of stripped strings.
 
@@ -37,33 +37,32 @@ def csv_to_list(value: str | list | None) -> List[str]:
         value = ",".join(value)
     return [x.strip() for x in value.split(",")]
 
+
+# Define Options as module-level constants
+HOSTS_OPTION = typer.Option(
+    [],
+    "--hosts",
+    "-h",
+    callback=csv_to_list,
+    help="Comma-separated list of hosts to run the task on",
+)
+
+GROUPS_OPTION = typer.Option(
+    [],
+    "--groups",
+    "-g",
+    callback=csv_to_list,
+    help="Comma-separated list of groups to run the task on",
+)
+
 @app.command()
 def run(
-    target: str = typer.Argument(
-        ..., 
-        help="The name of the task or workflow to run"
-    ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        "-d",
-        help="Run in dry-run mode [default: False]"
-    ),
-    hosts: List[str] = typer.Option(
-        [],  # Change default from None to empty list
-        "--hosts",
-        "-h",
-        callback=csv_to_list,
-        help="Comma-separated list of hosts to run the task on"
-    ),
-    groups: List[str] = typer.Option(
-        [],  # Change default from None to empty list
-        "--groups",
-        "-g",
-        callback=csv_to_list,
-        help="Comma-separated list of groups to run the task on"
-    ),
+    target: str = typer.Argument(..., help="The name of the task or workflow to run"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-d", help="Run in dry-run mode [default: False]"),
+    hosts: list[str] = HOSTS_OPTION,
+    groups: list[str] = GROUPS_OPTION,
 ) -> None:
+    # ...rest of the function...
     """
     Runs either a cataloged task or workflow - for workflows, the '.yaml' must be included.
     """
