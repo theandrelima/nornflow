@@ -182,9 +182,15 @@ todo*
 # local tasks dir
 tasks/
 
+# local workflows dir
+workflows/
+
 # ruff
 .ruff*/
 
 # bkp files and dirs
 *.bkp
 *_bkp
+
+# Ignore nornflow.yaml file in the root directory
+/nornflow.yaml
