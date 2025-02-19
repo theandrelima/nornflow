@@ -20,7 +20,6 @@ def read_yaml_file(file_path: str) -> dict:
     Returns:
         Dict: Dictionary containing the YAML file contents.
     """
-    print(f"Reading YAML file: {file_path}")
     path = Path(file_path)
     with path.open() as file:
         return yaml.safe_load(file)
