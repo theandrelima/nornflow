@@ -1,3 +1,5 @@
+# noqa: INP001
+
 from nornir.core.task import Result, Task
 
 
@@ -15,8 +17,4 @@ def greet_user(task: Task, greeting: str = "Hello", name: str = "User") -> Resul
     """
     message = f"{greeting}, {name}! Greeting from {task.host.name}"
 
-    return Result(
-        host=task.host,
-        result=message,
-        changed=False  # Task doesn't modify anything
-    )
+    return Result(host=task.host, result=message, changed=False)  # Task doesn't modify anything

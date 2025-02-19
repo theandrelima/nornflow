@@ -1,21 +1,24 @@
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any
 
 from nornir import InitNornir
-from nornir_utils.plugins.functions import print_result
 
-from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL, NORNFLOW_INVALID_INIT_KWARGS, NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS
-
+from nornflow.constants import (
+    NONRFLOW_SETTINGS_OPTIONAL,
+    NORNFLOW_INVALID_INIT_KWARGS,
+    NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS,
+)
 from nornflow.exceptions import (
-    NornFlowError,
+    CatalogModificationError,
     EmptyTaskCatalogError,
     LocalDirectoryNotFoundError,
+    NornFlowError,
     NornFlowInitializationError,
+    NornFlowRunError,
     NornirConfigsModificationError,
     SettingsModificationError,
     TaskLoadingError,
-    CatalogModificationError,
-    NornFlowRunError,
 )
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import import_module_from_path, is_nornir_task
@@ -25,22 +28,22 @@ from nornflow.workflow import Workflow, WorkflowFactory
 class NornFlow:
     def __init__(
         self,
-        nornflow_settings: Optional[NornFlowSettings] = None,
-        workflow: Optional[Workflow] = None,
+        nornflow_settings: NornFlowSettings | None = None,
+        workflow: Workflow | None = None,
         **kwargs: Any,
     ):
         # Some kwargs should only be set through the YAML settings file.
         self._check_invalid_kwargs(kwargs)
-        
+
         # a NornFlow object must have a NornFlowSettings object
         self._settings = nornflow_settings or NornFlowSettings(**kwargs)
-        
+
         # a NornFlow object can exist without a Workflow object BEFORE the run() method is called
         self._workflow = workflow
-        
+
         self._load_tasks_catalog()
         self._load_workflows_catalog()
-        
+
         # kwargs need to be cleaned up before passing them to InitNornir
         self._remove_optional_settings_from_kwargs(kwargs)
 
@@ -129,7 +132,7 @@ class NornFlow:
         raise CatalogModificationError("workflows")
 
     @property
-    def workflow(self) -> Union[str, Workflow]:
+    def workflow(self) -> str | Workflow:
         """
         Get the workflow object.
 
@@ -137,7 +140,7 @@ class NornFlow:
             Union[str, Workflow]: The workflow object.
         """
         return self._workflow
-    
+
     @workflow.setter
     def workflow(self, value: "Workflow") -> None:
         """
@@ -147,8 +150,10 @@ class NornFlow:
             value (Any): The workflow object to set.
         """
         if not isinstance(value, Workflow):
-            raise NornFlowError(f"NornFlow.workflow MUST be a Workflow object, but and object of  {type(value)} was provided: {value}")
-        
+            raise NornFlowError(
+                f"NornFlow.workflow MUST be a Workflow object, but and object of  {type(value)} was "
+                f"provided: {value}"
+            )
         self._workflow = value
 
     def _load_tasks_catalog(self) -> None:
@@ -210,7 +215,8 @@ class NornFlow:
 
     def _discover_workflows_in_dir(self, workflow_dir: str) -> None:
         """
-        Discover and load workflows from all files in a specific directory that match the supported extensions.
+        Discover and load workflows from all files in a specific directory that match the supported
+        extensions.
 
         Args:
             workflow_dir (str): Path to the directory containing workflow files.
@@ -220,13 +226,14 @@ class NornFlow:
         """
         workflow_path = Path(workflow_dir)
         if not workflow_path.is_dir():
-            raise LocalDirectoryNotFoundError(directory=workflow_dir, extra_message="Couldn't load workflows.")
+            raise LocalDirectoryNotFoundError(
+                directory=workflow_dir, extra_message="Couldn't load workflows."
+            )
 
         for file in workflow_path.rglob("*"):
             if file.suffix in NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS:
                 self._workflows_catalog[file.name] = file
 
-    
     def _remove_optional_settings_from_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
         Remove keys from kwargs that match the keys in NONRFLOW_OPTIONAL_SETTINGS.
@@ -255,19 +262,20 @@ class NornFlow:
     def _ensure_workflow(self) -> None:
         """
         Checks if self.workflow is set. If not, raises NornFlowRunError.
-        
-        Otherwise, if self.workflow contains a string, assumes it is workflow name, and attempts to 
-        set self.workflow to a Workflow object created from a file path in self.workflows_catalog 
+
+        Otherwise, if self.workflow contains a string, assumes it is workflow name, and attempts to
+        set self.workflow to a Workflow object created from a file path in self.workflows_catalog
         associated with that workflow name. If none is found, raises a NornFlowRunError.
-        
+
         If self.workflow is a Workflow object, does nothing.
 
         Raises:
-            NornFlowRunError: If self.workflow is not set or if the workflow name is not found in the workflows catalog.
+            NornFlowRunError: If self.workflow is not set or if the workflow name is not found in
+            the workflows catalog.
         """
         if not self.workflow:
             raise NornFlowRunError("No Workflow object set was provided.")
-        
+
         if isinstance(self.workflow, str):
             workflow_name = self.workflow
             workflow_path = self.workflows_catalog.get(workflow_name)
@@ -276,7 +284,7 @@ class NornFlow:
                 raise NornFlowRunError(f"Workflow '{workflow_name}' not found in the workflows catalog.")
 
             self.workflow = WorkflowFactory(workflow_path=workflow_path).create()
-    
+
     def run(self) -> None:
         """
         Runs the NornFlow job.
@@ -290,8 +298,8 @@ class NornFlowBuilder:
     Builder class for constructing NornFlow objects.
 
     Usage:
-        - Use the with_settings(), with_workflow_path(), with_workflow_dict(), with_workflow_object(), with_workflow_name(), and with_kwargs() 
-          methods to set configurations.
+        - Use the with_settings(), with_workflow_path(), with_workflow_dict(), with_workflow_object(),
+          with_workflow_name(), and with_kwargs() methods to set configurations.
         - Call the build() method to create a NornFlow object.
         - If both a workflow_object and a workflow_name are provided, the workflow object will be preferred.
     """
@@ -300,14 +308,14 @@ class NornFlowBuilder:
         """
         Initialize the NornFlowBuilder with default values.
         """
-        self._settings: Optional[NornFlowSettings] = None
-        self._workflow_path: Optional[Union[str, Path]] = None
-        self._workflow_dict: Optional[dict[str, Any]] = None
-        self._workflow_object: Optional[Workflow] = None
-        self._workflow_name: Optional[str] = None
+        self._settings: NornFlowSettings | None = None
+        self._workflow_path: str | Path | None = None
+        self._workflow_dict: dict[str, Any] | None = None
+        self._workflow_object: Workflow | None = None
+        self._workflow_name: str | None = None
         self._kwargs: dict[str, Any] = {}
 
-    def with_settings(self, settings: NornFlowSettings) -> 'NornFlowBuilder':
+    def with_settings(self, settings: NornFlowSettings) -> "NornFlowBuilder":
         """
         Set the NornFlowSettings for the builder.
 
@@ -320,7 +328,7 @@ class NornFlowBuilder:
         self._settings = settings
         return self
 
-    def with_workflow_path(self, workflow_path: Union[str, Path]) -> 'NornFlowBuilder':
+    def with_workflow_path(self, workflow_path: str | Path) -> "NornFlowBuilder":
         """
         Set the workflow path for the builder.
 
@@ -333,7 +341,7 @@ class NornFlowBuilder:
         self._workflow_path = workflow_path
         return self
 
-    def with_workflow_dict(self, workflow_dict: dict[str, Any]) -> 'NornFlowBuilder':
+    def with_workflow_dict(self, workflow_dict: dict[str, Any]) -> "NornFlowBuilder":
         """
         Set the workflow dictionary for the builder.
 
@@ -346,7 +354,7 @@ class NornFlowBuilder:
         self._workflow_dict = workflow_dict
         return self
 
-    def with_workflow_object(self, workflow_object: Workflow) -> 'NornFlowBuilder':
+    def with_workflow_object(self, workflow_object: Workflow) -> "NornFlowBuilder":
         """
         Set the workflow object for the builder.
 
@@ -358,8 +366,8 @@ class NornFlowBuilder:
         """
         self._workflow_object = workflow_object
         return self
-    
-    def with_workflow_name(self, workflow_name: str) -> 'NornFlowBuilder':
+
+    def with_workflow_name(self, workflow_name: str) -> "NornFlowBuilder":
         """
         Set the workflow name for the builder.
 
@@ -372,7 +380,7 @@ class NornFlowBuilder:
         self._workflow_name = workflow_name
         return self
 
-    def with_kwargs(self, **kwargs: Any) -> 'NornFlowBuilder':
+    def with_kwargs(self, **kwargs: Any) -> "NornFlowBuilder":
         """
         Set additional keyword arguments for the builder.
 
@@ -396,13 +404,8 @@ class NornFlowBuilder:
         if not workflow:
             if self._workflow_path or self._workflow_dict:
                 workflow_factory = WorkflowFactory(
-                    workflow_path=self._workflow_path,
-                    workflow_dict=self._workflow_dict
+                    workflow_path=self._workflow_path, workflow_dict=self._workflow_dict
                 )
                 workflow = workflow_factory.create()
 
-        return NornFlow(
-            nornflow_settings=self._settings,
-            workflow=workflow,
-            **self._kwargs
-        )
+        return NornFlow(nornflow_settings=self._settings, workflow=workflow, **self._kwargs)
