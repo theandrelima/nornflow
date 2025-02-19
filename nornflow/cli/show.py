@@ -1,4 +1,5 @@
 import inspect
+import json
 from pathlib import Path
 from typing import Any
 
@@ -228,8 +229,10 @@ def format_value(value: Any, color: str = "yellow") -> str:
         str: The formatted value.
     """
     if isinstance(value, dict):
-        # Convert the dictionary to a formatted table string
-        value_str = tabulate(value.items(), headers=["Key", "Value"], tablefmt="simple")
+        # Convert the dictionary to a JSON string with indentation
+        value_str = json.dumps(value, indent=2)
+        # Remove the first '{' and the last '}'
+        value_str = value_str[1:-1].strip()
     else:
         value_str = str(value)
     return colored(value_str, color)
