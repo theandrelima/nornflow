@@ -34,7 +34,7 @@ class WorkflowModel(PydanticSerdesBaseModel):
         super().create(dict_args, *args, **kwargs)
 
     @field_validator("inventory_filters", mode="before")
-    def validate_inventory_filters(self, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:
+    def validate_inventory_filters(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None: #noqa: N805
         """
         Validate that the inventory_filters field only contains the keys 'hosts' and 'groups'.
         These are the only supported filtering options at the moment.
