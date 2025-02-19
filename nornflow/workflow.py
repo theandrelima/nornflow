@@ -4,13 +4,13 @@ from pathlib import Path
 from typing import Any
 
 from nornir.core import Nornir
-from nornir_utils.plugins.functions import print_result
 from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
 
 from nornflow.exceptions import TaskDoesNotExistError, WorkflowInitializationError
 from nornflow.inventory_filters import filter_by_groups, filter_by_hostname
 from nornflow.models import TaskModel
+from nornflow.processors import DefaultNornFlowProcessor
 
 # making sure pydantic_serdes sees Workflow models
 os.environ["MODELS_MODULES"] = "nornflow.models"
@@ -96,8 +96,6 @@ class Workflow:
         """
         Filter the inventory based on the inventory_filters attribute.
         """
-        print("inventory_filters: ", self.inventory_filters)
-
         hosts, groups = self.inventory_filters.get("hosts"), self.inventory_filters.get("groups")
 
         if hosts:
@@ -106,6 +104,12 @@ class Workflow:
         if groups:
             nornir = nornir.filter(filter_func=filter_by_groups, groups=self.inventory_filters["groups"])
 
+    def _with_processors(self, nornir: Nornir) -> None:
+        """
+        Apply processors to the Nornir instance.
+        """
+        return nornir.with_processors([DefaultNornFlowProcessor()])
+    
     def run(self, nornir: Nornir, tasks_catalog: dict[str, Callable]) -> None:
         """
         Run the tasks in the workflow using the provided Nornir instance and tasks mapping.
@@ -116,10 +120,10 @@ class Workflow:
         """
         self._check_tasks(tasks_catalog)
         self._filter_inventory(nornir)
+        nornir = self._with_processors(nornir)
 
         for task in self.tasks:
             result = nornir.run(task=tasks_catalog[task.name], **task.args or {})
-            print_result(result)
 
 
 class WorkflowFactory:

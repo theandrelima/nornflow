@@ -4,6 +4,7 @@ from typing import Any
 
 import yaml
 from nornir.core.task import Result, Task
+from nornir.core.task import MultiResult, AggregatedResult
 
 from nornflow.constants import FALSY, TRUTHY
 from nornflow.exceptions import ModuleImportError
@@ -19,7 +20,6 @@ def read_yaml_file(file_path: str) -> dict:
     Returns:
         Dict: Dictionary containing the YAML file contents.
     """
-    print(f"Reading YAML file: {file_path}")
     path = Path(file_path)
     with path.open() as file:
         return yaml.safe_load(file)
@@ -94,6 +94,6 @@ def is_nornir_task(attr: Any) -> bool:
     if callable(attr) and hasattr(attr, "__annotations__"):
         annotations = attr.__annotations__
         has_task_param = any(param == Task for param in annotations.values())
-        returns_result = annotations.get("return") == Result
+        returns_result = annotations.get("return") in {Result, MultiResult, AggregatedResult}
         return has_task_param and returns_result
     return False
