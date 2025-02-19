@@ -132,7 +132,9 @@ class WorkflowInitializationError(WorkflowError):
 
     def __init__(self, message: str):
         super().__init__(
-            message or "Either workflow_path or workflow_dict must be provided. If you want to create an empty workflow, initialize with 'empty_workflow' set to True."
+            message
+            or "Either workflow_path or workflow_dict must be provided. If you want to "
+            "create an empty workflow, initialize with 'empty_workflow' set to True."
         )
 
 
