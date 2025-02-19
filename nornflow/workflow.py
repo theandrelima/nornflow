@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 from nornir.core import Nornir
-from nornir_utils.plugins.functions import print_result
 from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
 
@@ -97,8 +96,6 @@ class Workflow:
         """
         Filter the inventory based on the inventory_filters attribute.
         """
-        print("inventory_filters: ", self.inventory_filters)
-
         hosts, groups = self.inventory_filters.get("hosts"), self.inventory_filters.get("groups")
 
         if hosts:
