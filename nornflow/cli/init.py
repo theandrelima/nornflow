@@ -2,8 +2,8 @@ import shutil
 from pathlib import Path
 
 import typer
-import yaml
 
+from nornflow import NornFlowBuilder
 from nornflow.cli.constants import (
     NORNFLOW_CONFIG_FILE,
     NORNIR_DEFAULT_CONFIG_DIR,
@@ -15,9 +15,9 @@ from nornflow.cli.constants import (
     WORKFLOWS_DIR,
 )
 from nornflow.cli.show import show_catalog, show_nornflow_settings
-from nornflow import NornFlowBuilder
 
 app = typer.Typer()
+
 
 @app.command()
 def init() -> None:
@@ -56,17 +56,14 @@ def init() -> None:
         typer.secho(f"File already exists: {NORNFLOW_CONFIG_FILE}", fg=typer.colors.YELLOW)
 
     create_directory_and_copy_sample_file(
-        TASKS_DIR,
-        SAMPLE_TASK_FILE,
-        "Created a sample 'hello_world' task: {}"
+        TASKS_DIR, SAMPLE_TASK_FILE, "Created a sample 'hello_world' task: {}"
     )
 
     create_directory_and_copy_sample_file(
-        WORKFLOWS_DIR,
-        SAMPLE_WORKFLOW_FILE,
-        "Created a sample 'hello_world' workflow: {}"
+        WORKFLOWS_DIR, SAMPLE_WORKFLOW_FILE, "Created a sample 'hello_world' workflow: {}"
     )
     show_info_post_init()
+
 
 def display_banner() -> None:
     """
@@ -86,6 +83,7 @@ def display_banner() -> None:
         typer.secho(f"| {padded_line} |", fg=typer.colors.CYAN, bold=True)
     typer.secho(border, fg=typer.colors.CYAN, bold=True)
 
+
 def create_directory_and_copy_sample_file(dir_path: Path, sample_file: Path, sample_message: str) -> None:
     """
     Create a directory if it doesn't exist and copy a sample file into it.
@@ -98,6 +96,7 @@ def create_directory_and_copy_sample_file(dir_path: Path, sample_file: Path, sam
     if create_directory(dir_path):
         shutil.copy(sample_file, dir_path / sample_file.name)
         typer.secho(sample_message.format(dir_path / sample_file.name), fg=typer.colors.GREEN)
+
 
 def create_directory(dir_path: Path) -> bool:
     """Create a directory if it doesn't exist.
@@ -114,6 +113,7 @@ def create_directory(dir_path: Path) -> bool:
         return True
     typer.secho(f"Directory already exists: {dir_path}", fg=typer.colors.YELLOW)
     return False
+
 
 def show_info_post_init() -> None:
     """

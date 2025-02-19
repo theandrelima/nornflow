@@ -1,4 +1,3 @@
-
 from nornir.core.inventory import Host
 
 

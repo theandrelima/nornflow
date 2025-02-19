@@ -1,8 +1,10 @@
 import inspect
-import yaml
+import json
+from pathlib import Path
 from typing import Any
 
 import typer
+import yaml
 from nornir.core.exceptions import PluginNotRegistered
 from tabulate import tabulate
 from termcolor import colored
@@ -11,6 +13,7 @@ from nornflow import NornFlowBuilder
 from nornflow.cli.exceptions import NornFlowCLIShowError
 
 app = typer.Typer()
+
 
 @app.command()
 def show(
@@ -24,6 +27,9 @@ def show(
     """
     Displays summary info about NornFlow.
     """
+    if not any([catalog, settings, nornir_configs, all]):
+        raise typer.BadParameter("You must provide at least one option: --catalog, --settings, --nornir-configs, or --all.")
+
     try:
         nornflow = NornFlowBuilder().build()
 
@@ -46,6 +52,7 @@ def show(
         ).show()
         raise typer.Exit(code=2)  # noqa: B904
 
+
 def show_catalog(nornflow: "NornFlow") -> None:
     """
     Display the task catalog and workflows catalog.
@@ -54,8 +61,12 @@ def show_catalog(nornflow: "NornFlow") -> None:
         "TASKS CATALOG", render_task_catalog_table_data, ["Task Name", "Description", "Location"], nornflow
     )
     show_formatted_table(
-        "WORKFLOWS CATALOG", render_workflows_catalog_table_data, ["Workflow Name", "Description", "Location"], nornflow
+        "WORKFLOWS CATALOG",
+        render_workflows_catalog_table_data,
+        ["Workflow Name", "Description", "Location"],
+        nornflow,
     )
+
 
 def show_nornflow_settings(nornflow: "NornFlow") -> None:
     """
@@ -63,11 +74,13 @@ def show_nornflow_settings(nornflow: "NornFlow") -> None:
     """
     show_formatted_table("NORNFLOW SETTINGS", render_settings_table_data, ["Setting", "Value"], nornflow)
 
+
 def show_nornir_configs(nornflow: "NornFlow") -> None:
     """
     Display the Nornir configs.
     """
     show_formatted_table("NORNIR CONFIGS", render_nornir_cfgs_table_data, ["Config", "Value"], nornflow)
+
 
 def show_formatted_table(
     banner_text: str, table_data_renderer: callable, headers: list[str], nornflow: "NornFlow"
@@ -102,6 +115,7 @@ def show_formatted_table(
     # Display the table
     typer.echo(table)
 
+
 def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
     Prepare the data for the task catalog table.
@@ -132,6 +146,7 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
         table_data.append([colored_task_name, colored_docstring, colored_location])
     return table_data
 
+
 def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
     Prepare the data for the workflows catalog table.
@@ -144,15 +159,18 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
     """
     table_data = []
     for workflow_name, workflow_path in nornflow.workflows_catalog.items():
-        with open(workflow_path, 'r') as file:
+        with Path(workflow_path).open() as file:
             workflow_data = yaml.safe_load(file)
-            description = workflow_data.get('workflow_configs', {}).get('description', 'No description available')
+            description = workflow_data.get("workflow_configs", {}).get(
+                "description", "No description available"
+            )
 
         colored_workflow_name = colored(workflow_name, "cyan", attrs=["bold"])
         colored_description = colored(description, "yellow")
         colored_location = colored(str(workflow_path), "light_green")
         table_data.append([colored_workflow_name, colored_description, colored_location])
     return table_data
+
 
 def render_settings_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
@@ -166,6 +184,7 @@ def render_settings_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
     return render_table_data(nornflow.settings.as_dict)
 
+
 def render_nornir_cfgs_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
     Prepare the data for the Nornir configs table.
@@ -178,7 +197,10 @@ def render_nornir_cfgs_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
     return render_table_data(nornflow.nornir_configs)
 
-def render_table_data(data: dict[str, Any], key_color: str = "cyan", value_color: str = "yellow") -> list[list[str]]:
+
+def render_table_data(
+    data: dict[str, Any], key_color: str = "cyan", value_color: str = "yellow"
+) -> list[list[str]]:
     """
     Prepare the data for a table.
 
@@ -197,6 +219,7 @@ def render_table_data(data: dict[str, Any], key_color: str = "cyan", value_color
         table_data.append([colored_key, colored_value])
     return table_data
 
+
 def format_value(value: Any, color: str = "yellow") -> str:
     """
     Format the value for display in the table.
@@ -209,11 +232,14 @@ def format_value(value: Any, color: str = "yellow") -> str:
         str: The formatted value.
     """
     if isinstance(value, dict):
-        # Convert the dictionary to a formatted table string
-        value_str = tabulate(value.items(), headers=["Key", "Value"], tablefmt="simple")
+        # Convert the dictionary to a JSON string with indentation
+        value_str = json.dumps(value, indent=2)
+        # Remove the first '{' and the last '}'
+        value_str = value_str[1:-1].strip()
     else:
         value_str = str(value)
     return colored(value_str, color)
+
 
 def get_colored_headers(headers: list[str], color: str) -> list[str]:
     """
@@ -227,6 +253,7 @@ def get_colored_headers(headers: list[str], color: str) -> list[str]:
         List[str]: The colorized and bold headers.
     """
     return [colored(header, color, attrs=["bold"]) for header in headers]
+
 
 def display_banner(banner_text: str, table: str) -> None:
     """
