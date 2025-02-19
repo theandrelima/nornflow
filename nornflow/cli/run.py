@@ -1,7 +1,11 @@
-
+import ast
+import re
+from pathlib import Path
+from datetime import datetime
 import typer
 
-from nornflow.nornflow import NornFlow
+from nornflow import NornFlowBuilder, WorkflowFactory
+from nornflow.constants import NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS
 
 app = typer.Typer(help="Run NornFlow tasks and workflows")
 
@@ -22,14 +26,6 @@ def csv_to_list(value: str | list | None) -> list[str]:
     Returns:
         List[str]: A list of strings with whitespace stripped from each item.
             Returns empty list if input is None or empty.
-
-    Examples:
-        >>> csv_to_list("host1,host2")
-        ['host1', 'host2']
-        >>> csv_to_list(["host1,host2"])
-        ['host1', 'host2']
-        >>> csv_to_list(None)
-        []
     """
     if not value:
         return []
@@ -38,51 +34,140 @@ def csv_to_list(value: str | list | None) -> list[str]:
     return [x.strip() for x in value.split(",")]
 
 
+def parse_task_args(value: str | None) -> dict[str, str | list | dict]:
+    """
+    Convert a string of key=value pairs into a dictionary, where values can be strs, lists or dictionaries.
+
+    Args:
+        value (Optional[str]): String in format "key1='value1', key2=[1,2,3], key3={'subkey': 'subvalue'}"
+
+    Returns:
+        Dict[str, Union[str, list, dict]]: Dictionary of task arguments
+
+    """
+    if not value:
+        return {}
+
+    try:
+        parsed_args = {}
+        # Split on commas that are not within brackets, quotes, curly brackets, or parentheses
+        pairs = re.split(r",(?=(?:[^{}()[\]]*[{([][^{}()[\]]*[})\]])*[^{}()[\]]*$)", value)
+        for pair in pairs:
+            if "=" not in pair:
+                raise typer.BadParameter(f"Invalid argument format: {pair}.")
+            k, v = pair.split("=", 1)
+            k = k.strip()
+            v = v.strip()
+            try:
+                parsed_args[k] = ast.literal_eval(v)
+            except (ValueError, SyntaxError):
+                parsed_args[k] = v  # If eval fails, keep the value as a string
+        return parsed_args
+    except Exception as e:
+        raise typer.BadParameter("Arguments must be in format: \"key1='value1', key2=[1,2,3], key3={'subkey': 'subvalue'}\". Error: " + str(e))
+
+def get_workflow_builder(target: str, args: dict, inventory_filters: dict, dry_run: bool) -> NornFlowBuilder:
+    """
+    Build the workflow using the provided target, arguments, inventory filters, and dry-run option.
+
+    Args:
+        target (str): The name of the task or workflow to run.
+        args (dict): The task arguments.
+        inventory_filters (dict): The inventory filters.
+        dry_run (bool): The dry-run option.
+
+    Returns:
+        NornFlowBuilder: The builder instance with the configured workflow.
+    """
+    builder = NornFlowBuilder()
+    nornflow_kwargs = {"dry_run": dry_run} if dry_run else {}
+    builder.with_kwargs(**nornflow_kwargs)
+
+    if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS):
+        target_path = Path(target)
+        if target_path.exists():
+            absolute_path = target_path.resolve()
+            wf = WorkflowFactory.create_from_file(absolute_path)
+            if inventory_filters:
+                wf.workflow_dict["workflow_configs"]["inventory_filters"] = inventory_filters
+            builder.with_workflow_object(wf)
+        else:
+            builder.with_workflow_name(target)
+    else:
+        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        workflow_dict = {
+            "workflow_configs": {
+                "name": f"Task {target} - exec {timestamp}",
+                "description": f"ran with 'nornflow run' CLI (args: {args}, hosts: {inventory_filters.get('hosts')}, groups: {inventory_filters.get('groups')}, dry-run: {dry_run})",
+                "inventory_filters": inventory_filters,
+            },
+            "tasks": [
+                {
+                    "name": target,
+                    "args": args or {}
+                },
+            ],
+        }
+        builder.with_workflow_dict(workflow_dict)
+
+    return builder
+
 # Define Options as module-level constants
 HOSTS_OPTION = typer.Option(
-    [],
+    None,
     "--hosts",
     "-h",
     callback=csv_to_list,
-    help="Comma-separated list of hosts to run the task on",
+    help='Filters the inventory using a comma-separated list of hosts to run the task on (e.g "device1,device2") - can be used with other filter(s)',
 )
 
 GROUPS_OPTION = typer.Option(
-    [],
+    None,
     "--groups",
     "-g",
     callback=csv_to_list,
-    help="Comma-separated list of groups to run the task on",
+    help='Filters the inventory using a comma-separated list of groups to run the task on (e.g "group1,group2") - can be used with other filter(s)',
 )
+
+ARGS_OPTION = typer.Option(
+    None,
+    "--args",
+    "-a",
+    callback=parse_task_args,
+    help="Task arguments in key=value format (e.g., \"key1='value1', key2=[1,2,3], key3={'subkey': 'subvalue'}\")",
+)
+
+DRY_RUN_OPTION = typer.Option(
+    False,
+    "--dry-run",
+    "-d",
+    help="Run in dry-run mode [default: False]",
+)
+
 
 @app.command()
 def run(
     target: str = typer.Argument(..., help="The name of the task or workflow to run"),
-    dry_run: bool = typer.Option(False, "--dry-run", "-d", help="Run in dry-run mode [default: False]"),
+    args: str = ARGS_OPTION,
     hosts: list[str] = HOSTS_OPTION,
     groups: list[str] = GROUPS_OPTION,
+    dry_run: bool = DRY_RUN_OPTION,
 ) -> None:
-    # ...rest of the function...
     """
     Runs either a cataloged task or workflow - for workflows, the '.yaml' must be included.
     """
-    nornflow_kwargs = {"tasks_to_run": [target]}
-
-    if dry_run is not None:
-        nornflow_kwargs["dry_run"] = dry_run
-
     inventory_filters = {}
     if hosts:
         inventory_filters["hosts"] = hosts
     if groups:
         inventory_filters["groups"] = groups
 
-    if inventory_filters:
-        nornflow_kwargs["inventory_filters"] = inventory_filters
+    builder = get_workflow_builder(target, args, inventory_filters, dry_run)
 
     typer.secho(
-        f"Running task: {target} (dry-run: {dry_run}, hosts: {hosts}, groups: {groups})",
+        f"Running: {target} (args: {args}, hosts: {hosts}, groups: {groups}, dry-run: {dry_run})",
         fg=typer.colors.GREEN,
     )
-    nornflow = NornFlow(**nornflow_kwargs)
+
+    nornflow = builder.build()
     nornflow.run()

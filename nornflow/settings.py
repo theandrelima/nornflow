@@ -30,7 +30,7 @@ class NornFlowSettings:
     To allow for extensibility and customizations, NornFlow was designed with the following
     principles in mind:
         1 - NornFlow settings and Nornir settings are kept separate, hence the need for a
-           `nornir_config_file` setting in the NornFlow YAML settings file (see '2' below).
+           `nornir_config_file` setting in the NornFlow YAML settings file.
 
         2 - a minimal set of REQUIRED settings.
 

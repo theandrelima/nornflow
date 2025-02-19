@@ -180,7 +180,10 @@ todo*
 /nornir_configs/
 
 # local tasks dir
-tasks/
+/tasks/
+
+# local workflows dir
+/workflows/
 
 # ruff
 .ruff*/
@@ -188,3 +191,6 @@ tasks/
 # bkp files and dirs
 *.bkp
 *_bkp
+
+# Ignore nornflow.yaml file in the root directory
+/nornflow.yaml
