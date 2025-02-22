@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 authors = [
     { name = "Andre Lima"}
 ]
+license = { text = "GPL-3.0-or-later" }
 dependencies = [
     "nornir>=3.5.0",
     "nornir-utils>=0.2.0",
@@ -18,8 +19,8 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.17.0"]
+build-backend = "hatchling.build"
 
 [tool.uv]
 package = true
