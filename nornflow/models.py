@@ -25,7 +25,7 @@ class WorkflowModel(PydanticSerdesBaseModel):
 
     name: str
     description: str | None = None
-    inventory_filters: HashableDict[str, list[str] | None] | None = None
+    inventory_filters: HashableDict[str, tuple[str] | None] | None = None
     tasks: OneToMany[TaskModel, ...]
 
     @classmethod
@@ -34,23 +34,22 @@ class WorkflowModel(PydanticSerdesBaseModel):
         super().create(dict_args, *args, **kwargs)
 
     @field_validator("inventory_filters", mode="before")
-    def validate_inventory_filters(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None: #noqa: N805
+    def validate_inventory_filters(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:  # noqa: N805
         """
-        Validate that the inventory_filters field only contains the keys 'hosts' and 'groups'.
-        These are the only supported filtering options at the moment.
-
+        Validate inventory_filters and convert lists to tuples.
+    
         Args:
             v (Optional[HashableDict[str, Any]]): The inventory_filters value to validate.
-
+    
         Returns:
-            Optional[HashableDict[str, Any]]: The validated inventory_filters value.
-
+            Optional[HashableDict[str, Any]]: The validated inventory_filters with lists converted to tuples.
+    
         Raises:
-            ValueError: If the inventory_filters contains invalid keys.
+            WorkflowInventoryFilterError: If the inventory_filters contains invalid keys.
         """
         if v is None:
             return v
-
+    
         valid_keys = {"hosts", "groups"}
         invalid_keys = set(v.keys()) - valid_keys
         if invalid_keys:
@@ -58,5 +57,9 @@ class WorkflowModel(PydanticSerdesBaseModel):
                 f"Invalid keys in inventory_filters: {', '.join(invalid_keys)}. "
                 "Only 'hosts' and 'groups' are allowed."
             )
-
-        return v
+    
+        # Convert any lists in values to tuples
+        return HashableDict({
+            key: tuple(value) if isinstance(value, list) else value
+            for key, value in v.items()
+        })
