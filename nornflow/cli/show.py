@@ -161,7 +161,7 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
     for workflow_name, workflow_path in nornflow.workflows_catalog.items():
         with Path(workflow_path).open() as file:
             workflow_data = yaml.safe_load(file)
-            description = workflow_data.get("workflow_configs", {}).get(
+            description = workflow_data.get("workflow", {}).get(
                 "description", "No description available"
             )
 

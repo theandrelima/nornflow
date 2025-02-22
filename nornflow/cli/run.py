@@ -99,24 +99,24 @@ def get_workflow_builder(target: str, args: dict, inventory_filters: dict, dry_r
             absolute_path = target_path.resolve()
             wf = WorkflowFactory.create_from_file(absolute_path)
             if inventory_filters:
-                wf.workflow_dict["workflow_configs"]["inventory_filters"] = inventory_filters
+                wf.workflow_dict["workflow"]["inventory_filters"] = inventory_filters
             builder.with_workflow_object(wf)
         else:
             builder.with_workflow_name(target)
     else:
         timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S") # NOQA: DTZ005
         workflow_dict = {
-            "workflow_configs": {
+            "workflow": {
                 "name": f"Task {target} - exec {timestamp}",
                 "description": (
                     f"ran with 'nornflow run' CLI (args: {args}, hosts: {inventory_filters.get('hosts')}, "
                     f"groups: {inventory_filters.get('groups')}, dry-run: {dry_run})"
                 ),
                 "inventory_filters": inventory_filters,
+                "tasks": [
+                    {"name": target, "args": args or {}},
+                ],
             },
-            "tasks": [
-                {"name": target, "args": args or {}},
-            ],
         }
         builder.with_workflow_dict(workflow_dict)
 

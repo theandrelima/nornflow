@@ -52,8 +52,10 @@ class Workflow:
         Args:
             wf_dict (Dict[str, Any]): The workflow dictionary.
         """
-        desired_keys_order = ["tasks", "workflow_configs"]
-        self._workflow_dict = {key: wf_dict[key] for key in desired_keys_order}
+        if "workflow" not in wf_dict:
+            raise WorkflowInitializationError("Missing 'workflow' in workflow definition")
+        
+        self._workflow_dict = wf_dict
 
     @property
     def tasks(self) -> list[TaskModel]:
