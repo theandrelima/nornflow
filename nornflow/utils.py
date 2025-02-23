@@ -3,10 +3,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from nornir.core.task import Result, Task
-from nornir.core.task import MultiResult, AggregatedResult
+from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 
-from nornflow.constants import FALSY, TRUTHY
 from nornflow.exceptions import ModuleImportError
 
 
@@ -23,38 +21,6 @@ def read_yaml_file(file_path: str) -> dict:
     path = Path(file_path)
     with path.open() as file:
         return yaml.safe_load(file)
-
-
-def is_truthy(value: str | None) -> bool:
-    """
-    Checks if a value is truthy.
-
-    Args:
-        value (str): Value to check.
-
-    Returns:
-        bool: True if the value is truthy, False otherwise.
-    """
-    if not value:
-        return False
-
-    return value.lower() in TRUTHY
-
-
-def is_falsy(value: str | None) -> bool:
-    """
-    Checks if a value is falsy.
-
-    Args:
-        value (str): Value to check.
-
-    Returns:
-        bool: True if the value is falsy, False otherwise.
-    """
-    if not value:
-        return True
-
-    return value.lower() in FALSY
 
 
 def import_module_from_path(module_name: str, module_path: str) -> Any:

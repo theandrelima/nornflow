@@ -69,7 +69,7 @@ def parse_task_args(value: str | None) -> dict[str, str | list | dict]:
 
     except Exception as e:
         raise typer.BadParameter(
-            "Arguments must be in format: \"key1='value1', key2=[1,2,3], key3={'subkey': 'subvalue'}\". Error: " # noqa: E501
+            "Arguments must be in format: \"key1='value1', key2=[1,2,3], key3={'subkey': 'subvalue'}\". Error: "  # noqa: E501
             + str(e)
         ) from e
     else:
@@ -104,7 +104,7 @@ def get_workflow_builder(target: str, args: dict, inventory_filters: dict, dry_r
         else:
             builder.with_workflow_name(target)
     else:
-        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S") # NOQA: DTZ005
+        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         workflow_dict = {
             "workflow": {
                 "name": f"Task {target} - exec {timestamp}",
@@ -129,7 +129,7 @@ HOSTS_OPTION = typer.Option(
     "--hosts",
     "-h",
     callback=csv_to_list,
-    help='Filters the inventory using a comma-separated list of hosts to run the task on (e.g "device1,device2") - can be used with other filter(s)', # noqa: E501
+    help='Filters the inventory using a comma-separated list of hosts to run the task on (e.g "device1,device2") - can be used with other filter(s)',  # noqa: E501
 )
 
 GROUPS_OPTION = typer.Option(
@@ -137,7 +137,7 @@ GROUPS_OPTION = typer.Option(
     "--groups",
     "-g",
     callback=csv_to_list,
-    help='Filters the inventory using a comma-separated list of groups to run the task on (e.g "group1,group2") - can be used with other filter(s)', # noqa: E501
+    help='Filters the inventory using a comma-separated list of groups to run the task on (e.g "group1,group2") - can be used with other filter(s)',  # noqa: E501
 )
 
 ARGS_OPTION = typer.Option(
@@ -145,7 +145,7 @@ ARGS_OPTION = typer.Option(
     "--args",
     "-a",
     callback=parse_task_args,
-    help="Task arguments in key=value format (e.g., \"key1='value1', key2=[1,2,3], key3={'subkey': 'subvalue'}\")", # noqa: E501
+    help="Task arguments in key=value format (e.g., \"key1='value1', key2=[1,2,3], key3={'subkey': 'subvalue'}\")",  # noqa: E501
 )
 
 DRY_RUN_OPTION = typer.Option(

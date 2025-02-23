@@ -54,7 +54,7 @@ class Workflow:
         """
         if "workflow" not in wf_dict:
             raise WorkflowInitializationError("Missing 'workflow' in workflow definition")
-        
+
         self._workflow_dict = wf_dict
 
     @property
@@ -111,7 +111,7 @@ class Workflow:
         Apply processors to the Nornir instance.
         """
         return nornir.with_processors([DefaultNornFlowProcessor()])
-    
+
     def run(self, nornir: Nornir, tasks_catalog: dict[str, Callable]) -> None:
         """
         Run the tasks in the workflow using the provided Nornir instance and tasks mapping.
@@ -125,7 +125,7 @@ class Workflow:
         nornir = self._with_processors(nornir)
 
         for task in self.tasks:
-            result = nornir.run(task=tasks_catalog[task.name], **task.args or {})
+            nornir.run(task=tasks_catalog[task.name], **task.args or {})
 
 
 class WorkflowFactory:

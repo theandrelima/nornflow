@@ -1,11 +1,10 @@
 import pytest
-
-from nornflow.workflow import WorkflowFactory, Workflow
-from nornflow.exceptions import WorkflowInitializationError, TaskDoesNotExistError
-from nornflow.models import TaskModel
-from pydantic_serdes.exceptions import PydanticSerdesTypeError
 from pydantic_serdes.datastore import get_global_data_store
+from pydantic_serdes.exceptions import PydanticSerdesTypeError
 
+from nornflow.exceptions import TaskDoesNotExistError, WorkflowInitializationError
+from nornflow.models import TaskModel
+from nornflow.workflow import Workflow, WorkflowFactory
 
 GLOBAL_DATA_STORE = get_global_data_store()
 
@@ -56,6 +55,7 @@ class TestWorkflowSuccessfulCreation:
 
     def test_create_from_dict_valid(self, valid_workflow_dict):
         """Test creating a workflow from a valid dictionary."""
+        GLOBAL_DATA_STORE.flush()
         workflow = WorkflowFactory.create_from_dict(valid_workflow_dict)
         assert isinstance(workflow, Workflow)
         assert len(workflow.tasks) == 1
@@ -76,10 +76,7 @@ class TestWorkflowSuccessfulCreation:
     def test_factory_precedence(self, valid_workflow_file, invalid_workflow_dict):
         """Test that file path takes precedence over dictionary when both are provided."""
         GLOBAL_DATA_STORE.flush()
-        factory = WorkflowFactory(
-            workflow_path=valid_workflow_file,
-            workflow_dict=invalid_workflow_dict
-        )
+        factory = WorkflowFactory(workflow_path=valid_workflow_file, workflow_dict=invalid_workflow_dict)
         workflow = factory.create()
         assert isinstance(workflow, Workflow)
         assert len(workflow.tasks) == 1
@@ -90,7 +87,7 @@ class TestWorkflowSuccessfulCreation:
         """Test task validation against task catalog."""
         workflow = WorkflowFactory.create_from_dict(valid_workflow_dict)
         tasks_catalog = {}  # Empty catalog to trigger error
-        
+
         with pytest.raises(TaskDoesNotExistError) as exc_info:
             workflow._check_tasks(tasks_catalog)
         assert f"{self.test_name}_task" in str(exc_info.value)
@@ -98,7 +95,4 @@ class TestWorkflowSuccessfulCreation:
     def test_inventory_filters(self, valid_workflow_dict):
         """Test inventory filters are correctly set."""
         workflow = WorkflowFactory.create_from_dict(valid_workflow_dict)
-        assert workflow.inventory_filters == {
-            "hosts": ("host1", "host2"),
-            "groups": ("group1",)
-        }
+        assert workflow.inventory_filters == {"hosts": ("host1", "host2"), "groups": ("group1",)}

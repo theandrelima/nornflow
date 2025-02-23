@@ -236,7 +236,7 @@ dev = [
 requires-dist = [
     { name = "nornir", specifier = ">=3.5.0" },
     { name = "nornir-utils", specifier = ">=0.2.0" },
-    { name = "pydantic-serdes", specifier = ">=1.0.1" },
+    { name = "pydantic-serdes", specifier = ">=1.0.2" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "tabulate", specifier = ">=0.9.0" },
@@ -369,7 +369,7 @@ wheels = [
 
 [[package]]
 name = "pydantic-serdes"
-version = "1.0.1"
+version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "email-validator" },
@@ -379,9 +379,9 @@ dependencies = [
     { name = "sortedcontainers" },
     { name = "toml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a5/a5/6819e4dc89d201343cf5761fc9871f1aeb362f726df3583c853f87d19914/pydantic_serdes-1.0.1.tar.gz", hash = "sha256:067bdfa0177a0e3430b0233674b39515dba32be17b6447d5b38ba6a9395595dd", size = 17322 }
+sdist = { url = "https://files.pythonhosted.org/packages/fd/27/07f15a9ea4bd88d70564bbb2707ffa8c366dd2de3fe20aec528b28b553a5/pydantic_serdes-1.0.2.tar.gz", hash = "sha256:6f1a526789dc6703c53ce7ed16859545fb6caa5c4368680fc1fee5043a436c2c", size = 17436 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/c6/de0e1a38c1b8893c75656a796e8d64a83c90a7be2f5f8c5b9f188dc60786/pydantic_serdes-1.0.1-py3-none-any.whl", hash = "sha256:985a5ff93bd4c39410ba34593bf3f55cdbf1630a2bdebf27ac34520b8bd9602d", size = 20652 },
+    { url = "https://files.pythonhosted.org/packages/3d/6c/928866648540351af1c08bcf49198a32d4c95acfaf8201aecb45436f1e26/pydantic_serdes-1.0.2-py3-none-any.whl", hash = "sha256:5eab528b16b87b3bcb54443d690e9f9e8d7aa4e1eb78614f64687e2205770df4", size = 20751 },
 ]
 
 [[package]]

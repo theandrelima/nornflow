@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any
 
 from pydantic import field_validator
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
@@ -17,22 +17,21 @@ class TaskModel(PydanticSerdesBaseModel):
 
     id: int | None = None
     name: str
-    args: HashableDict[str, Union[str, tuple, dict] | None] | None = None
-    
-    
+    args: HashableDict[str, str | tuple | dict | None] | None = None
+
     @classmethod
-    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "TaskModel":
+    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "TaskModel": # noqa: ANN002
         """Create a new TaskModel with auto-incrementing id."""
         # Get current tasks and calculate next id
         current_tasks = cls.get_all()
         next_id = len(current_tasks) + 1 if current_tasks else 1
-        
+
         # Set the id in dict_args
         dict_args["id"] = next_id
-        
+
         # Call parent's create method
         return super().create(dict_args, *args, **kwargs)
-    
+
     @field_validator("args", mode="before")
     @classmethod
     def convert_args_lists_to_tuples(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:
@@ -48,10 +47,9 @@ class TaskModel(PydanticSerdesBaseModel):
         if v is None:
             return v
 
-        return HashableDict({
-            key: tuple(value) if isinstance(value, list) else value
-            for key, value in v.items()
-        })
+        return HashableDict(
+            {key: tuple(value) if isinstance(value, list) else value for key, value in v.items()}
+        )
 
 
 class WorkflowModel(PydanticSerdesBaseModel):
@@ -64,42 +62,44 @@ class WorkflowModel(PydanticSerdesBaseModel):
     tasks: OneToMany[TaskModel, ...]
 
     @classmethod
-    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "WorkflowModel":
-        """Create a new WorkflowModel."""        
+    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "WorkflowModel": # noqa: ANN002
+        """Create a new WorkflowModel."""
         # Tasks should already be in dict_args from the workflow definition
         if "tasks" not in dict_args:
             dict_args["tasks"] = []  # Default to empty list if no tasks defined
-        
+
         # Create TaskModels from the tasks in dict_args
         tasks = []
         for task_dict in dict_args["tasks"]:
             task = TaskModel.create(task_dict)
             tasks.append(task)
-        
+
         # Update tasks in dict_args with the created TaskModels
         # in the end, it's ok for tasks to be a python list, because PydanticSerdesBaseModel
         # automatically takes care of converting it to its own OneToMany type
         dict_args["tasks"] = tasks
-        
+
         return super().create(dict_args, *args, **kwargs)
 
     @field_validator("inventory_filters", mode="before")
-    def validate_inventory_filters(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:  # noqa: N805
+    def validate_inventory_filters(
+        cls, v: HashableDict[str, Any] | None # noqa: N805
+    ) -> HashableDict[str, Any] | None:
         """
         Validate inventory_filters and convert lists to tuples.
-    
+
         Args:
             v (Optional[HashableDict[str, Any]]): The inventory_filters value to validate.
-    
+
         Returns:
             Optional[HashableDict[str, Any]]: The validated inventory_filters with lists converted to tuples.
-    
+
         Raises:
             WorkflowInventoryFilterError: If the inventory_filters contains invalid keys.
         """
         if v is None:
             return v
-    
+
         valid_keys = {"hosts", "groups"}
         invalid_keys = set(v.keys()) - valid_keys
         if invalid_keys:
@@ -107,9 +107,8 @@ class WorkflowModel(PydanticSerdesBaseModel):
                 f"Invalid keys in inventory_filters: {', '.join(invalid_keys)}. "
                 "Only 'hosts' and 'groups' are allowed."
             )
-    
+
         # Convert any lists in values to tuples
-        return HashableDict({
-            key: tuple(value) if isinstance(value, list) else value
-            for key, value in v.items()
-        })
+        return HashableDict(
+            {key: tuple(value) if isinstance(value, list) else value for key, value in v.items()}
+        )
