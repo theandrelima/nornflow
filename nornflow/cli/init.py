@@ -70,9 +70,9 @@ def display_banner() -> None:
     Display a banner message with borders.
     """
     banner_message = (
-        "The 'init' command creates directories, config files, and a few sample files,\n"
-        "all with default values that you can modify as desired. No customization of\n"
-        "init parameters available yet. Do you want to continue?"
+        "The 'init' command creates directories, and samples for configs, tasks and\n"
+        "workflows files, all with default values that you can modify as desired.\n"
+        "No customization of 'init' parameters available yet.\n\nDo you want to continue?"
     )
     lines = banner_message.split("\n")
     max_length = max(len(line) for line in lines)

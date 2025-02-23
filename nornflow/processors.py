@@ -1,10 +1,13 @@
-from nornir.core.task import Task, Result
-from nornir.core.processor import Processor
-from colorama import init, Fore, Style
+# ruff: noqa: T201
 from datetime import datetime
+
+from colorama import Fore, init, Style
+from nornir.core.processor import Processor
+from nornir.core.task import Result, Task
 
 # Initialize colorama
 init(autoreset=True)
+
 
 class DefaultNornFlowProcessor(Processor):
     def task_started(self, task: Task) -> None:
@@ -19,7 +22,11 @@ class DefaultNornFlowProcessor(Processor):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         status = "Success" if result.failed is False else "Failed"
         status_color = Fore.GREEN if result.failed is False else Fore.RED
-        print(f"{Style.BRIGHT}{Fore.CYAN}Task: {task.name} {Fore.WHITE}| {Fore.YELLOW}Host: {host} {Fore.WHITE}| {status_color}Status: {status}")
+        print(
+            f"{Style.BRIGHT}{Fore.CYAN}Task: {task.name} "
+            f"{Fore.WHITE}| {Fore.YELLOW}Host: {host} "
+            f"{Fore.WHITE}| {status_color}Status: {status}"
+        )
         print(f"{Fore.WHITE}Output:\n{result.result}")
         print(f"{Style.BRIGHT}{Fore.BLUE}\nFinished: {timestamp}")
 
@@ -36,7 +43,11 @@ class DefaultNornFlowProcessor(Processor):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         status = "Success" if result.failed is False else "Failed"
         status_color = Fore.GREEN if result.failed is False else Fore.RED
-        print(f"{Style.BRIGHT}{Fore.CYAN}Subtask: {task.name} {Fore.WHITE}| {Fore.YELLOW}Host: {host} {Fore.WHITE}| {status_color}Status: {status}")
+        print(
+            f"{Style.BRIGHT}{Fore.CYAN}Subtask: {task.name} "
+            f"{Fore.WHITE}| {Fore.YELLOW}Host: {host} "
+            f"{Fore.WHITE}| {status_color}Status: {status}"
+        )
         print(f"{Fore.WHITE}Output:\n{result.result}")
         print(f"{Style.BRIGHT}{Fore.BLUE}\nSubtask Finished: {timestamp}")
 

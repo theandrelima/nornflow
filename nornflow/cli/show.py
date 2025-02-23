@@ -28,7 +28,9 @@ def show(
     Displays summary info about NornFlow.
     """
     if not any([catalog, settings, nornir_configs, all]):
-        raise typer.BadParameter("You must provide at least one option: --catalog, --settings, --nornir-configs, or --all.")
+        raise typer.BadParameter(
+            "You must provide at least one option: --catalog, --settings, --nornir-configs, or --all."
+        )
 
     try:
         nornflow = NornFlowBuilder().build()
@@ -161,9 +163,7 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
     for workflow_name, workflow_path in nornflow.workflows_catalog.items():
         with Path(workflow_path).open() as file:
             workflow_data = yaml.safe_load(file)
-            description = workflow_data.get("workflow_configs", {}).get(
-                "description", "No description available"
-            )
+            description = workflow_data.get("workflow", {}).get("description", "No description available")
 
         colored_workflow_name = colored(workflow_name, "cyan", attrs=["bold"])
         colored_description = colored(description, "yellow")

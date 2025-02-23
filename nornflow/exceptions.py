@@ -100,16 +100,18 @@ class LocalDirectoryNotFoundError(NornFlowError):
     """Exception raised when a specified directory is not found."""
 
     def __init__(self, directory: str, extra_message: str = ""):
-        super().__init__(f"Directory not found: {directory}{ - extra_message if extra_message else '.'}")
+        super().__init__(
+            f"Directory not found: {directory}{ ('-' + extra_message) if extra_message else '.'}"
+        )
 
 
 class NornFlowInitializationError(NornFlowError):
-    """Exception raised when invalid kwargs are passed to the NornFlow initializer."""
+    """Exception raised when there's an error initializing NornFlow."""
 
-    def __init__(self, invalid_kwargs: list[str], extra_message: str = ""):
-        super().__init__(
-            f"Invalid kwarg(s) passed to NornFlow initializer: {', '.join(invalid_kwargs)} {extra_message}"
-        )
+    def __init__(self, message: str = "", invalid_kwargs: list[str] | None = None):
+        if invalid_kwargs:
+            message = f"Invalid kwarg(s) passed to NornFlow initializer: {', '.join(invalid_kwargs)}"
+        super().__init__(message)
         self.invalid_kwargs = invalid_kwargs
 
 

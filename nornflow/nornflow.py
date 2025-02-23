@@ -32,26 +32,33 @@ class NornFlow:
         workflow: Workflow | None = None,
         **kwargs: Any,
     ):
-        # Some kwargs should only be set through the YAML settings file.
-        self._check_invalid_kwargs(kwargs)
+        try:
+            # Some kwargs should only be set through the YAML settings file.
+            self._check_invalid_kwargs(kwargs)
 
-        # a NornFlow object must have a NornFlowSettings object
-        self._settings = nornflow_settings or NornFlowSettings(**kwargs)
+            # a NornFlow object must have a NornFlowSettings object
+            self._settings = nornflow_settings or NornFlowSettings(**kwargs)
 
-        # a NornFlow object can exist without a Workflow object BEFORE the run() method is called
-        self._workflow = workflow
+            # a NornFlow object can exist without a Workflow object BEFORE the run() method is called
+            self._workflow = workflow
 
-        self._load_tasks_catalog()
-        self._load_workflows_catalog()
+            self._load_tasks_catalog()
+            self._load_workflows_catalog()
 
-        # kwargs need to be cleaned up before passing them to InitNornir
-        self._remove_optional_settings_from_kwargs(kwargs)
+            # kwargs need to be cleaned up before passing them to InitNornir
+            self._remove_optional_settings_from_kwargs(kwargs)
 
-        self.nornir = InitNornir(
-            config_file=self.settings.nornir_config_file,
-            dry_run=self.settings.dry_run,
-            **kwargs,
-        )
+            self.nornir = InitNornir(
+                config_file=self.settings.nornir_config_file,
+                dry_run=self.settings.dry_run,
+                **kwargs,
+            )
+        except NornFlowInitializationError:
+            # Re-raise NornFlowInitializationError as is
+            raise
+        except Exception as e:
+            # Wrap any other exception in NornFlowInitializationError
+            raise NornFlowInitializationError(f"Failed to initialize NornFlow: {e!s}") from e
 
     @property
     def nornir_configs(self) -> dict[str, Any]:
