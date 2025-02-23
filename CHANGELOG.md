@@ -1,8 +1,9 @@
-## [Unreleased] - 2025-02-22
+## [0.0.2] - 2025-02-23
 ### Added
 - Included minimal tests for NornFlowSettings, NornFlow and Workflow.
 - Several minor bug-fixes [non-breaking]
-- Models updated for bug fixes and improvements
+- Models updated for bug fixes and improvements [non-breaking]
+- Cosmetic documentation updates
 
 ## [0.0.1] - 2025-02-22
 ### Prototype version released
