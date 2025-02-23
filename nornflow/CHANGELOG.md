@@ -1,3 +1,7 @@
+## [Unreleased] - 2025-02-22
+### Added
+- Included minimal tests
+
 ## [0.0.1] - 2025-02-22
 ### Prototype version released
 - Users can create basic Workflows through .yaml files. 
