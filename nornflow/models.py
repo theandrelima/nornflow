@@ -20,7 +20,7 @@ class TaskModel(PydanticSerdesBaseModel):
     args: HashableDict[str, str | tuple | dict | None] | None = None
 
     @classmethod
-    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "TaskModel": # noqa: ANN002
+    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "TaskModel":  # noqa: ANN002
         """Create a new TaskModel with auto-incrementing id."""
         # Get current tasks and calculate next id
         current_tasks = cls.get_all()
@@ -62,7 +62,7 @@ class WorkflowModel(PydanticSerdesBaseModel):
     tasks: OneToMany[TaskModel, ...]
 
     @classmethod
-    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "WorkflowModel": # noqa: ANN002
+    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "WorkflowModel":  # noqa: ANN002
         """Create a new WorkflowModel."""
         # Tasks should already be in dict_args from the workflow definition
         if "tasks" not in dict_args:
@@ -83,7 +83,7 @@ class WorkflowModel(PydanticSerdesBaseModel):
 
     @field_validator("inventory_filters", mode="before")
     def validate_inventory_filters(
-        cls, v: HashableDict[str, Any] | None # noqa: N805
+        cls, v: HashableDict[str, Any] | None  # noqa: N805
     ) -> HashableDict[str, Any] | None:
         """
         Validate inventory_filters and convert lists to tuples.
