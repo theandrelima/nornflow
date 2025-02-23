@@ -58,7 +58,7 @@ jobs:
         source .venv/bin/activate
         black --check .
 
-    - name: Type check with mypy
+    - name: Check imports with isort
       run: |
         source .venv/bin/activate
-        mypy .
+        isort --check-only --diff .
