@@ -30,7 +30,7 @@ package = true
 where = ["."]
 include = ["nornflow*"]
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "black>=25.1.0",
     "isort>=6.0.0",
