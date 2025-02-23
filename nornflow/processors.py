@@ -1,5 +1,5 @@
 # ruff: noqa: T201
-from datetime import datetime #noqa: I001
+from datetime import datetime  # noqa: I001
 
 from colorama import Fore, Style, init
 from nornir.core.processor import Processor
