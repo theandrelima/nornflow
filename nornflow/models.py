@@ -39,10 +39,10 @@ class TaskModel(PydanticSerdesBaseModel):
         Convert any lists in the args values to tuples.
 
         Args:
-            v (Optional[HashableDict[str, Any]]): The args dictionary to validate.
+            v (HashableDict[str, Any] | None): The args dictionary to validate.
 
         Returns:
-            Optional[HashableDict[str, Any]]: The validated args with lists converted to tuples.
+            HashableDict[str, Any] | None: The validated args with lists converted to tuples.
         """
         if v is None:
             return v
@@ -89,10 +89,10 @@ class WorkflowModel(PydanticSerdesBaseModel):
         Validate inventory_filters and convert lists to tuples.
 
         Args:
-            v (Optional[HashableDict[str, Any]]): The inventory_filters value to validate.
+            v (HashableDict[str, Any] | None): The inventory_filters value to validate.
 
         Returns:
-            Optional[HashableDict[str, Any]]: The validated inventory_filters with lists converted to tuples.
+            HashableDict[str, Any] | None: The validated inventory_filters with lists converted to tuples.
 
         Raises:
             WorkflowInventoryFilterError: If the inventory_filters contains invalid keys.

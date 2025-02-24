@@ -66,7 +66,7 @@ class NornFlow:
         Get the Nornir configurations as a dict.
 
         Returns:
-            Dict[str, Any]: Dictionary containing the Nornir configurations.
+            dict[str, Any]: Dictionary containing the Nornir configurations.
         """
         return self.nornir.config.dict()
 
@@ -75,7 +75,7 @@ class NornFlow:
         raise NornirConfigsModificationError()
 
     @property
-    def settings(self) -> str:
+    def settings(self) -> NornFlowSettings:
         """
         Get the NornFlow settings.
 
@@ -104,7 +104,7 @@ class NornFlow:
         Get the tasks catalog.
 
         Returns:
-            Dict[str, Callable]: Dictionary of task names and their corresponding functions.
+            dict[str, Callable]: Dictionary of task names and their corresponding functions.
         """
         return self._tasks_catalog
 
@@ -124,7 +124,7 @@ class NornFlow:
         Get the workflows catalog.
 
         Returns:
-            Dict[str, Callable]: Dictionary of workflows names and the correspoding file Path to it.
+            dict[str, Path]: Dictionary of workflows names and the correspoding file Path to it.
         """
         return self._workflows_catalog
 
@@ -139,17 +139,17 @@ class NornFlow:
         raise CatalogModificationError("workflows")
 
     @property
-    def workflow(self) -> str | Workflow:
+    def workflow(self) -> Workflow | str:
         """
         Get the workflow object.
 
         Returns:
-            Union[str, Workflow]: The workflow object.
+            Workflow | str: The workflow object.
         """
         return self._workflow
 
     @workflow.setter
-    def workflow(self, value: "Workflow") -> None:
+    def workflow(self, value: Workflow) -> None:
         """
         Set the workflow object.
 
@@ -340,7 +340,7 @@ class NornFlowBuilder:
         Set the workflow path for the builder.
 
         Args:
-            workflow_path (Union[str, Path]): Path to the workflow file.
+            workflow_path (str | Path): Path to the workflow file.
 
         Returns:
             NornFlowBuilder: The builder instance.

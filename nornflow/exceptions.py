@@ -152,3 +152,4 @@ class TaskDoesNotExistError(WorkflowError):
 
 class WorkflowInventoryFilterError(WorkflowError):
     """Exception raised when there is an error with the inventory filters in a Workflow."""
+    
