@@ -29,7 +29,8 @@ jobs:
       run: |
         uv venv
         source .venv/bin/activate
-        uv pip install -e ".[dev]"
+        uv sync
+        uv pip install -e .
     
     - name: Create test directory
       run: |
