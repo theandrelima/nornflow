@@ -1,7 +1,8 @@
 import importlib.util
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
 from types import ModuleType
+from typing import Any
 
 import yaml
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
