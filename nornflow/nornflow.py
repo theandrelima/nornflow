@@ -190,14 +190,14 @@ class NornFlow:
         if not task_path.is_dir():
             raise LocalDirectoryNotFoundError(directory=task_dir, extra_message="Couldn't load tasks.")
 
-        for py_file in task_path.rglob("*.py"):
-            try:
+        try:
+            for py_file in task_path.rglob("*.py"):
                 module_name = py_file.stem
                 module_path = str(py_file)
                 module = import_module_from_path(module_name, module_path)
                 self._register_nornir_tasks_from_module(module)
-            except Exception as e:
-                raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e
+        except Exception as e:
+            raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e
 
     def _register_nornir_tasks_from_module(self, module: Any) -> None:
         """
