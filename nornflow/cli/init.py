@@ -5,11 +5,12 @@ import typer
 
 from nornflow import NornFlowBuilder
 from nornflow.cli.constants import (
+    GREET_USER_TASK_FILE,
+    HELLO_WORLD_TASK_FILE,
     NORNFLOW_CONFIG_FILE,
     NORNIR_DEFAULT_CONFIG_DIR,
     SAMPLE_NORNFLOW_FILE,
     SAMPLE_NORNIR_CONFIGS_DIR,
-    SAMPLE_TASK_FILE,
     SAMPLE_WORKFLOW_FILE,
     TASKS_DIR,
     WORKFLOWS_DIR,
@@ -28,8 +29,7 @@ def init() -> None:
     1. If a 'nornir_configs' directory does not exist in the current working directory, it copies
     the entire 'nornflow/cli/samples/nornir_configs' directory to the current working directory.
     2. Copies a sample 'nornflow.yaml' file to the current working directory if it does not exist.
-    3. Creates a 'tasks' directory and copies a sample 'hello_world.py' task file into it if the
-    directory does not exist.
+    3. Creates a 'tasks' directory and copies sample task files into it if the directory does not exist.
     """
     # Display the banner message and prompt the user for confirmation
     display_banner()
@@ -55,12 +55,12 @@ def init() -> None:
     else:
         typer.secho(f"File already exists: {NORNFLOW_CONFIG_FILE}", fg=typer.colors.YELLOW)
 
-    create_directory_and_copy_sample_file(
-        TASKS_DIR, SAMPLE_TASK_FILE, "Created a sample 'hello_world' task: {}"
+    create_directory_and_copy_sample_files(
+        TASKS_DIR, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
     )
 
-    create_directory_and_copy_sample_file(
-        WORKFLOWS_DIR, SAMPLE_WORKFLOW_FILE, "Created a sample 'hello_world' workflow: {}"
+    create_directory_and_copy_sample_files(
+        WORKFLOWS_DIR, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
     )
     show_info_post_init()
 
@@ -84,18 +84,21 @@ def display_banner() -> None:
     typer.secho(border, fg=typer.colors.CYAN, bold=True)
 
 
-def create_directory_and_copy_sample_file(dir_path: Path, sample_file: Path, sample_message: str) -> None:
+def create_directory_and_copy_sample_files(
+    dir_path: Path, sample_files: list[Path], sample_message: str
+) -> None:
     """
-    Create a directory if it doesn't exist and copy a sample file into it.
+    Create a directory if it doesn't exist and copy sample files into it.
 
     Args:
         dir_path (Path): The path of the directory to create.
-        sample_file (Path): The sample file to copy into the directory.
-        sample_message (str): The message to display after copying the sample file.
+        sample_files (list[Path]): The list of sample files to copy into the directory.
+        sample_message (str): The message to display after copying the sample files.
     """
     if create_directory(dir_path):
-        shutil.copy(sample_file, dir_path / sample_file.name)
-        typer.secho(sample_message.format(dir_path / sample_file.name), fg=typer.colors.GREEN)
+        for sample_file in sample_files:
+            shutil.copy(sample_file, dir_path / sample_file.name)
+        typer.secho(sample_message.format(dir_path), fg=typer.colors.GREEN)
 
 
 def create_directory(dir_path: Path) -> bool:

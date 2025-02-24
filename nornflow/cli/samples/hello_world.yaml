@@ -11,4 +11,4 @@ workflow:
     - name: greet_user
       args:
         greeting: "Hello"
-        identification: "you beautiful person"
+        user: "you beautiful person"

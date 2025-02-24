@@ -165,7 +165,7 @@ def run(
     dry_run: bool = DRY_RUN_OPTION,
 ) -> None:
     """
-    Runs either a cataloged task or workflow - for workflows, the '.yaml' must be included.
+    Runs either a cataloged task or workflow - for workflows, the '.yaml'/'.yml' extension must be included.
     """
     inventory_filters = {}
     if hosts:
