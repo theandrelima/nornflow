@@ -1,5 +1,5 @@
-import shutil
 import os
+import shutil
 from pathlib import Path
 
 import typer
@@ -20,6 +20,7 @@ from nornflow.cli.show import show_catalog, show_nornflow_settings
 
 app = typer.Typer()
 
+
 @app.command()
 def init(ctx: typer.Context) -> None:
     """
@@ -33,7 +34,7 @@ def init(ctx: typer.Context) -> None:
     4. If a 'workflows' directory doesn't exist, creates one and copies the sample workflow file into it.
     """
     builder = NornFlowBuilder()
-    
+
     settings = ctx.obj.get("settings")
     if settings:
         builder.with_settings_path(settings)

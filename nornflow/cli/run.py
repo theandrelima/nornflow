@@ -76,7 +76,9 @@ def parse_task_args(value: str | None) -> dict[str, str | list | dict]:
         return parsed_args
 
 
-def get_nornflow_builder(target: str, args: dict, inventory_filters: dict, dry_run: bool, settings_file: str = '') -> NornFlowBuilder:
+def get_nornflow_builder(
+    target: str, args: dict, inventory_filters: dict, dry_run: bool, settings_file: str = ""
+) -> NornFlowBuilder:
     """
     Build the workflow using the provided target, arguments, inventory filters, and dry-run option.
 
@@ -174,7 +176,7 @@ def run(
     Runs either a cataloged task or workflow - for workflows, the '.yaml'/'.yml' extension must be included.
     """
     settings = ctx.obj.get("settings")
-        
+
     inventory_filters = {}
     if hosts:
         inventory_filters["hosts"] = hosts

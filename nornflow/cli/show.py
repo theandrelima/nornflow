@@ -35,11 +35,11 @@ def show(
 
     try:
         builder = NornFlowBuilder()
-        
+
         if ctx.obj.get("settings"):
             settings = ctx.obj.get("settings")
             builder.with_settings_path(settings)
-        
+
         nornflow = builder.build()
 
         if all:

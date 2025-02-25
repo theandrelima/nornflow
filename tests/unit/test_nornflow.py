@@ -94,7 +94,10 @@ class TestNornFlowBuilder:
     def test_builder_with_workflow_object(self, basic_settings, valid_workflow):
         """Test building NornFlow with a workflow object."""
         nornflow = (
-            NornFlowBuilder().with_settings_object(basic_settings).with_workflow_object(valid_workflow).build()
+            NornFlowBuilder()
+            .with_settings_object(basic_settings)
+            .with_workflow_object(valid_workflow)
+            .build()
         )
         assert isinstance(nornflow, NornFlow)
         assert nornflow.workflow == valid_workflow
@@ -102,7 +105,10 @@ class TestNornFlowBuilder:
     def test_builder_with_workflow_path(self, basic_settings, valid_workflow_file):
         """Test building NornFlow with a workflow path."""
         nornflow = (
-            NornFlowBuilder().with_settings_object(basic_settings).with_workflow_path(valid_workflow_file).build()
+            NornFlowBuilder()
+            .with_settings_object(basic_settings)
+            .with_workflow_path(valid_workflow_file)
+            .build()
         )
         assert isinstance(nornflow, NornFlow)
         assert isinstance(nornflow.workflow, Workflow)

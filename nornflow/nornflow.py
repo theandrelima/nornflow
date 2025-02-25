@@ -334,7 +334,7 @@ class NornFlowBuilder:
         """
         self._settings = settings_object
         return self
-    
+
     def with_settings_path(self, settings_path: str | Path) -> "NornFlowBuilder":
         """
         Creates a NornFlowSettings for the builder, based on a file path.
