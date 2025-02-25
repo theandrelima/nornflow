@@ -66,7 +66,7 @@ class NornFlow:
         Get the Nornir configurations as a dict.
 
         Returns:
-            Dict[str, Any]: Dictionary containing the Nornir configurations.
+            dict[str, Any]: Dictionary containing the Nornir configurations.
         """
         return self.nornir.config.dict()
 
@@ -75,7 +75,7 @@ class NornFlow:
         raise NornirConfigsModificationError()
 
     @property
-    def settings(self) -> str:
+    def settings(self) -> NornFlowSettings:
         """
         Get the NornFlow settings.
 
@@ -104,7 +104,7 @@ class NornFlow:
         Get the tasks catalog.
 
         Returns:
-            Dict[str, Callable]: Dictionary of task names and their corresponding functions.
+            dict[str, Callable]: Dictionary of task names and their corresponding functions.
         """
         return self._tasks_catalog
 
@@ -124,7 +124,7 @@ class NornFlow:
         Get the workflows catalog.
 
         Returns:
-            Dict[str, Callable]: Dictionary of workflows names and the correspoding file Path to it.
+            dict[str, Path]: Dictionary of workflows names and the correspoding file Path to it.
         """
         return self._workflows_catalog
 
@@ -139,17 +139,17 @@ class NornFlow:
         raise CatalogModificationError("workflows")
 
     @property
-    def workflow(self) -> str | Workflow:
+    def workflow(self) -> Workflow | str:
         """
         Get the workflow object.
 
         Returns:
-            Union[str, Workflow]: The workflow object.
+            Workflow | str: The workflow object.
         """
         return self._workflow
 
     @workflow.setter
-    def workflow(self, value: "Workflow") -> None:
+    def workflow(self, value: Workflow) -> None:
         """
         Set the workflow object.
 
@@ -190,14 +190,14 @@ class NornFlow:
         if not task_path.is_dir():
             raise LocalDirectoryNotFoundError(directory=task_dir, extra_message="Couldn't load tasks.")
 
-        for py_file in task_path.rglob("*.py"):
-            try:
+        try:
+            for py_file in task_path.rglob("*.py"):
                 module_name = py_file.stem
                 module_path = str(py_file)
                 module = import_module_from_path(module_name, module_path)
                 self._register_nornir_tasks_from_module(module)
-            except Exception as e:
-                raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e
+        except Exception as e:
+            raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e
 
     def _register_nornir_tasks_from_module(self, module: Any) -> None:
         """
@@ -340,7 +340,7 @@ class NornFlowBuilder:
         Set the workflow path for the builder.
 
         Args:
-            workflow_path (Union[str, Path]): Path to the workflow file.
+            workflow_path (str | Path): Path to the workflow file.
 
         Returns:
             NornFlowBuilder: The builder instance.

@@ -10,6 +10,30 @@
 [![Installer: uv](https://img.shields.io/badge/installer-uv-blue)](https://github.com/astral-sh/uv)
 
 
+> ***NornFlow is still in the prototype phase.***
 
-Nornflow is still in prototype phase.
-The idea is for it to become both a tiny CLI-wrapper around Nornir, as well as a ansible-like orchestration tool, giving the user the ability to comfortably manage network automation workflows through YAML files.
+NornFlow leverages the power of [Nornir](https://github.com/nornir-automation/nornir), a Python framework for network automation, to execute tasks on network devices. 
+
+NornFlow serves two main purposes:
+- a CLI-wrapper around Nornir, allowing users to invoke the execution of individual Nornir tasks.
+- an Ansible-like workflow automation tool that enables users to build and execute complex workflows through YAML files (or programmatically through its API).
+
+
+## Why Use NornFlow?
+
+NornFlow provides benefits that make it a compelling choice for network automation for both developers and non-developers alike:
+
+💪 **Real power for developers**: Since NornFlow is built on Nornir, developers can deliver network automation directly in Python by writing Nornir tasks as straightforward Python functions. This eliminates the need for convoluted boilerplate code to create new *'plugins'*.
+
+👍 **Simplicity for end-users**: Engineers who are familiar with Ansible but not as proficient in Python and network automation development will find NornFlow’s user experience familiar and accessible. End-users can trigger and define their network automation workflows using intuitive YAML files, much like Ansible playbooks.
+
+
+For installation and usage, see '*Getting Started*'.
+
+## Quick Start
+- [Getting Started](https://github.com/theandrelima/nornflow/tree/main/docs/getting_started.md) 🏁
+- [NornFlow Settings](https://github.com/theandrelima/nornflow/tree/main/docs/nornflow_settings.md) ⚙
+- [The NornFLow class](https://github.com/theandrelima/nornflow/tree/main/docs/the_nornflow_class.md) 🆒
+- [Workflows](https://github.com/theandrelima/nornflow/tree/main/docs/workflows.md) ✅
+- [CLI](https://github.com/theandrelima/nornflow/tree/main/docs/cli.md) 🧑‍💻
+- [Feature Roadmap](https://github.com/theandrelima/nornflow/tree/main/docs/feature_roadmap.md) 🗺️

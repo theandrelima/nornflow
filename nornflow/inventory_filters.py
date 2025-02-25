@@ -7,7 +7,7 @@ def filter_by_hostname(host: Host, hostnames: list[str]) -> bool:
 
     Args:
         host (Host): The Nornir host object to check
-        hostnames (List[str]): List of hostnames to match against
+        hostnames (list[str]): List of hostnames to match against
 
     Returns:
         bool: True if host's name is in the hostnames list
@@ -21,7 +21,7 @@ def filter_by_groups(host: Host, groups: list[str]) -> bool:
 
     Args:
         host (Host): The Nornir host object to check
-        groups (List[str]): List of group names to match against
+        groups (list[str]): List of group names to match against
 
     Returns:
         bool: True if host belongs to any of the specified groups

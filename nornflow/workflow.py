@@ -40,7 +40,7 @@ class Workflow:
         Get the workflow dictionary.
 
         Returns:
-            Dict[str, Any]: The workflow dictionary.
+            dict[str, Any]: The workflow dictionary.
         """
         return self._workflow_dict
 
@@ -50,7 +50,7 @@ class Workflow:
         Set the workflow dictionary.
 
         Args:
-            wf_dict (Dict[str, Any]): The workflow dictionary.
+            wf_dict (dict[str, Any]): The workflow dictionary.
         """
         if "workflow" not in wf_dict:
             raise WorkflowInitializationError("Missing 'workflow' in workflow definition")
@@ -63,7 +63,7 @@ class Workflow:
         Get the tasks in the workflow.
 
         Returns:
-            List[TaskModel]: List of tasks in the workflow.
+            list[TaskModel]: List of tasks in the workflow.
         """
         return self.records["TaskModel"]
 
@@ -73,7 +73,7 @@ class Workflow:
         Get the inventory filters for the workflow.
 
         Returns:
-            Dict[str, Any]: Dictionary of inventory filters.
+            dict[str, Any]: Dictionary of inventory filters.
         """
         return self.records["WorkflowModel"][0].inventory_filters
 
@@ -82,7 +82,7 @@ class Workflow:
         Check if the tasks in the workflow are present in the tasks catalog.
 
         Args:
-            tasks_catalog (Dict[str, Callable]): The tasks catalog discovered by NornFlow.
+            tasks_catalog (dict[str, Callable]): The tasks catalog discovered by NornFlow.
 
         Raises:
             TaskDoesNotExistError: If any tasks in the workflow are not found in the tasks catalog.
@@ -145,8 +145,8 @@ class WorkflowFactory:
         Initialize the WorkflowFactory.
 
         Args:
-            workflow_path (Optional[Union[str, Path]]): Path to the workflow file.
-            workflow_dict (Optional[dict[str, Any]]): Dictionary representing the workflow.
+            workflow_path (str | Path | None): Path to the workflow file.
+            workflow_dict (dict[str, Any] | None): Dictionary representing the workflow.
         """
         self.workflow_path = workflow_path
         self.workflow_dict = workflow_dict
@@ -174,7 +174,7 @@ class WorkflowFactory:
         Create a Workflow object from a file.
 
         Args:
-            workflow_path (Union[str, Path]): Path to the workflow file.
+            workflow_path (str | Path): Path to the workflow file.
 
         Returns:
             Workflow: The created Workflow object.

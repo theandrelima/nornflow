@@ -1,5 +1,7 @@
 import importlib.util
+from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import yaml
@@ -8,7 +10,7 @@ from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from nornflow.exceptions import ModuleImportError
 
 
-def read_yaml_file(file_path: str) -> dict:
+def read_yaml_file(file_path: str) -> dict[str, Any]:
     """
     Reads a YAML file and returns its contents as a dictionary.
 
@@ -16,14 +18,14 @@ def read_yaml_file(file_path: str) -> dict:
         file_path (str): Path to the YAML file.
 
     Returns:
-        Dict: Dictionary containing the YAML file contents.
+        dict[str, Any]: Dictionary containing the YAML file contents.
     """
     path = Path(file_path)
     with path.open() as file:
         return yaml.safe_load(file)
 
 
-def import_module_from_path(module_name: str, module_path: str) -> Any:
+def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
     """
     Import a module from a given file path.
 
@@ -32,10 +34,10 @@ def import_module_from_path(module_name: str, module_path: str) -> Any:
         module_path (str): Path to the module file.
 
     Returns:
-        Any: Imported module.
+        ModuleType: Imported module.
 
     Raises:
-        ModuleImportException: If there is an error importing the module.
+        ModuleImportError: If there is an error importing the module.
     """
     try:
         spec = importlib.util.spec_from_file_location(module_name, module_path)
@@ -47,12 +49,12 @@ def import_module_from_path(module_name: str, module_path: str) -> Any:
     return module
 
 
-def is_nornir_task(attr: Any) -> bool:
+def is_nornir_task(attr: Callable) -> bool:
     """
     Check if an attribute is a Nornir task.
 
     Args:
-        attr (Any): Attribute to check.
+        attr (Callable): Attribute to check.
 
     Returns:
         bool: True if the attribute is a Nornir task, False otherwise.

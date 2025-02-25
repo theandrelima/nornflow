@@ -49,7 +49,7 @@ class NornFlowSettings:
             NornFlowSettings().non_existing_setting_not_informed_in_yaml_either  # returns None
     """
 
-    def __init__(self, settings_file: str = "nornflow.yaml", **kwargs):
+    def __init__(self, settings_file: str = "nornflow.yaml", **kwargs: Any):
         # Use environment variable to override config file path if set
         self.settings_file = os.getenv("NORNFLOW_CONFIG_FILE", settings_file)
         self._load_settings()

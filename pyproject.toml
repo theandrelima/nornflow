@@ -1,9 +1,9 @@
 [project]
 name = "nornflow"
-version = "0.0.2"
+version = "0.1.1"
 description = "A workflow orchestration tool for network automation built around Nornir."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 authors = [
     { name = "Andre Lima"}
 ]
@@ -30,7 +30,7 @@ package = true
 where = ["."]
 include = ["nornflow*"]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "black>=25.1.0",
     "isort>=6.0.0",
@@ -40,7 +40,7 @@ dev = [
 
 [tool.ruff]
 line-length = 110
-target-version = "py312"
+target-version = "py310"
 exclude = ["tests/*"]
 
 [tool.ruff.lint]

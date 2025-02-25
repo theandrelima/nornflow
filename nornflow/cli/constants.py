@@ -13,7 +13,8 @@ NORNFLOW_CONFIG_FILE = CWD / "nornflow.yaml"
 NORNFLOW_SAMPLES_DIR = Path(__file__).parent / "samples"
 
 # Package sample files (always relative to the CLI package)
-SAMPLE_TASK_FILE = NORNFLOW_SAMPLES_DIR / "hello_world.py"
+HELLO_WORLD_TASK_FILE = NORNFLOW_SAMPLES_DIR / "hello_world.py"
+GREET_USER_TASK_FILE = NORNFLOW_SAMPLES_DIR / "greet_user.py"
 SAMPLE_WORKFLOW_FILE = NORNFLOW_SAMPLES_DIR / "hello_world.yaml"
 SAMPLE_NORNFLOW_FILE = NORNFLOW_SAMPLES_DIR / "nornflow.yaml"
 SAMPLE_NORNIR_CONFIGS_DIR = NORNFLOW_SAMPLES_DIR / "nornir_configs"
