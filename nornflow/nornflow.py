@@ -322,17 +322,31 @@ class NornFlowBuilder:
         self._workflow_name: str | None = None
         self._kwargs: dict[str, Any] = {}
 
-    def with_settings(self, settings: NornFlowSettings) -> "NornFlowBuilder":
+    def with_settings_object(self, settings_object: NornFlowSettings) -> "NornFlowBuilder":
         """
-        Set the NornFlowSettings for the builder.
+        Set the NornFlowSettings object for the builder.
 
         Args:
-            settings (NornFlowSettings): The NornFlowSettings object.
+            settings_object (NornFlowSettings): The NornFlowSettings object.
 
         Returns:
             NornFlowBuilder: The builder instance.
         """
-        self._settings = settings
+        self._settings = settings_object
+        return self
+    
+    def with_settings_path(self, settings_path: str | Path) -> "NornFlowBuilder":
+        """
+        Creates a NornFlowSettings for the builder, based on a file path.
+
+        Args:
+            settings_path (str | Path): The path to a YAML file to be used by NornFlowSettings object.
+
+        Returns:
+            NornFlowBuilder: The builder instance.
+        """
+        settings_object = NornFlowSettings(settings_file=settings_path)
+        self.with_settings_object(settings_object)
         return self
 
     def with_workflow_path(self, workflow_path: str | Path) -> "NornFlowBuilder":

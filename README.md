@@ -25,7 +25,7 @@ NornFlow provides benefits that make it a compelling choice for network automati
 
 💪 **Real power for developers**: Since NornFlow is built on Nornir, developers can deliver network automation directly in Python by writing Nornir tasks as straightforward Python functions. This eliminates the need for convoluted boilerplate code to create new *'plugins'*.
 
-👍 **Simplicity for end-users**: Engineers who are familiar with Ansible but not as proficient in Python and network automation development will find NornFlow’s user experience familiar and accessible. End-users can trigger and define their network automation workflows using intuitive YAML files, much like Ansible playbooks.
+👍 **Simplicity for end-users**: Engineers who are familiar with Ansible, but not as proficient in Python and network automation development, will find NornFlow’s user experience familiar and accessible. End-users can trigger and define their network automation workflows using intuitive YAML files, much like Ansible playbooks.
 
 
 For installation and usage, see '*Getting Started*'.
@@ -35,5 +35,4 @@ For installation and usage, see '*Getting Started*'.
 - [NornFlow Settings](https://github.com/theandrelima/nornflow/tree/main/docs/nornflow_settings.md) ⚙
 - [The NornFLow class](https://github.com/theandrelima/nornflow/tree/main/docs/the_nornflow_class.md) 🆒
 - [Workflows](https://github.com/theandrelima/nornflow/tree/main/docs/workflows.md) ✅
-- [CLI](https://github.com/theandrelima/nornflow/tree/main/docs/cli.md) 🧑‍💻
 - [Feature Roadmap](https://github.com/theandrelima/nornflow/tree/main/docs/feature_roadmap.md) 🗺️

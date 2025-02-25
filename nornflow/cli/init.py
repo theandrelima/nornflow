@@ -1,4 +1,5 @@
 import shutil
+import os
 from pathlib import Path
 
 import typer
@@ -19,9 +20,8 @@ from nornflow.cli.show import show_catalog, show_nornflow_settings
 
 app = typer.Typer()
 
-
 @app.command()
-def init() -> None:
+def init(ctx: typer.Context) -> None:
     """
     Initialize NornFlow by setting up the necessary configuration files and directories.
 
@@ -29,8 +29,15 @@ def init() -> None:
     1. If a 'nornir_configs' directory does not exist in the current working directory, it copies
     the entire 'nornflow/cli/samples/nornir_configs' directory to the current working directory.
     2. Copies a sample 'nornflow.yaml' file to the current working directory if it does not exist.
-    3. Creates a 'tasks' directory and copies sample task files into it if the directory does not exist.
+    3. If a 'tasks' directory doesn't exist, creates one and copies sample task files into it.
+    4. If a 'workflows' directory doesn't exist, creates one and copies the sample workflow file into it.
     """
+    builder = NornFlowBuilder()
+    
+    settings = ctx.obj.get("settings")
+    if settings:
+        builder.with_settings_path(settings)
+
     # Display the banner message and prompt the user for confirmation
     display_banner()
     if not typer.confirm("Do you want to continue?", default=True):
@@ -49,11 +56,14 @@ def init() -> None:
             f"Created a sample 'nornir_configs' directory: {NORNIR_DEFAULT_CONFIG_DIR}", fg=typer.colors.GREEN
         )
 
-    if not NORNFLOW_CONFIG_FILE.exists():
-        shutil.copy(SAMPLE_NORNFLOW_FILE, NORNFLOW_CONFIG_FILE)
-        typer.secho(f"Created a sample 'nornflow.yaml': {NORNFLOW_CONFIG_FILE}", fg=typer.colors.GREEN)
-    else:
-        typer.secho(f"File already exists: {NORNFLOW_CONFIG_FILE}", fg=typer.colors.YELLOW)
+    if not os.getenv("NORNFLOW_CONFIG_FILE"):
+        if not settings and not NORNFLOW_CONFIG_FILE.exists():
+            shutil.copy(SAMPLE_NORNFLOW_FILE, NORNFLOW_CONFIG_FILE)
+            typer.secho(f"Created a sample 'nornflow.yaml': {NORNFLOW_CONFIG_FILE}", fg=typer.colors.GREEN)
+        elif settings:
+            typer.secho(f"Trying to use informed settings file: {settings}", fg=typer.colors.YELLOW)
+        else:
+            typer.secho(f"Settings file already exists: {NORNFLOW_CONFIG_FILE}", fg=typer.colors.YELLOW)
 
     create_directory_and_copy_sample_files(
         TASKS_DIR, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
@@ -62,7 +72,7 @@ def init() -> None:
     create_directory_and_copy_sample_files(
         WORKFLOWS_DIR, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
     )
-    show_info_post_init()
+    show_info_post_init(builder)
 
 
 def display_banner() -> None:
@@ -118,10 +128,10 @@ def create_directory(dir_path: Path) -> bool:
     return False
 
 
-def show_info_post_init() -> None:
+def show_info_post_init(builder: NornFlowBuilder) -> None:
     """
     Display all information about NornFlow, equivalent to running 'nornflow show --all'.
     """
-    nornflow = NornFlowBuilder().build()
+    nornflow = builder.build()
     show_nornflow_settings(nornflow)
     show_catalog(nornflow)
