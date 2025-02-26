@@ -116,7 +116,7 @@ Created a sample 'hello_world' workflow in directory: /tmp/nornflow_test/workflo
 ```
 
 Notice the files and folders the `nornflow init` command created:
-- 🧾 `nornflow.yaml` file: This settings file dictates NornFlow's behaviors and where it should look for Nornir Tasks and Workflows to include in its Catalogs. The output summarizes the settings in the `NORNFLOW SETTINGS` table. You can check the contents of this sample file [here](../nornflow/cli/samples/nornflow.yaml).
+- 📝 `nornflow.yaml` file: This settings file dictates NornFlow's behaviors and where it should look for Nornir Tasks and Workflows to include in its Catalogs. The output summarizes the settings in the `NORNFLOW SETTINGS` table. You can check the contents of this sample file [here](../nornflow/cli/samples/nornflow.yaml).
 - 📂 `tasks` folder: Contains two .py files, each with a single Nornir task. NornFlow automatically identifies and imports Nornir tasks into its `TASK CATALOG`. Check the sample tasks in [hello_world.py](../nornflow/cli/samples/hello_world.py) and [greet_user.py](../nornflow/cli/samples/greet_user.py).
 - 📂 `workflows` folder: Contains a single `hello_world.yaml` file. This workflow includes the same two tasks mentioned above. NornFlow automatically identifies and imports Workflows into its `WORKFLOWS CATALOG`. Check this sample Workflow in [hello_world.yaml](../nornflow/cli/samples/hello_world.yaml).
 - 📂 `nornir_configs` folder: Contains Nornir YAML files with trivial configs using Nornir's 'SimpleInventory', a single host and group for localhost (127.0.0.1), and dummy credentials. For most real-world scenarios, these files will need to be reworked. Check the sample files [here](../nornflow/cli/samples/nornir_configs/).
@@ -125,7 +125,7 @@ For a detailed explanation of NornFlow Settings, see the [Settings](./nornflow_s
 
 
 ### Writing Tasks
-> 🚨 ***NOTE: In this documentation, we won't go into the details of what is are Tasks and how to write them. Those are Nornir concepts, and pre-requisites to use NornFlow. You may want to check [Nornir's docs](https://github.com/nornir-automation/nornir)***  
+> 🚨 ***NOTE: In this documentation, we won't go into the details of what are Tasks and how to write them. Those are Nornir concepts, and pre-requisites to use NornFlow. You may want to check [Nornir's docs](https://github.com/nornir-automation/nornir)***  
 
 
 When writing Nornir tasks for NornFlow, it's important to know about the `local_tasks_dirs` in your `nornflow.yaml` file. This setting lists directories where NornFlow looks for Nornir tasks to include in its **Task Catalog**.  
@@ -220,7 +220,7 @@ The only condition for NornFlow to be able to run a Task, is for it to be known 
 ```
 nornflow run <task-name> [--args]
 ```
-> 💡***Refer to the [CLI section](./cli.md) for more details, like valid formats for args, filtering options, etc...*** 
+> 💡***Refer to the CLI help (`nornflow run --help`) for more details, like valid formats for args, filtering options, etc...*** 
 
 Here is an example of running a task without passing any args.
 
@@ -269,7 +269,7 @@ To run NornFlow Workflows, you still use the same CLI:
 ```
 nornflow run <worflow_name.yaml>
 ```
-> 💡 ***Refer to the [CLI section](./cli.md) for more details, like filtering options, and dry-run mode.***  
+> 💡 ***Refer to the CLI help (`nornflow run --help`) for more details, like filtering options, and dry-run mode.***  
 
 
 Let's run the only Workflow currently present in the Workflows Catalog, the [hello_world.yaml](../nornflow/cli/samples/hello_world.yaml):  
@@ -309,3 +309,12 @@ While a Task must exist in the TASK CATALOG for NornFlow to run it, the WORKFLOW
 Still, there are real benefits for properly cataloging workflows:
 - **Organization**: Set locations for workflows make them easy to find.
 - **Less typing**: Run cataloged workflows by name instead of the full file path.
+
+  
+  <div align="center">
+    
+  ## Navigation
+  
+  [Next: NornFlow Settings](./nornflow_settings.md)
+  
+  </div>

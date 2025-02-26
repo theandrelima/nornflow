@@ -17,6 +17,7 @@ app = typer.Typer()
 
 @app.command()
 def show(
+    ctx: typer.Context,
     catalog: bool = typer.Option(False, "--catalog", "-c", help="Display the task catalog"),
     settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
     nornir_configs: bool = typer.Option(
@@ -33,7 +34,13 @@ def show(
         )
 
     try:
-        nornflow = NornFlowBuilder().build()
+        builder = NornFlowBuilder()
+
+        if ctx.obj.get("settings"):
+            settings = ctx.obj.get("settings")
+            builder.with_settings_path(settings)
+
+        nornflow = builder.build()
 
         if all:
             show_catalog(nornflow)

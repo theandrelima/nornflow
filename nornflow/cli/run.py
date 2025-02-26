@@ -76,7 +76,9 @@ def parse_task_args(value: str | None) -> dict[str, str | list | dict]:
         return parsed_args
 
 
-def get_workflow_builder(target: str, args: dict, inventory_filters: dict, dry_run: bool) -> NornFlowBuilder:
+def get_nornflow_builder(
+    target: str, args: dict, inventory_filters: dict, dry_run: bool, settings_file: str = ""
+) -> NornFlowBuilder:
     """
     Build the workflow using the provided target, arguments, inventory filters, and dry-run option.
 
@@ -85,11 +87,16 @@ def get_workflow_builder(target: str, args: dict, inventory_filters: dict, dry_r
         args (dict): The task arguments.
         inventory_filters (dict): The inventory filters.
         dry_run (bool): The dry-run option.
+        settings_file (str): The path to a YAML settings file for NornFlowSettings.
 
     Returns:
         NornFlowBuilder: The builder instance with the configured workflow.
     """
     builder = NornFlowBuilder()
+
+    if settings_file:
+        builder.with_settings_path(settings_file)
+
     nornflow_kwargs = {"dry_run": dry_run} if dry_run else {}
     builder.with_kwargs(**nornflow_kwargs)
 
@@ -158,6 +165,7 @@ DRY_RUN_OPTION = typer.Option(
 
 @app.command()
 def run(
+    ctx: typer.Context,
     target: str = typer.Argument(..., help="The name of the task or workflow to run"),
     args: str = ARGS_OPTION,
     hosts: list[str] = HOSTS_OPTION,
@@ -167,13 +175,15 @@ def run(
     """
     Runs either a cataloged task or workflow - for workflows, the '.yaml'/'.yml' extension must be included.
     """
+    settings = ctx.obj.get("settings")
+
     inventory_filters = {}
     if hosts:
         inventory_filters["hosts"] = hosts
     if groups:
         inventory_filters["groups"] = groups
 
-    builder = get_workflow_builder(target, args, inventory_filters, dry_run)
+    builder = get_nornflow_builder(target, args, inventory_filters, dry_run, settings)
 
     typer.secho(
         f"Running: {target} (args: {args}, hosts: {hosts}, groups: {groups}, dry-run: {dry_run})",

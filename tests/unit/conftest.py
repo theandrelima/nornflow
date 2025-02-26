@@ -71,7 +71,7 @@ workflow:
 @pytest.fixture
 def valid_workflow(valid_workflow_dict):
     """Create a valid workflow object."""
-    return Workflow(**valid_workflow_dict)
+    return Workflow(valid_workflow_dict)
 
 
 @pytest.fixture
