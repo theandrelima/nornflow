@@ -7,8 +7,8 @@ Table of Contents
   - [Using uv](#using-uv)
 - [Basic Usage](#basic-usage)
   - [Initializing NornFlow](#initializing-nornflow)
-  - [Writing Tasks](#writing-tasks)
-  - [Writing Workflows](#writing-workflows)
+  - [Cataloging Tasks](#cataloging-tasks)
+  - [Cataloging Workflows](#cataloging-workflows)
   - [Running a Single Task](#running-a-single-task)
   - [Running a Workflow](#running-a-workflow)
 
@@ -124,7 +124,7 @@ Notice the files and folders the `nornflow init` command created:
 For a detailed explanation of NornFlow Settings, see the [Settings](./nornflow_settings.md) section.
 
 
-### Writing Tasks
+### Cataloging Tasks
 > 🚨 ***NOTE: In this documentation, we won't go into the details of what are Tasks and how to write them. Those are Nornir concepts, and pre-requisites to use NornFlow. You may want to check [Nornir's docs](https://github.com/nornir-automation/nornir)***  
 
 
@@ -183,9 +183,11 @@ $ nornflow show --catalog
 # 'WORKFLOWS CATALOG' omitted for brevity ...
 ```
 
-### Writing Workflows
+### Cataloging Workflows
 
-When it comes to writing NorFlow Workflows, pretty much the same general ideas around writing Tasks also apply. The important distinctions to keep in minde are:
+>🚨 ***NOTE: For greater details on how to write Workflows, check [Writing Workflows](./how_to_write_workflows.md)***  
+
+When it comes to Workflows, pretty much the same general ideas around writing Tasks also apply. The important distinctions to keep in minde are:
 - The relevant setting here is `local_workflows_dir`. It also is a list of directory paths that are supposed to hold workflow files written in YAML.
 - The detection logic is simpler in this case, and will just assume any `.yml` or `.yaml` is a Workflow file. The search is also recursive.
 - Only one Workflow is allowed per YAML file.
@@ -204,12 +206,6 @@ nornflow show --catalog
 │ hello_world.yaml │ A simple workflow that just works │ workflows/hello_world.yaml │
 ╰──────────────────┴───────────────────────────────────┴────────────────────────────╯
 ```
-
-The [Worflows section](./workflows.md) covers it with greater details, but here are the must-know bits about writing workflows:
-- A Workflow can be understood as a dictionary with a single top level key: `workflow`.
-- Several optional nested keys may exist, but only one is mandatory: `tasks`.
-- The `tasks` key itself holds a list of dictionaries, each representing a Task, with it's args.
-- Tasks will be run in the same order they are informed.
 
 Again, for a simple example of how a NornFlow Workflow YAML file should look like, check the [sample workflow](../nornflow/cli/samples/hello_world.yaml).
 
