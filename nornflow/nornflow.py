@@ -316,10 +316,10 @@ class NornFlowBuilder:
           2. with_workflow_name()
           3. with_workflow_path()
           4. with_workflow_dict()
-          
+
         NOTE: In this NornFlowBuilder class, we actually enforce only the order of items 1 and 2.
         It's only if neither are provided that NornFlowBuilder avails of the WorkflowFactory class
-        which will enforce the preference order of items 3 and 4. 
+        which will enforce the preference order of items 3 and 4.
     """
 
     def __init__(self):
