@@ -309,3 +309,12 @@ While a Task must exist in the TASK CATALOG for NornFlow to run it, the WORKFLOW
 Still, there are real benefits for properly cataloging workflows:
 - **Organization**: Set locations for workflows make them easy to find.
 - **Less typing**: Run cataloged workflows by name instead of the full file path.
+
+  
+  <div align="center">
+    
+  ## Navigation
+  
+  [Next: NornFlow Settings](./nornflow_settings.md)
+  
+  </div>

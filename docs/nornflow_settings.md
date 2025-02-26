@@ -94,3 +94,23 @@ The decision to keep NornFlow settings and Nornir configurations in separate fil
 3. **Flexibility**: The separation provides flexibility in managing different environments and use cases. For example, you can have different NornFlow settings for different projects while reusing the same Nornir configurations across multiple projects.
 
 In fact, even the choice of words here is purposeful: you may have noticed that throughout this documentation (and the code itself), the term "settings" is employed when referring to NornFlow, while "configs" is used in the context of Nornir. This distinction is intentional to emphasize the separation between the two applications - *even though grammatically these words could be used interchangeably*.
+
+
+<div align="center">
+  
+## Navigation
+
+<table width="100%">
+<tr>
+<td width="33%" align="left">
+<a href="./getting_started.md">← Previous: Getting Started</a>
+</td>
+<td width="33%" align="center">
+</td>
+<td width="33%" align="right">
+<a href="./nornflow_and_workflows.md">Next: NornFlow & Workflows →</a>
+</td>
+</tr>
+</table>
+
+</div>

@@ -23,14 +23,14 @@ class Workflow:
     A workflow is a sequence of one or more Nornir tasks that can be run on a Nornir inventory.
     """
 
-    def __init__(self, **kwargs: Any):
+    def __init__(self, workflow_dict: dict[str, Any]):
         """
         Initialize the Workflow object.
 
         Args:
-            **kwargs (Any): Keyword arguments representing the workflow configuration.
+            workflow_dict (dict[str, Any]): Dictionary representing the workflow configuration.
         """
-        self.workflow_dict = kwargs
+        self.workflow_dict = workflow_dict
         generate_from_dict(self.workflow_dict)
         self.records = get_global_data_store().records
 
@@ -193,4 +193,4 @@ class WorkflowFactory:
         Returns:
             Workflow: The created Workflow object.
         """
-        return Workflow(**workflow_dict)
+        return Workflow(workflow_dict)
