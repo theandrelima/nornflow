@@ -305,10 +305,21 @@ class NornFlowBuilder:
     Builder class for constructing NornFlow objects.
 
     Usage:
-        - Use the with_settings(), with_workflow_path(), with_workflow_dict(), with_workflow_object(),
-          with_workflow_name(), and with_kwargs() methods to set configurations.
+        - Use the with_settings_object(), with_settings_path(), with_workflow_path(), with_workflow_dict(),
+          with_workflow_object(), with_workflow_name(), and with_kwargs() methods to set configurations.
         - Call the build() method to create a NornFlow object.
-        - If both a workflow_object and a workflow_name are provided, the workflow object will be preferred.
+        - THe order of preference for building a NornFlowSeetings object is as follows:
+          1. with_settings_object()
+          2. with_settings_path()
+        - The order of preference for building a Workflow object is as follows:
+          1. with_workflow_object()
+          2. with_workflow_name()
+          3. with_workflow_path()
+          4. with_workflow_dict()
+          
+        NOTE: In this NornFlowBuilder class, we actually enforce only the order of items 1 and 2.
+        It's only if neither are provided that NornFlowBuilder avails of the WorkflowFactory class
+        which will enforce the preference order of items 3 and 4. 
     """
 
     def __init__(self):
@@ -338,6 +349,8 @@ class NornFlowBuilder:
     def with_settings_path(self, settings_path: str | Path) -> "NornFlowBuilder":
         """
         Creates a NornFlowSettings for the builder, based on a file path.
+        This only takes effect if the settings object has not been set yet.
+        Initializing NorFlow with a fully formed NornFlowSettings object is preferred.
 
         Args:
             settings_path (str | Path): The path to a YAML file to be used by NornFlowSettings object.
@@ -345,8 +358,9 @@ class NornFlowBuilder:
         Returns:
             NornFlowBuilder: The builder instance.
         """
-        settings_object = NornFlowSettings(settings_file=settings_path)
-        self.with_settings_object(settings_object)
+        if not self._settings:
+            settings_object = NornFlowSettings(settings_file=settings_path)
+            self.with_settings_object(settings_object)
         return self
 
     def with_workflow_path(self, workflow_path: str | Path) -> "NornFlowBuilder":
@@ -422,7 +436,10 @@ class NornFlowBuilder:
             NornFlow: The constructed NornFlow object.
         """
         workflow = self._workflow_object or self._workflow_name
+
         if not workflow:
+            # we pass both workflow_path and workflow_dict to WorkflowFactory
+            # and leave it to the factory to decide which one to use
             if self._workflow_path or self._workflow_dict:
                 workflow_factory = WorkflowFactory(
                     workflow_path=self._workflow_path, workflow_dict=self._workflow_dict
