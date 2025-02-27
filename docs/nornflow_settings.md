@@ -100,14 +100,14 @@ In fact, even the choice of words here is purposeful: you may have noticed that 
   
 ## Navigation
 
-<table width="100%">
+<table width="100%" border="0" style="border-collapse: collapse;">
 <tr>
-<td width="33%" align="left">
+<td width="33%" align="left" style="border: none;">
 <a href="./getting_started.md">← Previous: Getting Started</a>
 </td>
-<td width="33%" align="center">
+<td width="33%" align="center" style="border: none;">
 </td>
-<td width="33%" align="right">
+<td width="33%" align="right" style="border: none;">
 <a href="./nornflow_and_workflows.md">Next: NornFlow & Workflows →</a>
 </td>
 </tr>
