@@ -32,14 +32,14 @@ The `run` method in the `Workflow` class is where the actual execution happens. 
   
 ## Navigation
 
-<table width="100%">
+<table width="100%" border="0" style="border-collapse: collapse;">
 <tr>
-<td width="33%" align="left">
+<td width="33%" align="left" style="border: none;">
 <a href="./nornflow_settings.md">← Previous: NornFlow Settings</a>
 </td>
-<td width="33%" align="center">
+<td width="33%" align="center" style="border: none;">
 </td>
-<td width="33%" align="right">
+<td width="33%" align="right" style="border: none;">
 <a href="./how_to_write_workflows.md">Next: Writing Workflows →</a>
 </td>
 </tr>
