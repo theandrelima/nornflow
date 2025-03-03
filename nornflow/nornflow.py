@@ -2,10 +2,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from nornir import InitNornir
-
 from nornflow.constants import (
-    NONRFLOW_SETTINGS_OPTIONAL,
     NORNFLOW_INVALID_INIT_KWARGS,
     NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS,
 )
@@ -20,12 +17,34 @@ from nornflow.exceptions import (
     SettingsModificationError,
     TaskLoadingError,
 )
+from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import import_module_from_path, is_nornir_task
 from nornflow.workflow import Workflow, WorkflowFactory
 
 
 class NornFlow:
+    """
+    NornFlow extends Nornir with a structured workflow system, task discovery, and configuration
+    management capabilities. It serves as the main entry point for executing network automation
+    jobs that follow a defined workflow pattern.
+
+    Key features:
+    - Automated task discovery from local directories
+    - Workflow management and execution
+    - Consistent configuration handling
+
+    The NornFlow object lifecycle typically involves:
+    1. Initialization with settings (from file or explicit object)
+    2. Automatic discovery of available tasks
+    3. Automatic discovery of available workflows (not mandatory)
+    4. Selection of a workflow (by object, name, file path, or dictionary definition)
+    5. Execution of the workflow against the Nornir inventory
+
+    Tasks are executed in order as defined in the workflow, providing a structured
+    approach to network automation operations.
+    """
+
     def __init__(
         self,
         nornflow_settings: NornFlowSettings | None = None,
@@ -45,11 +64,9 @@ class NornFlow:
             self._load_tasks_catalog()
             self._load_workflows_catalog()
 
-            # kwargs need to be cleaned up before passing them to InitNornir
-            self._remove_optional_settings_from_kwargs(kwargs)
-
-            self.nornir = InitNornir(
-                config_file=self.settings.nornir_config_file,
+            # Create NornirManager instead of directly initializing Nornir
+            self.nornir_manager = NornirManager(
+                nornir_settings=self.settings.nornir_config_file,
                 dry_run=self.settings.dry_run,
                 **kwargs,
             )
@@ -68,7 +85,8 @@ class NornFlow:
         Returns:
             dict[str, Any]: Dictionary containing the Nornir configurations.
         """
-        return self.nornir.config.dict()
+        # Access nornir through nornir_manager
+        return self.nornir_manager.nornir.config.dict()
 
     @nornir_configs.setter
     def nornir_configs(self, value: Any) -> None:
@@ -241,17 +259,6 @@ class NornFlow:
             if file.suffix in NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS:
                 self._workflows_catalog[file.name] = file
 
-    def _remove_optional_settings_from_kwargs(self, kwargs: dict[str, Any]) -> None:
-        """
-        Remove keys from kwargs that match the keys in NONRFLOW_OPTIONAL_SETTINGS.
-
-        Args:
-            kwargs (dict[str, Any]): The kwargs dictionary to modify.
-        """
-        for key in NONRFLOW_SETTINGS_OPTIONAL:
-            if key in kwargs:
-                del kwargs[key]
-
     def _check_invalid_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
         Check if kwargs contains any keys in NORNFLOW_INVALID_INIT_KWARGS and raise an error if found.
@@ -281,7 +288,7 @@ class NornFlow:
             the workflows catalog.
         """
         if not self.workflow:
-            raise NornFlowRunError("No Workflow object set was provided.")
+            raise NornFlowRunError("No Workflow object was provided.")
 
         if isinstance(self.workflow, str):
             workflow_name = self.workflow
@@ -297,7 +304,8 @@ class NornFlow:
         Runs the NornFlow job.
         """
         self._ensure_workflow()
-        self.workflow.run(self.nornir, self.tasks_catalog)
+        # Pass nornir_manager and tasks_catalog to workflow.run
+        self.workflow.run(self.nornir_manager, self.tasks_catalog)
 
 
 class NornFlowBuilder:

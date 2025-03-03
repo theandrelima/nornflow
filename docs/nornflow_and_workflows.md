@@ -4,27 +4,38 @@ In NornFlow, a **Workflow** is a central concept that represents a sequence of o
 
 NornFlow acts like a central control pane, a 'know-it-all' manager making sure to instantiate all required objects to get tasks executed successfully. However, it doesn't actually execute any tasks, or handles the inventory in any way.  
 
-The actual heavy-lifting of inventory handling and task execution is handled by the `Workflow` class. 
+The actual heavy-lifting of inventory handling and task execution is handled by the `Workflow` class with the help of the `NornirManager` class.
 
-## The Role of the NornFlow Class
+## The Role of the [NornFlow Class](../nornflow/nornflow.py)
 
 The `NornFlow` class manages the app and it's required resources, taking care of:
 - **Settings Management**: Creating a `NornFlowSettings` object if one was not passed to its initializer already.
 - **Catalog Management**: Creating and keeping track of Tasks and Workflows Catalogs.
 - **Workflow Creation**: Creating a `Workflow` object if one was not passed to its initializer already.
-- **Nornir Instance**: Based on its settings object, as well as potentially other keyword arguments, it creates a Nornir object.
+- **NornirManager Creation**: Based on its settings object, it creates a `NornirManager` that will handle Nornir instances. This instance is later passed to the `Workflow` object.
 - **Workflow Execution**: Acting as an abstraction for the Workflow execution via its own `run` method.
 
-The `run` method in the `NornFlow` class is merely responsible for invoking the `run` method of its instantiated Workflow object, passing to it the Task Catalog and the Nornir object.  
+The `run` method in the `NornFlow` class is merely responsible for invoking the `run` method of its instantiated Workflow object, passing to it the Task Catalog and the NornirManager object.
 
-## The Role of the Workflow Class
+## The Role of the [NornirManager Class](../nornflow/nornir_manager.py)
+
+The `NornirManager` class serves as an abstraction layer between the Workflow and Nornir. It's responsible for:
+
+- **Nornir Instance Creation**: Creating and configuring the Nornir object based on settings.
+- **Processor Management**: Applying processors to the Nornir instance.
+- **Inventory Management**: Providing methods to access and filter the inventory.
+
+This abstraction provides better separation of concerns and allows for more flexible customization of the Nornir instance.
+
+## The Role of the [Workflow Class](../nornflow/workflow.py)
 
 The `Workflow` class is responsible for managing and executing the sequence of tasks. It takes care of:
 
-- **Inventory Filtering**: Applying filters to the Nornir inventory to determine which devices the tasks should be run on.
-- **Task Execution**: Running the tasks in the workflow using the provided Nornir instance and tasks catalog.
+- **Ensuring Filters**: Workflow identifies the filtering criteria requested by the user and interfaces with the `NornirManager` object to filter the inventory down to the devices the tasks should be run on.
+- **Task Execution**: Running the tasks in the workflow using the Tasks Catalog received from `NornFlow` and the Nornir instance exposed by the `NornirManager`.
+- **Execution Flow**: Managing the execution flow including processor application and summary generation.
 
-The `run` method in the `Workflow` class is where the actual execution happens. It validates the tasks, applies inventory filters, and runs the tasks using the Nornir instance.
+The `run` method in the `Workflow` class is where the actual execution happens.
 
 
 

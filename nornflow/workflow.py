@@ -3,13 +3,14 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from nornir.core import Nornir
+from nornir.core.processor import Processor
 from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
 
 from nornflow.exceptions import TaskDoesNotExistError, WorkflowInitializationError
 from nornflow.inventory_filters import filter_by_groups, filter_by_hostname
 from nornflow.models import TaskModel
+from nornflow.nornir_manager import NornirManager
 from nornflow.processors import DefaultNornFlowProcessor
 
 # making sure pydantic_serdes sees Workflow models
@@ -18,9 +19,32 @@ os.environ["MODELS_MODULES"] = "nornflow.models"
 
 class Workflow:
     """
-    Class representing a workflow in NornFlow.
+    A workflow in NornFlow represents a structured, ordered collection of tasks that are executed
+    against a Nornir inventory. Workflows provide a higher-level abstraction over individual Nornir
+    tasks, enabling complex multi-step operations while maintaining readability and reusability.
 
-    A workflow is a sequence of one or more Nornir tasks that can be run on a Nornir inventory.
+    Workflows can be defined in YAML files or directly as dictionaries, and are processed through
+    the pydantic-serdes library to validate their structure and convert them into runtime objects.
+
+    Key features:
+    - Task orchestration: Execute a sequence of tasks in defined order
+    - Inventory filtering: Target specific hosts or groups for execution in the order specified
+    - Task validation: Verify tasks exist before execution
+    - Result processing: Apply processors for standardized result handling
+
+    Example workflow definition (YAML):
+        workflow:
+          name: configure_interfaces
+          description: Configure interface settings on network devices
+          inventory_filters:
+            groups: [access_switches]  # Applied first
+            hosts: [switch1, switch2]  # Applied second
+          tasks:
+            - name: backup_configs
+            - name: generate_configs
+              args:
+                template: interface_configs.j2
+            - name: deploy_configs
     """
 
     def __init__(self, workflow_dict: dict[str, Any]):
@@ -94,38 +118,76 @@ class Workflow:
         if missing_tasks:
             raise TaskDoesNotExistError(missing_tasks)
 
-    def _filter_inventory(self, nornir: Nornir) -> None:
+    def _get_filtering_kwargs(self) -> list[dict[str, Any]]:
         """
-        Filter the inventory based on the inventory_filters attribute.
+        Generate a list of filter keyword argument dictionaries based on inventory_filters.
+
+        This method examines the inventory_filters attribute and creates a list of keyword
+        argument dictionaries for filtering. Each dictionary contains:
+        - filter_func: The appropriate filter function (filter_by_hostname or filter_by_groups)
+        - Either 'hostnames' or 'groups': The corresponding filter values
+
+        Filters are included in the result in the exact order they appear in inventory_filters.
+        Empty filter values are skipped.
+
+        Returns:
+            list[dict[str, Any]]: List of dictionaries with filter kwargs
         """
-        hosts, groups = self.inventory_filters.get("hosts"), self.inventory_filters.get("groups")
+        filter_kwargs_list = []
+        filter_keys = list(self.inventory_filters.keys())
 
-        if hosts:
-            nornir = nornir.filter(filter_func=filter_by_hostname, hostnames=self.inventory_filters["hosts"])
+        for key in filter_keys:
+            filter_values = self.inventory_filters[key]
+            if not filter_values:
+                continue
 
-        if groups:
-            nornir = nornir.filter(filter_func=filter_by_groups, groups=self.inventory_filters["groups"])
+            if key == "hosts":
+                filter_kwargs_list.append({"filter_func": filter_by_hostname, "hostnames": filter_values})
+            elif key == "groups":
+                filter_kwargs_list.append({"filter_func": filter_by_groups, "groups": filter_values})
 
-    def _with_processors(self, nornir: Nornir) -> None:
+        return filter_kwargs_list
+
+    def _apply_filters(self, nornir_manager: NornirManager, **kwargs: Any) -> None:
+        """
+        Apply filtering to the Nornir instance using the provided kwargs.
+
+        Args:
+            nornir_manager (NornirManager): The NornirManager instance to apply filters to
+            **kwargs (Any): Keyword arguments containing filter criteria
+        """
+        for filter_kwargs in self._get_filtering_kwargs():
+            nornir_manager.apply_filters(**filter_kwargs)
+
+    def _with_processors(self, nornir_manager: NornirManager, processor_obj: Processor) -> None:
         """
         Apply processors to the Nornir instance.
-        """
-        return nornir.with_processors([DefaultNornFlowProcessor()])
 
-    def run(self, nornir: Nornir, tasks_catalog: dict[str, Callable]) -> None:
+        Args:
+            nornir_manager (NornirManager): The NornirManager instance to apply processors to
+        """
+        nornir_manager.apply_processors([processor_obj])
+
+    def run(self, nornir_manager: NornirManager, tasks_catalog: dict[str, Callable]) -> None:
         """
         Run the tasks in the workflow using the provided Nornir instance and tasks mapping.
 
         Args:
-            nornir (Nornir): The Nornir instance to use for running the tasks.
+            nornir_manager (NornirManager): The NornirManager instance to use for running the tasks.
             tasks_catalog (dict[str, Callable]): The tasks catalog discovered by NornFlow.
         """
         self._check_tasks(tasks_catalog)
-        self._filter_inventory(nornir)
-        nornir = self._with_processors(nornir)
+        self._apply_filters(nornir_manager)
+
+        # for the moment, hardcoding DefaultNornFlowProcessor, but this should be configurable
+        processor_obj = DefaultNornFlowProcessor()
+        self._with_processors(nornir_manager, processor_obj)
 
         for task in self.tasks:
-            nornir.run(task=tasks_catalog[task.name], **task.args or {})
+            nornir_manager.nornir.run(task=tasks_catalog[task.name], **task.args or {})
+
+        if hasattr(processor_obj, "print_final_workflow_summary"):
+            processor_obj.print_final_workflow_summary()
 
 
 class WorkflowFactory:
