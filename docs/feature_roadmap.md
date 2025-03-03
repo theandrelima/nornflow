@@ -23,17 +23,15 @@ This high-level roadmap outlines the strategic direction for NornFlow developmen
 
 ### Advanced Filtering
 - Enhanced inventory filtering capabilities
-- Support for custom filter functions
-- Local environment integration (localhost support)
+- Support for custom/imported filter functions
 
 ### Output & Processing
-- Custom output processor support
+- Support for custom/imported output processor support
 - Enhanced result presentation
 
 ### Workflow Enhancements
 - Conditional logic in workflows
-- Loop structures for repetitive tasks
-- Failure handling improvements
+- Loop structures
 
 ### Modular Component Sharing (Community Package Ecosystem)
 - Support for importing tasks, filters, and processors from external Python packages
