@@ -1,12 +1,12 @@
+from unittest.mock import Mock, patch
+
 import pytest
+from nornir.core import Nornir
+from nornir.core.processor import Processor
 
 from nornflow.nornflow import NornFlow
 from nornflow.settings import NornFlowSettings
 from nornflow.workflow import Workflow
-
-from unittest.mock import Mock, patch
-from nornir.core import Nornir
-from nornir.core.processor import Processor
 
 
 @pytest.fixture
@@ -105,8 +105,6 @@ def basic_nornflow(basic_settings):
     return NornFlow(nornflow_settings=basic_settings)
 
 
-
-
 @pytest.fixture
 def mock_processor():
     """Create a mock Processor instance for testing."""
@@ -125,5 +123,5 @@ def mock_nornir():
 @pytest.fixture
 def mock_init_nornir(mock_nornir):
     """Patch InitNornir to return our mock Nornir instance."""
-    with patch('nornflow.nornir_manager.InitNornir', return_value=mock_nornir) as mock_init:
+    with patch("nornflow.nornir_manager.InitNornir", return_value=mock_nornir) as mock_init:
         yield mock_init

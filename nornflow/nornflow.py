@@ -24,26 +24,27 @@ from nornflow.workflow import Workflow, WorkflowFactory
 
 
 class NornFlow:
-    """    
+    """
     NornFlow extends Nornir with a structured workflow system, task discovery, and configuration
     management capabilities. It serves as the main entry point for executing network automation
     jobs that follow a defined workflow pattern.
-    
+
     Key features:
     - Automated task discovery from local directories
     - Workflow management and execution
     - Consistent configuration handling
-    
+
     The NornFlow object lifecycle typically involves:
     1. Initialization with settings (from file or explicit object)
     2. Automatic discovery of available tasks
     3. Automatic discovery of available workflows (not mandatory)
     4. Selection of a workflow (by object, name, file path, or dictionary definition)
     5. Execution of the workflow against the Nornir inventory
-    
+
     Tasks are executed in order as defined in the workflow, providing a structured
     approach to network automation operations.
     """
+
     def __init__(
         self,
         nornflow_settings: NornFlowSettings | None = None,
@@ -68,7 +69,7 @@ class NornFlow:
                 nornir_settings=self.settings.nornir_config_file,
                 dry_run=self.settings.dry_run,
                 **kwargs,
-            )            
+            )
         except NornFlowInitializationError:
             # Re-raise NornFlowInitializationError as is
             raise
