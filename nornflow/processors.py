@@ -1,5 +1,5 @@
 # ruff: noqa: T201
-import threading # noqa: I001
+import threading  # noqa: I001
 from datetime import datetime
 
 from colorama import Back, Fore, Style, init
