@@ -6,6 +6,7 @@ from typing import Any
 from nornir.core import Nornir
 from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
+from nornir.core.processor import Processor
 
 from nornflow.exceptions import TaskDoesNotExistError, WorkflowInitializationError
 from nornflow.inventory_filters import filter_by_groups, filter_by_hostname
@@ -165,14 +166,14 @@ class Workflow:
         for filter_kwargs in self._get_filtering_kwargs():
             nornir_manager.apply_filters(**filter_kwargs)
     
-    def _with_processors(self, nornir_manager: NornirManager) -> None:
+    def _with_processors(self, nornir_manager: NornirManager, processor_obj: Processor) -> None:
         """
         Apply processors to the Nornir instance.
         
         Args:
             nornir_manager (NornirManager): The NornirManager instance to apply processors to
         """
-        nornir_manager.apply_processors([DefaultNornFlowProcessor()])
+        nornir_manager.apply_processors([processor_obj])
 
     def run(self, nornir_manager: NornirManager, tasks_catalog: dict[str, Callable]) -> None:
         """
@@ -184,14 +185,19 @@ class Workflow:
         """
         self._check_tasks(tasks_catalog)
         self._apply_filters(nornir_manager)
-        self._with_processors(nornir_manager)
+        
+        # for the moment, hardcoding DefaultNornFlowProcessor, but this should be configurable
+        processor_obj = DefaultNornFlowProcessor()
+        self._with_processors(nornir_manager, processor_obj)
         
         for task in self.tasks:
             nornir_manager.nornir.run(
                 task=tasks_catalog[task.name], 
                 **task.args or {}
-            )                
-            
+            )
+        
+        if hasattr(processor_obj, "print_final_workflow_summary"):
+            processor_obj.print_final_workflow_summary()            
 
 class WorkflowFactory:
     """
