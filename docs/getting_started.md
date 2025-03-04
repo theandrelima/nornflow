@@ -139,7 +139,7 @@ from nornir.core.task import Task, Result
 
 def gather_facts(task: Task) -> Result:
     """
-    The function docstring will show up as the Task's 'Description' in the TASK CATALOG. 
+    Docstring's first line will show up as the Task's 'Description' in the TASK CATALOG. 
     """
     facts = {
         "hostname": task.host.hostname,
@@ -162,23 +162,15 @@ $ nornflow show --catalog
 
 
                                                                TASKS CATALOG
-╭──────────────┬──────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────────────╮
-│  Task Name   │ Description                                                                          │ Location                                 │
-├──────────────┼──────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────┤
-│ hello_world  │ Hello World task.                                                                    │ /tmp/nornflow_test/tasks/hello_world.py  │
-├──────────────┼──────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────┤
-│ gather_facts │ The function docstring will show up as the Task's 'Description' in the TASK CATALOG. │ /tmp/nornflow_test/tasks/new_task.py     │    <<<< HERE IT IS!!!
-├──────────────┼──────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────┤
-│  greet_user  │ A simple Nornir task that greets a user.                                             │ /tmp/nornflow_test/tasks/greet_user.py   │
-│              │                                                                                      │                                          │
-│              │     Args:                                                                            │                                          │
-│              │         task (Task): The Nornir Task object                                          │                                          │
-│              │         greeting (str): The greeting to use (default: "Hello")                       │                                          │
-│              │         user (str): The name to greet (default: "User")                              │                                          │
-│              │                                                                                      │                                          │
-│              │     Returns:                                                                         │                                          │
-│              │         Result: Nornir Result object containing the greeting message                 │                                          │
-╰──────────────┴──────────────────────────────────────────────────────────────────────────────────────┴──────────────────────────────────────────╯
+╭──────────────┬──────────────────────────────────────────────────────────────────────────────────────┬────────────────────────╮
+│  Task Name   │ Description                                                                          │ Location               │
+├──────────────┼──────────────────────────────────────────────────────────────────────────────────────┼────────────────────────┤
+│ hello_world  │ Hello World task.                                                                    │ ./tasks/hello_world.py │
+├──────────────┼──────────────────────────────────────────────────────────────────────────────────────┼────────────────────────┤
+│ gather_facts │ Docstring's first line will show up as the Task's 'Description' in the TASK CATALOG. │ ./tasks/new_task.py    │<<<< HERE IT IS!!!
+├──────────────┼──────────────────────────────────────────────────────────────────────────────────────┼────────────────────────┤
+│  greet_user  │ A simple Nornir task that greets a user.                                             │ ./tasks/greet_user.py  │
+╰──────────────┴──────────────────────────────────────────────────────────────────────────────────────┴────────────────────────╯
 
 # 'WORKFLOWS CATALOG' omitted for brevity ...
 ```
