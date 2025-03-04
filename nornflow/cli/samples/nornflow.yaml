@@ -2,7 +2,7 @@
 # You can create your own '<something>.yaml' file in the root of your project, keeping in mind that 
 # NornFlow will try to find a settings YAML file through the following order:
 # 1. The path specified in the environment variable 'NORNFLOW_SETTINGS'
-# 2. The path passed to NornFlowSettings initializer (meaning using the 'nornflow run --settings' argument)
+# 2. The path passed to NornFlowSettings initializer (meaning using the 'nornflow --settings <path> ...')
 # 3. The path 'nornflow.yaml' in the root of the project
 
 ######################
