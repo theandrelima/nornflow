@@ -1,4 +1,5 @@
 import inspect
+import textwrap
 import json
 from pathlib import Path
 from typing import Any
@@ -111,19 +112,11 @@ def show_formatted_table(
     if not table_data:
         return
 
-    # Colorize and bold the headers
     colored_headers = get_colored_headers(headers, "blue")
-
     # Determine column alignment based on the number of headers
     colalign = ["center"] + ["left"] * (len(headers) - 1)
-
-    # Display the table to get its width
     table = tabulate(table_data, headers=colored_headers, tablefmt="rounded_grid", colalign=colalign)
-
-    # Create and display the banner
     display_banner(banner_text, table)
-
-    # Display the table
     typer.echo(table)
 
 
@@ -136,12 +129,19 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
 
     Returns:
         List[List[str]]: The prepared table data.
-    """
-    from nornflow.cli.constants import CWD
-    
+    """    
     table_data = []
     for task_name, task_func in nornflow.tasks_catalog.items():
-        docstring = (task_func.__doc__ or "No description available").strip()
+        # Extract the docstring and fallback to default if None
+        full_docstring = task_func.__doc__ or "No description available"
+        cleaned_docstring = full_docstring.strip()
+
+        if '.' in cleaned_docstring:
+            first_sentence = cleaned_docstring.split('.')[0].strip() + '.'
+        else:
+            first_sentence = cleaned_docstring.split('\n')[0].strip()
+
+        wrapped_text = textwrap.fill(first_sentence, width=60)
 
         # Get the Python dotted path to the function
         module = inspect.getmodule(task_func)
@@ -161,7 +161,7 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
                 function_path = str(file_path)
 
         colored_task_name = colored(task_name, "cyan", attrs=["bold"])
-        colored_docstring = colored(docstring, "yellow")
+        colored_docstring = colored(wrapped_text, "yellow")
         colored_location = colored(function_path, "light_green")
         table_data.append([colored_task_name, colored_docstring, colored_location])
     return table_data
