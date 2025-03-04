@@ -5,7 +5,7 @@ import typer
 from nornflow.cli import init, run, show
 
 app = typer.Typer(
-    help="NornFlow CLI - A workflow orchestration tool for Network Automation built around Nornir.",
+    help="NornFlow is a workflow orchestration tool for Network Automation built around Nornir.",
     add_completion=False,
 )
 
