@@ -1,6 +1,6 @@
 import inspect
-import textwrap
 import json
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -11,9 +11,8 @@ from tabulate import tabulate
 from termcolor import colored
 
 from nornflow import NornFlowBuilder
-from nornflow.cli.exceptions import NornFlowCLIShowError
 from nornflow.cli.constants import CWD
-
+from nornflow.cli.exceptions import NornFlowCLIShowError
 
 app = typer.Typer()
 
@@ -129,17 +128,17 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
 
     Returns:
         List[List[str]]: The prepared table data.
-    """    
+    """
     table_data = []
     for task_name, task_func in nornflow.tasks_catalog.items():
         # Extract the docstring and fallback to default if None
         full_docstring = task_func.__doc__ or "No description available"
         cleaned_docstring = full_docstring.strip()
 
-        if '.' in cleaned_docstring:
-            first_sentence = cleaned_docstring.split('.')[0].strip() + '.'
+        if "." in cleaned_docstring:
+            first_sentence = cleaned_docstring.split(".")[0].strip() + "."
         else:
-            first_sentence = cleaned_docstring.split('\n')[0].strip()
+            first_sentence = cleaned_docstring.split("\n")[0].strip()
 
         wrapped_text = textwrap.fill(first_sentence, width=60)
 
@@ -151,7 +150,7 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
         else:
             # Fallback to the file location with relative path if possible
             file_path = Path(inspect.getfile(task_func))
-            
+
             # Try to make it relative to CWD
             try:
                 relative_path = file_path.relative_to(CWD)
