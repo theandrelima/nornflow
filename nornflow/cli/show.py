@@ -11,6 +11,8 @@ from termcolor import colored
 
 from nornflow import NornFlowBuilder
 from nornflow.cli.exceptions import NornFlowCLIShowError
+from nornflow.cli.constants import CWD
+
 
 app = typer.Typer()
 
@@ -135,6 +137,8 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     Returns:
         List[List[str]]: The prepared table data.
     """
+    from nornflow.cli.constants import CWD
+    
     table_data = []
     for task_name, task_func in nornflow.tasks_catalog.items():
         docstring = (task_func.__doc__ or "No description available").strip()
@@ -145,9 +149,16 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
             module_path = module.__name__
             function_path = f"{module_path}.{task_func.__name__}"
         else:
-            # Fallback to the actual file location
-            file_path = inspect.getfile(task_func)
-            function_path = file_path
+            # Fallback to the file location with relative path if possible
+            file_path = Path(inspect.getfile(task_func))
+            
+            # Try to make it relative to CWD
+            try:
+                relative_path = file_path.relative_to(CWD)
+                function_path = f"./{relative_path}"
+            except ValueError:
+                # If the file is not within CWD, use absolute path as fallback
+                function_path = str(file_path)
 
         colored_task_name = colored(task_name, "cyan", attrs=["bold"])
         colored_docstring = colored(docstring, "yellow")
