@@ -15,10 +15,6 @@ class NornirManager:
     This class is responsible for initializing and managing Nornir instances
     used throughout a NornFlow workflow execution. It handles configuration,
     filtering, and processor application in a consistent manner.
-
-    The NornirManager maintains a primary Nornir instance and optionally
-    a specialized instance for local tasks, providing appropriate access
-    to either based on task requirements.
     """
 
     def __init__(self, nornir_settings: str, dry_run: bool, **kwargs):
