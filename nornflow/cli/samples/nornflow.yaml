@@ -18,7 +18,7 @@ nornir_config_file: "nornir_configs/config.yaml"
 
 # List of paths to directories containing the Nornir tasks to be included in NornFlow's task_catalog. It
 # defaults to a 'tasks' directory in the root of the project. The search is recursive, meaning that all 
-# subdirectories will be searched as well. Be careful with this.
+# subdirectories will be searched as well.
 local_tasks_dirs:
   - "tasks"
 
@@ -28,6 +28,12 @@ local_tasks_dirs:
 # considered as workflows.
 local_workflows_dirs:
   - "workflows"
+
+# List of paths to directories containing the Nornir filters to be included in NornFlow's filter_catalog. It
+# defaults to a 'filters' directory in the root of the project. The search is recursive, meaning that all
+# subdirectories will be searched as well.
+local_filters_dirs:
+  - "filters"
 
 # List of python packages installed to your environment that contain Nornir tasks and Filter functions to be included in NornFlow's catalogs.
 imported_packages: []
