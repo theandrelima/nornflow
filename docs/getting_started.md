@@ -90,22 +90,14 @@ Created a sample 'hello_world' workflow in directory: /tmp/nornflow_test/workflo
 │       dry_run        │ False                      │
 ╰──────────────────────┴────────────────────────────╯
 
-                                                         TASKS CATALOG                                                          
-╭─────────────┬──────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────╮
-│  Task Name  │ Description                                                          │ Location                                │
-├─────────────┼──────────────────────────────────────────────────────────────────────┼─────────────────────────────────────────┤
-│ hello_world │ Hello World task.                                                    │ /tmp/nornflow_test/tasks/hello_world.py │
-├─────────────┼──────────────────────────────────────────────────────────────────────┼─────────────────────────────────────────┤
-│ greet_user  │ A simple Nornir task that greets a user.                             │ /tmp/nornflow_test/tasks/greet_user.py  │
-│             │                                                                      │                                         │
-│             │     Args:                                                            │                                         │
-│             │         task (Task): The Nornir Task object                          │                                         │
-│             │         greeting (str): The greeting to use (default: "Hello")       │                                         │
-│             │         user (str): The name to greet (default: "User")              │                                         │
-│             │                                                                      │                                         │
-│             │     Returns:                                                         │                                         │
-│             │         Result: Nornir Result object containing the greeting message │                                         │
-╰─────────────┴──────────────────────────────────────────────────────────────────────┴─────────────────────────────────────────╯
+                              TASKS CATALOG                                                          
+╭─────────────┬──────────────────────────────────────────┬────────────────────────╮
+│  Task Name  │ Description                              │ Location               │
+├─────────────┼──────────────────────────────────────────┼────────────────────────┤
+│ hello_world │ Hello World task.                        │ ./tasks/hello_world.py │
+├─────────────┼──────────────────────────────────────────┼────────────────────────┤
+│ greet_user  │ A simple Nornir task that greets a user. │ ./tasks/greet_user.py  │
+╰─────────────┴──────────────────────────────────────────┴────────────────────────╯
 
                                   WORKFLOWS CATALOG                                  
 ╭──────────────────┬───────────────────────────────────┬────────────────────────────╮
