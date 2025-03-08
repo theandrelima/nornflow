@@ -10,7 +10,7 @@ The actual heavy-lifting of inventory handling and task execution is handled by 
 
 The `NornFlow` class manages the app and it's required resources, taking care of:
 - **Settings Management**: Creating a `NornFlowSettings` object if one was not passed to its initializer already.
-- **Catalog Management**: Creating and keeping track of Tasks and Workflows Catalogs.
+- **Catalog Management**: Creating and keeping track of Tasks, Workflows, and Filters Catalogs.
 - **Workflow Creation**: Creating a `Workflow` object if one was not passed to its initializer already.
 - **NornirManager Creation**: Based on its settings object, it creates a `NornirManager` that will handle Nornir instances. This instance is later passed to the `Workflow` object.
 - **Workflow Execution**: Acting as an abstraction for the Workflow execution via its own `run` method.
@@ -31,13 +31,11 @@ This abstraction provides better separation of concerns and allows for more flex
 
 The `Workflow` class is responsible for managing and executing the sequence of tasks. It takes care of:
 
-- **Ensuring Filters**: Workflow identifies the filtering criteria requested by the user and interfaces with the `NornirManager` object to filter the inventory down to the devices the tasks should be run on.
+- **Ensuring Filters**: Workflow identifies the filtering criteria requested by the user and interfaces with the `NornirManager` object to filter the inventory down to the devices the tasks should be run on. It supports Nornir's well-known [host-based basic filters](https://nornir.readthedocs.io/en/latest/howto/filtering_deep_dive.html#Host-based-basic-filters) with aby arbitrary direct attribute filtering, as well as some two NornFlow's own filtering options: 'hosts' and 'groups'.  
 - **Task Execution**: Running the tasks in the workflow using the Tasks Catalog received from `NornFlow` and the Nornir instance exposed by the `NornirManager`.
 - **Execution Flow**: Managing the execution flow including processor application and summary generation.
 
 The `run` method in the `Workflow` class is where the actual execution happens.
-
-
 
 <div align="center">
   

@@ -1,6 +1,20 @@
 # Writing Workflows
 
-Workflows in NornFlow are defined using YAML files. These files contain the configuration needed to execute sequences of tasks on network devices. This document explains how to write these workflow YAML files correctly.  
+Workflows in NornFlow are defined using YAML files. Such files contain the configuration needed to execute sequences of tasks on network devices. Here we explain how to write workflow YAML files correctly.  
+
+## Table of Contents
+- [Basic Structure](#basic-structure)
+- [Required and Optional Fields](#required-and-optional-fields)
+  - [Required Fields](#required-fields)
+  - [Optional Fields](#optional-fields)
+- [Summary of Fields & Types](#summary-of-fields--types)
+- [Inventory Filtering](#inventory-filtering)
+  - [Special NornFlow Filters](#special-nornflow-filters)
+  - [Direct Attribute Filtering](#direct-attribute-filtering)
+  - [Filter Behavior](#filter-behavior)
+- [Examples](#examples)
+  - [Minimal Valid Workflow](#minimal-valid-workflow)
+  - [Complete Workflow Example](#complete-workflow-example)
 
 ## Basic Structure
 A workflow YAML file must have a top-level workflow key, which contains all the workflow configuration:
@@ -10,8 +24,9 @@ workflow:
   name: "My Workflow"
   description: "Description of what this workflow does"
   inventory_filters:
-    hosts: []
-    groups: []
+    hosts: [] # Included for completeness – can be omitted if not used
+    groups: []  # Included for completeness – can be omitted if not used
+    platform: "ios"  # Direct attribute filter example
   tasks:
     - name: "task_name"
     - name: "another_task"
@@ -37,6 +52,7 @@ workflow:
   - **inventory_filters**: Filters to determine which devices the tasks will run on (optional)
     - **hosts**: List of hostnames to include (optional, list of strings)
     - **groups**: List of group names to include (optional, list of strings)
+    - **Any attribute name**: Any attribute from your host data (optional, value of appropriate type)
   - **tasks**:
     - **args**: Arguments to pass to the task function when it is called (optional, dictionary)
 
@@ -51,9 +67,31 @@ workflow:
 | workflow.inventory_filters       | No        | Object             | Filters for device selection    |
 | workflow.inventory_filters.hosts | No        | List of strings    | Host names to include           |
 | workflow.inventory_filters.groups| No        | List of strings    | Group names to include          |
+| workflow.inventory_filters.*     | No        | Any                | Any host attribute to filter on |
 | workflow.tasks                   | Yes       | List of dictionaries | List of tasks to execute      |
 | workflow.tasks[].name            | Yes       | String             | The name of the task            |
 | workflow.tasks[].args            | No        | Dictionary         | Arguments to pass to the task   |
+
+## Inventory Filtering
+NornFlow provides flexible inventory filtering capabilities:
+
+### Special NornFlow Filters
+- **hosts** - List of host names to include (matches any in list)
+- **groups** - List of group names to include (matches any in list)
+
+### Direct Attribute Filtering
+Besides the special filter types, you can use any host attribute as a filter key. For example:
+```yaml
+inventory_filters:
+  platform: "ios"        # Filter devices with platform="ios"
+  vendor: "cisco"        # Filter devices with vendor="cisco"
+  site_code: "nyc"       # Filter devices with site_code="nyc"
+```
+
+### Filter Behavior
+1. Special filters (`hosts` & `groups`) are applied first, in the order they appear
+2. Direct attribute filters are applied afterward
+3. Multiple filters are combined with AND logic - only hosts matching ALL criteria are included
 
 ## Examples
 
@@ -78,6 +116,9 @@ workflow:
       - router2
     groups:
       - cisco_routers
+    platform: "ios"
+    vendor: "cisco"
+    site_code: "hq"
 
   tasks:
     - name: gather_facts
