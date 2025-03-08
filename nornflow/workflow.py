@@ -99,7 +99,7 @@ class Workflow:
         Returns:
             dict[str, Any]: Dictionary of inventory filters.
         """
-        return self.records["WorkflowModel"][0].inventory_filters
+        return self.records["WorkflowModel"][0].inventory_filters or {}
 
     def _check_tasks(self, tasks_catalog: dict[str, Callable]) -> None:
         """
@@ -122,41 +122,58 @@ class Workflow:
         """
         Generate a list of filter keyword argument dictionaries based on inventory_filters.
 
-        This method examines the inventory_filters attribute and creates a list of keyword
-        argument dictionaries for filtering. Each dictionary contains:
-        - filter_func: The appropriate filter function (filter_by_hostname or filter_by_groups)
-        - Either 'hostnames' or 'groups': The corresponding filter values
-
-        Filters are included in the result in the exact order they appear in inventory_filters.
-        Empty filter values are skipped.
+        This method processes the inventory_filters and separates them into special filters
+        (hosts, groups) that use custom filter functions, and direct attribute filters that
+        are passed directly to Nornir's filter method.
 
         Returns:
             list[dict[str, Any]]: List of dictionaries with filter kwargs
         """
-        filter_kwargs_list = []
-        filter_keys = list(self.inventory_filters.keys())
+        # Start with empty lists for each filter type
+        special_filters = []
+        direct_filters = {}
 
-        for key in filter_keys:
-            filter_values = self.inventory_filters[key]
+        # Skip if no inventory filters defined
+        if not self.inventory_filters:
+            return []
+
+        # Process each filter
+        for key, filter_values in self.inventory_filters.items():
             if not filter_values:
                 continue
 
+            # Handle special filter types
             if key == "hosts":
-                filter_kwargs_list.append({"filter_func": filter_by_hostname, "hostnames": filter_values})
+                special_filters.append({"filter_func": filter_by_hostname, "hostnames": filter_values})
             elif key == "groups":
-                filter_kwargs_list.append({"filter_func": filter_by_groups, "groups": filter_values})
+                special_filters.append({"filter_func": filter_by_groups, "groups": filter_values})
+            else:
+                # Add to direct filters for attribute-based filtering
+                direct_filters[key] = filter_values
+
+        # Special filters go first (preserving order), then direct filters if any
+        filter_kwargs_list = special_filters
+        if direct_filters:
+            filter_kwargs_list.append(direct_filters)
 
         return filter_kwargs_list
 
     def _apply_filters(self, nornir_manager: NornirManager, **kwargs: Any) -> None:
         """
-        Apply filtering to the Nornir instance using the provided kwargs.
+        Apply filtering to the Nornir instance.
+
+        This method applies filters to the Nornir inventory in the order they were defined.
+        It handles both special filters (hosts, groups) and direct attribute filters.
 
         Args:
             nornir_manager (NornirManager): The NornirManager instance to apply filters to
-            **kwargs (Any): Keyword arguments containing filter criteria
+            **kwargs (Any): Additional keyword arguments for filtering (not currently used)
         """
-        for filter_kwargs in self._get_filtering_kwargs():
+        filter_kwargs_list = self._get_filtering_kwargs()
+        if not filter_kwargs_list:
+            return
+
+        for filter_kwargs in filter_kwargs_list:
             nornir_manager.apply_filters(**filter_kwargs)
 
     def _with_processors(self, nornir_manager: NornirManager, processor_obj: Processor) -> None:
@@ -165,6 +182,7 @@ class Workflow:
 
         Args:
             nornir_manager (NornirManager): The NornirManager instance to apply processors to
+            processor_obj (Processor): The processor to apply
         """
         nornir_manager.apply_processors([processor_obj])
 
