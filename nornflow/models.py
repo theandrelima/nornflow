@@ -4,8 +4,6 @@ from pydantic import field_validator
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.models import PydanticSerdesBaseModel
 
-from nornflow.exceptions import WorkflowInventoryFilterError
-
 
 class TaskModel(PydanticSerdesBaseModel):
     _key = (
@@ -87,7 +85,7 @@ class WorkflowModel(PydanticSerdesBaseModel):
     ) -> HashableDict[str, Any] | None:
         """
         Convert lists in inventory_filters to tuples for serialization.
-        
+
         With the enhanced filtering capabilities, this validator now accepts any keys
         in the inventory_filters dictionary, allowing for both special filters ('hosts', 'groups')
         and direct attribute filtering.

@@ -6,13 +6,13 @@ NornFlow's dynamic filter resolution system. When adding new filters, you MUST
 follow these conventions:
 
 NAMING CONVENTION:
-- Filter functions MUST be named 'filter_by_X' where X is the filter key used in 
+- Filter functions MUST be named 'filter_by_X' where X is the filter key used in
   inventory_filters (e.g., 'filter_by_hosts' for filter key 'hosts')
 
 PARAMETER STRUCTURE:
 - MUST have exactly 2 parameters:
   1. First parameter MUST be named 'host' (Nornir Host object)
-  2. Second parameter receives the filter values and SHOULD be named semantically 
+  2. Second parameter receives the filter values and SHOULD be named semantically
      related to the filter purpose
 
 RETURN VALUE:
@@ -29,7 +29,7 @@ Example:
     def filter_by_platform(host: Host, platform: str) -> bool:
         \"\"\"Filter hosts by platform type.\"\"\"
         return host.platform == platform
-    
+
     # Can be used in inventory_filters as:
     inventory_filters = {"platform": "ios"}
 """
