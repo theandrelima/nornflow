@@ -42,6 +42,7 @@ def process_value(key: str, value_str: str) -> Any:
     Returns:
         Processed value as the appropriate Python type
     """
+    # Best effort parsing starting with python literals.
     # Try to parse as Python literal (list, dict, etc.)
     try:
         parsed_value = ast.literal_eval(value_str)
@@ -206,7 +207,6 @@ def get_nornflow_builder(
     return builder
 
 
-# Define Options as module-level constants
 HOSTS_OPTION = typer.Option(
     None,
     "--hosts",
@@ -244,7 +244,7 @@ DRY_RUN_OPTION = typer.Option(
     help="Run in dry-run mode [default: False]",
 )
 
-
+# TODO: Eventually, decommision the legacy options.
 @app.command()
 def run(
     ctx: typer.Context,
@@ -285,6 +285,7 @@ def run(
     
     if groups:
         legacy_filters_used = True
+
         # Don't overwrite if already in inventory_filters
         if 'groups' in all_inventory_filters:
             typer.secho(
