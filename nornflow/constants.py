@@ -1,3 +1,6 @@
+# Special inventory filter keys that use NornFlow provided custom filter functions
+NORNFLOW_SPECIAL_FILTER_KEYS = ["hosts", "groups"]
+
 # used to track the mandatory kwargs for a NornFlowSettings object
 NONRFLOW_SETTINGS_MANDATORY = ("nornir_config_file",)
 

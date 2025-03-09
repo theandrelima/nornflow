@@ -7,7 +7,7 @@ from typing import Any, Optional
 import typer
 
 from nornflow import NornFlowBuilder, WorkflowFactory
-from nornflow.constants import NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS
+from nornflow.constants import NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS, NORNFLOW_SPECIAL_FILTER_KEYS
 
 app = typer.Typer(help="Run NornFlow tasks and workflows")
 
@@ -33,7 +33,7 @@ def process_value(key: str, value_str: str) -> Any:
     """
     Process a string value into the appropriate Python type.
     
-    Handles special cases like ensuring hosts/groups are always lists.
+    Handles special cases like ensuring special filter types are always lists.
     
     Args:
         key: The key name
@@ -47,8 +47,8 @@ def process_value(key: str, value_str: str) -> Any:
     try:
         parsed_value = ast.literal_eval(value_str)
         
-        # Special handling for hosts and groups - ALWAYS ensure they are lists
-        if key in ['hosts', 'groups']:
+        # Special handling for special filter keys - ALWAYS ensure they are lists
+        if key in NORNFLOW_SPECIAL_FILTER_KEYS:
             if isinstance(parsed_value, str):
                 return [parsed_value]
             elif isinstance(parsed_value, (list, tuple)):
@@ -65,8 +65,8 @@ def process_value(key: str, value_str: str) -> Any:
             return [item.strip() for item in value_str.split(',')]
         else:
             # Just a regular string
-            # Special handling for hosts and groups - ALWAYS ensure they are lists
-            if key in ['hosts', 'groups']:
+            # Special handling for special filter keys - ALWAYS ensure they are lists
+            if key in NORNFLOW_SPECIAL_FILTER_KEYS:
                 return [value_str]
             else:
                 return value_str
@@ -227,7 +227,8 @@ INVENTORY_FILTERS_OPTION = typer.Option(
     None,
     "--inventory-filters",
     "-i",
-    help="Inventory filters in flexible format, examples:\n- \"platform='ios', vendor='cisco'\"\n- \"hosts=host1,host2\"\n- \"groups=['prod', 'core']\"",  # noqa: E501
+    help=f"Inventory filters in flexible format. Special filters ({', '.join(NORNFLOW_SPECIAL_FILTER_KEYS)}) "
+         f"receive custom handling.\nExamples:\n- \"platform='ios', vendor='cisco'\"\n- \"hosts=host1,host2\"\n- \"groups=['prod', 'core']\"",
 )
 
 ARGS_OPTION = typer.Option(
@@ -244,7 +245,8 @@ DRY_RUN_OPTION = typer.Option(
     help="Run in dry-run mode [default: False]",
 )
 
-# TODO: Eventually, decommision the legacy options.
+
+# TODO: Eventually, decommission the legacy options.
 @app.command()
 def run(
     ctx: typer.Context,
@@ -271,36 +273,28 @@ def run(
     
     # Add hosts/groups if provided through legacy options
     legacy_filters_used = False
-    if hosts:
-        legacy_filters_used = True
-        # Don't overwrite if already in inventory_filters
-        if 'hosts' in all_inventory_filters:
-            typer.secho(
-                "Warning: Both --hosts and --inventory-filters with 'hosts' key provided. "
-                "Using values from --inventory-filters.",
-                fg=typer.colors.YELLOW
-            )
-        else:
-            all_inventory_filters["hosts"] = hosts
     
-    if groups:
-        legacy_filters_used = True
-
-        # Don't overwrite if already in inventory_filters
-        if 'groups' in all_inventory_filters:
-            typer.secho(
-                "Warning: Both --groups and --inventory-filters with 'groups' key provided. "
-                "Using values from --inventory-filters.",
-                fg=typer.colors.YELLOW
-            )
-        else:
-            all_inventory_filters["groups"] = groups
+    # Handle both legacy filter options in a consistent way
+    legacy_options = {"hosts": hosts, "groups": groups}
+    for key, value in legacy_options.items():
+        if value:
+            legacy_filters_used = True
+            # Don't overwrite if already in inventory_filters
+            if key in all_inventory_filters:
+                typer.secho(
+                    f"Warning: Both --{key} and --inventory-filters with '{key}' key provided. "
+                    f"Using values from --inventory-filters.",
+                    fg=typer.colors.YELLOW
+                )
+            else:
+                all_inventory_filters[key] = value
     
     # Show deprecation warning for legacy filters
     if legacy_filters_used:
         typer.secho(
-            "Warning: The --hosts and --groups options are deprecated and will be removed in a future version. "
-            "Please use --inventory-filters instead (e.g., --inventory-filters \"hosts=host1,host2 or hosts=['host1', 'host2']\")",
+            "Warning: The --hosts and --groups options will be deprecated and removed in a future version. "
+            "Please use --inventory-filters instead (e.g., --inventory-filters \"hosts=host1,host2\" "
+            "or \"hosts=['host1', 'host2']\")",
             fg=typer.colors.YELLOW
         )
 
