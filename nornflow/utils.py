@@ -1,9 +1,9 @@
-import inspect
 import importlib
+import inspect
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
@@ -51,56 +51,53 @@ def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
 
 
 def resolve_special_filter(
-    key: str, 
-    filter_values: Any,
-    filter_module_name: str = 'nornflow.inventory_filters'
-) -> Optional[dict[str, Any]]:
+    key: str, filter_values: Any, filter_module_name: str = "nornflow.inventory_filters"
+) -> dict[str, Any] | None:
     """
     Resolve a filter key to a filter function and arguments according to Nornir conventions.
-    
-    Uses the convention that for a key 'x', there should be a function 
+
+    Uses the convention that for a key 'x', there should be a function
     named 'filter_by_x' in the specified module that can be used as a filter function.
-    
+
     Important assumptions:
     - Filter functions should follow Nornir's standard pattern of exactly 2 parameters
     - First parameter must be 'host' (representing a Nornir Host object)
     - Second parameter receives the filter_values and should match the filter key semantically
-    
+
     Args:
         key: The filter key name (e.g., 'hosts', 'groups')
         filter_values: The values to filter by (typically a list)
         filter_module_name: Name of module containing filter functions
-        
+
     Returns:
         dict: Filter kwargs including 'filter_func' and appropriate parameters,
              or None if the filter function couldn't be resolved
     """
     # Use convention: filter_by_{key} should be the function name
     filter_func_name = f"filter_by_{key}"
-    
+
     try:
         # Import the inventory filters module
         filters_module = importlib.import_module(filter_module_name)
-        
+
         # Check if the function exists in the module
         if hasattr(filters_module, filter_func_name):
             filter_func = getattr(filters_module, filter_func_name)
-            
+
             # Use the function's parameter names to determine the correct kwarg name
             sig = inspect.signature(filter_func)
             # Get the second parameter name (first is 'host', second should be our filter parameter)
             param_names = list(sig.parameters.keys())
-            
-            if len(param_names) >= 2:
+
+            if len(param_names) >= 2:  # noqa: PLR2004
                 kwarg_name = param_names[1]  # Second parameter
                 return {"filter_func": filter_func, kwarg_name: filter_values}
-            else:
-                # Fallback - use the key name as the kwarg name
-                return {"filter_func": filter_func, key: filter_values}
+            # Fallback - use the key name as the kwarg name
+            return {"filter_func": filter_func, key: filter_values}
 
     except (ImportError, AttributeError):
         pass
-        
+
     return None
 
 

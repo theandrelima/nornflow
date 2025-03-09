@@ -1,6 +1,4 @@
 import os
-import inspect
-import importlib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -9,13 +7,12 @@ from nornir.core.processor import Processor
 from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
 
+from nornflow.constants import NORNFLOW_SPECIAL_FILTER_KEYS
 from nornflow.exceptions import TaskDoesNotExistError, WorkflowInitializationError
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.processors import DefaultNornFlowProcessor
-from nornflow.constants import NORNFLOW_SPECIAL_FILTER_KEYS
 from nornflow.utils import resolve_special_filter
-
 
 # making sure pydantic_serdes sees Workflow models
 os.environ["MODELS_MODULES"] = "nornflow.models"
@@ -121,31 +118,31 @@ class Workflow:
 
         if missing_tasks:
             raise TaskDoesNotExistError(missing_tasks)
-    
+
     def _get_filtering_kwargs(self) -> list[dict[str, Any]]:
         """
         Generate a list of filter keyword argument dictionaries based on inventory_filters.
-    
+
         This method processes the inventory_filters and separates them into special filters
         (hosts, groups) that use custom filter functions, and direct attribute filters that
         are passed directly to Nornir's filter method.
-    
+
         Returns:
             list[dict[str, Any]]: List of dictionaries with filter kwargs
         """
         # Start with empty lists for each filter type
         special_filters = []
         direct_filters = {}
-    
+
         # Skip if no inventory filters defined
         if not self.inventory_filters:
             return []
-        
+
         # Process each filter
         for key, filter_values in self.inventory_filters.items():
             if not filter_values:
                 continue
-    
+
             # Check if this is a special filter key
             if key in NORNFLOW_SPECIAL_FILTER_KEYS:
                 filter_kwargs = resolve_special_filter(key, filter_values)
@@ -157,12 +154,12 @@ class Workflow:
             else:
                 # Add to direct filters for attribute-based filtering
                 direct_filters[key] = filter_values
-    
+
         # Special filters go first (preserving order), then direct filters if any
         filter_kwargs_list = special_filters
         if direct_filters:
             filter_kwargs_list.append(direct_filters)
-    
+
         return filter_kwargs_list
 
     def _apply_filters(self, nornir_manager: NornirManager, **kwargs: Any) -> None:

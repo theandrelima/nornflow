@@ -2,12 +2,15 @@ import ast
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import typer
 
 from nornflow import NornFlowBuilder, WorkflowFactory
-from nornflow.constants import NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS, NORNFLOW_SPECIAL_FILTER_KEYS
+from nornflow.constants import (
+    NORNFLOW_SPECIAL_FILTER_KEYS,
+    NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS,
+)
 
 app = typer.Typer(help="Run NornFlow tasks and workflows")
 
@@ -29,16 +32,16 @@ def csv_to_list(value: str | list | None) -> list[str]:
     return [x.strip() for x in value.split(",")]
 
 
-def process_value(key: str, value_str: str) -> Any:
+def process_value(key: str, value_str: str) -> Any:  # noqa: PLR0911
     """
     Process a string value into the appropriate Python type.
-    
+
     Handles special cases like ensuring special filter types are always lists.
-    
+
     Args:
         key: The key name
         value_str: The string value to process
-        
+
     Returns:
         Processed value as the appropriate Python type
     """
@@ -46,45 +49,42 @@ def process_value(key: str, value_str: str) -> Any:
     # Try to parse as Python literal (list, dict, etc.)
     try:
         parsed_value = ast.literal_eval(value_str)
-        
+
         # Special handling for special filter keys - ALWAYS ensure they are lists
         if key in NORNFLOW_SPECIAL_FILTER_KEYS:
             if isinstance(parsed_value, str):
                 return [parsed_value]
-            elif isinstance(parsed_value, (list, tuple)):
+            if isinstance(parsed_value, list | tuple):
                 return list(parsed_value)
-            else:
-                return [parsed_value]
-        else:
-            return parsed_value
-            
+            return [parsed_value]
+        return parsed_value
+
     except (ValueError, SyntaxError):
         # If it's not a valid Python literal, check for CSV format
-        if ',' in value_str and not (value_str.startswith('{') or value_str.startswith('[') or value_str.startswith('(')):
+        if "," in value_str and not value_str.startswith(("{", "[", "(")):
             # Looks like a CSV, treat as list
-            return [item.strip() for item in value_str.split(',')]
-        else:
-            # Just a regular string
-            # Special handling for special filter keys - ALWAYS ensure they are lists
-            if key in NORNFLOW_SPECIAL_FILTER_KEYS:
-                return [value_str]
-            else:
-                return value_str
+            return [item.strip() for item in value_str.split(",")]
+
+        # Just a regular string
+        # Special handling for special filter keys - ALWAYS ensure they are lists
+        if key in NORNFLOW_SPECIAL_FILTER_KEYS:
+            return [value_str]
+        return value_str
 
 
 def parse_key_value_pairs(value: str | None, error_context: str) -> dict[str, Any]:
     """
     Parse a string of key=value pairs into a dictionary with intelligent value parsing.
-    
+
     Handles multiple formats for values:
     - Python literals via ast.literal_eval
     - Simple strings
     - Comma-separated values (auto-converted to lists)
-    
+
     Args:
         value: String containing key=value pairs
         error_context: Context for error messages
-        
+
     Returns:
         Dictionary of parsed key-value pairs
     """
@@ -103,11 +103,11 @@ def parse_key_value_pairs(value: str | None, error_context: str) -> dict[str, An
             k, v = pair.split("=", 1)
             k = k.strip()
             v = v.strip()
-            
+
             # Remove quotes from key if present
             if (k.startswith('"') and k.endswith('"')) or (k.startswith("'") and k.endswith("'")):
                 k = k[1:-1]
-            
+
             # Process the value
             parsed_dict[k] = process_value(k, v)
 
@@ -117,9 +117,9 @@ def parse_key_value_pairs(value: str | None, error_context: str) -> dict[str, An
             f"- Simple values: \"key='value'\"\n"
             f"- Lists: \"key=['value1', 'value2']\" or \"key=value1,value2,value3\"\n"
             f"- Dicts: \"key={{'inner_key': 'value'}}\"\n"
-            f"Error: {str(e)}"
+            f"Error: {e!s}"
         ) from e
-    
+
     return parsed_dict
 
 
@@ -212,7 +212,7 @@ HOSTS_OPTION = typer.Option(
     "--hosts",
     "-h",
     callback=csv_to_list,
-    help='(to be deprecated) Filters the inventory using a CSV list of hosts to run the task on (e.g "device1,device2")',
+    help='(to be deprecated) Filters the inventory using a CSV list of hosts to run the task on (e.g "device1,device2")',  # noqa: E501
 )
 
 GROUPS_OPTION = typer.Option(
@@ -220,7 +220,7 @@ GROUPS_OPTION = typer.Option(
     "--groups",
     "-g",
     callback=csv_to_list,
-    help='(to be deprecated) Filters the inventory using a comma-separated list of groups to run the task on (e.g "group1,group2")',
+    help='(to be deprecated) Filters the inventory using a comma-separated list of groups to run the task on (e.g "group1,group2")',  # noqa: E501
 )
 
 INVENTORY_FILTERS_OPTION = typer.Option(
@@ -228,7 +228,7 @@ INVENTORY_FILTERS_OPTION = typer.Option(
     "--inventory-filters",
     "-i",
     help=f"Inventory filters in flexible format. Special filters ({', '.join(NORNFLOW_SPECIAL_FILTER_KEYS)}) "
-         f"receive custom handling.\nExamples:\n- \"platform='ios', vendor='cisco'\"\n- \"hosts=host1,host2\"\n- \"groups=['prod', 'core']\"",
+    f"receive custom handling.\nExamples:\n- \"platform='ios', vendor='cisco'\"\n- \"hosts=host1,host2\"\n- \"groups=['prod', 'core']\"",  # noqa: E501
 )
 
 ARGS_OPTION = typer.Option(
@@ -251,29 +251,29 @@ DRY_RUN_OPTION = typer.Option(
 def run(
     ctx: typer.Context,
     target: str = typer.Argument(..., help="The name of the task or workflow to run"),
-    args: Optional[str] = ARGS_OPTION,
-    hosts: Optional[list[str]] = HOSTS_OPTION,
-    groups: Optional[list[str]] = GROUPS_OPTION,
-    inventory_filters: Optional[str] = INVENTORY_FILTERS_OPTION,
+    args: str | None = ARGS_OPTION,
+    hosts: list[str] | None = HOSTS_OPTION,
+    groups: list[str] | None = GROUPS_OPTION,
+    inventory_filters: str | None = INVENTORY_FILTERS_OPTION,
     dry_run: bool = DRY_RUN_OPTION,
 ) -> None:
     """
     Runs either a cataloged task or workflow - for workflows, the '.yaml'/'.yml' extension must be included.
     """
     settings = ctx.obj.get("settings")
-    
+
     # Parse args into dictionary if provided
     parsed_args = parse_task_args(args) if args else {}
-    
+
     # Parse inventory filters if provided
     parsed_inventory_filters = parse_inventory_filters(inventory_filters) if inventory_filters else {}
 
     # Combine all filter types into one dictionary
     all_inventory_filters = parsed_inventory_filters.copy()
-    
+
     # Add hosts/groups if provided through legacy options
     legacy_filters_used = False
-    
+
     # Handle both legacy filter options in a consistent way
     legacy_options = {"hosts": hosts, "groups": groups}
     for key, value in legacy_options.items():
@@ -284,18 +284,18 @@ def run(
                 typer.secho(
                     f"Warning: Both --{key} and --inventory-filters with '{key}' key provided. "
                     f"Using values from --inventory-filters.",
-                    fg=typer.colors.YELLOW
+                    fg=typer.colors.YELLOW,
                 )
             else:
                 all_inventory_filters[key] = value
-    
+
     # Show deprecation warning for legacy filters
     if legacy_filters_used:
         typer.secho(
             "Warning: The --hosts and --groups options will be deprecated and removed in a future version. "
-            "Please use --inventory-filters instead (e.g., --inventory-filters \"hosts=host1,host2\" "
+            'Please use --inventory-filters instead (e.g., --inventory-filters "hosts=host1,host2" '
             "or \"hosts=['host1', 'host2']\")",
-            fg=typer.colors.YELLOW
+            fg=typer.colors.YELLOW,
         )
 
     builder = get_nornflow_builder(target, parsed_args, all_inventory_filters, dry_run, settings)
