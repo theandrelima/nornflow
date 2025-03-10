@@ -7,8 +7,11 @@ from nornir.core.processor import Processor
 from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
 
-from nornflow.constants import NORNFLOW_SPECIAL_FILTER_KEYS
-from nornflow.exceptions import TaskDoesNotExistError, WorkflowInitializationError, WorkflowInventoryFilterError
+from nornflow.exceptions import (
+    TaskDoesNotExistError,
+    WorkflowInitializationError,
+    WorkflowInventoryFilterError,
+)
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.processors import DefaultNornFlowProcessor
@@ -121,24 +124,25 @@ class Workflow:
     def _get_filtering_kwargs(self, filters_catalog: dict[str, Callable]) -> list[dict[str, Any]]:
         """
         Generate a list of filter keyword argument dictionaries based on inventory_filters.
-        
+
         This method processes the inventory_filters and converts them into filter kwargs
         that can be applied to a Nornir instance. The filters can be either:
         - Custom filter functions from the filters_catalog
         - Direct attribute filters passed directly to Nornir
-        
+
         Returns:
             list[dict[str, Any]]: List of dictionaries with filter kwargs
         """
         # Skip if no inventory filters defined
         if not self.inventory_filters:
             return []
-        
+
         # Process each filter
         filter_kwargs_list = []
         for key, filter_values in self.inventory_filters.items():
             if key in filters_catalog:
-                # We first check if a key under 'inventory_filters' is a filter function in the filters_catalog
+                # We first check if a key under 'inventory_filters'
+                # is a filter function in the filters_catalog
                 filter_kwargs = self._process_custom_filter(key, filter_values, filters_catalog)
                 filter_kwargs_list.append(filter_kwargs)
             else:
@@ -146,80 +150,81 @@ class Workflow:
                 # Case 7: No matching filter function - use direct attribute filtering
                 # This handles Nornir's built-in Host-based basic filtering (like name, platform, etc.)
                 filter_kwargs_list.append({key: filter_values})
-                
+
         return filter_kwargs_list
-    
-    def _process_custom_filter(self, key: str, filter_values: Any, 
-                             filters_catalog: dict[str, Callable]) -> dict[str, Any]:
+
+    def _process_custom_filter(
+        self, key: str, filter_values: Any, filters_catalog: dict[str, Callable]
+    ) -> dict[str, Any]:
         """
         Process a single custom filter and its values.
-        
+
         Args:
             key: The filter name/key
             filter_values: The values for this filter
             filters_catalog: Dictionary mapping filter names to (func, param_names) tuples
-            
+
         Returns:
             dict[str, Any]: Filter kwargs dictionary for this filter
-            
+
         Raises:
             WorkflowInventoryFilterError: If parameter validation fails
         """
         # Get the filter function and its parameter names
         filter_func, param_names = filters_catalog[key]
-        
+
         # Start with filter_func parameter
         filter_kwargs = {"filter_func": filter_func}
-        
+
         # Handle the filter values based on their type and the expected parameters
         if not param_names:
             # Case 1: No additional parameters needed besides host (parameter-less filter)
             # Just use the filter function with no additional parameters
             return filter_kwargs
-            
-        elif isinstance(filter_values, dict):
+
+        if isinstance(filter_values, dict):
             # Case 2: Parameters provided as a dictionary
             return self._handle_dict_parameters(key, filter_values, param_names, filter_kwargs)
-            
-        elif isinstance(filter_values, (list, tuple)) and len(param_names) == 1:
+
+        if isinstance(filter_values, list | tuple) and len(param_names) == 1:
             # Case 3: Single parameter expecting a list/tuple
             # The filter takes one parameter which is a list/tuple
             filter_kwargs[param_names[0]] = filter_values
             return filter_kwargs
-            
-        elif isinstance(filter_values, (list, tuple)) and len(filter_values) == len(param_names):
+
+        if isinstance(filter_values, list | tuple) and len(filter_values) == len(param_names):
             # Case 4: Multiple parameters provided as a list in the correct order
             # Create a dictionary by zipping parameter names with their values
-            filter_kwargs.update(dict(zip(param_names, filter_values)))
+            filter_kwargs.update(dict(zip(param_names, filter_values, strict=False)))
             return filter_kwargs
-            
-        elif len(param_names) == 1:
+
+        if len(param_names) == 1:
             # Case 5: Single parameter with a scalar value
             # The filter takes one parameter with a simple value
             filter_kwargs[param_names[0]] = filter_values
             return filter_kwargs
-            
-        else:
-            # Case 6: Parameter mismatch - incompatible values format
-            raise WorkflowInventoryFilterError(
-                f"Filter '{key}' expects {len(param_names)} parameters {param_names}, "
-                f"but got incompatible value: {filter_values}"
-            )
-    
-    def _handle_dict_parameters(self, key: str, filter_values: dict, 
-                              param_names: list[str], filter_kwargs: dict) -> dict[str, Any]:
+
+        # Case 6: Parameter mismatch - incompatible values format
+        raise WorkflowInventoryFilterError(
+            f"Filter '{key}' expects {len(param_names)} parameters {param_names}, "
+            f"but got incompatible value: {filter_values}"
+        )
+
+    def _handle_dict_parameters(
+        self, key: str, filter_values: dict, param_names: list[str], filter_kwargs: dict
+    ) -> dict[str, Any]:
         """
         Handle the case where filter parameters are provided as a dictionary.
-        
+
         Args:
             key: The filter name
             filter_values: Dictionary of parameter values
             param_names: Expected parameter names
             filter_kwargs: Base filter kwargs dict
-            
+
         Returns:
             dict[str, Any]: Updated filter kwargs dictionary
-            
+
         Raises:
             WorkflowInventoryFilterError: If required parameters are missing
         """
@@ -229,12 +234,12 @@ class Workflow:
             raise WorkflowInventoryFilterError(
                 f"Filter '{key}' requires parameters {param_names}, but missing: {missing_params}"
             )
-        
+
         # Add only the expected parameters from the dict
         for param in param_names:
             if param in filter_values:
                 filter_kwargs[param] = filter_values[param]
-                
+
         return filter_kwargs
 
     def _apply_filters(self, nornir_manager: NornirManager, filters_catalog: dict[str, Callable]) -> None:
@@ -265,7 +270,12 @@ class Workflow:
         """
         nornir_manager.apply_processors([processor_obj])
 
-    def run(self, nornir_manager: NornirManager, tasks_catalog: dict[str, Callable], filters_catalog: dict[str, Callable]) -> None:
+    def run(
+        self,
+        nornir_manager: NornirManager,
+        tasks_catalog: dict[str, Callable],
+        filters_catalog: dict[str, Callable],
+    ) -> None:
         """
         Run the tasks in the workflow using the provided Nornir instance and tasks mapping.
 

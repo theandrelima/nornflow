@@ -20,7 +20,9 @@ app = typer.Typer()
 @app.command()
 def show(
     ctx: typer.Context,
-    catalog: bool = typer.Option(False, "--catalog", "-c", help="Display the task, workflow, and filter catalogs"),
+    catalog: bool = typer.Option(
+        False, "--catalog", "-c", help="Display the task, workflow, and filter catalogs"
+    ),
     settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
     nornir_configs: bool = typer.Option(
         False, "--nornir-configs", "-n", help="Display current Nornir Configs"
@@ -207,12 +209,12 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
         List[List[str]]: The prepared table data.
     """
     table_data = []
-    
+
     # Skip if no filters catalog available
-    if not hasattr(nornflow, "_filters_catalog") or not nornflow._filters_catalog:
+    if not hasattr(nornflow, "_filters_catalog") or not nornflow.filters_catalog:
         return table_data
-        
-    for filter_name, (filter_func, param_names) in nornflow._filters_catalog.items():
+
+    for filter_name, (filter_func, param_names) in nornflow.filters_catalog.items():
         # Extract the docstring and fallback to default if None
         full_docstring = filter_func.__doc__ or "No description available"
         cleaned_docstring = full_docstring.strip()
@@ -227,7 +229,7 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
             param_info = "Parameters: None (host only)"
         else:
             param_info = f"Parameters: {', '.join(param_names)}"
-            
+
         # Format as two separate lines
         description = f"{first_sentence}\n{param_info}"
 

@@ -69,55 +69,55 @@ def is_nornir_task(attr: Callable) -> bool:
     return False
 
 
-def is_nornir_filter(attr: Callable) -> bool:
+def is_nornir_filter(attr: Callable) -> bool:  # noqa: PLR0911
     """
     Check if an function is a Nornir inventory filter function.
-    
+
     Strict criteria (all must be met):
     - Must be callable
     - First parameter MUST be explicitly annotated as Host from nornir.core.inventory
     - Return type MUST be explicitly annotated as either:
       - The built-in bool type
       - A typing.Literal containing only boolean values (True/False)
-    
+
     This function enforces explicit type annotations to ensure filter functions
     follow a consistent pattern.
-    
+
     Args:
         attr (Callable): Attribute to check.
-        
+
     Returns:
         bool: True if the attribute is a properly annotated Nornir filter, False otherwise.
     """
     if not callable(attr):
         return False
-        
+
     try:
         sig = inspect.signature(attr)
         params = list(sig.parameters.values())
-        
+
         # Must have at least one parameter (host)
         if not params:
             return False
-        
+
         # First parameter annotation must be Host
         if params[0].annotation != Host:
             return False
-        
+
         # Check for various boolean-like return types
         return_type_annotation = sig.return_annotation
-            
+
         # Check for built-in bool
-        if return_type_annotation == bool:
+        if return_type_annotation is bool:
             return True
-        
+
         # Checking kind of an edge case here: typing.Literal with boolean values
         if hasattr(return_type_annotation, "__origin__") and return_type_annotation.__origin__ is Literal:
             args = getattr(return_type_annotation, "__args__", ())
             # If all args are True or False, it's a boolean Literal
             if set(args) <= {True, False}:
                 return True
-            
+
         return False
 
     except (ValueError, TypeError):

@@ -1,7 +1,8 @@
-import pytest
 from unittest.mock import Mock, patch
 
+import pytest
 from nornir.core.inventory import Host
+
 from nornflow.exceptions import NornirManagerProcessorsError
 from nornflow.nornir_manager import NornirManager
 
@@ -24,7 +25,7 @@ class TestNornirManagerFilters:
     @pytest.fixture
     def manager(self, mock_nornir):
         """Create a NornirManager with mocked Nornir instance."""
-        with patch('nornflow.nornir_manager.InitNornir', return_value=mock_nornir):
+        with patch("nornflow.nornir_manager.InitNornir", return_value=mock_nornir):
             return NornirManager(nornir_settings="dummy_path.yaml", dry_run=False)
 
     def test_no_filters_error(self, manager):
@@ -35,24 +36,22 @@ class TestNornirManagerFilters:
     def test_direct_attribute_filtering(self, manager, mock_nornir):
         """Test direct attribute filtering."""
         manager.apply_filters(name="test-device", platform="ios")
-        
+
         # Verify filter was called with correct args
         mock_nornir.filter.assert_called_with(name="test-device", platform="ios")
 
     def test_function_based_filtering(self, manager, mock_nornir):
         """Test function-based filtering."""
         manager.apply_filters(filter_func=filter_by_platform, platform="ios")
-        
+
         # Verify filter was called with correct args
-        mock_nornir.filter.assert_called_with(
-            filter_func=filter_by_platform, platform="ios"
-        )
+        mock_nornir.filter.assert_called_with(filter_func=filter_by_platform, platform="ios")
 
     def test_tuple_handling(self, manager, mock_nornir):
         """Test that tuples are passed through correctly."""
         test_tuple = ("host1", "host2")
         manager.apply_filters(hosts=test_tuple)
-        
+
         # Verify filter was called with tuple intact
         mock_nornir.filter.assert_called_with(hosts=test_tuple)
 
@@ -61,9 +60,9 @@ class TestNornirManagerFilters:
         filter_kwargs = {
             "name__any": ["device1", "device2"],
             "platform": "ios",
-            "filter_func": filter_by_platform
+            "filter_func": filter_by_platform,
         }
         manager.apply_filters(**filter_kwargs)
-        
+
         # Verify filter was called with all kwargs
         mock_nornir.filter.assert_called_with(**filter_kwargs)
