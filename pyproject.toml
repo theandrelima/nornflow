@@ -37,6 +37,9 @@ dev = [
     "mypy>=1.15.0",
     "ruff>=0.9.4",
 ]
+manual-tests = [
+    "nornir-netbox>=0.3.0",
+]
 
 [tool.ruff]
 line-length = 110
