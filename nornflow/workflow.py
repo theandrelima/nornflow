@@ -8,11 +8,10 @@ from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
 
 from nornflow.constants import NORNFLOW_SPECIAL_FILTER_KEYS
-from nornflow.exceptions import TaskDoesNotExistError, WorkflowInitializationError
+from nornflow.exceptions import TaskDoesNotExistError, WorkflowInitializationError, WorkflowInventoryFilterError
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.processors import DefaultNornFlowProcessor
-from nornflow.utils import resolve_special_filter
 
 # making sure pydantic_serdes sees Workflow models
 os.environ["MODELS_MODULES"] = "nornflow.models"
@@ -119,50 +118,126 @@ class Workflow:
         if missing_tasks:
             raise TaskDoesNotExistError(missing_tasks)
 
-    def _get_filtering_kwargs(self) -> list[dict[str, Any]]:
+    def _get_filtering_kwargs(self, filters_catalog: dict[str, Callable]) -> list[dict[str, Any]]:
         """
         Generate a list of filter keyword argument dictionaries based on inventory_filters.
-
-        This method processes the inventory_filters and separates them into special filters
-        (hosts, groups) that use custom filter functions, and direct attribute filters that
-        are passed directly to Nornir's filter method.
-
+        
+        This method processes the inventory_filters and converts them into filter kwargs
+        that can be applied to a Nornir instance. The filters can be either:
+        - Custom filter functions from the filters_catalog
+        - Direct attribute filters passed directly to Nornir
+        
         Returns:
             list[dict[str, Any]]: List of dictionaries with filter kwargs
         """
-        # Start with empty lists for each filter type
-        special_filters = []
-        direct_filters = {}
-
         # Skip if no inventory filters defined
         if not self.inventory_filters:
             return []
-
+        
         # Process each filter
+        filter_kwargs_list = []
         for key, filter_values in self.inventory_filters.items():
-            if not filter_values:
-                continue
-
-            # Check if this is a special filter key
-            if key in NORNFLOW_SPECIAL_FILTER_KEYS:
-                filter_kwargs = resolve_special_filter(key, filter_values)
-                if filter_kwargs:
-                    special_filters.append(filter_kwargs)
-                else:
-                    # Fall back to direct filtering if the function doesn't exist
-                    direct_filters[key] = filter_values
+            if key in filters_catalog:
+                # We first check if a key under 'inventory_filters' is a filter function in the filters_catalog
+                filter_kwargs = self._process_custom_filter(key, filter_values, filters_catalog)
+                filter_kwargs_list.append(filter_kwargs)
             else:
-                # Add to direct filters for attribute-based filtering
-                direct_filters[key] = filter_values
-
-        # Special filters go first (preserving order), then direct filters if any
-        filter_kwargs_list = special_filters
-        if direct_filters:
-            filter_kwargs_list.append(direct_filters)
-
+                # NOTE: cases 1-6 are covered by _process_custom_filter
+                # Case 7: No matching filter function - use direct attribute filtering
+                # This handles Nornir's built-in Host-based basic filtering (like name, platform, etc.)
+                filter_kwargs_list.append({key: filter_values})
+                
         return filter_kwargs_list
+    
+    def _process_custom_filter(self, key: str, filter_values: Any, 
+                             filters_catalog: dict[str, Callable]) -> dict[str, Any]:
+        """
+        Process a single custom filter and its values.
+        
+        Args:
+            key: The filter name/key
+            filter_values: The values for this filter
+            filters_catalog: Dictionary mapping filter names to (func, param_names) tuples
+            
+        Returns:
+            dict[str, Any]: Filter kwargs dictionary for this filter
+            
+        Raises:
+            WorkflowInventoryFilterError: If parameter validation fails
+        """
+        # Get the filter function and its parameter names
+        filter_func, param_names = filters_catalog[key]
+        
+        # Start with filter_func parameter
+        filter_kwargs = {"filter_func": filter_func}
+        
+        # Handle the filter values based on their type and the expected parameters
+        if not param_names:
+            # Case 1: No additional parameters needed besides host (parameter-less filter)
+            # Just use the filter function with no additional parameters
+            return filter_kwargs
+            
+        elif isinstance(filter_values, dict):
+            # Case 2: Parameters provided as a dictionary
+            return self._handle_dict_parameters(key, filter_values, param_names, filter_kwargs)
+            
+        elif isinstance(filter_values, (list, tuple)) and len(param_names) == 1:
+            # Case 3: Single parameter expecting a list/tuple
+            # The filter takes one parameter which is a list/tuple
+            filter_kwargs[param_names[0]] = filter_values
+            return filter_kwargs
+            
+        elif isinstance(filter_values, (list, tuple)) and len(filter_values) == len(param_names):
+            # Case 4: Multiple parameters provided as a list in the correct order
+            # Create a dictionary by zipping parameter names with their values
+            filter_kwargs.update(dict(zip(param_names, filter_values)))
+            return filter_kwargs
+            
+        elif len(param_names) == 1:
+            # Case 5: Single parameter with a scalar value
+            # The filter takes one parameter with a simple value
+            filter_kwargs[param_names[0]] = filter_values
+            return filter_kwargs
+            
+        else:
+            # Case 6: Parameter mismatch - incompatible values format
+            raise WorkflowInventoryFilterError(
+                f"Filter '{key}' expects {len(param_names)} parameters {param_names}, "
+                f"but got incompatible value: {filter_values}"
+            )
+    
+    def _handle_dict_parameters(self, key: str, filter_values: dict, 
+                              param_names: list[str], filter_kwargs: dict) -> dict[str, Any]:
+        """
+        Handle the case where filter parameters are provided as a dictionary.
+        
+        Args:
+            key: The filter name
+            filter_values: Dictionary of parameter values
+            param_names: Expected parameter names
+            filter_kwargs: Base filter kwargs dict
+            
+        Returns:
+            dict[str, Any]: Updated filter kwargs dictionary
+            
+        Raises:
+            WorkflowInventoryFilterError: If required parameters are missing
+        """
+        # Check that all required parameters are provided
+        missing_params = set(param_names) - set(filter_values.keys())
+        if missing_params:
+            raise WorkflowInventoryFilterError(
+                f"Filter '{key}' requires parameters {param_names}, but missing: {missing_params}"
+            )
+        
+        # Add only the expected parameters from the dict
+        for param in param_names:
+            if param in filter_values:
+                filter_kwargs[param] = filter_values[param]
+                
+        return filter_kwargs
 
-    def _apply_filters(self, nornir_manager: NornirManager, **kwargs: Any) -> None:
+    def _apply_filters(self, nornir_manager: NornirManager, filters_catalog: dict[str, Callable]) -> None:
         """
         Apply filtering to the Nornir instance.
 
@@ -173,7 +248,7 @@ class Workflow:
             nornir_manager (NornirManager): The NornirManager instance to apply filters to
             **kwargs (Any): Additional keyword arguments for filtering (not currently used)
         """
-        filter_kwargs_list = self._get_filtering_kwargs()
+        filter_kwargs_list = self._get_filtering_kwargs(filters_catalog)
         if not filter_kwargs_list:
             return
 
@@ -190,16 +265,18 @@ class Workflow:
         """
         nornir_manager.apply_processors([processor_obj])
 
-    def run(self, nornir_manager: NornirManager, tasks_catalog: dict[str, Callable]) -> None:
+    def run(self, nornir_manager: NornirManager, tasks_catalog: dict[str, Callable], filters_catalog: dict[str, Callable]) -> None:
         """
         Run the tasks in the workflow using the provided Nornir instance and tasks mapping.
 
         Args:
             nornir_manager (NornirManager): The NornirManager instance to use for running the tasks.
             tasks_catalog (dict[str, Callable]): The tasks catalog discovered by NornFlow.
+            filters_catalog (dict[str, Callable]): The filters catalog discovered by NornFlow.
+
         """
         self._check_tasks(tasks_catalog)
-        self._apply_filters(nornir_manager)
+        self._apply_filters(nornir_manager, filters_catalog)
 
         # for the moment, hardcoding DefaultNornFlowProcessor, but this should be configurable
         processor_obj = DefaultNornFlowProcessor()

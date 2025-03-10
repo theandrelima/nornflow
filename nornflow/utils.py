@@ -3,9 +3,10 @@ import inspect
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, Literal
 
 import yaml
+from nornir.core.inventory import Host
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 
 from nornflow.exceptions import ModuleImportError
@@ -50,57 +51,6 @@ def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
     return module
 
 
-def resolve_special_filter(
-    key: str, filter_values: Any, filter_module_name: str = "nornflow.inventory_filters"
-) -> dict[str, Any] | None:
-    """
-    Resolve a filter key to a filter function and arguments according to Nornir conventions.
-
-    Uses the convention that for a key 'x', there should be a function
-    named 'filter_by_x' in the specified module that can be used as a filter function.
-
-    Important assumptions:
-    - Filter functions should follow Nornir's standard pattern of exactly 2 parameters
-    - First parameter must be 'host' (representing a Nornir Host object)
-    - Second parameter receives the filter_values and should match the filter key semantically
-
-    Args:
-        key: The filter key name (e.g., 'hosts', 'groups')
-        filter_values: The values to filter by (typically a list)
-        filter_module_name: Name of module containing filter functions
-
-    Returns:
-        dict: Filter kwargs including 'filter_func' and appropriate parameters,
-             or None if the filter function couldn't be resolved
-    """
-    # Use convention: filter_by_{key} should be the function name
-    filter_func_name = f"filter_by_{key}"
-
-    try:
-        # Import the inventory filters module
-        filters_module = importlib.import_module(filter_module_name)
-
-        # Check if the function exists in the module
-        if hasattr(filters_module, filter_func_name):
-            filter_func = getattr(filters_module, filter_func_name)
-
-            # Use the function's parameter names to determine the correct kwarg name
-            sig = inspect.signature(filter_func)
-            # Get the second parameter name (first is 'host', second should be our filter parameter)
-            param_names = list(sig.parameters.keys())
-
-            if len(param_names) >= 2:  # noqa: PLR2004
-                kwarg_name = param_names[1]  # Second parameter
-                return {"filter_func": filter_func, kwarg_name: filter_values}
-            # Fallback - use the key name as the kwarg name
-            return {"filter_func": filter_func, key: filter_values}
-
-    except (ImportError, AttributeError):
-        pass
-
-    return None
-
-
 def is_nornir_task(attr: Callable) -> bool:
     """
     Check if an attribute is a Nornir task.
@@ -117,3 +67,58 @@ def is_nornir_task(attr: Callable) -> bool:
         returns_result = annotations.get("return") in {Result, MultiResult, AggregatedResult}
         return has_task_param and returns_result
     return False
+
+
+def is_nornir_filter(attr: Callable) -> bool:
+    """
+    Check if an function is a Nornir inventory filter function.
+    
+    Strict criteria (all must be met):
+    - Must be callable
+    - First parameter MUST be explicitly annotated as Host from nornir.core.inventory
+    - Return type MUST be explicitly annotated as either:
+      - The built-in bool type
+      - A typing.Literal containing only boolean values (True/False)
+    
+    This function enforces explicit type annotations to ensure filter functions
+    follow a consistent pattern.
+    
+    Args:
+        attr (Callable): Attribute to check.
+        
+    Returns:
+        bool: True if the attribute is a properly annotated Nornir filter, False otherwise.
+    """
+    if not callable(attr):
+        return False
+        
+    try:
+        sig = inspect.signature(attr)
+        params = list(sig.parameters.values())
+        
+        # Must have at least one parameter (host)
+        if not params:
+            return False
+        
+        # First parameter annotation must be Host
+        if params[0].annotation != Host:
+            return False
+        
+        # Check for various boolean-like return types
+        return_type_annotation = sig.return_annotation
+            
+        # Check for built-in bool
+        if return_type_annotation == bool:
+            return True
+        
+        # Checking kind of an edge case here: typing.Literal with boolean values
+        if hasattr(return_type_annotation, "__origin__") and return_type_annotation.__origin__ is Literal:
+            args = getattr(return_type_annotation, "__args__", ())
+            # If all args are True or False, it's a boolean Literal
+            if set(args) <= {True, False}:
+                return True
+            
+        return False
+
+    except (ValueError, TypeError):
+        return False

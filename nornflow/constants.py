@@ -9,6 +9,7 @@ NONRFLOW_SETTINGS_OPTIONAL = {
     "dry_run": False,
     "local_tasks_dirs": [],
     "local_workflows_dirs": [],
+    "local_filters_dirs": [],
     "imported_packages": [],
 }
 
@@ -19,6 +20,7 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "nornir_config_file",
     "local_tasks_dirs",
     "local_workflows_dirs",
+    "local_filters_dirs",
     "imported_packages",
 )
 

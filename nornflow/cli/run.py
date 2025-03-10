@@ -227,8 +227,9 @@ INVENTORY_FILTERS_OPTION = typer.Option(
     None,
     "--inventory-filters",
     "-i",
-    help=f"Inventory filters in flexible format. Special filters ({', '.join(NORNFLOW_SPECIAL_FILTER_KEYS)}) "
-    f"receive custom handling.\nExamples:\n- \"platform='ios', vendor='cisco'\"\n- \"hosts=host1,host2\"\n- \"groups=['prod', 'core']\"",  # noqa: E501
+    help=f"Inventory filters in flexible format. "
+    f"\nExamples:\n- \"platform='ios', vendor='cisco'\"\n- \"hosts=host1,host2\""
+    f"\n- \"groups=['prod', 'core']\"\n- \"custom_filter=\" (parameterless filter)",  # Added example
 )
 
 ARGS_OPTION = typer.Option(
