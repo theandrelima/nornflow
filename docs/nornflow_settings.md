@@ -70,22 +70,7 @@ NornFlow will try to find a settings YAML file in the following order:
     - "filters"
     - "../custom_filters"
   ```
-Yes, this section should be updated to better reflect the filtering capabilities and connect it to the workflow documentation. Here's my suggested update:
-
-```markdown
-### `local_filters_dirs`
-
-- **Description**: List of paths to directories containing custom filter functions to be included in NornFlow's filter catalog. These filter functions can be referenced by name in workflow YAML files to perform advanced inventory filtering. The search is recursive, meaning that all subdirectories will be searched as well.
-- **Type**: list[str]
-- **Default**: ["filters"]
-- **Example**:
-  ```yaml
-  local_filters_dirs:
-    - "filters"
-    - "../custom_filters"
-  ```
 - **Note**: For details on how these filters can be used in workflows, see the [Inventory Filtering](./how_to_write_workflows.md#inventory-filtering) section in the Workflows documentation.
-```
 
 ### `dry_run`
 

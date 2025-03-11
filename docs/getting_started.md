@@ -81,7 +81,7 @@ Created directory: /tmp/nornflow_test/filters
 ╭──────────────────────┬────────────────────────────╮
 │       Setting        │ Value                      │
 ├──────────────────────┼────────────────────────────┤
-│  nornir_config_file  │ config.yaml │
+│  nornir_config_file  │ config.yaml                │
 ├──────────────────────┼────────────────────────────┤
 │   local_tasks_dirs   │ ['tasks']                  │
 ├──────────────────────┼────────────────────────────┤
@@ -99,9 +99,9 @@ Created directory: /tmp/nornflow_test/filters
 ╭─────────────┬──────────────────────────────────────────┬────────────────────────╮
 │  Task Name  │ Description                              │ Location               │
 ├─────────────┼──────────────────────────────────────────┼────────────────────────┤
-│ greet_user  │ A simple Nornir task that greets a user. │ greet_user.py  │
+│ greet_user  │ A simple Nornir task that greets a user. │ greet_user.py          │
 ├─────────────┼──────────────────────────────────────────┼────────────────────────┤
-│ hello_world │ Hello World task.                        │ hello_world.py │
+│ hello_world │ Hello World task.                        │ hello_world.py         │
 ╰─────────────┴──────────────────────────────────────────┴────────────────────────╯
 
 
@@ -109,7 +109,7 @@ Created directory: /tmp/nornflow_test/filters
 ╭──────────────────┬───────────────────────────────────┬────────────────────────────╮
 │  Workflow Name   │ Description                       │ Location                   │
 ├──────────────────┼───────────────────────────────────┼────────────────────────────┤
-│ hello_world.yaml │ A simple workflow that just works │ hello_world.yaml │
+│ hello_world.yaml │ A simple workflow that just works │ hello_world.yaml           │
 ╰──────────────────┴───────────────────────────────────┴────────────────────────────╯
 
 
