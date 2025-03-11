@@ -1,7 +1,9 @@
+import inspect
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from nornflow import filters as builtin_filters
 from nornflow.constants import (
     NORNFLOW_INVALID_INIT_KWARGS,
     NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS,
@@ -9,6 +11,7 @@ from nornflow.constants import (
 from nornflow.exceptions import (
     CatalogModificationError,
     EmptyTaskCatalogError,
+    FilterLoadingError,
     LocalDirectoryNotFoundError,
     NornFlowError,
     NornFlowInitializationError,
@@ -19,7 +22,7 @@ from nornflow.exceptions import (
 )
 from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
-from nornflow.utils import import_module_from_path, is_nornir_task
+from nornflow.utils import import_module_from_path, is_nornir_filter, is_nornir_task
 from nornflow.workflow import Workflow, WorkflowFactory
 
 
@@ -30,16 +33,18 @@ class NornFlow:
     jobs that follow a defined workflow pattern.
 
     Key features:
-    - Automated task discovery from local directories
+    - Automated assets discovery from local directories
     - Workflow management and execution
     - Consistent configuration handling
+    - Advanced inventory filtering with custom filter functions
 
     The NornFlow object lifecycle typically involves:
     1. Initialization with settings (from file or explicit object)
     2. Automatic discovery of available tasks
     3. Automatic discovery of available workflows (not mandatory)
-    4. Selection of a workflow (by object, name, file path, or dictionary definition)
-    5. Execution of the workflow against the Nornir inventory
+    4. Automatic discovery of available filters (not mandatory)
+    5. Selection of a workflow (by object, name, file path, or dictionary definition)
+    6. Execution of the workflow against the filtered Nornir inventory
 
     Tasks are executed in order as defined in the workflow, providing a structured
     approach to network automation operations.
@@ -63,6 +68,7 @@ class NornFlow:
 
             self._load_tasks_catalog()
             self._load_workflows_catalog()
+            self._load_filters_catalog()
 
             # Create NornirManager instead of directly initializing Nornir
             self.nornir_manager = NornirManager(
@@ -157,6 +163,26 @@ class NornFlow:
         raise CatalogModificationError("workflows")
 
     @property
+    def filters_catalog(self) -> dict[str, Callable]:
+        """
+        Get the filters catalog.
+
+        Returns:
+            dict[str, Callable]: Dictionary of filter names and their corresponding functions.
+        """
+        return self._filters_catalog
+
+    @filters_catalog.setter
+    def filters_catalog(self, _: Any) -> None:
+        """
+        Prevent setting the filters catalog directly.
+
+        Raises:
+            AttributeError: Always raised to prevent direct setting of the filters catalog.
+        """
+        raise CatalogModificationError("filters")
+
+    @property
     def workflow(self) -> Workflow | str:
         """
         Get the workflow object.
@@ -228,6 +254,73 @@ class NornFlow:
             attr = getattr(module, attr_name)
             if is_nornir_task(attr):
                 self._tasks_catalog[attr_name] = attr
+
+    def _load_filters_catalog(self) -> None:
+        """
+        Load inventory filters in two phases:
+
+        Phase 1: Load built-in filters from nornflow.filters module
+        Phase 2: Load user-defined filters from configured local_filters_dirs
+
+        The filters catalog stores each filter as a tuple of (function_object, parameter_names),
+        where parameter_names is a list of parameter names excluding the first 'host' parameter.
+        This structure enables the flexible parameter passing in workflow definitions.
+        """
+        self._filters_catalog = {}
+
+        # Phase 1: Load built-in filters from nornflow.inventory_filters
+        self._register_nornir_filters_from_module(builtin_filters)
+
+        # Phase 2: Load filters from local directories (can override built-ins)
+        if hasattr(self.settings, "local_filters_dirs"):
+            for filter_dir in self.settings.local_filters_dirs:
+                self._discover_filters_in_dir(filter_dir)
+
+    def _discover_filters_in_dir(self, filter_dir: str) -> None:
+        """
+        Discover and load filters from all Python modules in a specific directory.
+
+        Args:
+            filter_dir (str): Path to the directory containing filter files.
+
+        Raises:
+            LocalDirectoryNotFoundError: If the specified directory does not exist.
+            FilterLoadingError: If there is an error loading filters from a file.
+        """
+        filter_path = Path(filter_dir)
+        if not filter_path.is_dir():
+            raise LocalDirectoryNotFoundError(directory=filter_dir, extra_message="Couldn't load filters.")
+
+        try:
+            for py_file in filter_path.rglob("*.py"):
+                module_name = py_file.stem
+                module_path = str(py_file)
+                module = import_module_from_path(module_name, module_path)
+                self._register_nornir_filters_from_module(module)
+        except Exception as e:
+            raise FilterLoadingError(f"Error loading filters from file '{py_file}': {e}") from e
+
+    def _register_nornir_filters_from_module(self, module: Any) -> None:
+        """
+        Register filters from a module.
+
+        Stores each filter as a tuple of (function_object, parameter_names),
+        where parameter_names excludes the first 'host' parameter.
+
+        Args:
+            module (Any): Imported module.
+        """
+
+        for attr_name in dir(module):
+            attr = getattr(module, attr_name)
+            if is_nornir_filter(attr):
+                # Get the function signature to extract parameter names
+                sig = inspect.signature(attr)
+                # Skip the first parameter (host) and get remaining parameter names
+                param_names = list(sig.parameters.keys())[1:]
+
+                # Store as tuple: (function_object, parameter_names)
+                self._filters_catalog[attr_name] = (attr, param_names)
 
     def _load_workflows_catalog(self) -> None:
         """
@@ -304,8 +397,8 @@ class NornFlow:
         Runs the NornFlow job.
         """
         self._ensure_workflow()
-        # Pass nornir_manager and tasks_catalog to workflow.run
-        self.workflow.run(self.nornir_manager, self.tasks_catalog)
+        # Pass nornir_manager, tasks_catalog, and filters_catalog to workflow.run
+        self.workflow.run(self.nornir_manager, self.tasks_catalog, self.filters_catalog)
 
 
 class NornFlowBuilder:

@@ -35,4 +35,3 @@ For installation and usage, see '*Getting Started*'.
 - [Settings](https://github.com/theandrelima/nornflow/tree/main/docs/nornflow_settings.md) ⚙
 - [Nonrflow & Workflows](https://github.com/theandrelima/nornflow/tree/main/docs/nornflow_and_workflows.md) 🆒
 - [How to Write Workflows](https://github.com/theandrelima/nornflow/tree/main/docs/how_to_write_workflows.md) ✅
-- [Feature Roadmap](https://github.com/theandrelima/nornflow/tree/main/docs/feature_roadmap.md) 🗺️

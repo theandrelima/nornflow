@@ -185,6 +185,9 @@ todo*
 # local workflows dir
 /workflows/
 
+# local filters dir
+/filters/
+
 # ruff
 .ruff*/
 

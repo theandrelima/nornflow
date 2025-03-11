@@ -37,6 +37,10 @@ dev = [
     "mypy>=1.15.0",
     "ruff>=0.9.4",
 ]
+manual-tests = [
+    "nornir-napalm>=0.5.0",
+    "nornir-netbox>=0.3.0",
+]
 
 [tool.ruff]
 line-length = 110
@@ -72,6 +76,7 @@ ignore = [
     "TD003",
     "FIX002",
     "TRY003",
+    "TRY300",
     "TRY301",
     "TRY400",
     "PLR0913",

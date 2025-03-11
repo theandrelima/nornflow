@@ -1,21 +1,25 @@
+"""
+NonrFlow provided filters for Nornir inventory.
+"""
+
 from nornir.core.inventory import Host
 
 
-def filter_by_hostname(host: Host, hostnames: list[str]) -> bool:
+def hosts(host: Host, hosts: list[str]) -> bool:
     """
     Filter hosts by hostname.
 
     Args:
         host (Host): The Nornir host object to check
-        hostnames (list[str]): List of hostnames to match against
+        hosts (list[str]): List of hostnames to match against
 
     Returns:
-        bool: True if host's name is in the hostnames list
+        bool: True if host's name is in the hosts list
     """
-    return host.name in hostnames
+    return host.name in hosts
 
 
-def filter_by_groups(host: Host, groups: list[str]) -> bool:
+def groups(host: Host, groups: list[str]) -> bool:
     """
     Filter hosts by group membership.
 

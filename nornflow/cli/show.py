@@ -20,7 +20,9 @@ app = typer.Typer()
 @app.command()
 def show(
     ctx: typer.Context,
-    catalog: bool = typer.Option(False, "--catalog", "-c", help="Display the task catalog"),
+    catalog: bool = typer.Option(
+        False, "--catalog", "-c", help="Display the task, workflow, and filter catalogs"
+    ),
     settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
     nornir_configs: bool = typer.Option(
         False, "--nornir-configs", "-n", help="Display current Nornir Configs"
@@ -66,7 +68,7 @@ def show(
 
 def show_catalog(nornflow: "NornFlow") -> None:
     """
-    Display the task catalog and workflows catalog.
+    Display the task catalog, workflows catalog, and filters catalog.
     """
     show_formatted_table(
         "TASKS CATALOG", render_task_catalog_table_data, ["Task Name", "Description", "Location"], nornflow
@@ -75,6 +77,12 @@ def show_catalog(nornflow: "NornFlow") -> None:
         "WORKFLOWS CATALOG",
         render_workflows_catalog_table_data,
         ["Workflow Name", "Description", "Location"],
+        nornflow,
+    )
+    show_formatted_table(
+        "FILTERS CATALOG",
+        render_filters_catalog_table_data,
+        ["Filter Name", "Description", "Location"],
         nornflow,
     )
 
@@ -146,7 +154,8 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
         module = inspect.getmodule(task_func)
         if module is not None:
             module_path = module.__name__
-            function_path = f"{module_path}.{task_func.__name__}"
+            # Show just the module path without the function name
+            function_path = module_path
         else:
             # Fallback to the file location with relative path if possible
             file_path = Path(inspect.getfile(task_func))
@@ -186,6 +195,66 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
         colored_description = colored(description, "yellow")
         colored_location = colored(str(workflow_path), "light_green")
         table_data.append([colored_workflow_name, colored_description, colored_location])
+    return table_data
+
+
+def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
+    """
+    Prepare the data for the filters catalog table.
+
+    Args:
+        nornflow (NornFlow): The NornFlow object containing the filters catalog.
+
+    Returns:
+        List[List[str]]: The prepared table data.
+    """
+    table_data = []
+
+    # Skip if no filters catalog available
+    if not hasattr(nornflow, "_filters_catalog") or not nornflow.filters_catalog:
+        return table_data
+
+    for filter_name, (filter_func, param_names) in nornflow.filters_catalog.items():
+        # Extract the docstring and fallback to default if None
+        full_docstring = filter_func.__doc__ or "No description available"
+        cleaned_docstring = full_docstring.strip()
+
+        if "." in cleaned_docstring:
+            first_sentence = cleaned_docstring.split(".")[0].strip() + "."
+        else:
+            first_sentence = cleaned_docstring.split("\n")[0].strip()
+
+        # Add parameter information on a separate line
+        if not param_names:
+            param_info = "Parameters: None (host only)"
+        else:
+            param_info = f"Parameters: {', '.join(param_names)}"
+
+        # Format as two separate lines
+        description = f"{first_sentence}\n{param_info}"
+
+        # Get the Python dotted path to the function
+        module = inspect.getmodule(filter_func)
+        if module is not None:
+            module_path = module.__name__
+            # Show just the module path without the function name
+            function_path = module_path
+        else:
+            # Fallback to the file location with relative path if possible
+            file_path = Path(inspect.getfile(filter_func))
+
+            # Try to make it relative to CWD
+            try:
+                relative_path = file_path.relative_to(CWD)
+                function_path = f"./{relative_path}"
+            except ValueError:
+                # If the file is not within CWD, use absolute path as fallback
+                function_path = str(file_path)
+
+        colored_filter_name = colored(filter_name, "cyan", attrs=["bold"])
+        colored_docstring = colored(description, "yellow")
+        colored_location = colored(function_path, "light_green")
+        table_data.append([colored_filter_name, colored_docstring, colored_location])
     return table_data
 
 

@@ -4,8 +4,6 @@ from pydantic import field_validator
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.models import PydanticSerdesBaseModel
 
-from nornflow.exceptions import WorkflowInventoryFilterError
-
 
 class TaskModel(PydanticSerdesBaseModel):
     _key = (
@@ -58,7 +56,7 @@ class WorkflowModel(PydanticSerdesBaseModel):
 
     name: str
     description: str | None = None
-    inventory_filters: HashableDict[str, tuple[str] | None] | None = None
+    inventory_filters: HashableDict[str, Any] | None = None
     tasks: OneToMany[TaskModel, ...]
 
     @classmethod
@@ -86,27 +84,20 @@ class WorkflowModel(PydanticSerdesBaseModel):
         cls, v: HashableDict[str, Any] | None  # noqa: N805
     ) -> HashableDict[str, Any] | None:
         """
-        Validate inventory_filters and convert lists to tuples.
+        Convert lists in inventory_filters to tuples for serialization.
+
+        With the enhanced filtering capabilities, this validator now accepts any keys
+        in the inventory_filters dictionary, allowing for both special filters ('hosts', 'groups')
+        and direct attribute filtering.
 
         Args:
             v (HashableDict[str, Any] | None): The inventory_filters value to validate.
 
         Returns:
-            HashableDict[str, Any] | None: The validated inventory_filters with lists converted to tuples.
-
-        Raises:
-            WorkflowInventoryFilterError: If the inventory_filters contains invalid keys.
+            HashableDict[str, Any] | None: The inventory_filters with lists converted to tuples.
         """
         if v is None:
             return v
-
-        valid_keys = {"hosts", "groups"}
-        invalid_keys = set(v.keys()) - valid_keys
-        if invalid_keys:
-            raise WorkflowInventoryFilterError(
-                f"Invalid keys in inventory_filters: {', '.join(invalid_keys)}. "
-                "Only 'hosts' and 'groups' are allowed."
-            )
 
         # Convert any lists in values to tuples
         return HashableDict(

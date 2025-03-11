@@ -1,10 +1,12 @@
-import importlib.util
+import importlib
+import inspect
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, Literal
 
 import yaml
+from nornir.core.inventory import Host
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 
 from nornflow.exceptions import ModuleImportError
@@ -51,13 +53,22 @@ def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
 
 def is_nornir_task(attr: Callable) -> bool:
     """
-    Check if an attribute is a Nornir task.
+    Check if a function is a Nornir task based on its type annotations.
+
+    Strict criteria (all must be met):
+    - Must be callable
+    - Must have type annotations
+    - At least one parameter must be annotated as Task from nornir.core.task
+    - Return type must be explicitly annotated as one of:
+      - Result
+      - MultiResult
+      - AggregatedResult
 
     Args:
         attr (Callable): Attribute to check.
 
     Returns:
-        bool: True if the attribute is a Nornir task, False otherwise.
+        bool: True if the attribute is a properly annotated Nornir task, False otherwise.
     """
     if callable(attr) and hasattr(attr, "__annotations__"):
         annotations = attr.__annotations__
@@ -65,3 +76,58 @@ def is_nornir_task(attr: Callable) -> bool:
         returns_result = annotations.get("return") in {Result, MultiResult, AggregatedResult}
         return has_task_param and returns_result
     return False
+
+
+def is_nornir_filter(attr: Callable) -> bool:  # noqa: PLR0911
+    """
+    Check if an function is a Nornir inventory filter function.
+
+    Strict criteria (all must be met):
+    - Must be callable
+    - First parameter MUST be explicitly annotated as Host from nornir.core.inventory
+    - Return type MUST be explicitly annotated as either:
+      - The built-in bool type
+      - A typing.Literal containing only boolean values (True/False)
+
+    This function enforces explicit type annotations to ensure filter functions
+    follow a consistent pattern.
+
+    Args:
+        attr (Callable): Attribute to check.
+
+    Returns:
+        bool: True if the attribute is a properly annotated Nornir filter, False otherwise.
+    """
+    if not callable(attr):
+        return False
+
+    try:
+        sig = inspect.signature(attr)
+        params = list(sig.parameters.values())
+
+        # Must have at least one parameter (host)
+        if not params:
+            return False
+
+        # First parameter annotation must be Host
+        if params[0].annotation != Host:
+            return False
+
+        # Check for various boolean-like return types
+        return_type_annotation = sig.return_annotation
+
+        # Check for built-in bool
+        if return_type_annotation is bool:
+            return True
+
+        # Checking kind of an edge case here: typing.Literal with boolean values
+        if hasattr(return_type_annotation, "__origin__") and return_type_annotation.__origin__ is Literal:
+            args = getattr(return_type_annotation, "__args__", ())
+            # If all args are True or False, it's a boolean Literal
+            if set(args) <= {True, False}:
+                return True
+
+        return False
+
+    except (ValueError, TypeError):
+        return False

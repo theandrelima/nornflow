@@ -122,6 +122,10 @@ class NornFlowRunError(NornFlowError):
         super().__init__(message)
 
 
+class FilterLoadingError(NornFlowError):
+    """Raised when there is an error loading filters."""
+
+
 class WorkflowError(Exception):
     """Base exception class for Workflow-related errors."""
 

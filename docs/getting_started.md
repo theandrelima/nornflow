@@ -1,6 +1,6 @@
 # Getting Started with NornFlow
 
-Table of Contents
+## Table of Contents
 - [Installation](#installation)
   - [Using pip](#using-pip)
   - [Using poetry](#using-poetry)
@@ -9,6 +9,7 @@ Table of Contents
   - [Initializing NornFlow](#initializing-nornflow)
   - [Cataloging Tasks](#cataloging-tasks)
   - [Cataloging Workflows](#cataloging-workflows)
+  - [Cataloging Filters](#cataloging-filters)
   - [Running a Single Task](#running-a-single-task)
   - [Running a Workflow](#running-a-workflow)
 
@@ -47,7 +48,7 @@ From a development point of view, NornFlow uses uv for dependency and environmen
 ## Basic Usage
 
 ### Initializing NornFlow
-Once `nornflow` has been installed in your environment, you can do:
+Once nornflow has been installed in your environment, you can do:
 
 ```shell
  $nornflow init
@@ -73,44 +74,62 @@ Created directory: /tmp/nornflow_test/tasks
 Created sample tasks in directory: /tmp/nornflow_test/tasks
 Created directory: /tmp/nornflow_test/workflows
 Created a sample 'hello_world' workflow in directory: /tmp/nornflow_test/workflows
+Created directory: /tmp/nornflow_test/filters
 
 
                   NORNFLOW SETTINGS                  
 ╭──────────────────────┬────────────────────────────╮
 │       Setting        │ Value                      │
 ├──────────────────────┼────────────────────────────┤
-│  nornir_config_file  │ nornir_configs/config.yaml │
+│  nornir_config_file  │ config.yaml │
 ├──────────────────────┼────────────────────────────┤
 │   local_tasks_dirs   │ ['tasks']                  │
 ├──────────────────────┼────────────────────────────┤
 │ local_workflows_dirs │ ['workflows']              │
+├──────────────────────┼────────────────────────────┤
+│  local_filters_dirs  │ ['filters']                │
 ├──────────────────────┼────────────────────────────┤
 │  imported_packages   │ []                         │
 ├──────────────────────┼────────────────────────────┤
 │       dry_run        │ False                      │
 ╰──────────────────────┴────────────────────────────╯
 
-                              TASKS CATALOG                                                          
+
+                                   TASKS CATALOG                                   
 ╭─────────────┬──────────────────────────────────────────┬────────────────────────╮
 │  Task Name  │ Description                              │ Location               │
 ├─────────────┼──────────────────────────────────────────┼────────────────────────┤
-│ hello_world │ Hello World task.                        │ ./tasks/hello_world.py │
+│ greet_user  │ A simple Nornir task that greets a user. │ greet_user.py  │
 ├─────────────┼──────────────────────────────────────────┼────────────────────────┤
-│ greet_user  │ A simple Nornir task that greets a user. │ ./tasks/greet_user.py  │
+│ hello_world │ Hello World task.                        │ hello_world.py │
 ╰─────────────┴──────────────────────────────────────────┴────────────────────────╯
+
 
                                   WORKFLOWS CATALOG                                  
 ╭──────────────────┬───────────────────────────────────┬────────────────────────────╮
 │  Workflow Name   │ Description                       │ Location                   │
 ├──────────────────┼───────────────────────────────────┼────────────────────────────┤
-│ hello_world.yaml │ A simple workflow that just works │ workflows/hello_world.yaml │
+│ hello_world.yaml │ A simple workflow that just works │ hello_world.yaml │
 ╰──────────────────┴───────────────────────────────────┴────────────────────────────╯
+
+
+                            FILTERS CATALOG                             
+╭───────────────┬───────────────────────────────────┬──────────────────╮
+│  Filter Name  │ Description                       │ Location         │
+├───────────────┼───────────────────────────────────┼──────────────────┤
+│    groups     │ Filter hosts by group membership. │ nornflow.filters │
+│               │ Parameters: groups                │                  │
+├───────────────┼───────────────────────────────────┼──────────────────┤
+│     hosts     │ Filter hosts by hostname.         │ nornflow.filters │
+│               │ Parameters: hosts                 │                  │
+╰───────────────┴───────────────────────────────────┴──────────────────╯
 ```
 
 Notice the files and folders the `nornflow init` command created:
 - 📝 `nornflow.yaml` file: This settings file dictates NornFlow's behaviors and where it should look for Nornir Tasks and Workflows to include in its Catalogs. The output summarizes the settings in the `NORNFLOW SETTINGS` table. You can check the contents of this sample file [here](../nornflow/cli/samples/nornflow.yaml).
 - 📂 `tasks` folder: Contains two .py files, each with a single Nornir task. NornFlow automatically identifies and imports Nornir tasks into its `TASK CATALOG`. Check the sample tasks in [hello_world.py](../nornflow/cli/samples/hello_world.py) and [greet_user.py](../nornflow/cli/samples/greet_user.py).
 - 📂 `workflows` folder: Contains a single `hello_world.yaml` file. This workflow includes the same two tasks mentioned above. NornFlow automatically identifies and imports Workflows into its `WORKFLOWS CATALOG`. Check this sample Workflow in [hello_world.yaml](../nornflow/cli/samples/hello_world.yaml).
+- 📂 `filters` folder: Initially empty, this folder is where you can place custom filter functions to be included in the `FILTERS CATALOG`. 
 - 📂 `nornir_configs` folder: Contains Nornir YAML files with trivial configs using Nornir's 'SimpleInventory', a single host and group for localhost (127.0.0.1), and dummy credentials. For most real-world scenarios, these files will need to be reworked. Check the sample files [here](../nornflow/cli/samples/nornir_configs/).
 
 For a detailed explanation of NornFlow Settings, see the [Settings](./nornflow_settings.md) section.
@@ -191,9 +210,92 @@ nornflow show --catalog
 ╰──────────────────┴───────────────────────────────────┴────────────────────────────╯
 ```
 
-Again, for a simple example of how a NornFlow Workflow YAML file should look like, check the [sample workflow](../nornflow/cli/samples/hello_world.yaml).
+Again, for a simple example of how a NornFlow Workflow YAML file should look like, check the sample workflow.
 
-> 🚨 ***As of now, workflows still don't support advanced features like loops, conditionals and variables. These are [planned features](./feature_roadmap.md), but for the moment developers would have to account for it directly through Python logic implemented in their Tasks.***
+> 🚨 ***As of now, workflows still don't support advanced features like loops, conditionals and variables. These are planned features, but for the moment developers would have to account for it directly through Python logic implemented in their Tasks.***
+
+### Cataloging Filters
+
+NornFlow's filtering system allows you to target specific hosts in your inventory when running tasks or workflows. The `local_filters_dirs` setting in your `nornflow.yaml` file specifies directories where NornFlow looks for custom filter functions.
+
+#### Built-in Filters
+
+NornFlow comes with built-in filters in the [nornflow.filters](../nornflow/filters.py) module:
+
+```shell
+$ nornflow show --catalog
+
+# 'TASKS CATALOG' and 'WORKFLOWS CATALOG' omitted for brevity...
+
+                            FILTERS CATALOG                             
+╭───────────────┬───────────────────────────────────┬──────────────────╮
+│  Filter Name  │ Description                       │ Location         │
+├───────────────┼───────────────────────────────────┼──────────────────┤
+│    groups     │ Filter hosts by group membership. │ nornflow.filters │
+│               │ Parameters: groups                │                  │
+├───────────────┼───────────────────────────────────┼──────────────────┤
+│     hosts     │ Filter hosts by hostname.         │ nornflow.filters │
+│               │ Parameters: hosts                 │                  │
+╰───────────────┴───────────────────────────────────┴──────────────────╯
+```
+
+#### Creating Custom Filters
+
+Custom filters must follow this structure:
+1. First parameter must be a `host` parameter
+2. Return a boolean value
+3. Any additional parameters will be matched with values provided in the workflow
+
+For example:
+
+```python
+# /tmp/nornflow_test/filters/location_filters.py
+from nornir.core.inventory import Host
+
+def filter_by_location(host: Host, city: str, building: str) -> bool:
+    """
+    Filter hosts by location (city and building).
+    
+    This description will appear in the FILTERS CATALOG.
+    """
+    return (host.data.get("city") == city and
+            host.data.get("building") == building)
+
+def filter_by_city(host: Host, city: str) -> bool:
+    """
+    Filter hosts by city.
+    """
+    return host.data.get("city") == city
+```
+
+After creating this file, your custom filters will appear in the catalog:
+
+```shell
+$ nornflow show --catalog
+
+# 'TASKS CATALOG' and 'WORKFLOWS CATALOG' omitted for brevity...
+
+                                FILTERS CATALOG                                 
+╭──────────────────┬───────────────────────────────────────┬───────────────────────────────╮
+│   Filter Name    │ Description                           │ Location                      │
+├──────────────────┼───────────────────────────────────────┼───────────────────────────────┤
+│ filter_by_city   │ Filter hosts by city.                 │ ./filters/location_filters.py │
+│                  │ Parameters: city                      │                               │
+├──────────────────┼───────────────────────────────────────┼───────────────────────────────┤
+│filter_by_location│ Filter hosts by location (city and    │ ./filters/location_filters.py │
+│                  │ building).                            │                               │
+│                  │ Parameters: city, building            │                               │
+├──────────────────┼───────────────────────────────────────┼───────────────────────────────┤
+│     groups       │ Filter hosts by group membership.     │ nornflow.filters              │
+│                  │ Parameters: groups                    │                               │
+├──────────────────┼───────────────────────────────────────┼───────────────────────────────┤
+│     hosts        │ Filter hosts by hostname.             │ nornflow.filters              │
+│                  │ Parameters: hosts                     │                               │
+╰──────────────────┴───────────────────────────────────────┴───────────────────────────────╯
+```
+
+NornFlow automatically discovers filter functions and parameter names through introspection, allowing for flexible parameter passing in workflows. For more details on filters, see [Inventory Filtering](./how_to_write_workflows.md#inventory-filtering) section in the Workflows documentation.
+
 
 ### Running a Single Task
 The only condition for NornFlow to be able to run a Task, is for it to be known in it's TASKS CATALOG. Once that condition is satisfied, users can use the `nornflow run` CLI command:
