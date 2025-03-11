@@ -22,32 +22,20 @@ os.environ["MODELS_MODULES"] = "nornflow.models"
 
 class Workflow:
     """
-    A workflow in NornFlow represents a structured, ordered collection of tasks that are executed
-    against a Nornir inventory. Workflows provide a higher-level abstraction over individual Nornir
-    tasks, enabling complex multi-step operations while maintaining readability and reusability.
-
-    Workflows can be defined in YAML files or directly as dictionaries, and are processed through
-    the pydantic-serdes library to validate their structure and convert them into runtime objects.
-
-    Key features:
-    - Task orchestration: Execute a sequence of tasks in defined order
-    - Inventory filtering: Target specific hosts or groups for execution in the order specified
-    - Task validation: Verify tasks exist before execution
-    - Result processing: Apply processors for standardized result handling
-
-    Example workflow definition (YAML):
-        workflow:
-          name: configure_interfaces
-          description: Configure interface settings on network devices
-          inventory_filters:
-            groups: [access_switches]  # Applied first
-            hosts: [switch1, switch2]  # Applied second
-          tasks:
-            - name: backup_configs
-            - name: generate_configs
-              args:
-                template: interface_configs.j2
-            - name: deploy_configs
+    Workflow represents a sequence of tasks to be executed against a Nornir inventory.
+    
+    This class handles the loading, parsing, and execution of workflow definitions,
+    including inventory filtering, task sequencing, and result handling.
+    
+    Key responsibilities:
+    - Parsing workflow definitions from YAML or dictionaries
+    - Processing inventory filters in sequence (applying AND logic)
+    - Supporting multiple filter formats:
+      - Built-in filters (hosts, groups)
+      - Custom filter functions with various parameter formats
+      - Direct attribute filtering
+    - Executing tasks in the defined sequence
+    - Collecting and summarizing results
     """
 
     def __init__(self, workflow_dict: dict[str, Any]):
@@ -124,14 +112,19 @@ class Workflow:
     def _get_filtering_kwargs(self, filters_catalog: dict[str, Callable]) -> list[dict[str, Any]]:
         """
         Generate a list of filter keyword argument dictionaries based on inventory_filters.
-
-        This method processes the inventory_filters and converts them into filter kwargs
-        that can be applied to a Nornir instance. The filters can be either:
-        - Custom filter functions from the filters_catalog
-        - Direct attribute filters passed directly to Nornir
-
+        
+        This method processes each key in inventory_filters and determines how to handle it:
+        1. If the key exists in filters_catalog: Process as a custom filter function
+        2. Otherwise: Process as a direct attribute filter for Nornir
+        
+        Each filter is processed in the order defined in the YAML/dict, with filters applied
+        sequentially to narrow down the inventory selection.
+        
+        Args:
+            filters_catalog (dict[str, Callable]): Dictionary of available filter functions
+            
         Returns:
-            list[dict[str, Any]]: List of dictionaries with filter kwargs
+            list[dict[str, Any]]: List of dictionaries with filter kwargs to be applied sequentially
         """
         # Skip if no inventory filters defined
         if not self.inventory_filters:
@@ -157,18 +150,25 @@ class Workflow:
         self, key: str, filter_values: Any, filters_catalog: dict[str, Callable]
     ) -> dict[str, Any]:
         """
-        Process a single custom filter and its values.
-
+        Process a custom filter function from the filters_catalog.
+        
+        Handles various parameter passing formats:
+        1. No parameters (parameterless filter)
+        2. Dictionary of named parameters
+        3. List/tuple for a single parameter expecting a collection
+        4. List/tuple of values mapping to multiple parameters in order
+        5. Single scalar value for a filter with one parameter
+        
         Args:
-            key: The filter name/key
-            filter_values: The values for this filter
-            filters_catalog: Dictionary mapping filter names to (func, param_names) tuples
-
+            key (str): The filter name/key from inventory_filters
+            filter_values (Any): The value associated with the filter key
+            filters_catalog (dict[str, Callable]): Dictionary of available filter functions
+            
         Returns:
-            dict[str, Any]: Filter kwargs dictionary for this filter
-
+            dict[str, Any]: Dictionary with filter_func and any parameters to be passed to Nornir
+            
         Raises:
-            WorkflowInventoryFilterError: If parameter validation fails
+            WorkflowInventoryFilterError: If parameter format doesn't match filter requirements
         """
         # Get the filter function and its parameter names
         filter_func, param_names = filters_catalog[key]

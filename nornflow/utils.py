@@ -53,13 +53,22 @@ def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
 
 def is_nornir_task(attr: Callable) -> bool:
     """
-    Check if an attribute is a Nornir task.
+    Check if a function is a Nornir task based on its type annotations.
+
+    Strict criteria (all must be met):
+    - Must be callable
+    - Must have type annotations
+    - At least one parameter must be annotated as Task from nornir.core.task
+    - Return type must be explicitly annotated as one of:
+      - Result
+      - MultiResult
+      - AggregatedResult
 
     Args:
         attr (Callable): Attribute to check.
 
     Returns:
-        bool: True if the attribute is a Nornir task, False otherwise.
+        bool: True if the attribute is a properly annotated Nornir task, False otherwise.
     """
     if callable(attr) and hasattr(attr, "__annotations__"):
         annotations = attr.__annotations__

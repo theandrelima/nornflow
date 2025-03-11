@@ -31,7 +31,11 @@ This abstraction provides better separation of concerns and allows for more flex
 
 The `Workflow` class is responsible for managing and executing the sequence of tasks. It takes care of:
 
-- **Ensuring Filters**: Workflow identifies the filtering criteria requested by the user and interfaces with the `NornirManager` object to filter the inventory down to the devices the tasks should be run on. It supports Nornir's well-known [host-based basic filters](https://nornir.readthedocs.io/en/latest/howto/filtering_deep_dive.html#Host-based-basic-filters) with aby arbitrary direct attribute filtering, as well as some two NornFlow's own filtering options: 'hosts' and 'groups'.  
+- **Ensuring Filters**: Workflow identifies the filtering criteria requested by the user and interfaces with the `NornirManager` object to filter the inventory down to the devices the tasks should be run on. It supports multiple filtering methods:
+  - **Built-in filters**: Special 'hosts' and 'groups' filters for simple device selection
+  - **Custom filter functions**: Advanced filtering logic defined in your filters catalog
+  - **Direct attribute filtering**: Simple equality matching using any host attribute  
+These filters are applied sequentially, each narrowing down the inventory selection with AND logic.
 - **Task Execution**: Running the tasks in the workflow using the Tasks Catalog received from `NornFlow` and the Nornir instance exposed by the `NornirManager`.
 - **Execution Flow**: Managing the execution flow including processor application and summary generation.
 
