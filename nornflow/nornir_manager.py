@@ -11,16 +11,16 @@ from nornflow.exceptions import NornirManagerProcessorsError
 class NornirManager:
     """
     NornirManager provides a centralized way to manage Nornir instances.
-    
+
     This class is responsible for initializing and managing Nornir instances
     used throughout a NornFlow workflow execution. It handles configuration,
     filtering, and processor application in a consistent manner.
-    
+
     Key responsibilities:
     - Creating and initializing Nornir objects from configuration files
     - Applying inventory filters (both direct attribute and function-based)
     - Managing processor application to Nornir instances
-    
+
     The filtering system supports:
     - Direct attribute filtering on any host property
     - Custom filter functions with flexible parameter passing
@@ -68,19 +68,19 @@ class NornirManager:
     def apply_filters(self, **kwargs) -> Nornir:
         """
         Apply filters to the Nornir inventory.
-        
+
         This method can apply both direct attribute filters and custom filter functions.
         For custom filter functions, the 'filter_func' kwarg will contain the actual function
         while other kwargs provide the parameters.
-        
+
         Args:
             **kwargs: Filter criteria to pass to Nornir's filter method
                 - For attribute filters: key=value pairs for host attributes
                 - For function filters: filter_func=function, param1=value1, etc.
-        
+
         Returns:
             Nornir: The filtered Nornir instance
-        
+
         Raises:
             NornirManagerProcessorsError: If no filters are provided
         """

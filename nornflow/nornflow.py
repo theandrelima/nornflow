@@ -31,13 +31,13 @@ class NornFlow:
     NornFlow extends Nornir with a structured workflow system, task discovery, and configuration
     management capabilities. It serves as the main entry point for executing network automation
     jobs that follow a defined workflow pattern.
-    
+
     Key features:
     - Automated assets discovery from local directories
     - Workflow management and execution
     - Consistent configuration handling
     - Advanced inventory filtering with custom filter functions
-    
+
     The NornFlow object lifecycle typically involves:
     1. Initialization with settings (from file or explicit object)
     2. Automatic discovery of available tasks
@@ -45,7 +45,7 @@ class NornFlow:
     4. Automatic discovery of available filters (not mandatory)
     5. Selection of a workflow (by object, name, file path, or dictionary definition)
     6. Execution of the workflow against the filtered Nornir inventory
-    
+
     Tasks are executed in order as defined in the workflow, providing a structured
     approach to network automation operations.
     """
@@ -258,10 +258,10 @@ class NornFlow:
     def _load_filters_catalog(self) -> None:
         """
         Load inventory filters in two phases:
-        
+
         Phase 1: Load built-in filters from nornflow.filters module
         Phase 2: Load user-defined filters from configured local_filters_dirs
-        
+
         The filters catalog stores each filter as a tuple of (function_object, parameter_names),
         where parameter_names is a list of parameter names excluding the first 'host' parameter.
         This structure enables the flexible parameter passing in workflow definitions.

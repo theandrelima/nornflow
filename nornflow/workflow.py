@@ -23,10 +23,10 @@ os.environ["MODELS_MODULES"] = "nornflow.models"
 class Workflow:
     """
     Workflow represents a sequence of tasks to be executed against a Nornir inventory.
-    
+
     This class handles the loading, parsing, and execution of workflow definitions,
     including inventory filtering, task sequencing, and result handling.
-    
+
     Key responsibilities:
     - Parsing workflow definitions from YAML or dictionaries
     - Processing inventory filters in sequence (applying AND logic)
@@ -112,17 +112,17 @@ class Workflow:
     def _get_filtering_kwargs(self, filters_catalog: dict[str, Callable]) -> list[dict[str, Any]]:
         """
         Generate a list of filter keyword argument dictionaries based on inventory_filters.
-        
+
         This method processes each key in inventory_filters and determines how to handle it:
         1. If the key exists in filters_catalog: Process as a custom filter function
         2. Otherwise: Process as a direct attribute filter for Nornir
-        
+
         Each filter is processed in the order defined in the YAML/dict, with filters applied
         sequentially to narrow down the inventory selection.
-        
+
         Args:
             filters_catalog (dict[str, Callable]): Dictionary of available filter functions
-            
+
         Returns:
             list[dict[str, Any]]: List of dictionaries with filter kwargs to be applied sequentially
         """
@@ -151,22 +151,22 @@ class Workflow:
     ) -> dict[str, Any]:
         """
         Process a custom filter function from the filters_catalog.
-        
+
         Handles various parameter passing formats:
         1. No parameters (parameterless filter)
         2. Dictionary of named parameters
         3. List/tuple for a single parameter expecting a collection
         4. List/tuple of values mapping to multiple parameters in order
         5. Single scalar value for a filter with one parameter
-        
+
         Args:
             key (str): The filter name/key from inventory_filters
             filter_values (Any): The value associated with the filter key
             filters_catalog (dict[str, Callable]): Dictionary of available filter functions
-            
+
         Returns:
             dict[str, Any]: Dictionary with filter_func and any parameters to be passed to Nornir
-            
+
         Raises:
             WorkflowInventoryFilterError: If parameter format doesn't match filter requirements
         """
