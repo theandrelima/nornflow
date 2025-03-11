@@ -7,6 +7,7 @@ CWD = Path.cwd()
 NORNIR_DEFAULT_CONFIG_DIR = CWD / "nornir_configs"
 TASKS_DIR = CWD / "tasks"
 WORKFLOWS_DIR = CWD / "workflows"
+FILTERS_DIR = CWD / "filters"
 NORNFLOW_CONFIG_FILE = CWD / "nornflow.yaml"
 
 # NornFlow's samples directory

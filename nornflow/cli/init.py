@@ -6,6 +6,7 @@ import typer
 
 from nornflow import NornFlowBuilder
 from nornflow.cli.constants import (
+    FILTERS_DIR,
     GREET_USER_TASK_FILE,
     HELLO_WORLD_TASK_FILE,
     NORNFLOW_CONFIG_FILE,
@@ -32,6 +33,7 @@ def init(ctx: typer.Context) -> None:
     2. Copies a sample 'nornflow.yaml' file to the current working directory if it does not exist.
     3. If a 'tasks' directory doesn't exist, creates one and copies sample task files into it.
     4. If a 'workflows' directory doesn't exist, creates one and copies the sample workflow file into it.
+    5. If a 'filters' directory doesn't exist, creates an empty one.
     """
     builder = NornFlowBuilder()
 
@@ -73,6 +75,9 @@ def init(ctx: typer.Context) -> None:
     create_directory_and_copy_sample_files(
         WORKFLOWS_DIR, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
     )
+
+    create_directory(FILTERS_DIR)
+
     show_info_post_init(builder)
 
 
