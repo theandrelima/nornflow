@@ -248,21 +248,3 @@ class FilterLoadingError(NornFlowResourceError):
 
     def __init__(self, message: str):
         super().__init__(message)
-
-
-###############################################################################
-# ALIASES FOR BACKWARD COMPATIBILITY
-###############################################################################
-
-# Keep these for backward compatibility
-NornFlowError = NornFlowAppError
-WorkflowError = NornFlowWorkflowError
-LocalDirectoryNotFoundError = DirectoryNotFoundError
-TaskDoesNotExistError = TaskNotFoundError
-NornirManagerProcessorsError = ProcessorError
-MissingMandatorySettingError = lambda setting: MandatorySettingError(setting, missing=True)
-EmptyMandatorySettingError = lambda setting: MandatorySettingError(setting, missing=False)
-SettingsFileNotFoundError = lambda file_path: SettingsFileError(file_path, error_type="not_found")
-SettingsFilePermissionError = lambda file_path: SettingsFileError(file_path, error_type="permission")
-SettingsFileParsingError = lambda file_path, error: SettingsFileError(file_path, error_type="parsing", error_details=error)
-NornirConfigsModificationError = NornirConfigError
