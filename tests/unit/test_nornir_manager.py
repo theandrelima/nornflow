@@ -3,7 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL
-from nornflow.exceptions import NornirManagerProcessorsError
+from nornflow.exceptions import ProcessorError
 from nornflow.nornir_manager import NornirManager
 
 
@@ -104,7 +104,7 @@ class TestNornirManager:
         manager = NornirManager(nornir_settings="dummy_config.yaml", dry_run=False)
 
         # Verify calling apply_filters with no args raises an error
-        with pytest.raises(NornirManagerProcessorsError, match="No filters informed."):
+        with pytest.raises(ProcessorError, match="No filters informed."):
             manager.apply_filters()
 
     def test_apply_processors_with_valid_processors(self, mock_init_nornir, mock_nornir, mock_processor):
@@ -128,5 +128,5 @@ class TestNornirManager:
         manager = NornirManager(nornir_settings="dummy_config.yaml", dry_run=False)
 
         # Verify calling apply_processors with empty list raises an error
-        with pytest.raises(NornirManagerProcessorsError, match="No processors informed."):
+        with pytest.raises(ProcessorError, match="No processors informed."):
             manager.apply_processors([])

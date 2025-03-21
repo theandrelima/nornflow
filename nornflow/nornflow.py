@@ -10,13 +10,14 @@ from nornflow.constants import (
 )
 from nornflow.exceptions import (
     CatalogModificationError,
+    DirectoryNotFoundError,
     EmptyTaskCatalogError,
     FilterLoadingError,
-    LocalDirectoryNotFoundError,
-    NornFlowError,
+    ModuleImportError,
+    NornFlowAppError,
     NornFlowInitializationError,
     NornFlowRunError,
-    NornirConfigsModificationError,
+    NornirConfigError,
     SettingsModificationError,
     TaskLoadingError,
 )
@@ -96,7 +97,7 @@ class NornFlow:
 
     @nornir_configs.setter
     def nornir_configs(self, value: Any) -> None:
-        raise NornirConfigsModificationError()
+        raise NornirConfigError()
 
     @property
     def settings(self) -> NornFlowSettings:
@@ -201,8 +202,8 @@ class NornFlow:
             value (Any): The workflow object to set.
         """
         if not isinstance(value, Workflow):
-            raise NornFlowError(
-                f"NornFlow.workflow MUST be a Workflow object, but and object of  {type(value)} was "
+            raise NornFlowAppError(  # Changed from NornFlowError
+                f"NornFlow.workflow MUST be a Workflow object, but an object of {type(value)} was "
                 f"provided: {value}"
             )
         self._workflow = value
@@ -227,19 +228,22 @@ class NornFlow:
             task_dir (str): Path to the directory containing task files.
 
         Raises:
-            LocalTaskDirectoryNotFoundError: If the specified directory does not exist.
+            DirectoryNotFoundError: If the specified directory does not exist.
             TaskLoadingError: If there is an error loading tasks from a file.
         """
         task_path = Path(task_dir)
         if not task_path.is_dir():
-            raise LocalDirectoryNotFoundError(directory=task_dir, extra_message="Couldn't load tasks.")
+            raise DirectoryNotFoundError(directory=task_dir, extra_message="Couldn't load tasks.")  # Changed from LocalDirectoryNotFoundError
 
         try:
             for py_file in task_path.rglob("*.py"):
                 module_name = py_file.stem
                 module_path = str(py_file)
-                module = import_module_from_path(module_name, module_path)
-                self._register_nornir_tasks_from_module(module)
+                try:
+                    module = import_module_from_path(module_name, module_path)
+                    self._register_nornir_tasks_from_module(module)
+                except Exception as e:
+                    raise ModuleImportError(module_name, module_path, str(e)) from e
         except Exception as e:
             raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e
 
@@ -284,19 +288,22 @@ class NornFlow:
             filter_dir (str): Path to the directory containing filter files.
 
         Raises:
-            LocalDirectoryNotFoundError: If the specified directory does not exist.
+            DirectoryNotFoundError: If the specified directory does not exist.
             FilterLoadingError: If there is an error loading filters from a file.
         """
         filter_path = Path(filter_dir)
         if not filter_path.is_dir():
-            raise LocalDirectoryNotFoundError(directory=filter_dir, extra_message="Couldn't load filters.")
+            raise DirectoryNotFoundError(directory=filter_dir, extra_message="Couldn't load filters.")  # Changed from LocalDirectoryNotFoundError
 
         try:
             for py_file in filter_path.rglob("*.py"):
                 module_name = py_file.stem
                 module_path = str(py_file)
-                module = import_module_from_path(module_name, module_path)
-                self._register_nornir_filters_from_module(module)
+                try:
+                    module = import_module_from_path(module_name, module_path)
+                    self._register_nornir_filters_from_module(module)
+                except Exception as e:
+                    raise ModuleImportError(module_name, module_path, str(e)) from e
         except Exception as e:
             raise FilterLoadingError(f"Error loading filters from file '{py_file}': {e}") from e
 
@@ -340,11 +347,11 @@ class NornFlow:
             workflow_dir (str): Path to the directory containing workflow files.
 
         Raises:
-            LocalTaskDirectoryNotFoundError: If the specified directory does not exist.
+            DirectoryNotFoundError: If the specified directory does not exist.
         """
         workflow_path = Path(workflow_dir)
         if not workflow_path.is_dir():
-            raise LocalDirectoryNotFoundError(
+            raise DirectoryNotFoundError(  # Changed from LocalDirectoryNotFoundError
                 directory=workflow_dir, extra_message="Couldn't load workflows."
             )
 
@@ -364,7 +371,7 @@ class NornFlow:
         """
         invalid_keys = [key for key in kwargs if key in NORNFLOW_INVALID_INIT_KWARGS]
         if invalid_keys:
-            raise NornFlowInitializationError(invalid_keys)
+            raise NornFlowInitializationError(invalid_kwargs=invalid_keys)
 
     def _ensure_workflow(self) -> None:
         """

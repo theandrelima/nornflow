@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 import pytest
 from nornir.core.inventory import Host
 
-from nornflow.exceptions import NornirManagerProcessorsError
+from nornflow.exceptions import ProcessorError
 from nornflow.nornir_manager import NornirManager
 
 
@@ -30,7 +30,7 @@ class TestNornirManagerFilters:
 
     def test_no_filters_error(self, manager):
         """Test that an error is raised when no filters are provided."""
-        with pytest.raises(NornirManagerProcessorsError):
+        with pytest.raises(ProcessorError):
             manager.apply_filters()
 
     def test_direct_attribute_filtering(self, manager, mock_nornir):
