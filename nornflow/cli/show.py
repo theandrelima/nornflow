@@ -12,7 +12,8 @@ from termcolor import colored
 
 from nornflow import NornFlowBuilder
 from nornflow.cli.constants import CWD
-from nornflow.cli.exceptions import NornFlowCLIShowError
+from nornflow.cli.exceptions import CLIShowError
+from nornflow.exceptions import NornFlowAppError
 
 app = typer.Typer()
 
@@ -57,13 +58,51 @@ def show(
                 show_nornflow_settings(nornflow)
             if nornir_configs:
                 show_nornir_configs(nornflow)
+                
     except PluginNotRegistered as e:
-        NornFlowCLIShowError(
+        # Keep specific handler for Nornir plugin errors
+        CLIShowError(
             message=f"{e!s}",
             hint="Make sure you have the required Nornir plugin(s) installed in the environment.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)  # noqa: B904
+        raise typer.Exit(code=2)
+        
+    except NornFlowAppError as e:
+        # Generic handler for all NornFlow exceptions
+        CLIShowError(
+            message=f"NornFlow configuration error: {e}",
+            hint="Check your NornFlow configuration and verify that all required resources are available.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)
+        
+    except yaml.YAMLError as e:
+        # Specific handler for YAML parsing errors
+        CLIShowError(
+            message=f"Error parsing YAML file: {e}",
+            hint="Check your workflow files for YAML syntax errors.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)
+        
+    except (FileNotFoundError, PermissionError) as e:
+        # Specific handler for file system errors
+        CLIShowError(
+            message=f"File system error: {e}",
+            hint="Check file permissions and ensure all referenced files exist.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)
+        
+    except Exception as e:
+        # Catch-all for unexpected errors
+        CLIShowError(
+            message=f"Failed to show requested information: {e}",
+            hint="Check your configuration and try again.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)
 
 
 def show_catalog(nornflow: "NornFlow") -> None:
@@ -129,25 +168,23 @@ def show_formatted_table(
 
 def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
-    Prepare the data for the task catalog table.
+    Render the task catalog as a list of lists (suitable for tabulate).
 
     Args:
-        nornflow (NornFlow): The NornFlow object containing the task catalog.
+        nornflow (NornFlow): The NornFlow object.
 
     Returns:
-        List[List[str]]: The prepared table data.
+        list[list[str]]: The table data.
     """
     table_data = []
     for task_name, task_func in nornflow.tasks_catalog.items():
-        # Extract the docstring and fallback to default if None
-        full_docstring = task_func.__doc__ or "No description available"
-        cleaned_docstring = full_docstring.strip()
+        # Get the docstring, or use a placeholder if None
+        docstring = task_func.__doc__ or "No description available"
 
-        if "." in cleaned_docstring:
-            first_sentence = cleaned_docstring.split(".")[0].strip() + "."
-        else:
-            first_sentence = cleaned_docstring.split("\n")[0].strip()
-
+        # Get the first sentence (or first 100 chars) from docstring
+        first_sentence = docstring.split(".")[0].strip()
+        if len(first_sentence) > 100:
+            first_sentence = first_sentence[:97] + "..."
         wrapped_text = textwrap.fill(first_sentence, width=60)
 
         # Get the Python dotted path to the function
@@ -177,54 +214,62 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
 
 def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
-    Prepare the data for the workflows catalog table.
+    Render the workflows catalog as a list of lists (suitable for tabulate).
 
     Args:
-        nornflow (NornFlow): The NornFlow object containing the workflows catalog.
+        nornflow (NornFlow): The NornFlow object.
 
     Returns:
-        List[List[str]]: The prepared table data.
+        list[list[str]]: The table data.
     """
     table_data = []
     for workflow_name, workflow_path in nornflow.workflows_catalog.items():
-        with Path(workflow_path).open() as file:
-            workflow_data = yaml.safe_load(file)
-            description = workflow_data.get("workflow", {}).get("description", "No description available")
+        try:
+            with open(workflow_path, "r") as f:
+                workflow_dict = yaml.safe_load(f)
+                description = workflow_dict["workflow"].get("description", "No description available")
+        except Exception:
+            description = "Could not load description from file"
+
+        # Wrap the description
+        description = textwrap.fill(description, width=60)
+
+        # Determine the relative path if possible
+        try:
+            relative_path = workflow_path.relative_to(CWD)
+            path_str = f"./{relative_path}"
+        except ValueError:
+            # If the file is not within CWD, use absolute path as fallback
+            path_str = str(workflow_path)
 
         colored_workflow_name = colored(workflow_name, "cyan", attrs=["bold"])
         colored_description = colored(description, "yellow")
-        colored_location = colored(str(workflow_path), "light_green")
+        colored_location = colored(path_str, "light_green")
         table_data.append([colored_workflow_name, colored_description, colored_location])
     return table_data
 
 
 def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
-    Prepare the data for the filters catalog table.
+    Render the filters catalog as a list of lists (suitable for tabulate).
 
     Args:
-        nornflow (NornFlow): The NornFlow object containing the filters catalog.
+        nornflow (NornFlow): The NornFlow object.
 
     Returns:
-        List[List[str]]: The prepared table data.
+        list[list[str]]: The table data.
     """
     table_data = []
-
-    # Skip if no filters catalog available
-    if not hasattr(nornflow, "_filters_catalog") or not nornflow.filters_catalog:
-        return table_data
-
     for filter_name, (filter_func, param_names) in nornflow.filters_catalog.items():
-        # Extract the docstring and fallback to default if None
-        full_docstring = filter_func.__doc__ or "No description available"
-        cleaned_docstring = full_docstring.strip()
+        # Get the docstring, or use a placeholder if None
+        docstring = filter_func.__doc__ or "No description available"
 
-        if "." in cleaned_docstring:
-            first_sentence = cleaned_docstring.split(".")[0].strip() + "."
-        else:
-            first_sentence = cleaned_docstring.split("\n")[0].strip()
+        # Get the first sentence (or first 100 chars) from docstring
+        first_sentence = docstring.split(".")[0].strip()
+        if len(first_sentence) > 100:
+            first_sentence = first_sentence[:97] + "..."
 
-        # Add parameter information on a separate line
+        # Add parameter info on a new line
         if not param_names:
             param_info = "Parameters: None (host only)"
         else:
@@ -260,49 +305,53 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
 
 def render_settings_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
-    Prepare the data for the settings table.
+    Render the NornFlow settings as a list of lists (suitable for tabulate).
 
     Args:
-        nornflow (NornFlow): The NornFlow object containing the settings.
+        nornflow (NornFlow): The NornFlow object.
 
     Returns:
-        List[List[str]]: The prepared settings table data.
+        list[list[str]]: The table data.
     """
-    return render_table_data(nornflow.settings.as_dict)
+    # Get settings as a dict
+    settings_dict = nornflow.settings.as_dict
+    return render_table_data(settings_dict)
 
 
 def render_nornir_cfgs_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
-    Prepare the data for the Nornir configs table.
+    Render the Nornir configs as a list of lists (suitable for tabulate).
 
     Args:
-        nornflow (NornFlow): The NornFlow object containing the Nornir configs.
+        nornflow (NornFlow): The NornFlow object.
 
     Returns:
-        List[List[str]]: The prepared Nornir configs table data.
+        list[list[str]]: The table data.
     """
-    return render_table_data(nornflow.nornir_configs)
+    # Get nornir_configs as a dict
+    nornir_configs = nornflow.nornir_configs
+    return render_table_data(nornir_configs)
 
 
 def render_table_data(
     data: dict[str, Any], key_color: str = "cyan", value_color: str = "yellow"
 ) -> list[list[str]]:
     """
-    Prepare the data for a table.
+    Render a dictionary as a list of lists (suitable for tabulate).
 
     Args:
-        data (dict[str, Any]): The dictionary containing the data.
-        key_color (str): The color to use for the keys.
-        value_color (str): The color to use for the values.
+        data (dict[str, Any]): The dictionary to render.
+        key_color (str, optional): The color for the keys. Defaults to "cyan".
+        value_color (str, optional): The color for the values. Defaults to "yellow".
 
     Returns:
-        List[List[str]]: The prepared table data.
+        list[list[str]]: The table data.
     """
     table_data = []
     for key, value in data.items():
         colored_key = colored(key, key_color, attrs=["bold"])
-        colored_value = format_value(value, value_color)
-        table_data.append([colored_key, colored_value])
+        formatted_value = format_value(value, value_color)
+        table_data.append([colored_key, formatted_value])
     return table_data
 
 
@@ -329,14 +378,14 @@ def format_value(value: Any, color: str = "yellow") -> str:
 
 def get_colored_headers(headers: list[str], color: str) -> list[str]:
     """
-    Return the colorized and bold headers.
+    Color the headers.
 
     Args:
-        headers (list[str]): The list of headers to be colorized and bolded.
-        color (str): The color to be used for the headers.
+        headers (list[str]): The headers to color.
+        color (str): The color to use.
 
     Returns:
-        List[str]: The colorized and bold headers.
+        list[str]: The colored headers.
     """
     return [colored(header, color, attrs=["bold"]) for header in headers]
 
@@ -353,7 +402,7 @@ def display_banner(banner_text: str, table: str) -> None:
 
     # Center the banner with the table
     table_width = len(table.split("\n")[0])
-    centered_banner = banner.center(table_width)
+    centered_banner = banner.center(table_width + 5)
 
     # Add blank spaces before the banner
     typer.echo("\n\n" + centered_banner)

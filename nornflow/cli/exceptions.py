@@ -67,3 +67,7 @@ class CLIShowError(NornFlowCLIError):
 
 class CLIRunError(NornFlowCLIError):
     """Raised when there are errors running commands via CLI."""
+
+
+class CLIInitError(NornFlowCLIError):
+    """Raised when there are errors initializing resources via CLI."""
