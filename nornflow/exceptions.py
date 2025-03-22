@@ -66,13 +66,6 @@ class NornFlowRunError(NornFlowCoreError):
         super().__init__(message)
 
 
-class NoTasksToRunError(NornFlowCoreError):
-    """Raised when there are no tasks specified to run."""
-
-    def __init__(self):
-        super().__init__("No tasks to run informed.")
-
-
 ###############################################################################
 # WORKFLOW EXCEPTIONS
 ###############################################################################
