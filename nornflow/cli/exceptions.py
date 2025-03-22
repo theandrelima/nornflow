@@ -5,7 +5,6 @@ This module defines CLI-specific exceptions for the NornFlow application.
 """
 
 import traceback
-from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -18,16 +17,16 @@ console = Console(stderr=True)
 class NornFlowCLIError(NornFlowAppError):
     """
     Base exception class for CLI-related errors.
-    
+
     These relate to command-line interface operations.
     """
 
     def __init__(
         self,
         message: str,
-        hint: Optional[str] = None,
+        hint: str | None = None,
         code: int = 1,
-        original_exception: Optional[Exception] = None,
+        original_exception: Exception | None = None,
     ):
         super().__init__(message)
         self.message = message

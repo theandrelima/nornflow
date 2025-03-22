@@ -296,7 +296,7 @@ def run(
         # Show deprecation warning for legacy filters
         if legacy_filters_used:
             typer.secho(
-                "Warning: The --hosts and --groups options will be deprecated and removed in a future version. "
+                "Warning: The --hosts and --groups options will be deprecated and removed in a future version. "  # noqa: E501
                 'Please use --inventory-filters instead (e.g., --inventory-filters "hosts=host1,host2" '
                 "or \"hosts=['host1', 'host2']\")",
                 fg=typer.colors.YELLOW,
@@ -313,35 +313,35 @@ def run(
 
         nornflow = builder.build()
         nornflow.run()
-        
+
     except NornFlowAppError as e:
         CLIRunError(
             message=f"NornFlow error while running {target}: {e}",
             hint="Check your task configuration, inventory filters, and NornFlow setup.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
-        
+        raise typer.Exit(code=2)  # noqa: B904
+
     except FileNotFoundError as e:
         CLIRunError(
             message=f"File not found: {e}",
             hint=f"Check that the file '{target}' exists and is accessible.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
-        
+        raise typer.Exit(code=2)  # noqa: B904
+
     except PermissionError as e:
         CLIRunError(
             message=f"Permission denied: {e}",
             hint="Check that you have sufficient permissions to access the required files.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
-        
+        raise typer.Exit(code=2)  # noqa: B904
+
     except Exception as e:
         CLIRunError(
             message=f"Unexpected error while running {target}: {e}",
             hint="This may be a bug. Please report it if the issue persists.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2)  # noqa: B904

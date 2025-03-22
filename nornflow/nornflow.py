@@ -233,7 +233,9 @@ class NornFlow:
         """
         task_path = Path(task_dir)
         if not task_path.is_dir():
-            raise DirectoryNotFoundError(directory=task_dir, extra_message="Couldn't load tasks.")  # Changed from LocalDirectoryNotFoundError
+            raise DirectoryNotFoundError(
+                directory=task_dir, extra_message="Couldn't load tasks."
+            )  # Changed from LocalDirectoryNotFoundError
 
         try:
             for py_file in task_path.rglob("*.py"):
@@ -293,7 +295,9 @@ class NornFlow:
         """
         filter_path = Path(filter_dir)
         if not filter_path.is_dir():
-            raise DirectoryNotFoundError(directory=filter_dir, extra_message="Couldn't load filters.")  # Changed from LocalDirectoryNotFoundError
+            raise DirectoryNotFoundError(
+                directory=filter_dir, extra_message="Couldn't load filters."
+            )  # Changed from LocalDirectoryNotFoundError
 
         try:
             for py_file in filter_path.rglob("*.py"):

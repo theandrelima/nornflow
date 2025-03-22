@@ -11,7 +11,7 @@ from tabulate import tabulate
 from termcolor import colored
 
 from nornflow import NornFlowBuilder
-from nornflow.cli.constants import CWD
+from nornflow.cli.constants import CWD, DESCRIPTION_FIRST_SENTENCE_LENGTH
 from nornflow.cli.exceptions import CLIShowError
 from nornflow.exceptions import NornFlowAppError
 
@@ -58,7 +58,7 @@ def show(
                 show_nornflow_settings(nornflow)
             if nornir_configs:
                 show_nornir_configs(nornflow)
-                
+
     except PluginNotRegistered as e:
         # Keep specific handler for Nornir plugin errors
         CLIShowError(
@@ -66,8 +66,8 @@ def show(
             hint="Make sure you have the required Nornir plugin(s) installed in the environment.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
-        
+        raise typer.Exit(code=2)  # noqa: B904
+
     except NornFlowAppError as e:
         # Generic handler for all NornFlow exceptions
         CLIShowError(
@@ -75,8 +75,8 @@ def show(
             hint="Check your NornFlow configuration and verify that all required resources are available.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
-        
+        raise typer.Exit(code=2)  # noqa: B904
+
     except yaml.YAMLError as e:
         # Specific handler for YAML parsing errors
         CLIShowError(
@@ -84,8 +84,8 @@ def show(
             hint="Check your workflow files for YAML syntax errors.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
-        
+        raise typer.Exit(code=2)  # noqa: B904
+
     except (FileNotFoundError, PermissionError) as e:
         # Specific handler for file system errors
         CLIShowError(
@@ -93,8 +93,8 @@ def show(
             hint="Check file permissions and ensure all referenced files exist.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
-        
+        raise typer.Exit(code=2)  # noqa: B904
+
     except Exception as e:
         # Catch-all for unexpected errors
         CLIShowError(
@@ -102,7 +102,7 @@ def show(
             hint="Check your configuration and try again.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2)  # noqa: B904
 
 
 def show_catalog(nornflow: "NornFlow") -> None:
@@ -183,7 +183,7 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
 
         # Get the first sentence (or first 100 chars) from docstring
         first_sentence = docstring.split(".")[0].strip()
-        if len(first_sentence) > 100:
+        if len(first_sentence) > DESCRIPTION_FIRST_SENTENCE_LENGTH:
             first_sentence = first_sentence[:97] + "..."
         wrapped_text = textwrap.fill(first_sentence, width=60)
 
@@ -225,7 +225,7 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
     table_data = []
     for workflow_name, workflow_path in nornflow.workflows_catalog.items():
         try:
-            with open(workflow_path, "r") as f:
+            with workflow_path.open() as f:  # Using Path.open() instead of the built-in open()
                 workflow_dict = yaml.safe_load(f)
                 description = workflow_dict["workflow"].get("description", "No description available")
         except Exception:
@@ -266,7 +266,7 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
 
         # Get the first sentence (or first 100 chars) from docstring
         first_sentence = docstring.split(".")[0].strip()
-        if len(first_sentence) > 100:
+        if len(first_sentence) > DESCRIPTION_FIRST_SENTENCE_LENGTH:
             first_sentence = first_sentence[:97] + "..."
 
         # Add parameter info on a new line

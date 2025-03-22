@@ -13,7 +13,7 @@ organized hierarchically with clear inheritance paths.
 class NornFlowAppError(Exception):
     """
     Root exception class for all NornFlow errors.
-    
+
     This exception serves as the base class for the entire exception hierarchy.
     It should never be raised directly but rather inherited from.
     """
@@ -30,7 +30,7 @@ class NornFlowAppError(Exception):
 class NornFlowCoreError(NornFlowAppError):
     """
     Base exception class for core functionality errors.
-    
+
     These relate to fundamental operations of the NornFlow application itself.
     """
 
@@ -81,7 +81,7 @@ class NoTasksToRunError(NornFlowCoreError):
 class NornFlowWorkflowError(NornFlowAppError):
     """
     Base exception class for workflow-related errors.
-    
+
     These relate to workflow definition, parsing, and execution.
     """
 
@@ -115,7 +115,6 @@ class WorkflowInventoryFilterError(NornFlowWorkflowError):
         super().__init__(message)
 
 
-
 ###############################################################################
 # SETTINGS EXCEPTIONS
 ###############################################################################
@@ -124,7 +123,7 @@ class WorkflowInventoryFilterError(NornFlowWorkflowError):
 class NornFlowSettingsError(NornFlowAppError):
     """
     Base exception class for settings-related errors.
-    
+
     These relate to configuration and settings management.
     """
 
@@ -133,7 +132,9 @@ class MandatorySettingError(NornFlowSettingsError):
     """Raised when there is an issue with a mandatory setting."""
 
     def __init__(self, setting: str, missing: bool = True):
-        message = f"Missing mandatory setting: {setting}." if missing else f"Setting '{setting}' can't be empty."
+        message = (
+            f"Missing mandatory setting: {setting}." if missing else f"Setting '{setting}' can't be empty."
+        )
         super().__init__(message)
         self.setting = setting
 
@@ -150,7 +151,7 @@ class SettingsFileError(NornFlowSettingsError):
             message = f"Error parsing YAML file '{file_path}': {error_details}"
         else:
             message = f"Error accessing configuration file '{file_path}': {error_details}"
-        
+
         super().__init__(message)
         self.file_path = file_path
         self.error_type = error_type
@@ -181,7 +182,7 @@ class SettingsModificationError(NornFlowSettingsError):
 class NornFlowNornirError(NornFlowAppError):
     """
     Base exception class for Nornir-related errors.
-    
+
     These relate to interaction with the Nornir framework.
     """
 
@@ -212,7 +213,7 @@ class ProcessorError(NornFlowNornirError):
 class NornFlowResourceError(NornFlowAppError):
     """
     Base exception class for resource access errors.
-    
+
     These relate to file, module, and other resource access issues.
     """
 
@@ -221,9 +222,7 @@ class DirectoryNotFoundError(NornFlowResourceError):
     """Raised when a specified directory is not found."""
 
     def __init__(self, directory: str, extra_message: str = ""):
-        super().__init__(
-            f"Directory not found: {directory}{' - ' + extra_message if extra_message else '.'}"
-        )
+        super().__init__(f"Directory not found: {directory}{' - ' + extra_message if extra_message else '.'}")
         self.directory = directory
 
 

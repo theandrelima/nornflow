@@ -75,14 +75,14 @@ class NornFlowSettings:
                 raise SettingsDataTypeError()
 
             self.loaded_settings = defaultdict(lambda: None, config_data)
-        except FileNotFoundError:
-            raise SettingsFileError(self.settings_file, error_type="not_found")
-        except PermissionError:
-            raise SettingsFileError(self.settings_file, error_type="permission")
+        except FileNotFoundError as e:
+            raise SettingsFileError(self.settings_file, error_type="not_found") from e
+        except PermissionError as e:
+            raise SettingsFileError(self.settings_file, error_type="permission") from e
         except yaml.YAMLError as e:
-            raise SettingsFileError(self.settings_file, error_type="parsing", error_details=str(e))
-        except TypeError:
-            raise SettingsDataTypeError()
+            raise SettingsFileError(self.settings_file, error_type="parsing", error_details=str(e)) from e
+        except TypeError as e:
+            raise SettingsDataTypeError() from e
         except Exception as e:
             raise NornFlowAppError(f"An unexpected error occurred: {e}") from e
 

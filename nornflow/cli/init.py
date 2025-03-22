@@ -30,90 +30,119 @@ def init(ctx: typer.Context) -> None:
     Initialize NornFlow by setting up the necessary configuration files and directories.
     """
     try:
-        builder = NornFlowBuilder()
+        # Setup builder based on context
+        builder = setup_builder(ctx)
 
-        settings = ctx.obj.get("settings")
-        if settings:
-            builder.with_settings_path(settings)
-
-        # Display the banner message and prompt the user for confirmation
-        display_banner()
-        if not typer.confirm("Do you want to continue?", default=True):
-            typer.secho("Initialization aborted.", fg=typer.colors.RED)
+        # Display banner and get user confirmation
+        if not get_user_confirmation():
             return
 
-        typer.secho(f"NornFlow will be initialized at {NORNIR_DEFAULT_CONFIG_DIR.parent}", fg=typer.colors.GREEN)
+        # Setup main directory structure and configuration files
+        setup_directory_structure()
+        setup_nornflow_config_file(ctx.obj.get("settings"))
+        setup_sample_content()
 
-        if create_directory(NORNIR_DEFAULT_CONFIG_DIR):
-            for item in SAMPLE_NORNIR_CONFIGS_DIR.iterdir():
-                if item.is_dir():
-                    shutil.copytree(item, NORNIR_DEFAULT_CONFIG_DIR / item.name)
-                else:
-                    shutil.copy(item, NORNIR_DEFAULT_CONFIG_DIR / item.name)
-            typer.secho(
-                f"Created a sample 'nornir_configs' directory: {NORNIR_DEFAULT_CONFIG_DIR}", fg=typer.colors.GREEN
-            )
-
-        if not os.getenv("NORNFLOW_CONFIG_FILE"):
-            if not settings and not NORNFLOW_CONFIG_FILE.exists():
-                shutil.copy(SAMPLE_NORNFLOW_FILE, NORNFLOW_CONFIG_FILE)
-                typer.secho(f"Created a sample 'nornflow.yaml': {NORNFLOW_CONFIG_FILE}", fg=typer.colors.GREEN)
-            elif settings:
-                typer.secho(f"Trying to use informed settings file: {settings}", fg=typer.colors.YELLOW)
-            else:
-                typer.secho(f"Settings file already exists: {NORNFLOW_CONFIG_FILE}", fg=typer.colors.YELLOW)
-
-        create_directory_and_copy_sample_files(
-            TASKS_DIR, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
-        )
-
-        create_directory_and_copy_sample_files(
-            WORKFLOWS_DIR, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
-        )
-
-        create_directory(FILTERS_DIR)
-
+        # Show information about the initialized setup
         show_info_post_init(builder)
-        
+
     except FileNotFoundError as e:
         CLIInitError(
             message=f"File not found: {e}",
             hint="Check that all required template files exist in the installation directory.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
-        
+        raise typer.Exit(code=2)  # noqa: B904
+
     except PermissionError as e:
         CLIInitError(
             message=f"Permission denied: {e}",
             hint="Check that you have write permissions to the current directory.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
-        
+        raise typer.Exit(code=2)  # noqa: B904
+
     except shutil.Error as e:
         CLIInitError(
             message=f"Error copying file: {e}",
             hint="There may be an issue with file permissions or the files already exist.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
-        
+        raise typer.Exit(code=2)  # noqa: B904
+
     except NornFlowAppError as e:
         CLIInitError(
             message=f"NornFlow error: {e}",
             hint="There was an issue with the NornFlow configuration.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
-        
+        raise typer.Exit(code=2)  # noqa: B904
+
     except Exception as e:
         CLIInitError(
             message=f"Unexpected error during initialization: {e}",
             hint="This may be a bug. Please report it if the issue persists.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2)  # noqa: B904
+
+
+def setup_builder(ctx: typer.Context) -> NornFlowBuilder:
+    """Set up and configure the NornFlowBuilder."""
+    builder = NornFlowBuilder()
+    settings = ctx.obj.get("settings")
+    if settings:
+        builder.with_settings_path(settings)
+    return builder
+
+
+def get_user_confirmation() -> bool:
+    """Display banner and get user confirmation to proceed."""
+    display_banner()
+    if not typer.confirm("Do you want to continue?", default=True):
+        typer.secho("Initialization aborted.", fg=typer.colors.RED)
+        return False
+    return True
+
+
+def setup_directory_structure() -> None:
+    """Set up the main directory structure."""
+    typer.secho(f"NornFlow will be initialized at {NORNIR_DEFAULT_CONFIG_DIR.parent}", fg=typer.colors.GREEN)
+
+    if create_directory(NORNIR_DEFAULT_CONFIG_DIR):
+        for item in SAMPLE_NORNIR_CONFIGS_DIR.iterdir():
+            if item.is_dir():
+                shutil.copytree(item, NORNIR_DEFAULT_CONFIG_DIR / item.name)
+            else:
+                shutil.copy(item, NORNIR_DEFAULT_CONFIG_DIR / item.name)
+        typer.secho(
+            f"Created a sample 'nornir_configs' directory: {NORNIR_DEFAULT_CONFIG_DIR}",
+            fg=typer.colors.GREEN,
+        )
+
+
+def setup_nornflow_config_file(settings: str) -> None:
+    """Set up the NornFlow configuration file."""
+    if not os.getenv("NORNFLOW_CONFIG_FILE"):
+        if not settings and not NORNFLOW_CONFIG_FILE.exists():
+            shutil.copy(SAMPLE_NORNFLOW_FILE, NORNFLOW_CONFIG_FILE)
+            typer.secho(f"Created a sample 'nornflow.yaml': {NORNFLOW_CONFIG_FILE}", fg=typer.colors.GREEN)
+        elif settings:
+            typer.secho(f"Trying to use informed settings file: {settings}", fg=typer.colors.YELLOW)
+        else:
+            typer.secho(f"Settings file already exists: {NORNFLOW_CONFIG_FILE}", fg=typer.colors.YELLOW)
+
+
+def setup_sample_content() -> None:
+    """Set up sample tasks, workflows, and filters directories."""
+    create_directory_and_copy_sample_files(
+        TASKS_DIR, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
+    )
+
+    create_directory_and_copy_sample_files(
+        WORKFLOWS_DIR, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
+    )
+
+    create_directory(FILTERS_DIR)
 
 
 def display_banner() -> None:

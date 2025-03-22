@@ -7,6 +7,7 @@ from nornir.core.processor import Processor
 from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import ProcessorError
 
+
 class NornirManager:
     """
     NornirManager provides a centralized way to manage Nornir instances.
