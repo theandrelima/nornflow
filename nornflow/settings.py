@@ -6,13 +6,10 @@ import yaml
 
 from nornflow.constants import NONRFLOW_SETTINGS_MANDATORY, NONRFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import (
-    EmptyMandatorySettingError,
-    MissingMandatorySettingError,
-    NornFlowError,
+    MandatorySettingError,
+    NornFlowAppError,
     SettingsDataTypeError,
-    SettingsFileNotFoundError,
-    SettingsFileParsingError,
-    SettingsFilePermissionError,
+    SettingsFileError,
 )
 from nornflow.utils import read_yaml_file
 
@@ -67,10 +64,9 @@ class NornFlowSettings:
         process, appropriate custom exceptions are raised.
 
         Raises:
-            SettingsFileNotFoundException: If the configuration file does not exist.
-            SettingsFilePermissionException: If there is a permission error accessing the configuration file.
-            SettingsFileParsingException: If there is an error parsing the YAML file.
-            SettingsDataTypeException: If the configuration data is not a dictionary.
+            SettingsFileError: If there are issues with accessing or parsing the settings file
+            SettingsDataTypeError: If the configuration data is not a dictionary
+            NornFlowAppError: For any other unexpected errors
         """
         try:
             config_data = read_yaml_file(self.settings_file)
@@ -80,28 +76,28 @@ class NornFlowSettings:
 
             self.loaded_settings = defaultdict(lambda: None, config_data)
         except FileNotFoundError as e:
-            raise SettingsFileNotFoundError(self.settings_file) from e
+            raise SettingsFileError(self.settings_file, error_type="not_found") from e
         except PermissionError as e:
-            raise SettingsFilePermissionError(self.settings_file) from e
+            raise SettingsFileError(self.settings_file, error_type="permission") from e
         except yaml.YAMLError as e:
-            raise SettingsFileParsingError(self.settings_file, str(e)) from e
+            raise SettingsFileError(self.settings_file, error_type="parsing", error_details=str(e)) from e
         except TypeError as e:
             raise SettingsDataTypeError() from e
         except Exception as e:
-            raise NornFlowError(f"An unexpected error occurred: {e}") from e
+            raise NornFlowAppError(f"An unexpected error occurred: {e}") from e
 
     def _check_mandatory_settings(self) -> None:
         """
         Check if all mandatory settings are present and not empty in the configuration.
 
         Raises:
-            ValueError: If a mandatory setting is missing or empty.
+            MandatorySettingError: If a mandatory setting is missing or empty.
         """
         for setting in NONRFLOW_SETTINGS_MANDATORY:
             if setting not in self.loaded_settings:
-                raise MissingMandatorySettingError(setting)
+                raise MandatorySettingError(setting, missing=True)
             if not self.loaded_settings[setting]:
-                raise EmptyMandatorySettingError(setting)
+                raise MandatorySettingError(setting, missing=False)
 
     def _set_optional_settings(self, **kwargs: Any) -> None:
         """

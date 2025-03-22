@@ -17,7 +17,9 @@ from nornflow.cli.constants import (
     TASKS_DIR,
     WORKFLOWS_DIR,
 )
+from nornflow.cli.exceptions import CLIInitError
 from nornflow.cli.show import show_catalog, show_nornflow_settings
+from nornflow.exceptions import NornFlowAppError
 
 app = typer.Typer()
 
@@ -26,27 +28,84 @@ app = typer.Typer()
 def init(ctx: typer.Context) -> None:
     """
     Initialize NornFlow by setting up the necessary configuration files and directories.
-
-    This command performs the following actions:
-    1. If a 'nornir_configs' directory does not exist in the current working directory, it copies
-    the entire 'nornflow/cli/samples/nornir_configs' directory to the current working directory.
-    2. Copies a sample 'nornflow.yaml' file to the current working directory if it does not exist.
-    3. If a 'tasks' directory doesn't exist, creates one and copies sample task files into it.
-    4. If a 'workflows' directory doesn't exist, creates one and copies the sample workflow file into it.
-    5. If a 'filters' directory doesn't exist, creates an empty one.
     """
-    builder = NornFlowBuilder()
+    try:
+        # Setup builder based on context
+        builder = setup_builder(ctx)
 
+        # Display banner and get user confirmation
+        if not get_user_confirmation():
+            return
+
+        # Setup main directory structure and configuration files
+        setup_directory_structure()
+        setup_nornflow_config_file(ctx.obj.get("settings"))
+        setup_sample_content()
+
+        # Show information about the initialized setup
+        show_info_post_init(builder)
+
+    except FileNotFoundError as e:
+        CLIInitError(
+            message=f"File not found: {e}",
+            hint="Check that all required template files exist in the installation directory.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)  # noqa: B904
+
+    except PermissionError as e:
+        CLIInitError(
+            message=f"Permission denied: {e}",
+            hint="Check that you have write permissions to the current directory.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)  # noqa: B904
+
+    except shutil.Error as e:
+        CLIInitError(
+            message=f"Error copying file: {e}",
+            hint="There may be an issue with file permissions or the files already exist.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)  # noqa: B904
+
+    except NornFlowAppError as e:
+        CLIInitError(
+            message=f"NornFlow error: {e}",
+            hint="There was an issue with the NornFlow configuration.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)  # noqa: B904
+
+    except Exception as e:
+        CLIInitError(
+            message=f"Unexpected error during initialization: {e}",
+            hint="This may be a bug. Please report it if the issue persists.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)  # noqa: B904
+
+
+def setup_builder(ctx: typer.Context) -> NornFlowBuilder:
+    """Set up and configure the NornFlowBuilder."""
+    builder = NornFlowBuilder()
     settings = ctx.obj.get("settings")
     if settings:
         builder.with_settings_path(settings)
+    return builder
 
-    # Display the banner message and prompt the user for confirmation
+
+def get_user_confirmation() -> bool:
+    """Display banner and get user confirmation to proceed."""
     display_banner()
     if not typer.confirm("Do you want to continue?", default=True):
         typer.secho("Initialization aborted.", fg=typer.colors.RED)
-        return
+        return False
+    return True
 
+
+def setup_directory_structure() -> None:
+    """Set up the main directory structure."""
     typer.secho(f"NornFlow will be initialized at {NORNIR_DEFAULT_CONFIG_DIR.parent}", fg=typer.colors.GREEN)
 
     if create_directory(NORNIR_DEFAULT_CONFIG_DIR):
@@ -56,9 +115,13 @@ def init(ctx: typer.Context) -> None:
             else:
                 shutil.copy(item, NORNIR_DEFAULT_CONFIG_DIR / item.name)
         typer.secho(
-            f"Created a sample 'nornir_configs' directory: {NORNIR_DEFAULT_CONFIG_DIR}", fg=typer.colors.GREEN
+            f"Created a sample 'nornir_configs' directory: {NORNIR_DEFAULT_CONFIG_DIR}",
+            fg=typer.colors.GREEN,
         )
 
+
+def setup_nornflow_config_file(settings: str) -> None:
+    """Set up the NornFlow configuration file."""
     if not os.getenv("NORNFLOW_CONFIG_FILE"):
         if not settings and not NORNFLOW_CONFIG_FILE.exists():
             shutil.copy(SAMPLE_NORNFLOW_FILE, NORNFLOW_CONFIG_FILE)
@@ -68,6 +131,9 @@ def init(ctx: typer.Context) -> None:
         else:
             typer.secho(f"Settings file already exists: {NORNFLOW_CONFIG_FILE}", fg=typer.colors.YELLOW)
 
+
+def setup_sample_content() -> None:
+    """Set up sample tasks, workflows, and filters directories."""
     create_directory_and_copy_sample_files(
         TASKS_DIR, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
     )
@@ -77,8 +143,6 @@ def init(ctx: typer.Context) -> None:
     )
 
     create_directory(FILTERS_DIR)
-
-    show_info_post_init(builder)
 
 
 def display_banner() -> None:

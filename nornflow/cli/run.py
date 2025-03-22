@@ -7,10 +7,12 @@ from typing import Any
 import typer
 
 from nornflow import NornFlowBuilder, WorkflowFactory
+from nornflow.cli.exceptions import CLIRunError
 from nornflow.constants import (
     NORNFLOW_SPECIAL_FILTER_KEYS,
     NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS,
 )
+from nornflow.exceptions import NornFlowAppError
 
 app = typer.Typer(help="Run NornFlow tasks and workflows")
 
@@ -261,52 +263,85 @@ def run(
     """
     Runs either a cataloged task or workflow - for workflows, the '.yaml'/'.yml' extension must be included.
     """
-    settings = ctx.obj.get("settings")
+    try:
+        settings = ctx.obj.get("settings")
 
-    # Parse args into dictionary if provided
-    parsed_args = parse_task_args(args) if args else {}
+        # Parse args into dictionary if provided
+        parsed_args = parse_task_args(args) if args else {}
 
-    # Parse inventory filters if provided
-    parsed_inventory_filters = parse_inventory_filters(inventory_filters) if inventory_filters else {}
+        # Parse inventory filters if provided
+        parsed_inventory_filters = parse_inventory_filters(inventory_filters) if inventory_filters else {}
 
-    # Combine all filter types into one dictionary
-    all_inventory_filters = parsed_inventory_filters.copy()
+        # Combine all filter types into one dictionary
+        all_inventory_filters = parsed_inventory_filters.copy()
 
-    # Add hosts/groups if provided through legacy options
-    legacy_filters_used = False
+        # Add hosts/groups if provided through legacy options
+        legacy_filters_used = False
 
-    # Handle both legacy filter options in a consistent way
-    legacy_options = {"hosts": hosts, "groups": groups}
-    for key, value in legacy_options.items():
-        if value:
-            legacy_filters_used = True
-            # Don't overwrite if already in inventory_filters
-            if key in all_inventory_filters:
-                typer.secho(
-                    f"Warning: Both --{key} and --inventory-filters with '{key}' key provided. "
-                    f"Using values from --inventory-filters.",
-                    fg=typer.colors.YELLOW,
-                )
-            else:
-                all_inventory_filters[key] = value
+        # Handle both legacy filter options in a consistent way
+        legacy_options = {"hosts": hosts, "groups": groups}
+        for key, value in legacy_options.items():
+            if value:
+                legacy_filters_used = True
+                # Don't overwrite if already in inventory_filters
+                if key in all_inventory_filters:
+                    typer.secho(
+                        f"Warning: Both --{key} and --inventory-filters with '{key}' key provided. "
+                        f"Using values from --inventory-filters.",
+                        fg=typer.colors.YELLOW,
+                    )
+                else:
+                    all_inventory_filters[key] = value
 
-    # Show deprecation warning for legacy filters
-    if legacy_filters_used:
+        # Show deprecation warning for legacy filters
+        if legacy_filters_used:
+            typer.secho(
+                "Warning: The --hosts and --groups options will be deprecated and removed in a future version. "  # noqa: E501
+                'Please use --inventory-filters instead (e.g., --inventory-filters "hosts=host1,host2" '
+                "or \"hosts=['host1', 'host2']\")",
+                fg=typer.colors.YELLOW,
+            )
+
+        builder = get_nornflow_builder(target, parsed_args, all_inventory_filters, dry_run, settings)
+
+        # Update the output message to include all filters
+        filter_info = f"filters: {all_inventory_filters}" if all_inventory_filters else "no filters"
         typer.secho(
-            "Warning: The --hosts and --groups options will be deprecated and removed in a future version. "
-            'Please use --inventory-filters instead (e.g., --inventory-filters "hosts=host1,host2" '
-            "or \"hosts=['host1', 'host2']\")",
-            fg=typer.colors.YELLOW,
+            f"Running: {target} (args: {parsed_args}, {filter_info}, dry-run: {dry_run})",
+            fg=typer.colors.GREEN,
         )
 
-    builder = get_nornflow_builder(target, parsed_args, all_inventory_filters, dry_run, settings)
+        nornflow = builder.build()
+        nornflow.run()
 
-    # Update the output message to include all filters
-    filter_info = f"filters: {all_inventory_filters}" if all_inventory_filters else "no filters"
-    typer.secho(
-        f"Running: {target} (args: {parsed_args}, {filter_info}, dry-run: {dry_run})",
-        fg=typer.colors.GREEN,
-    )
+    except NornFlowAppError as e:
+        CLIRunError(
+            message=f"NornFlow error while running {target}: {e}",
+            hint="Check your task configuration, inventory filters, and NornFlow setup.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)  # noqa: B904
 
-    nornflow = builder.build()
-    nornflow.run()
+    except FileNotFoundError as e:
+        CLIRunError(
+            message=f"File not found: {e}",
+            hint=f"Check that the file '{target}' exists and is accessible.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)  # noqa: B904
+
+    except PermissionError as e:
+        CLIRunError(
+            message=f"Permission denied: {e}",
+            hint="Check that you have sufficient permissions to access the required files.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)  # noqa: B904
+
+    except Exception as e:
+        CLIRunError(
+            message=f"Unexpected error while running {target}: {e}",
+            hint="This may be a bug. Please report it if the issue persists.",
+            original_exception=e,
+        ).show()
+        raise typer.Exit(code=2)  # noqa: B904

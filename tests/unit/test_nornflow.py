@@ -3,10 +3,10 @@ import pytest
 from nornflow import NornFlowBuilder
 from nornflow.exceptions import (
     CatalogModificationError,
+    DirectoryNotFoundError,
     EmptyTaskCatalogError,
-    LocalDirectoryNotFoundError,
     NornFlowInitializationError,
-    NornirConfigsModificationError,
+    NornirConfigError,
     SettingsModificationError,
 )
 from nornflow.nornflow import NornFlow
@@ -62,11 +62,11 @@ class TestNornFlowValidation:
         with pytest.raises(NornFlowInitializationError) as exc_info:
             NornFlow(nornflow_settings=settings)
 
-        assert isinstance(exc_info.value.__cause__, LocalDirectoryNotFoundError)
+        assert isinstance(exc_info.value.__cause__, DirectoryNotFoundError)
 
     def test_property_modifications(self, basic_nornflow):
         """Test that properties cannot be modified directly."""
-        with pytest.raises(NornirConfigsModificationError):
+        with pytest.raises(NornirConfigError):
             basic_nornflow.nornir_configs = {}
 
         with pytest.raises(SettingsModificationError):

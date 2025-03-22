@@ -5,7 +5,7 @@ from nornir.core import Nornir
 from nornir.core.processor import Processor
 
 from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL
-from nornflow.exceptions import NornirManagerProcessorsError
+from nornflow.exceptions import ProcessorError
 
 
 class NornirManager:
@@ -82,10 +82,10 @@ class NornirManager:
             Nornir: The filtered Nornir instance
 
         Raises:
-            NornirManagerProcessorsError: If no filters are provided
+            ProcessorError: If no filters are provided
         """
         if not kwargs:
-            raise NornirManagerProcessorsError("No filters informed.")
+            raise ProcessorError("No filters informed.")
 
         self.nornir = self.nornir.filter(**kwargs)
         return self.nornir
@@ -104,10 +104,10 @@ class NornirManager:
             Nornir: Nornir instance with processors applied
 
         Raises:
-            NornirManagerProcessorsError: If no processors are provided
+            ProcessorError: If no processors are provided
         """
         if not processors:
-            raise NornirManagerProcessorsError("No processors informed.")
+            raise ProcessorError("No processors informed.")
 
         self.nornir = self.nornir.with_processors(processors)
         return self.nornir

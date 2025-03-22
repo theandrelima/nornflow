@@ -8,7 +8,7 @@ from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
 
 from nornflow.exceptions import (
-    TaskDoesNotExistError,
+    TaskNotFoundError,
     WorkflowInitializationError,
     WorkflowInventoryFilterError,
 )
@@ -100,14 +100,14 @@ class Workflow:
             tasks_catalog (dict[str, Callable]): The tasks catalog discovered by NornFlow.
 
         Raises:
-            TaskDoesNotExistError: If any tasks in the workflow are not found in the tasks catalog.
+            TaskNotFoundError: If any tasks in the workflow are not found in the tasks catalog.
         """
         task_names = [task.name for task in self.tasks]
 
         missing_tasks = [task_name for task_name in task_names if task_name not in tasks_catalog]
 
         if missing_tasks:
-            raise TaskDoesNotExistError(missing_tasks)
+            raise TaskNotFoundError(missing_tasks)
 
     def _get_filtering_kwargs(self, filters_catalog: dict[str, Callable]) -> list[dict[str, Any]]:
         """
@@ -251,7 +251,7 @@ class Workflow:
 
         Args:
             nornir_manager (NornirManager): The NornirManager instance to apply filters to
-            **kwargs (Any): Additional keyword arguments for filtering (not currently used)
+            filters_catalog (dict[str, Callable]): Dictionary of available filter functions
         """
         filter_kwargs_list = self._get_filtering_kwargs(filters_catalog)
         if not filter_kwargs_list:
