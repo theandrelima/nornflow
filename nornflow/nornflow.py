@@ -22,8 +22,9 @@ from nornflow.exceptions import (
     TaskLoadingError,
 )
 from nornflow.nornir_manager import NornirManager
+from nornflow.processors import DefaultNornFlowProcessor
 from nornflow.settings import NornFlowSettings
-from nornflow.utils import import_module_from_path, is_nornir_filter, is_nornir_task
+from nornflow.utils import import_module_from_path, is_nornir_filter, is_nornir_task, load_processor
 from nornflow.workflow import Workflow, WorkflowFactory
 
 
@@ -70,6 +71,7 @@ class NornFlow:
             self._load_tasks_catalog()
             self._load_workflows_catalog()
             self._load_filters_catalog()
+            self._load_processors()
 
             # Create NornirManager instead of directly initializing Nornir
             self.nornir_manager = NornirManager(
@@ -83,6 +85,28 @@ class NornFlow:
         except Exception as e:
             # Wrap any other exception in NornFlowInitializationError
             raise NornFlowInitializationError(f"Failed to initialize NornFlow: {e!s}") from e
+
+    def _load_processors(self) -> None:
+        """
+        Load processors from settings or apply the default processor.
+        
+        This method checks the settings.processors list and loads each processor
+        configuration using the load_processor utility function. If no processors
+        are defined in settings, it initializes with the DefaultNornFlowProcessor.
+        
+        The loaded processors are stored in self._processors for later use during
+        workflow execution.
+        """
+        if self.settings.processors:
+            self._processors = []
+            
+            for processor_config in self.settings.processors:
+                processor = load_processor(processor_config)
+                self._processors.append(processor)
+        
+        else:
+            # Apply default processor if none are specified
+            self._processors = [DefaultNornFlowProcessor()]
 
     @property
     def nornir_configs(self) -> dict[str, Any]:
@@ -207,6 +231,26 @@ class NornFlow:
                 f"provided: {value}"
             )
         self._workflow = value
+
+    @property
+    def processors(self) -> list:
+        """
+        Get the list of processor instances that will be applied to workflows.
+
+        Returns:
+            list: List of processor instances used during workflow execution.
+        """
+        return self._processors
+
+    @processors.setter
+    def processors(self, _: Any) -> None:
+        """
+        Prevent setting the processors directly.
+
+        Raises:
+            SettingsModificationError: Always raised to prevent direct setting of processors.
+        """
+        raise NornFlowInitializationError(message="Processors cannot be set directly, but must be loaded from nornflow settings file.")
 
     def _load_tasks_catalog(self) -> None:
         """
@@ -409,7 +453,7 @@ class NornFlow:
         """
         self._ensure_workflow()
         # Pass nornir_manager, tasks_catalog, and filters_catalog to workflow.run
-        self.workflow.run(self.nornir_manager, self.tasks_catalog, self.filters_catalog)
+        self.workflow.run(self.nornir_manager, self.tasks_catalog, self.filters_catalog, self.processors)
 
 
 class NornFlowBuilder:

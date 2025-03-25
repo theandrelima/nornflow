@@ -6,10 +6,12 @@ from types import ModuleType
 from typing import Any, Literal
 
 import yaml
+from nornir.core.processor import Processor
 from nornir.core.inventory import Host
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 
 from nornflow.exceptions import ModuleImportError
+from nornflow.exceptions import ProcessorError
 
 
 def read_yaml_file(file_path: str) -> dict[str, Any]:
@@ -131,3 +133,40 @@ def is_nornir_filter(attr: Callable) -> bool:  # noqa: PLR0911
 
     except (ValueError, TypeError):
         return False
+
+
+def load_processor(processor_config: dict) -> Processor:
+    """
+    Dynamically load and instantiate a processor from config.
+    
+    Args:
+        processor_config: Dict with dotted_path and args keys
+        
+    Returns:
+        Instantiated processor
+        
+    Raises:
+        ProcessorError: If processor cannot be loaded or instantiated
+    """
+    try:
+        dotted_path = processor_config.get('dotted_path')
+        if not dotted_path:
+            raise ProcessorError("Missing dotted_path in processor configuration")
+            
+        args = processor_config.get('args', {})
+        
+        # Split the dotted path into module and class
+        module_path, class_name = dotted_path.rsplit('.', 1)
+        
+        # Import the module
+        module = importlib.import_module(module_path)
+        
+        # Get the class
+        processor_class = getattr(module, class_name)
+        
+        # Instantiate the processor
+        return processor_class(**args)
+    except (ImportError, AttributeError) as e:
+        raise ProcessorError(f"Failed to load processor {dotted_path}: {str(e)}")
+    except Exception as e:
+        raise ProcessorError(f"Error instantiating processor {dotted_path}: {str(e)}")

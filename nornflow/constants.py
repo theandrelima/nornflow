@@ -11,6 +11,7 @@ NONRFLOW_SETTINGS_OPTIONAL = {
     "local_workflows_dirs": [],
     "local_filters_dirs": [],
     "imported_packages": [],
+    "processors": [],
 }
 
 # Used to check if the kwargs passed to a NornFlow initializer are valid.
@@ -22,6 +23,7 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "local_workflows_dirs",
     "local_filters_dirs",
     "imported_packages",
+    "processors",
 )
 
 NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS = (".yaml", ".yml")
