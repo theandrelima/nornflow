@@ -41,18 +41,20 @@ imported_packages: []
 # If set to True, NornFlow will invoke Nornir in dry-run mode
 dry_run: False
 
-# List of Nornir processor configurations to be applied during task/workflow execution.
+# List of Nornir processors to be applied during task/workflow execution.
 # If not provided, NornFlow will default to using only the DefaultNornFlowProcessor
 # which takes no arguments.
 #
 # Structure:
-#   - dotted_path: Full Python import path to the processor class
-#     args: Dictionary of keyword arguments passed to the processor constructor
+#   - class: Full python dotted path to the processor class
+#     args: An optional dictionary of keyword arguments passed to 
+#           the processor constructor, if it acceopts any.
 #
 # IMPORTANT: If you specify custom processors, the DefaultNornFlowProcessor will NOT
 # be automatically included - you must explicitly add it if you still want its functionality.
 #
-# NOTE: Workflow files can define their own 'processors' section with the same structure.
+# NOTE: Workflow files can define their own 'processors' section with this same structure.
 # Workflow-level processor configurations will OVERRIDE this global configuration (not merge with it).
 processors:
-  - dotted_path: "nornflow.processors.DefaultNornFlowProcessor"
+  - class: "nornflow.processors.DefaultNornFlowProcessor"
+    args: {}

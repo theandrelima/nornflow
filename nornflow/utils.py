@@ -140,7 +140,7 @@ def load_processor(processor_config: dict) -> Processor:
     Dynamically load and instantiate a processor from config.
     
     Args:
-        processor_config: Dict with dotted_path and args keys
+        processor_config: Dict with class and args keys
         
     Returns:
         Instantiated processor
@@ -149,9 +149,9 @@ def load_processor(processor_config: dict) -> Processor:
         ProcessorError: If processor cannot be loaded or instantiated
     """
     try:
-        dotted_path = processor_config.get('dotted_path')
+        dotted_path = processor_config.get('class')
         if not dotted_path:
-            raise ProcessorError("Missing dotted_path in processor configuration")
+            raise ProcessorError("Missing class in processor configuration")
             
         args = processor_config.get('args', {})
         
