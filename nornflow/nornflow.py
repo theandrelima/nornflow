@@ -24,7 +24,14 @@ from nornflow.exceptions import (
 from nornflow.nornir_manager import NornirManager
 from nornflow.processors import DefaultNornFlowProcessor
 from nornflow.settings import NornFlowSettings
-from nornflow.utils import import_module_from_path, is_nornir_filter, is_nornir_task, load_processor
+from nornflow.utils import (
+    discover_items_in_dir,
+    process_module_attributes,
+    import_module_from_path, 
+    is_nornir_filter, 
+    is_nornir_task, 
+    load_processor
+)
 from nornflow.workflow import Workflow, WorkflowFactory
 
 
@@ -258,40 +265,23 @@ class NornFlow:
         all Nornir tasks from directories specified in the NornFlow configuration.
         """
         self._tasks_catalog = {}
+        
         for task_dir in self.settings.local_tasks_dirs:
-            self._discover_tasks_in_dir(task_dir)
+            try:
+                # Use the new utility function
+                discover_items_in_dir(
+                    task_dir, 
+                    lambda module: self._register_nornir_tasks_from_module(module),
+                    "tasks"
+                )
+            except DirectoryNotFoundError:
+                # Just continue if directory doesn't exist
+                pass
+            except Exception as e:
+                raise TaskLoadingError(f"Error loading tasks: {str(e)}") from e
 
         if not self._tasks_catalog:
             raise EmptyTaskCatalogError()
-
-    def _discover_tasks_in_dir(self, task_dir: str) -> None:
-        """
-        Discover and load tasks from all Python modules in a specific directory.
-
-        Args:
-            task_dir (str): Path to the directory containing task files.
-
-        Raises:
-            DirectoryNotFoundError: If the specified directory does not exist.
-            TaskLoadingError: If there is an error loading tasks from a file.
-        """
-        task_path = Path(task_dir)
-        if not task_path.is_dir():
-            raise DirectoryNotFoundError(
-                directory=task_dir, extra_message="Couldn't load tasks."
-            )  # Changed from LocalDirectoryNotFoundError
-
-        try:
-            for py_file in task_path.rglob("*.py"):
-                module_name = py_file.stem
-                module_path = str(py_file)
-                try:
-                    module = import_module_from_path(module_name, module_path)
-                    self._register_nornir_tasks_from_module(module)
-                except Exception as e:
-                    raise ModuleImportError(module_name, module_path, str(e)) from e
-        except Exception as e:
-            raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e
 
     def _register_nornir_tasks_from_module(self, module: Any) -> None:
         """
@@ -300,10 +290,11 @@ class NornFlow:
         Args:
             module (Any): Imported module.
         """
-        for attr_name in dir(module):
-            attr = getattr(module, attr_name)
-            if is_nornir_task(attr):
-                self._tasks_catalog[attr_name] = attr
+        process_module_attributes(
+            module,
+            is_nornir_task,
+            lambda attr_name, attr: self._tasks_catalog.update({attr_name: attr})
+        )
 
     def _load_filters_catalog(self) -> None:
         """
@@ -324,7 +315,17 @@ class NornFlow:
         # Phase 2: Load filters from local directories (can override built-ins)
         if hasattr(self.settings, "local_filters_dirs"):
             for filter_dir in self.settings.local_filters_dirs:
-                self._discover_filters_in_dir(filter_dir)
+                try:
+                    discover_items_in_dir(
+                        filter_dir,
+                        lambda module: self._register_nornir_filters_from_module(module),
+                        "filters"
+                    )
+                except DirectoryNotFoundError:
+                    # Just continue if directory doesn't exist
+                    pass
+                except Exception as e:
+                    raise FilterLoadingError(f"Error loading filters: {str(e)}") from e
 
     def _discover_filters_in_dir(self, filter_dir: str) -> None:
         """
@@ -365,17 +366,15 @@ class NornFlow:
         Args:
             module (Any): Imported module.
         """
+        def process_filter(attr_name: str, attr: Callable) -> None:
+            # Get the function signature to extract parameter names
+            sig = inspect.signature(attr)
+            # Skip the first parameter (host) and get remaining parameter names
+            param_names = list(sig.parameters.keys())[1:]
+            # Store as tuple: (function_object, parameter_names)
+            self._filters_catalog[attr_name] = (attr, param_names)
 
-        for attr_name in dir(module):
-            attr = getattr(module, attr_name)
-            if is_nornir_filter(attr):
-                # Get the function signature to extract parameter names
-                sig = inspect.signature(attr)
-                # Skip the first parameter (host) and get remaining parameter names
-                param_names = list(sig.parameters.keys())[1:]
-
-                # Store as tuple: (function_object, parameter_names)
-                self._filters_catalog[attr_name] = (attr, param_names)
+        process_module_attributes(module, is_nornir_filter, process_filter)
 
     def _load_workflows_catalog(self) -> None:
         """

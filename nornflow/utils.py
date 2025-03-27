@@ -195,3 +195,50 @@ def convert_lists_to_tuples(dictionary: HashableDict[str, Any] | None) -> Hashab
         {key: tuple(value) if isinstance(value, list) else value 
          for key, value in dictionary.items()}
     )
+
+
+def discover_items_in_dir(dir_path: str, register_func: Callable, error_context: str) -> None:
+    """
+    Discover and register items from Python modules in a directory.
+    
+    Args:
+        dir_path: Path to the directory to scan
+        register_func: Function to call for each module found
+        error_context: Context for error messages (e.g., "tasks", "filters")
+        
+    Raises:
+        DirectoryNotFoundError: If directory doesn't exist
+        ModuleImportError: If module import fails
+    """
+    from nornflow.exceptions import DirectoryNotFoundError
+    
+    path = Path(dir_path)
+    if not path.is_dir():
+        raise DirectoryNotFoundError(
+            directory=dir_path, 
+            extra_message=f"Couldn't load {error_context}."
+        )
+
+    for py_file in path.rglob("*.py"):
+        module_name = py_file.stem
+        module_path = str(py_file)
+        try:
+            module = import_module_from_path(module_name, module_path)
+            register_func(module)
+        except Exception as e:
+            raise ModuleImportError(module_name, module_path, str(e)) from e
+
+
+def process_module_attributes(module: Any, predicate_func: Callable, process_func: Callable) -> None:
+    """
+    Process module attributes that match a predicate function.
+    
+    Args:
+        module: Module to process
+        predicate_func: Function that determines if an attribute should be processed
+        process_func: Function that processes the attribute
+    """
+    for attr_name in dir(module):
+        attr = getattr(module, attr_name)
+        if predicate_func(attr):
+            process_func(attr_name, attr)
