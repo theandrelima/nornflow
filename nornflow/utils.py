@@ -13,6 +13,8 @@ from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from nornflow.exceptions import ModuleImportError
 from nornflow.exceptions import ProcessorError
 
+from pydantic_serdes.custom_collections import HashableDict
+
 
 def read_yaml_file(file_path: str) -> dict[str, Any]:
     """
@@ -170,3 +172,26 @@ def load_processor(processor_config: dict) -> Processor:
         raise ProcessorError(f"Failed to load processor {dotted_path}: {str(e)}")
     except Exception as e:
         raise ProcessorError(f"Error instantiating processor {dotted_path}: {str(e)}")
+    
+
+def convert_lists_to_tuples(dictionary: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:
+    """
+    Convert any lists in dictionary values to tuples for serialization.
+    
+    This is a common operation needed for HashableDict fields in models
+    to ensure they can be properly serialized.
+    
+    Args:
+        dictionary (HashableDict[str, Any] | None): The dictionary to process.
+        
+    Returns:
+        HashableDict[str, Any] | None: A new HashableDict with lists converted to tuples,
+                                      or None if input was None.
+    """
+    if dictionary is None:
+        return None
+        
+    return HashableDict(
+        {key: tuple(value) if isinstance(value, list) else value 
+         for key, value in dictionary.items()}
+    )

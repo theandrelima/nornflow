@@ -4,6 +4,8 @@ from pydantic import field_validator
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.models import PydanticSerdesBaseModel
 
+from nornflow.utils import convert_lists_to_tuples
+
 
 class TaskModel(PydanticSerdesBaseModel):
     _key = (
@@ -42,12 +44,7 @@ class TaskModel(PydanticSerdesBaseModel):
         Returns:
             HashableDict[str, Any] | None: The validated args with lists converted to tuples.
         """
-        if v is None:
-            return v
-
-        return HashableDict(
-            {key: tuple(value) if isinstance(value, list) else value for key, value in v.items()}
-        )
+        return convert_lists_to_tuples(v)
 
 
 class WorkflowModel(PydanticSerdesBaseModel):
@@ -86,20 +83,10 @@ class WorkflowModel(PydanticSerdesBaseModel):
         """
         Convert lists in inventory_filters to tuples for serialization.
 
-        With the enhanced filtering capabilities, this validator now accepts any keys
-        in the inventory_filters dictionary, allowing for both special filters ('hosts', 'groups')
-        and direct attribute filtering.
-
         Args:
             v (HashableDict[str, Any] | None): The inventory_filters value to validate.
 
         Returns:
             HashableDict[str, Any] | None: The inventory_filters with lists converted to tuples.
         """
-        if v is None:
-            return v
-
-        # Convert any lists in values to tuples
-        return HashableDict(
-            {key: tuple(value) if isinstance(value, list) else value for key, value in v.items()}
-        )
+        return convert_lists_to_tuples(v)
