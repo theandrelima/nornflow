@@ -12,6 +12,7 @@
   - [Cataloging Filters](#cataloging-filters)
   - [Running a Single Task](#running-a-single-task)
   - [Running a Workflow](#running-a-workflow)
+  - [Task Execution and Output](#task-execution-and-output)
 
 ## Installation
 
@@ -391,6 +392,68 @@ While a Task must exist in the TASK CATALOG for NornFlow to run it, the WORKFLOW
 Still, there are real benefits for properly cataloging workflows:
 - **Organization**: Set locations for workflows make them easy to find.
 - **Less typing**: Run cataloged workflows by name instead of the full file path.
+
+
+## Task Execution and Output
+
+When executing tasks or workflows, NornFlow uses **processors** to manage how task execution is displayed and tracked. By default, the `DefaultNornFlowProcessor` provides:
+
+- Colorful console output showing task execution progress
+- Timing information for each task
+- Success/failure statistics
+- Summary reports after execution completes
+
+Here's an example of a summary reports after execution completes with the default processor output:
+
+```
+(... task outputs omitted for brevity...)
+
+━━━ EXECUTION SUMMARY ━━━
+
+Time Statistics:
+  Started at:  09:15:23.456
+  Finished at: 09:15:25.789
+  Duration:    2333ms (2.33 seconds)
+
+Task Statistics:
+  Unique Tasks:    3
+  Task Executions: 12
+
+Execution Results:
+  Successful:  12 (100.0%)
+  Failed:      0 (0.0%)
+```
+
+### Advanced: Custom Processors
+
+For more advanced use cases, you can pass custom Processors:  
+
+#### Using the CLI
+```bash
+nornflow run backup_configs --processors "class='mypackage.CustomProcessor',args={'verbose':True}"
+```
+
+#### Directly in workflow YAML file
+```yaml
+workflow:
+  processors:
+      #since 'processors' is defined, if I want to also avail of DefaultNornFlowProcessor, it needs to be included in the list
+      - class: "nornflow.processors.DefaultNornFlowProcessor"
+      - class: "mypackage.CustomProcessor"
+        args:
+          verbose: true
+          log_level: "INFO"
+```
+See [How to Write Workflows](how_to_write_workflows.md) for more details on adding a `processors` section to your workflow YAML file.  
+
+#### Global nornflow.yaml settings
+
+```yaml
+processors:
+  - class: "mypackage.internal_folder.processor_module.CustomProcessor"
+    args: {} # include args as dict. If none needs to be passed, either pass an empty dict, or entirely omit the 'args' key here.
+```
+Refer to the [Processors](./nornflow_settings.md#processors) section in settings documentation for detailed infor about this.  
 
   
   <div align="center">

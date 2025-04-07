@@ -62,7 +62,7 @@ class TestNornFlowValidation:
         with pytest.raises(NornFlowInitializationError) as exc_info:
             NornFlow(nornflow_settings=settings)
 
-        assert isinstance(exc_info.value.__cause__, DirectoryNotFoundError)
+        assert isinstance(exc_info.value.__cause__, EmptyTaskCatalogError)
 
     def test_property_modifications(self, basic_nornflow):
         """Test that properties cannot be modified directly."""

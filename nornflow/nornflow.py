@@ -22,8 +22,16 @@ from nornflow.exceptions import (
     TaskLoadingError,
 )
 from nornflow.nornir_manager import NornirManager
+from nornflow.processors import DefaultNornFlowProcessor
 from nornflow.settings import NornFlowSettings
-from nornflow.utils import import_module_from_path, is_nornir_filter, is_nornir_task
+from nornflow.utils import (
+    discover_items_in_dir,
+    import_module_from_path,
+    is_nornir_filter,
+    is_nornir_task,
+    load_processor,
+    process_module_attributes,
+)
 from nornflow.workflow import Workflow, WorkflowFactory
 
 
@@ -58,6 +66,9 @@ class NornFlow:
         **kwargs: Any,
     ):
         try:
+            # Extract processors if specified in kwargs for CLI support
+            self._kwargs_processors = kwargs.pop("processors", None)
+
             # Some kwargs should only be set through the YAML settings file.
             self._check_invalid_kwargs(kwargs)
 
@@ -70,6 +81,7 @@ class NornFlow:
             self._load_tasks_catalog()
             self._load_workflows_catalog()
             self._load_filters_catalog()
+            self._load_processors()
 
             # Create NornirManager instead of directly initializing Nornir
             self.nornir_manager = NornirManager(
@@ -83,6 +95,35 @@ class NornFlow:
         except Exception as e:
             # Wrap any other exception in NornFlowInitializationError
             raise NornFlowInitializationError(f"Failed to initialize NornFlow: {e!s}") from e
+
+    def _load_processors(self) -> None:
+        """
+        Load processors from various sources by precedence:
+        1. Processors passed through kwargs - Likely coming from CLI
+        2. Settings file processors (settings.processors)
+        3. Default processor (DefaultNornFlowProcessor)
+
+        The loaded processors are stored in self._processors for later use during
+        workflow execution.
+        """
+        # Check if processors were directly specified in constructor kwargs (CLI processors)
+        if self._kwargs_processors:
+            self._processors = []
+            for processor_config in self._kwargs_processors:
+                processor = load_processor(processor_config)
+                self._processors.append(processor)
+
+        # Otherwise, check if processors are defined in settings
+        elif self.settings.processors:
+            self._processors = []
+
+            for processor_config in self.settings.processors:
+                processor = load_processor(processor_config)
+                self._processors.append(processor)
+
+        # If no processors are specified anywhere, use default
+        else:
+            self._processors = [DefaultNornFlowProcessor()]
 
     @property
     def nornir_configs(self) -> dict[str, Any]:
@@ -208,12 +249,35 @@ class NornFlow:
             )
         self._workflow = value
 
+    @property
+    def processors(self) -> list:
+        """
+        Get the list of processor instances that will be applied to workflows.
+
+        Returns:
+            list: List of processor instances used during workflow execution.
+        """
+        return self._processors
+
+    @processors.setter
+    def processors(self, _: Any) -> None:
+        """
+        Prevent setting the processors directly.
+
+        Raises:
+            SettingsModificationError: Always raised to prevent direct setting of processors.
+        """
+        raise NornFlowInitializationError(
+            message="Processors cannot be set directly, but must be loaded from nornflow settings file."
+        )
+
     def _load_tasks_catalog(self) -> None:
         """
         Entrypoint method that will put in motion the logic to discover and load
         all Nornir tasks from directories specified in the NornFlow configuration.
         """
         self._tasks_catalog = {}
+
         for task_dir in self.settings.local_tasks_dirs:
             self._discover_tasks_in_dir(task_dir)
 
@@ -222,32 +286,21 @@ class NornFlow:
 
     def _discover_tasks_in_dir(self, task_dir: str) -> None:
         """
-        Discover and load tasks from all Python modules in a specific directory.
+        Discover and load tasks from a specific directory.
 
         Args:
-            task_dir (str): Path to the directory containing task files.
-
-        Raises:
-            DirectoryNotFoundError: If the specified directory does not exist.
-            TaskLoadingError: If there is an error loading tasks from a file.
+            task_dir (str): Path to directory containing tasks.
         """
-        task_path = Path(task_dir)
-        if not task_path.is_dir():
-            raise DirectoryNotFoundError(
-                directory=task_dir, extra_message="Couldn't load tasks."
-            )  # Changed from LocalDirectoryNotFoundError
-
         try:
-            for py_file in task_path.rglob("*.py"):
-                module_name = py_file.stem
-                module_path = str(py_file)
-                try:
-                    module = import_module_from_path(module_name, module_path)
-                    self._register_nornir_tasks_from_module(module)
-                except Exception as e:
-                    raise ModuleImportError(module_name, module_path, str(e)) from e
+            # Use the utility function
+            discover_items_in_dir(
+                task_dir, lambda module: self._register_nornir_tasks_from_module(module), "tasks"
+            )
+        except DirectoryNotFoundError:
+            # Just continue if directory doesn't exist
+            pass
         except Exception as e:
-            raise TaskLoadingError(f"Error loading tasks from file '{py_file}': {e}") from e
+            raise TaskLoadingError(f"Error loading tasks: {e!s}") from e
 
     def _register_nornir_tasks_from_module(self, module: Any) -> None:
         """
@@ -256,10 +309,9 @@ class NornFlow:
         Args:
             module (Any): Imported module.
         """
-        for attr_name in dir(module):
-            attr = getattr(module, attr_name)
-            if is_nornir_task(attr):
-                self._tasks_catalog[attr_name] = attr
+        process_module_attributes(
+            module, is_nornir_task, lambda attr_name, attr: self._tasks_catalog.update({attr_name: attr})
+        )
 
     def _load_filters_catalog(self) -> None:
         """
@@ -280,7 +332,26 @@ class NornFlow:
         # Phase 2: Load filters from local directories (can override built-ins)
         if hasattr(self.settings, "local_filters_dirs"):
             for filter_dir in self.settings.local_filters_dirs:
-                self._discover_filters_in_dir(filter_dir)
+                self._discover_filters_in_single_dir(filter_dir)
+
+    def _discover_filters_in_single_dir(self, filter_dir: str) -> None:
+        """
+        Discover and load filters from a specific directory.
+
+        Args:
+            filter_dir (str): Path to directory containing filters.
+        """
+        try:
+            discover_items_in_dir(
+                filter_dir,
+                lambda module: self._register_nornir_filters_from_module(module),
+                "filters",
+            )
+        except DirectoryNotFoundError:
+            # Just continue if directory doesn't exist
+            pass
+        except Exception as e:
+            raise FilterLoadingError(f"Error loading filters: {e!s}") from e
 
     def _discover_filters_in_dir(self, filter_dir: str) -> None:
         """
@@ -322,16 +393,15 @@ class NornFlow:
             module (Any): Imported module.
         """
 
-        for attr_name in dir(module):
-            attr = getattr(module, attr_name)
-            if is_nornir_filter(attr):
-                # Get the function signature to extract parameter names
-                sig = inspect.signature(attr)
-                # Skip the first parameter (host) and get remaining parameter names
-                param_names = list(sig.parameters.keys())[1:]
+        def process_filter(attr_name: str, attr: Callable) -> None:
+            # Get the function signature to extract parameter names
+            sig = inspect.signature(attr)
+            # Skip the first parameter (host) and get remaining parameter names
+            param_names = list(sig.parameters.keys())[1:]
+            # Store as tuple: (function_object, parameter_names)
+            self._filters_catalog[attr_name] = (attr, param_names)
 
-                # Store as tuple: (function_object, parameter_names)
-                self._filters_catalog[attr_name] = (attr, param_names)
+        process_module_attributes(module, is_nornir_filter, process_filter)
 
     def _load_workflows_catalog(self) -> None:
         """
@@ -406,10 +476,19 @@ class NornFlow:
     def run(self) -> None:
         """
         Runs the NornFlow job.
+
+        If processors were specified via kwargs (including CLI), they take precedence over
+        workflow-specific processors, which in turn take precedence over global processors from settings.
         """
         self._ensure_workflow()
+
+        # If kwargs processors specified, disable workflow-specific processors
+        if self._kwargs_processors and self.workflow.processors_config:
+            # Simply disable workflow processors to enforce kwargs precedence
+            self.workflow.processors_config = None
+
         # Pass nornir_manager, tasks_catalog, and filters_catalog to workflow.run
-        self.workflow.run(self.nornir_manager, self.tasks_catalog, self.filters_catalog)
+        self.workflow.run(self.nornir_manager, self.tasks_catalog, self.filters_catalog, self.processors)
 
 
 class NornFlowBuilder:
@@ -443,6 +522,7 @@ class NornFlowBuilder:
         self._workflow_dict: dict[str, Any] | None = None
         self._workflow_object: Workflow | None = None
         self._workflow_name: str | None = None
+        self._processors: list[dict[str, Any]] | None = None
         self._kwargs: dict[str, Any] = {}
 
     def with_settings_object(self, settings_object: NornFlowSettings) -> "NornFlowBuilder":
@@ -527,6 +607,20 @@ class NornFlowBuilder:
         self._workflow_name = workflow_name
         return self
 
+    def with_processors(self, processors: list[dict[str, Any]]) -> "NornFlowBuilder":
+        """
+        Set the processor configurations for the builder.
+
+        Args:
+            processors (list[dict[str, Any]]): List of processor configurations.
+                Each must be a dict with 'class' and optional 'args' keys.
+
+        Returns:
+            NornFlowBuilder: The builder instance.
+        """
+        self._processors = processors
+        return self
+
     def with_kwargs(self, **kwargs: Any) -> "NornFlowBuilder":
         """
         Set additional keyword arguments for the builder.
@@ -557,5 +651,9 @@ class NornFlowBuilder:
                     workflow_path=self._workflow_path, workflow_dict=self._workflow_dict
                 )
                 workflow = workflow_factory.create()
+
+        # Add processors to kwargs if specified
+        if self._processors:
+            self._kwargs["processors"] = self._processors
 
         return NornFlow(nornflow_settings=self._settings, workflow=workflow, **self._kwargs)

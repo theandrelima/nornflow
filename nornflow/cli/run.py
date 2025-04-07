@@ -155,8 +155,55 @@ def parse_inventory_filters(value: str | None) -> dict[str, Any]:
     return parse_key_value_pairs(value, "inventory filters")
 
 
+def parse_processors(value: str | None) -> list[dict[str, Any]]:
+    """
+    Parse a string of processor configurations into a list of processor configs.
+
+    Format examples:
+      - Single processor: "class='nornflow.processors.DefaultNornFlowProcessor',args={}"
+      - Multiple processors:
+        "class='module.Processor1',args={};class='module.Processor2',args={'key':'value'}"
+
+    Args:
+        value: String describing processor configurations
+
+    Returns:
+        List of processor configurations
+    """
+    if not value:
+        return []
+
+    result = []
+    # Split by semicolons to separate multiple processors
+    processor_strings = value.split(";")
+
+    for proc_str in processor_strings:
+        if not proc_str.strip():
+            continue
+
+        # Parse as key-value pairs
+        proc_dict = parse_key_value_pairs(proc_str, "processor")
+
+        # Validate required 'class' key
+        if "class" not in proc_dict:
+            raise typer.BadParameter("Each processor must have a 'class' key specified")
+
+        # If args not specified, add empty dict
+        if "args" not in proc_dict:
+            proc_dict["args"] = {}
+
+        result.append(proc_dict)
+
+    return result
+
+
 def get_nornflow_builder(
-    target: str, args: dict, inventory_filters: dict, dry_run: bool, settings_file: str = ""
+    target: str,
+    args: dict,
+    inventory_filters: dict,
+    dry_run: bool,
+    settings_file: str = "",
+    processors: list[dict[str, Any]] | None = None,
 ) -> NornFlowBuilder:
     """
     Build the workflow using the provided target, arguments, inventory filters, and dry-run option.
@@ -167,16 +214,24 @@ def get_nornflow_builder(
         inventory_filters (dict): The inventory filters.
         dry_run (bool): The dry-run option.
         settings_file (str): The path to a YAML settings file for NornFlowSettings.
+        processors (list): The processor configurations.
 
     Returns:
         NornFlowBuilder: The builder instance with the configured workflow.
     """
+    processors = processors or []
+
     builder = NornFlowBuilder()
 
     if settings_file:
         builder.with_settings_path(settings_file)
 
     nornflow_kwargs = {"dry_run": dry_run} if dry_run else {}
+
+    # Add processors to kwargs if specified
+    if processors:
+        nornflow_kwargs["processors"] = processors
+
     builder.with_kwargs(**nornflow_kwargs)
 
     if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS):
@@ -248,6 +303,14 @@ DRY_RUN_OPTION = typer.Option(
     help="Run in dry-run mode [default: False]",
 )
 
+PROCESSORS_OPTION = typer.Option(
+    None,
+    "--processors",
+    "-p",
+    help="Processor configurations in format: \"class='package.ProcessorClass',args={'key':'value'}\". "
+    "Multiple processors can be separated with semicolons.",
+)
+
 
 # TODO: Eventually, decommission the legacy options.
 @app.command()
@@ -258,6 +321,7 @@ def run(
     hosts: list[str] | None = HOSTS_OPTION,
     groups: list[str] | None = GROUPS_OPTION,
     inventory_filters: str | None = INVENTORY_FILTERS_OPTION,
+    processors: str | None = PROCESSORS_OPTION,
     dry_run: bool = DRY_RUN_OPTION,
 ) -> None:
     """
@@ -271,6 +335,9 @@ def run(
 
         # Parse inventory filters if provided
         parsed_inventory_filters = parse_inventory_filters(inventory_filters) if inventory_filters else {}
+
+        # Parse processors if provided
+        parsed_processors = parse_processors(processors) if processors else []
 
         # Combine all filter types into one dictionary
         all_inventory_filters = parsed_inventory_filters.copy()
@@ -302,12 +369,17 @@ def run(
                 fg=typer.colors.YELLOW,
             )
 
-        builder = get_nornflow_builder(target, parsed_args, all_inventory_filters, dry_run, settings)
+        builder = get_nornflow_builder(
+            target, parsed_args, all_inventory_filters, dry_run, settings, parsed_processors
+        )
+
+        # Calculate processor info for display
+        processor_info = f", processors: {parsed_processors}" if parsed_processors else ""
 
         # Update the output message to include all filters
         filter_info = f"filters: {all_inventory_filters}" if all_inventory_filters else "no filters"
         typer.secho(
-            f"Running: {target} (args: {parsed_args}, {filter_info}, dry-run: {dry_run})",
+            f"Running: {target} (args: {parsed_args}, {filter_info}, dry-run: {dry_run}{processor_info})",
             fg=typer.colors.GREEN,
         )
 

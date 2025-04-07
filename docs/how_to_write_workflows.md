@@ -14,6 +14,10 @@ Workflows in NornFlow are defined using YAML files. Such files contain the confi
   - [Ways to Define Filter Parameters](#ways-to-define-filter-parameters)
   - [Creating Custom Filters](#creating-custom-filters)
   - [Example: Combined Filtering Strategy](#example-combined-filtering-strategy)
+- [Workflow Processors](#workflow-processors)
+  - [Processor Configuration](#processor-configuration)
+  - [Processor Precedence](#processor-precedence)
+  - [Example](#example)
 - [Examples](#examples)
   - [Minimal Valid Workflow](#minimal-valid-workflow)
   - [Complete Workflow Example](#complete-workflow-example)
@@ -55,6 +59,9 @@ workflow:
     - **<custom_filter>**: A filter function from your filters catalog
       - Can be defined with no parameters, a dictionary of parameters, a single value, or a list
     - **<attribute_name>**: Any attribute from your host data for direct filtering (value must match the attribute type)
+  - **processors**: List of processor configurations to use for this workflow (optional)
+    - **class**: Full Python import path to the processor class
+    - **args**: Dictionary of keyword arguments passed to the processor constructor
   - **tasks**:
     - **args**: Arguments to pass to the task function when it is called (optional, dictionary)
 
@@ -71,6 +78,9 @@ workflow:
 | workflow.inventory_filters.groups       | No        | List of strings            | Group names to include  (built-in filter)     |
 | workflow.inventory_filters.<custom_filter> | No    | Boolean/Dict/List/Value    | Custom filter with optional parameters         |
 | workflow.inventory_filters.<attribute>  | No        | Any                        | Direct attribute filter for host selection    |
+| workflow.processors                     | No        | List of objects            | List of processor configurations              |
+| workflow.processors[].class             | Yes       | String                     | Python import path to processor class         |
+| workflow.processors[].args              | No        | Dictionary                 | Arguments to pass to processor constructor    |
 | workflow.tasks                          | Yes       | List of dictionaries       | List of tasks to execute                      |
 | workflow.tasks[].name                   | Yes       | String                     | The name of the task                          |
 | workflow.tasks[].args                   | No        | Dictionary                 | Arguments to pass to the task                 |
@@ -155,6 +165,41 @@ workflow:
     - name: upgrade_os
 ```
 
+## Workflow Processors
+
+You can define custom processors for a specific workflow to control task output formatting, execution tracking, and more.
+
+### Processor Configuration
+
+Processors are configured using these fields:
+- **class**: The full Python import path to the processor class
+- **args**: Optional dictionary of keyword arguments for the processor's constructor
+
+### Processor Precedence
+
+When using processors in workflows:
+1. Workflow-specific processors override global processors defined in nornflow.yaml
+2. CLI processors (specified with `--processors`) override workflow-specific processors
+3. If no processors are defined, the DefaultNornFlowProcessor is used
+
+### Example
+
+```yaml
+workflow:
+  name: "My Workflow"
+  processors:
+    - class: "nornflow.processors.DefaultNornFlowProcessor"
+      args: {}
+    - class: "mypackage.CustomLogProcessor"
+      args:
+        log_file: "workflow-output.log"
+        verbose: true
+  tasks:
+    - name: my_task
+```
+
+For more details on processors, see the Processors section in the settings documentation.
+
 ## Examples
 
 ## Minimal Valid Workflow
@@ -178,7 +223,13 @@ workflow:
     platform: "ios"
     vendor: "cisco"
     site_code: "hq"
-
+  processors:
+    #since 'processors' is defined, to still avail of DefaultNornFlowProcessor, it needs to be explicitly included in the list
+    - class: "nornflow.processors.DefaultNornFlowProcessor"
+    - class: "mypackage.CustomProcessor"
+      args:
+        verbose: true
+        log_level: "INFO"
   tasks:
     - name: gather_facts
 

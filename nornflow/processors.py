@@ -195,7 +195,7 @@ class DefaultNornFlowProcessor(Processor):
             print(f"  {Fore.RED}Failed:      {Style.BRIGHT}{self.failed_executions} ({failure_percent:.1f}%)")
             print()
 
-            # VISUAL PROGRESS BAR
+            # VISUAL GREEN/RED STATUS BAR
             bar = f"{Back.GREEN}{' ' * success_bars}{Back.RED}{' ' * failure_bars}{Style.RESET_ALL}"
             print(f"  {bar}")
             print()

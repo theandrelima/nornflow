@@ -4,6 +4,9 @@ workflow:
   inventory_filters: 
     hosts:
     groups:
+  processors:
+    - class: "nornflow.processors.DefaultNornFlowProcessor"  # this is already the default configuration
+      args: {} # DefaultNornFlowProcessor doesnt take any init params
   
   tasks:
     - name: hello_world
