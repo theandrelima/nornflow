@@ -8,6 +8,8 @@ from nornflow.nornflow import NornFlow
 from nornflow.settings import NornFlowSettings
 from nornflow.workflow import Workflow
 
+from tests.unit.test_processors_utils import TestProcessor, TestProcessor2
+
 
 @pytest.fixture
 def valid_workflow_dict(request):
@@ -125,3 +127,35 @@ def mock_init_nornir(mock_nornir):
     """Patch InitNornir to return our mock Nornir instance."""
     with patch("nornflow.nornir_manager.InitNornir", return_value=mock_nornir) as mock_init:
         yield mock_init
+
+
+@pytest.fixture
+def test_processor():
+    """Create a TestProcessor instance."""
+    return TestProcessor(name="TestProcessor")
+
+
+@pytest.fixture
+def test_processor_config():
+    """Create a processor configuration dict for TestProcessor."""
+    return {
+        "class": "tests.unit.test_processors_utils.TestProcessor",
+        "args": {"name": "ConfiguredProcessor", "verbose": True}
+    }
+
+
+@pytest.fixture
+def test_processor2_config():
+    """Create a processor configuration dict for TestProcessor2."""
+    return {
+        "class": "tests.unit.test_processors_utils.TestProcessor2",
+        "args": {"name": "Processor2"}
+    }
+
+
+@pytest.fixture
+def workflow_with_processors(valid_workflow_dict, test_processor_config):
+    """Create a valid workflow with processor configuration."""
+    workflow_dict = valid_workflow_dict.copy()
+    workflow_dict["workflow"]["processors"] = [test_processor_config]
+    return workflow_dict
