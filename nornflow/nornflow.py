@@ -66,6 +66,9 @@ class NornFlow:
         **kwargs: Any,
     ):
         try:
+            # Extract processors if specified in kwargs for CLI support
+            self._kwargs_processors = kwargs.pop("processors", None)
+            
             # Some kwargs should only be set through the YAML settings file.
             self._check_invalid_kwargs(kwargs)
 
@@ -95,24 +98,31 @@ class NornFlow:
 
     def _load_processors(self) -> None:
         """
-        Load processors from settings or apply the default processor.
-        
-        This method checks the settings.processors list and loads each processor
-        configuration using the load_processor utility function. If no processors
-        are defined in settings, it initializes with the DefaultNornFlowProcessor.
+        Load processors from various sources by precedence:
+        1. Processors passed through kwargs - Likely coming from CLI
+        2. Settings file processors (settings.processors)
+        3. Default processor (DefaultNornFlowProcessor)
         
         The loaded processors are stored in self._processors for later use during
         workflow execution.
         """
-        if self.settings.processors:
+        # Check if processors were directly specified in constructor kwargs (CLI processors)
+        if self._kwargs_processors:
+            self._processors = []
+            for processor_config in self._kwargs_processors:
+                processor = load_processor(processor_config)
+                self._processors.append(processor)
+        
+        # Otherwise, check if processors are defined in settings
+        elif self.settings.processors:
             self._processors = []
             
             for processor_config in self.settings.processors:
                 processor = load_processor(processor_config)
                 self._processors.append(processor)
         
+        # If no processors are specified anywhere, use default
         else:
-            # Apply default processor if none are specified
             self._processors = [DefaultNornFlowProcessor()]
 
     @property
@@ -449,10 +459,24 @@ class NornFlow:
     def run(self) -> None:
         """
         Runs the NornFlow job.
+        
+        If processors were specified via kwargs (including CLI), they take precedence over 
+        workflow-specific processors, which in turn take precedence over global processors from settings.
         """
         self._ensure_workflow()
+
+        # If kwargs processors specified, disable workflow-specific processors
+        if self._kwargs_processors and self.workflow.processors_config:
+            # Simply disable workflow processors to enforce kwargs precedence
+            self.workflow.processors_config = None
+        
         # Pass nornir_manager, tasks_catalog, and filters_catalog to workflow.run
-        self.workflow.run(self.nornir_manager, self.tasks_catalog, self.filters_catalog, self.processors)
+        self.workflow.run(
+            self.nornir_manager,
+            self.tasks_catalog,
+            self.filters_catalog,
+            self.processors
+        )
 
 
 class NornFlowBuilder:
@@ -486,6 +510,7 @@ class NornFlowBuilder:
         self._workflow_dict: dict[str, Any] | None = None
         self._workflow_object: Workflow | None = None
         self._workflow_name: str | None = None
+        self._processors: list[dict[str, Any]] | None = None
         self._kwargs: dict[str, Any] = {}
 
     def with_settings_object(self, settings_object: NornFlowSettings) -> "NornFlowBuilder":
@@ -569,6 +594,20 @@ class NornFlowBuilder:
         """
         self._workflow_name = workflow_name
         return self
+        
+    def with_processors(self, processors: list[dict[str, Any]]) -> "NornFlowBuilder":
+        """
+        Set the processor configurations for the builder.
+
+        Args:
+            processors (list[dict[str, Any]]): List of processor configurations.
+                Each must be a dict with 'class' and optional 'args' keys.
+
+        Returns:
+            NornFlowBuilder: The builder instance.
+        """
+        self._processors = processors
+        return self
 
     def with_kwargs(self, **kwargs: Any) -> "NornFlowBuilder":
         """
@@ -600,5 +639,9 @@ class NornFlowBuilder:
                     workflow_path=self._workflow_path, workflow_dict=self._workflow_dict
                 )
                 workflow = workflow_factory.create()
+                
+        # Add processors to kwargs if specified
+        if self._processors:
+            self._kwargs["processors"] = self._processors
 
         return NornFlow(nornflow_settings=self._settings, workflow=workflow, **self._kwargs)
