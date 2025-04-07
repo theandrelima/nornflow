@@ -6,14 +6,12 @@ from types import ModuleType
 from typing import Any, Literal
 
 import yaml
-from nornir.core.processor import Processor
 from nornir.core.inventory import Host
+from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
-
-from nornflow.exceptions import ModuleImportError
-from nornflow.exceptions import ProcessorError
-
 from pydantic_serdes.custom_collections import HashableDict
+
+from nornflow.exceptions import ModuleImportError, ProcessorError
 
 
 def read_yaml_file(file_path: str) -> dict[str, Any]:
@@ -140,84 +138,80 @@ def is_nornir_filter(attr: Callable) -> bool:  # noqa: PLR0911
 def load_processor(processor_config: dict) -> Processor:
     """
     Dynamically load and instantiate a processor from config.
-    
+
     Args:
         processor_config: Dict with class and args keys
-        
+
     Returns:
         Instantiated processor
-        
+
     Raises:
         ProcessorError: If processor cannot be loaded or instantiated
     """
     try:
-        dotted_path = processor_config.get('class')
+        dotted_path = processor_config.get("class")
         if not dotted_path:
             raise ProcessorError("Missing class in processor configuration")
-            
-        args = processor_config.get('args', {})
-        
+
+        args = processor_config.get("args", {})
+
         # Split the dotted path into module and class
-        module_path, class_name = dotted_path.rsplit('.', 1)
-        
+        module_path, class_name = dotted_path.rsplit(".", 1)
+
         # Import the module
         module = importlib.import_module(module_path)
-        
+
         # Get the class
         processor_class = getattr(module, class_name)
-        
+
         # Instantiate the processor
         return processor_class(**args)
     except (ImportError, AttributeError) as e:
-        raise ProcessorError(f"Failed to load processor {dotted_path}: {str(e)}")
+        raise ProcessorError(f"Failed to load processor {dotted_path}: {e!s}") from e
     except Exception as e:
-        raise ProcessorError(f"Error instantiating processor {dotted_path}: {str(e)}")
-    
+        raise ProcessorError(f"Error instantiating processor {dotted_path}: {e!s}") from e
+
 
 def convert_lists_to_tuples(dictionary: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:
     """
     Convert any lists in dictionary values to tuples for serialization.
-    
+
     This is a common operation needed for HashableDict fields in models
     to ensure they can be properly serialized.
-    
+
     Args:
         dictionary (HashableDict[str, Any] | None): The dictionary to process.
-        
+
     Returns:
         HashableDict[str, Any] | None: A new HashableDict with lists converted to tuples,
                                       or None if input was None.
     """
     if dictionary is None:
         return None
-        
+
     return HashableDict(
-        {key: tuple(value) if isinstance(value, list) else value 
-         for key, value in dictionary.items()}
+        {key: tuple(value) if isinstance(value, list) else value for key, value in dictionary.items()}
     )
 
 
 def discover_items_in_dir(dir_path: str, register_func: Callable, error_context: str) -> None:
     """
     Discover and register items from Python modules in a directory.
-    
+
     Args:
         dir_path: Path to the directory to scan
         register_func: Function to call for each module found
         error_context: Context for error messages (e.g., "tasks", "filters")
-        
+
     Raises:
         DirectoryNotFoundError: If directory doesn't exist
         ModuleImportError: If module import fails
     """
     from nornflow.exceptions import DirectoryNotFoundError
-    
+
     path = Path(dir_path)
     if not path.is_dir():
-        raise DirectoryNotFoundError(
-            directory=dir_path, 
-            extra_message=f"Couldn't load {error_context}."
-        )
+        raise DirectoryNotFoundError(directory=dir_path, extra_message=f"Couldn't load {error_context}.")
 
     for py_file in path.rglob("*.py"):
         module_name = py_file.stem
@@ -232,7 +226,7 @@ def discover_items_in_dir(dir_path: str, register_func: Callable, error_context:
 def process_module_attributes(module: Any, predicate_func: Callable, process_func: Callable) -> None:
     """
     Process module attributes that match a predicate function.
-    
+
     Args:
         module: Module to process
         predicate_func: Function that determines if an attribute should be processed

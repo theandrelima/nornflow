@@ -26,11 +26,11 @@ from nornflow.processors import DefaultNornFlowProcessor
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import (
     discover_items_in_dir,
+    import_module_from_path,
+    is_nornir_filter,
+    is_nornir_task,
+    load_processor,
     process_module_attributes,
-    import_module_from_path, 
-    is_nornir_filter, 
-    is_nornir_task, 
-    load_processor
 )
 from nornflow.workflow import Workflow, WorkflowFactory
 
@@ -68,7 +68,7 @@ class NornFlow:
         try:
             # Extract processors if specified in kwargs for CLI support
             self._kwargs_processors = kwargs.pop("processors", None)
-            
+
             # Some kwargs should only be set through the YAML settings file.
             self._check_invalid_kwargs(kwargs)
 
@@ -102,7 +102,7 @@ class NornFlow:
         1. Processors passed through kwargs - Likely coming from CLI
         2. Settings file processors (settings.processors)
         3. Default processor (DefaultNornFlowProcessor)
-        
+
         The loaded processors are stored in self._processors for later use during
         workflow execution.
         """
@@ -112,15 +112,15 @@ class NornFlow:
             for processor_config in self._kwargs_processors:
                 processor = load_processor(processor_config)
                 self._processors.append(processor)
-        
+
         # Otherwise, check if processors are defined in settings
         elif self.settings.processors:
             self._processors = []
-            
+
             for processor_config in self.settings.processors:
                 processor = load_processor(processor_config)
                 self._processors.append(processor)
-        
+
         # If no processors are specified anywhere, use default
         else:
             self._processors = [DefaultNornFlowProcessor()]
@@ -267,7 +267,9 @@ class NornFlow:
         Raises:
             SettingsModificationError: Always raised to prevent direct setting of processors.
         """
-        raise NornFlowInitializationError(message="Processors cannot be set directly, but must be loaded from nornflow settings file.")
+        raise NornFlowInitializationError(
+            message="Processors cannot be set directly, but must be loaded from nornflow settings file."
+        )
 
     def _load_tasks_catalog(self) -> None:
         """
@@ -275,23 +277,30 @@ class NornFlow:
         all Nornir tasks from directories specified in the NornFlow configuration.
         """
         self._tasks_catalog = {}
-        
+
         for task_dir in self.settings.local_tasks_dirs:
-            try:
-                # Use the new utility function
-                discover_items_in_dir(
-                    task_dir, 
-                    lambda module: self._register_nornir_tasks_from_module(module),
-                    "tasks"
-                )
-            except DirectoryNotFoundError:
-                # Just continue if directory doesn't exist
-                pass
-            except Exception as e:
-                raise TaskLoadingError(f"Error loading tasks: {str(e)}") from e
+            self._discover_tasks_in_dir(task_dir)
 
         if not self._tasks_catalog:
             raise EmptyTaskCatalogError()
+
+    def _discover_tasks_in_dir(self, task_dir: str) -> None:
+        """
+        Discover and load tasks from a specific directory.
+
+        Args:
+            task_dir (str): Path to directory containing tasks.
+        """
+        try:
+            # Use the utility function
+            discover_items_in_dir(
+                task_dir, lambda module: self._register_nornir_tasks_from_module(module), "tasks"
+            )
+        except DirectoryNotFoundError:
+            # Just continue if directory doesn't exist
+            pass
+        except Exception as e:
+            raise TaskLoadingError(f"Error loading tasks: {e!s}") from e
 
     def _register_nornir_tasks_from_module(self, module: Any) -> None:
         """
@@ -301,9 +310,7 @@ class NornFlow:
             module (Any): Imported module.
         """
         process_module_attributes(
-            module,
-            is_nornir_task,
-            lambda attr_name, attr: self._tasks_catalog.update({attr_name: attr})
+            module, is_nornir_task, lambda attr_name, attr: self._tasks_catalog.update({attr_name: attr})
         )
 
     def _load_filters_catalog(self) -> None:
@@ -325,17 +332,26 @@ class NornFlow:
         # Phase 2: Load filters from local directories (can override built-ins)
         if hasattr(self.settings, "local_filters_dirs"):
             for filter_dir in self.settings.local_filters_dirs:
-                try:
-                    discover_items_in_dir(
-                        filter_dir,
-                        lambda module: self._register_nornir_filters_from_module(module),
-                        "filters"
-                    )
-                except DirectoryNotFoundError:
-                    # Just continue if directory doesn't exist
-                    pass
-                except Exception as e:
-                    raise FilterLoadingError(f"Error loading filters: {str(e)}") from e
+                self._discover_filters_in_single_dir(filter_dir)
+
+    def _discover_filters_in_single_dir(self, filter_dir: str) -> None:
+        """
+        Discover and load filters from a specific directory.
+
+        Args:
+            filter_dir (str): Path to directory containing filters.
+        """
+        try:
+            discover_items_in_dir(
+                filter_dir,
+                lambda module: self._register_nornir_filters_from_module(module),
+                "filters",
+            )
+        except DirectoryNotFoundError:
+            # Just continue if directory doesn't exist
+            pass
+        except Exception as e:
+            raise FilterLoadingError(f"Error loading filters: {e!s}") from e
 
     def _discover_filters_in_dir(self, filter_dir: str) -> None:
         """
@@ -376,6 +392,7 @@ class NornFlow:
         Args:
             module (Any): Imported module.
         """
+
         def process_filter(attr_name: str, attr: Callable) -> None:
             # Get the function signature to extract parameter names
             sig = inspect.signature(attr)
@@ -459,8 +476,8 @@ class NornFlow:
     def run(self) -> None:
         """
         Runs the NornFlow job.
-        
-        If processors were specified via kwargs (including CLI), they take precedence over 
+
+        If processors were specified via kwargs (including CLI), they take precedence over
         workflow-specific processors, which in turn take precedence over global processors from settings.
         """
         self._ensure_workflow()
@@ -469,14 +486,9 @@ class NornFlow:
         if self._kwargs_processors and self.workflow.processors_config:
             # Simply disable workflow processors to enforce kwargs precedence
             self.workflow.processors_config = None
-        
+
         # Pass nornir_manager, tasks_catalog, and filters_catalog to workflow.run
-        self.workflow.run(
-            self.nornir_manager,
-            self.tasks_catalog,
-            self.filters_catalog,
-            self.processors
-        )
+        self.workflow.run(self.nornir_manager, self.tasks_catalog, self.filters_catalog, self.processors)
 
 
 class NornFlowBuilder:
@@ -594,7 +606,7 @@ class NornFlowBuilder:
         """
         self._workflow_name = workflow_name
         return self
-        
+
     def with_processors(self, processors: list[dict[str, Any]]) -> "NornFlowBuilder":
         """
         Set the processor configurations for the builder.
@@ -639,7 +651,7 @@ class NornFlowBuilder:
                     workflow_path=self._workflow_path, workflow_dict=self._workflow_dict
                 )
                 workflow = workflow_factory.create()
-                
+
         # Add processors to kwargs if specified
         if self._processors:
             self._kwargs["processors"] = self._processors

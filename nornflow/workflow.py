@@ -15,7 +15,6 @@ from nornflow.exceptions import (
 )
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
-from nornflow.processors import DefaultNornFlowProcessor
 from nornflow.utils import load_processor
 
 # making sure pydantic_serdes sees Workflow models
@@ -264,22 +263,23 @@ class Workflow:
             nornir_manager.apply_filters(**filter_kwargs)
 
     def _with_processors(
-        self, 
-        nornir_manager: NornirManager, 
-        processors: list[Processor] = []
+        self, nornir_manager: NornirManager, processors: list[Processor] | None = None
     ) -> None:
         """
         Apply processors to the Nornir instance based on configuration.
-        
+
         This method handles the processor selection logic:
         1. Use workflow-specific processors from self.processors_config if defined
         2. Otherwise use the passed processors parameter
         3. If neither exists, do nothing (use NornFlow's global processors)
-    
+
         Args:
             nornir_manager (NornirManager): The NornirManager instance to apply processors to
-            processors (list[Processor]): List of processors to apply if no workflow-specific processors defined
+            processors (list[Processor] | None): List of processors to apply if no workflow-specific
+                processors defined
         """
+        processors = processors or []
+
         # Apply workflow-specific processors if defined
         if self.processors_config:
             try:
@@ -287,51 +287,53 @@ class Workflow:
                 for processor_config in self.processors_config:
                     processor = load_processor(processor_config)
                     workflow_processors.append(processor)
-                
+
                 if workflow_processors:
                     nornir_manager.apply_processors(workflow_processors)
             except Exception as e:
-                raise ProcessorError(f"Failed to initialize workflow processors: {str(e)}") from e
+                raise ProcessorError(f"Failed to initialize workflow processors: {e!s}") from e
         # Otherwise use processors passed as parameter if provided
         elif processors:
             nornir_manager.apply_processors(processors)
-        # If neither are present, use NornFlow's global processors (already applied)
-    
-    
+
     def run(
         self,
         nornir_manager: NornirManager,
         tasks_catalog: dict[str, Callable],
         filters_catalog: dict[str, Callable],
-        processors: list[Processor] = [],
+        processors: list[Processor] | None = None,
     ) -> None:
         """
         Run the tasks in the workflow using the provided Nornir instance and tasks mapping.
-    
+
         Args:
             nornir_manager (NornirManager): The NornirManager instance to use for running the tasks.
             tasks_catalog (dict[str, Callable]): The tasks catalog discovered by NornFlow.
             filters_catalog (dict[str, Callable]): The filters catalog discovered by NornFlow.
-            processors (list[Processor]): Optional list of processors to apply if no workflow-specific processors defined.
+            processors (list[Processor] | None): Optional list of processors to apply if no workflow-specific
+                processors defined.
         """
+        processors = processors or []
+
         self._check_tasks(tasks_catalog)
         self._apply_filters(nornir_manager, filters_catalog)
-        
+
         # Apply processors based on precedence rules
         self._with_processors(nornir_manager, processors)
-        
+
         # Set task count on processors that support it
         for processor in nornir_manager.nornir.processors:
             if hasattr(processor, "total_workflow_tasks"):
                 processor.total_workflow_tasks = len(self.tasks)
-    
+
         for task in self.tasks:
             nornir_manager.nornir.run(task=tasks_catalog[task.name], **task.args or {})
-    
+
         # Call print_final_workflow_summary on processors that support it
         for processor in nornir_manager.nornir.processors:
             if hasattr(processor, "print_final_workflow_summary"):
                 processor.print_final_workflow_summary()
+
 
 class WorkflowFactory:
     """

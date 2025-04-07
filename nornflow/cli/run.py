@@ -158,46 +158,52 @@ def parse_inventory_filters(value: str | None) -> dict[str, Any]:
 def parse_processors(value: str | None) -> list[dict[str, Any]]:
     """
     Parse a string of processor configurations into a list of processor configs.
-    
+
     Format examples:
       - Single processor: "class='nornflow.processors.DefaultNornFlowProcessor',args={}"
-      - Multiple processors: "class='module.Processor1',args={};class='module.Processor2',args={'key':'value'}"
-    
+      - Multiple processors:
+        "class='module.Processor1',args={};class='module.Processor2',args={'key':'value'}"
+
     Args:
         value: String describing processor configurations
-        
+
     Returns:
         List of processor configurations
     """
     if not value:
         return []
-    
+
     result = []
     # Split by semicolons to separate multiple processors
     processor_strings = value.split(";")
-    
+
     for proc_str in processor_strings:
         if not proc_str.strip():
             continue
-            
+
         # Parse as key-value pairs
         proc_dict = parse_key_value_pairs(proc_str, "processor")
-        
+
         # Validate required 'class' key
-        if 'class' not in proc_dict:
+        if "class" not in proc_dict:
             raise typer.BadParameter("Each processor must have a 'class' key specified")
-        
+
         # If args not specified, add empty dict
-        if 'args' not in proc_dict:
-            proc_dict['args'] = {}
-            
+        if "args" not in proc_dict:
+            proc_dict["args"] = {}
+
         result.append(proc_dict)
-        
+
     return result
 
 
 def get_nornflow_builder(
-    target: str, args: dict, inventory_filters: dict, dry_run: bool, settings_file: str = "", processors: list[dict[str, Any]] = []
+    target: str,
+    args: dict,
+    inventory_filters: dict,
+    dry_run: bool,
+    settings_file: str = "",
+    processors: list[dict[str, Any]] | None = None,
 ) -> NornFlowBuilder:
     """
     Build the workflow using the provided target, arguments, inventory filters, and dry-run option.
@@ -213,17 +219,19 @@ def get_nornflow_builder(
     Returns:
         NornFlowBuilder: The builder instance with the configured workflow.
     """
+    processors = processors or []
+
     builder = NornFlowBuilder()
 
     if settings_file:
         builder.with_settings_path(settings_file)
 
     nornflow_kwargs = {"dry_run": dry_run} if dry_run else {}
-    
+
     # Add processors to kwargs if specified
     if processors:
         nornflow_kwargs["processors"] = processors
-        
+
     builder.with_kwargs(**nornflow_kwargs)
 
     if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS):
@@ -300,7 +308,7 @@ PROCESSORS_OPTION = typer.Option(
     "--processors",
     "-p",
     help="Processor configurations in format: \"class='package.ProcessorClass',args={'key':'value'}\". "
-         "Multiple processors can be separated with semicolons.",
+    "Multiple processors can be separated with semicolons.",
 )
 
 
