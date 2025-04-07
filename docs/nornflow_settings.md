@@ -9,6 +9,7 @@
   - [`local_workflows_dirs`](#local_workflows_dirs)
   - [`local_filters_dirs`](#local_filters_dirs)
   - [`dry_run`](#dry_run)
+  - [`processors`](#processors)
   - [`imported_packages`](#imported_packages)
 - [NornFlow Settings vs Nornir Configs](#nornflow-settings-vs-nornir-configs)
 
@@ -81,6 +82,33 @@ NornFlow will try to find a settings YAML file in the following order:
   ```yaml
   dry_run: True
   ```  
+
+### `processors`
+- **Description**: List of Nornir processor configurations to be applied during task/workflow execution. If not provided, NornFlow will default to using only its default processor: `nornflow.processors.DefaultNornFlowProcessor`.
+- **Type**: `list[dict]`
+- **Default**: Uses `DefaultNornFlowProcessor` if not specified
+- **Example**:
+  ```yaml
+  processors:
+    - class: "nornflow.processors.DefaultNornFlowProcessor"
+      args: {} # included for completeness. If empty, it can be simply omitted. 
+    - class: "mypackage.mymodule.MyCustomProcessor" 
+      args:
+        verbose: true
+        log_level: "INFO"
+  ```
+- **Note**: Each processor configuration requires:
+  - `class`: Full Python import path to the processor class
+  - `args`: Optional dictionary of keyword arguments passed to the processor constructor
+
+  **IMPORTANT**: If you specify custom processors, the `DefaultNornFlowProcessor` **WILL NOT** be automatically included. You must explicitly add it if you still want its functionality.
+  
+  Workflows can define their own processors section in their YAML files, with the same structure. Processor precedence follows this order:
+  1. CLI arguments (via `--processors`/`-p` option)
+  2. Workflow-specific processors (defined in the YAML file)
+  3. Global processors setting (defined in the settings YAML file - defaults to `nornflow.yaml` in the root of the project directory)
+  4. `DefaultNornFlowProcessor` (if no other processors specified)
+
 ---
 > 🚨 ***NOTE: `imported_packages` is planned, but not yet supported and right now has no effect at all.***
 ### *`imported_packages`*
