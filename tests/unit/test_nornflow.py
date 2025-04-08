@@ -3,7 +3,6 @@ import pytest
 from nornflow import NornFlowBuilder
 from nornflow.exceptions import (
     CatalogModificationError,
-    DirectoryNotFoundError,
     EmptyTaskCatalogError,
     NornFlowInitializationError,
     NornirConfigError,

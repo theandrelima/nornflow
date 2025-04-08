@@ -6,7 +6,7 @@ from nornflow.exceptions import ProcessorError
 from nornflow.nornflow import NornFlow
 from nornflow.utils import load_processor
 from nornflow.workflow import WorkflowFactory
-from tests.unit.test_processors_utils import TestProcessor, TestProcessor2
+from tests.unit.test_processors_utils import TestProcessor
 
 
 class TestProcessorLoading:
