@@ -180,7 +180,7 @@ class Workflow:
 
         # Handle the filter values based on their type and the expected parameters
         if not param_names:
-            # Case 1: No additional parameters needed besides host (parameter-less filter)
+            # Case 1: No additional parameters needed (parameter-less filter)
             # Just use the filter function with no additional parameters
             return filter_kwargs
 
