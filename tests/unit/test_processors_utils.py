@@ -1,31 +1,54 @@
 from nornir.core.processor import Processor
-from nornir.core.task import Result, Task
 
 
 class TestProcessor(Processor):
-    """Simple processor for testing with configurable attributes."""
-
+    """Test processor for CLI tests."""
+    
     def __init__(self, name="TestProcessor", verbose=False, priority=0):
+        """Initialize test processor."""
         self.name = name
         self.verbose = verbose
-        self.priority = priority
-        self.tasks_started = []
+        self.priority = priority 
+        self.task_results = {}
+        
+    def task_started(self, task):
+        """Log when task starts."""
+        self.task_results[task.name] = {"status": "started"}
+        
+    def task_completed(self, task, result):
+        """Log when task completes."""
+        self.task_results[task.name] = {"status": "completed", "result": result}
+        
+    def task_instance_started(self, task, host):
+        """Log when task instance starts."""
+        if self.verbose:
+            print(f"Task {task.name} started on {host.name}")
+            
+    def task_instance_completed(self, task, host, result):
+        """Log when task instance completes."""
+        if self.verbose:
+            print(f"Task {task.name} completed on {host.name} with result: {result}")
+            
+    def subtask_instance_started(self, task, host):
+        """Log when subtask instance starts."""
+        pass
+        
+    def subtask_instance_completed(self, task, host, result):
+        """Log when subtask instance completes."""
+        pass
 
-    def task_started(self, task: Task) -> None:
-        self.tasks_started.append(task.name)
 
-    def __eq__(self, other):
-        if not isinstance(other, TestProcessor):
-            return False
-        return self.name == other.name and self.verbose == other.verbose and self.priority == other.priority
+class TestProcessor2(TestProcessor):
+    """Second test processor with different default name."""
+    
+    def __init__(self, name="TestProcessor2", verbose=False, priority=0):
+        """Initialize with different default name."""
+        super().__init__(name=name, verbose=verbose, priority=priority)
 
 
-class TestProcessor2(Processor):
-    """Second test processor to test multiple processor loading."""
-
-    def __init__(self, name="TestProcessor2"):
-        self.name = name
-        self.tasks_started = []
-
-    def task_started(self, task: Task) -> None:
-        self.tasks_started.append(task.name)
+class TestProcessor2(TestProcessor):
+    """Second test processor with different default name."""
+    
+    def __init__(self, name="TestProcessor2", verbose=False):
+        """Initialize with different default name."""
+        super().__init__(name=name, verbose=verbose)
