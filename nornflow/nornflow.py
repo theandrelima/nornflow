@@ -13,7 +13,6 @@ from nornflow.exceptions import (
     DirectoryNotFoundError,
     EmptyTaskCatalogError,
     FilterLoadingError,
-    ModuleImportError,
     NornFlowAppError,
     NornFlowInitializationError,
     NornFlowRunError,
@@ -26,7 +25,6 @@ from nornflow.processors import DefaultNornFlowProcessor
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import (
     discover_items_in_dir,
-    import_module_from_path,
     is_nornir_filter,
     is_nornir_task,
     load_processor,

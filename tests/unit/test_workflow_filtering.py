@@ -1,5 +1,6 @@
+from unittest.mock import MagicMock, PropertyMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 
 from nornflow.exceptions import WorkflowInventoryFilterError
 from nornflow.workflow import Workflow
@@ -92,7 +93,7 @@ class TestWorkflowFiltering:
         # Should raise WorkflowInventoryFilterError
         with pytest.raises(WorkflowInventoryFilterError) as excinfo:
             self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-        
+
         assert "missing" in str(excinfo.value)
         assert "building" in str(excinfo.value)
 
@@ -146,7 +147,7 @@ class TestWorkflowFiltering:
         # Should raise WorkflowInventoryFilterError
         with pytest.raises(WorkflowInventoryFilterError) as excinfo:
             self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-        
+
         assert "expects 2 parameters" in str(excinfo.value)
         assert "incompatible value" in str(excinfo.value)
 
@@ -195,15 +196,17 @@ class TestWorkflowFiltering:
     def _get_filtering_kwargs_impl(self, inventory_filters, filters_catalog):
         """
         Implementation of _get_filtering_kwargs for testing.
-        
+
         This properly patches the inventory_filters property to return our test values.
         """
         # Create a workflow instance and patch its inventory_filters property
-        with patch('nornflow.workflow.Workflow.inventory_filters', 
-                  new_callable=PropertyMock, 
-                  return_value=inventory_filters):
+        with patch(
+            "nornflow.workflow.Workflow.inventory_filters",
+            new_callable=PropertyMock,
+            return_value=inventory_filters,
+        ):
             # Create a workflow instance
             workflow = Workflow.__new__(Workflow)
-            
+
             # Call the method we want to test
             return workflow._get_filtering_kwargs(filters_catalog)

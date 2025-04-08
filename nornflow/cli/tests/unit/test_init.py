@@ -1,29 +1,21 @@
-from unittest.mock import MagicMock, patch, call
-from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pytest
-import typer
-import shutil
-import os
 
 from nornflow.cli.init import (
+    get_user_confirmation,
     init,
     setup_builder,
-    get_user_confirmation,
     setup_directory_structure,
     setup_nornflow_config_file,
     setup_sample_content,
     show_info_post_init,
-    NORNFLOW_CONFIG_FILE,
-    SAMPLE_NORNFLOW_FILE,
-    create_directory,
-    create_directory_and_copy_sample_files,
 )
-from nornflow.cli.exceptions import CLIInitError
-from nornflow.cli.show import show_nornflow_settings, show_catalog
 
 
 class MockExit(Exception):
     """Mock exception for testing typer.Exit"""
+
     def __init__(self, code=0):
         self.code = code
         super().__init__(f"Exit with code {code}")
@@ -69,9 +61,7 @@ class TestInitCommand:
     @patch("nornflow.cli.init.setup_builder")
     @patch("nornflow.cli.init.get_user_confirmation")
     @patch("nornflow.cli.init.setup_directory_structure")
-    def test_init_user_declines(
-        self, mock_setup_dirs, mock_confirmation, mock_setup_builder
-    ):
+    def test_init_user_declines(self, mock_setup_dirs, mock_confirmation, mock_setup_builder):
         """Test initialization when user declines confirmation."""
         # Setup mocks
         mock_confirmation.return_value = False
@@ -105,7 +95,7 @@ class TestInitCommand:
             mock_typer.Exit = MockExit
             with pytest.raises(MockExit) as exc_info:
                 init(mock_ctx)
-            
+
             assert exc_info.value.code == 2
             mock_error.assert_called_once()
             mock_error_instance.show.assert_called_once()
@@ -114,9 +104,7 @@ class TestInitCommand:
     @patch("nornflow.cli.init.get_user_confirmation")
     @patch("nornflow.cli.init.setup_directory_structure")
     @patch("nornflow.cli.init.CLIInitError")
-    def test_init_permission_error(
-        self, mock_error, mock_setup_dirs, mock_confirmation, mock_setup_builder
-    ):
+    def test_init_permission_error(self, mock_error, mock_setup_dirs, mock_confirmation, mock_setup_builder):
         """Test initialization when PermissionError occurs."""
         # Setup mocks
         mock_confirmation.return_value = True
@@ -130,7 +118,7 @@ class TestInitCommand:
             mock_typer.Exit = MockExit
             with pytest.raises(MockExit) as exc_info:
                 init(mock_ctx)
-            
+
             assert exc_info.value.code == 2
             mock_error.assert_called_once()
             mock_error_instance.show.assert_called_once()
@@ -175,12 +163,12 @@ class TestSetupFunctions:
         """Test setup_directory_structure creates directories."""
         # Setup mock to return True to simulate directory creation
         mock_create_dir.return_value = True
-        
+
         setup_directory_structure()
-        
+
         # Verify create_directory was called at least once
         assert mock_create_dir.call_count >= 1  # Should be called for nornir_configs at minimum
-        
+
         # Verify shutil.copy or copytree were called to populate directories
         assert mock_copy.call_count + mock_copytree.call_count > 0
 
@@ -189,13 +177,15 @@ class TestSetupFunctions:
     @patch("nornflow.cli.init.shutil.copy")
     @patch("nornflow.cli.init.typer.secho")
     @patch("nornflow.cli.init.os.getenv", return_value=None)
-    def test_setup_nornflow_config_no_settings(self, mock_getenv, mock_secho, mock_copy, mock_sample, mock_config):
+    def test_setup_nornflow_config_no_settings(
+        self, mock_getenv, mock_secho, mock_copy, mock_sample, mock_config
+    ):
         """Test setup_nornflow_config_file with no settings."""
         # Make Path.exists return False to ensure file is copied
         mock_config.exists.return_value = False
-        
+
         setup_nornflow_config_file("")
-        
+
         # Verify config file was copied
         mock_copy.assert_called_once_with(mock_sample, mock_config)
         mock_secho.assert_called_once()
@@ -207,9 +197,9 @@ class TestSetupFunctions:
         """Test setup_sample_content copies sample files."""
         # Configure the mock
         mock_create_and_copy.return_value = None
-        
+
         setup_sample_content()
-        
+
         # Verify create_directory_and_copy_sample_files was called at least 2 times
         assert mock_create_and_copy.call_count >= 2
         mock_secho.assert_called()
@@ -221,9 +211,9 @@ class TestSetupFunctions:
         mock_builder = MagicMock()
         mock_nornflow = MagicMock()
         mock_builder.build.return_value = mock_nornflow
-        
+
         show_info_post_init(mock_builder)
-        
+
         # Should build the NornFlow object
         mock_builder.build.assert_called_once()
         # Should call show functions
