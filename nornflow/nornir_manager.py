@@ -51,9 +51,6 @@ class NornirManager:
             **kwargs,
         )
 
-        # Initialize _local_tasks_nornir to None (lazy initialization)
-        self._local_tasks_nornir = None
-
     def _remove_optional_nornflow_settings_from_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
         Remove NornFlow-specific settings from kwargs that shouldn't be passed to InitNornir.

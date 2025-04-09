@@ -13,7 +13,6 @@ from nornflow.exceptions import (
     DirectoryNotFoundError,
     EmptyTaskCatalogError,
     FilterLoadingError,
-    ModuleImportError,
     NornFlowAppError,
     NornFlowInitializationError,
     NornFlowRunError,
@@ -26,7 +25,6 @@ from nornflow.processors import DefaultNornFlowProcessor
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import (
     discover_items_in_dir,
-    import_module_from_path,
     is_nornir_filter,
     is_nornir_task,
     load_processor,
@@ -332,9 +330,9 @@ class NornFlow:
         # Phase 2: Load filters from local directories (can override built-ins)
         if hasattr(self.settings, "local_filters_dirs"):
             for filter_dir in self.settings.local_filters_dirs:
-                self._discover_filters_in_single_dir(filter_dir)
+                self._discover_filters_in_dir(filter_dir)
 
-    def _discover_filters_in_single_dir(self, filter_dir: str) -> None:
+    def _discover_filters_in_dir(self, filter_dir: str) -> None:
         """
         Discover and load filters from a specific directory.
 
@@ -352,35 +350,6 @@ class NornFlow:
             pass
         except Exception as e:
             raise FilterLoadingError(f"Error loading filters: {e!s}") from e
-
-    def _discover_filters_in_dir(self, filter_dir: str) -> None:
-        """
-        Discover and load filters from all Python modules in a specific directory.
-
-        Args:
-            filter_dir (str): Path to the directory containing filter files.
-
-        Raises:
-            DirectoryNotFoundError: If the specified directory does not exist.
-            FilterLoadingError: If there is an error loading filters from a file.
-        """
-        filter_path = Path(filter_dir)
-        if not filter_path.is_dir():
-            raise DirectoryNotFoundError(
-                directory=filter_dir, extra_message="Couldn't load filters."
-            )  # Changed from LocalDirectoryNotFoundError
-
-        try:
-            for py_file in filter_path.rglob("*.py"):
-                module_name = py_file.stem
-                module_path = str(py_file)
-                try:
-                    module = import_module_from_path(module_name, module_path)
-                    self._register_nornir_filters_from_module(module)
-                except Exception as e:
-                    raise ModuleImportError(module_name, module_path, str(e)) from e
-        except Exception as e:
-            raise FilterLoadingError(f"Error loading filters from file '{py_file}': {e}") from e
 
     def _register_nornir_filters_from_module(self, module: Any) -> None:
         """

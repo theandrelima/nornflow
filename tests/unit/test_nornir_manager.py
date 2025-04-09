@@ -1,5 +1,3 @@
-from unittest.mock import Mock
-
 import pytest
 
 from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL
@@ -21,7 +19,7 @@ class TestNornirManager:
         assert manager.nornir_settings == "dummy_config.yaml"
         assert manager.dry_run is False
         assert manager.nornir == mock_nornir
-        assert manager._local_tasks_nornir is None
+        # Removed check for _local_tasks_nornir which was unused and has been removed
 
     def test_init_with_additional_params(self, mock_init_nornir):
         """Test initialization with additional parameters."""
