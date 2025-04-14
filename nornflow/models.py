@@ -34,7 +34,7 @@ class TaskModel(PydanticSerdesBaseModel):
 
     @field_validator("args", mode="before")
     @classmethod
-    def convert_args_lists_to_tuples(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:
+    def validate_args(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:
         """
         Convert any lists in the args values to tuples.
 
