@@ -1,9 +1,12 @@
-from typing import Any
+from typing import Any, Callable, Dict
 
-from pydantic import field_validator
+from nornir.core.task import AggregatedResult
+from pydantic import Field, field_validator
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.models import PydanticSerdesBaseModel
 
+from nornflow.exceptions import TaskNotFoundError
+from nornflow.nornir_manager import NornirManager
 from nornflow.utils import convert_lists_to_tuples
 
 
@@ -45,6 +48,31 @@ class TaskModel(PydanticSerdesBaseModel):
             HashableDict[str, Any] | None: The validated args with lists converted to tuples.
         """
         return convert_lists_to_tuples(v)
+        
+    def run(self, nornir_manager: NornirManager, tasks_catalog: Dict[str, Callable]) -> AggregatedResult:
+        """
+        Execute the task using the provided NornirManager and tasks catalog.
+        
+        Args:
+            nornir_manager (NornirManager): The NornirManager instance to use for execution
+            tasks_catalog (Dict[str, Callable]): Dictionary mapping task names to their function implementations
+            
+        Returns:
+            AggregatedResult: The results of the task execution
+            
+        Raises:
+            TaskNotFoundError: If the task name is not found in the tasks catalog
+        """
+        # Get the task function from the catalog
+        task_func = tasks_catalog.get(self.name)
+        if not task_func:
+            raise TaskNotFoundError(f"Task function for '{self.name}' not found in tasks catalog")
+        
+        # Prepare arguments
+        task_args = {} if self.args is None else dict(self.args)
+        
+        # Execute the task on the Nornir instance
+        return nornir_manager.nornir.run(task=task_func, **task_args)
 
 
 class WorkflowModel(PydanticSerdesBaseModel):
