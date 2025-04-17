@@ -41,14 +41,14 @@ class TaskModel(PydanticSerdesBaseModel):
     def validate_args(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:
         """
         Validate the args dictionary and convert any lists in values to tuples.
-        
+
         This validation ensures args contains only hashable values by converting
         non-hashable lists to hashable tuples, which is required for proper model
         serialization and comparison.
-    
+
         Args:
             v (HashableDict[str, Any] | None): The args dictionary to validate.
-    
+
         Returns:
             HashableDict[str, Any] | None: The validated args with lists converted to tuples.
         """
