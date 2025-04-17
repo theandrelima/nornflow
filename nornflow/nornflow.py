@@ -44,6 +44,7 @@ class NornFlow:
     - Workflow management and execution
     - Consistent configuration handling
     - Advanced inventory filtering with custom filter functions
+    - Customizable execution processors
 
     The NornFlow object lifecycle typically involves:
     1. Initialization with settings (from file or explicit object)
@@ -55,17 +56,24 @@ class NornFlow:
 
     Tasks are executed in order as defined in the workflow, providing a structured
     approach to network automation operations.
+    
+    Processor precedence follows this order (highest to lowest priority):
+    1. Processors provided directly to the NornFlow constructor
+    2. Processors specified in the workflow definition
+    3. Processors specified in the NornFlow settings
+    4. Default processor if none of the above are specified
     """
 
     def __init__(
         self,
         nornflow_settings: NornFlowSettings | None = None,
         workflow: Workflow | None = None,
+        processors: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ):
         try:
-            # Extract processors if specified in kwargs for CLI support
-            self._kwargs_processors = kwargs.pop("processors", None)
+            # Store processors from explicit parameter
+            self._kwargs_processors = processors
 
             # Some kwargs should only be set through the YAML settings file.
             self._check_invalid_kwargs(kwargs)
@@ -621,8 +629,9 @@ class NornFlowBuilder:
                 )
                 workflow = workflow_factory.create()
 
-        # Add processors to kwargs if specified
-        if self._processors:
-            self._kwargs["processors"] = self._processors
-
-        return NornFlow(nornflow_settings=self._settings, workflow=workflow, **self._kwargs)
+        return NornFlow(
+            nornflow_settings=self._settings,
+            workflow=workflow,
+            processors=self._processors,
+            **self._kwargs
+        )

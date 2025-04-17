@@ -228,11 +228,11 @@ def get_nornflow_builder(
 
     nornflow_kwargs = {"dry_run": dry_run} if dry_run else {}
 
-    # Add processors to kwargs if specified
-    if processors:
-        nornflow_kwargs["processors"] = processors
-
     builder.with_kwargs(**nornflow_kwargs)
+
+    # Add processors using dedicated method if specified
+    if processors:
+        builder.with_processors(processors)
 
     if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS):
         target_path = Path(target)
@@ -418,3 +418,4 @@ def run(
             original_exception=e,
         ).show()
         raise typer.Exit(code=2)  # noqa: B904
+    
