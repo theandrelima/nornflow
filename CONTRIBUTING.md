@@ -21,7 +21,7 @@ Please be respectful and kind in your interactions with other contributors. We a
 
 1. **Fork and clone the repository**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/nornflow.git
+   git clone https://github.com/theandrelima/nornflow.git
    cd nornflow
    ```
 

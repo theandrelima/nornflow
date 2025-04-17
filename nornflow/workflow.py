@@ -303,22 +303,11 @@ class Workflow:
         filters_catalog: dict[str, Callable],
         processors: list[Processor] | None = None,
     ) -> None:
-        """
-        Run the tasks in the workflow using the provided Nornir instance and tasks mapping.
-
-        Args:
-            nornir_manager (NornirManager): The NornirManager instance to use for running the tasks.
-            tasks_catalog (dict[str, Callable]): The tasks catalog discovered by NornFlow.
-            filters_catalog (dict[str, Callable]): The filters catalog discovered by NornFlow.
-            processors (list[Processor] | None): Optional list of processors to apply if no workflow-specific
-                processors defined.
-        """
+        """Run the workflow tasks."""
         processors = processors or []
 
         self._check_tasks(tasks_catalog)
         self._apply_filters(nornir_manager, filters_catalog)
-
-        # Apply processors based on precedence rules
         self._with_processors(nornir_manager, processors)
 
         # Set task count on processors that support it
@@ -327,7 +316,7 @@ class Workflow:
                 processor.total_workflow_tasks = len(self.tasks)
 
         for task in self.tasks:
-            nornir_manager.nornir.run(task=tasks_catalog[task.name], **task.args or {})
+            task.run(nornir_manager, tasks_catalog)
 
         # Call print_final_workflow_summary on processors that support it
         for processor in nornir_manager.nornir.processors:

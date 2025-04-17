@@ -254,6 +254,7 @@ def get_nornflow_builder(
                     f"dry-run: {dry_run})"
                 ),
                 "inventory_filters": inventory_filters,
+                "processors": processors if processors else None,
                 "tasks": [
                     {"name": target, "args": args or {}},
                 ],
