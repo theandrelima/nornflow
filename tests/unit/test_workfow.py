@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
 from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.exceptions import PydanticSerdesTypeError
@@ -96,3 +98,79 @@ class TestWorkflowSuccessfulCreation:
         """Test inventory filters are correctly set."""
         workflow = WorkflowFactory.create_from_dict(valid_workflow_dict)
         assert workflow.inventory_filters == {"hosts": ("host1", "host2"), "groups": ("group1",)}
+
+
+class TestWorkflowExecution:
+    @pytest.fixture(autouse=True)
+    def setup_method(self, request):
+        """Setup method to ensure each test uses unique names."""
+        self.test_name = request.function.__name__
+        # Clean the global data store before each test
+        GLOBAL_DATA_STORE.flush()
+
+    def test_workflow_run_calls_task_run(self):
+        """Test that Workflow.run calls task.run for each task."""
+        # Create workflow with real TaskModel instances
+        workflow_dict = {
+            "workflow": {"name": "test_workflow", "tasks": [{"name": "task1"}, {"name": "task2"}]}
+        }
+
+        workflow = WorkflowFactory.create_from_dict(workflow_dict)
+
+        # Setup
+        mock_nornir_manager = MagicMock()
+        mock_nornir_manager.nornir = MagicMock()
+        mock_tasks_catalog = {"task1": MagicMock(), "task2": MagicMock()}
+        mock_filters_catalog = {}
+
+        # Patch _check_tasks to do nothing and patch the TaskModel.run method
+        with patch.object(workflow, "_check_tasks"), patch("nornflow.models.TaskModel.run") as mock_run:
+
+            # Execute
+            workflow.run(mock_nornir_manager, mock_tasks_catalog, mock_filters_catalog)
+
+            # Verify run was called twice (once for each task)
+            assert mock_run.call_count == 2
+            # Verify each call had the right arguments
+            for call_args in mock_run.call_args_list:
+                args, kwargs = call_args
+                assert args[0] == mock_nornir_manager
+                assert args[1] == mock_tasks_catalog
+
+    def test_workflow_run_applies_filters_and_processors(self):
+        """Test that Workflow.run properly applies filters and processors."""
+        # Create workflow
+        workflow_dict = {
+            "workflow": {
+                "name": "test_workflow",
+                "inventory_filters": {"hosts": ["test_host"]},
+                "tasks": [{"name": "test_task"}],
+            }
+        }
+
+        workflow = WorkflowFactory.create_from_dict(workflow_dict)
+
+        mock_nornir_manager = MagicMock()
+        mock_nornir_manager.nornir = MagicMock()
+        mock_tasks_catalog = {"test_task": MagicMock()}
+        mock_filters_catalog = {}
+        mock_processors = [MagicMock()]
+
+        # Patch _check_tasks and other methods
+        with (
+            patch.object(workflow, "_check_tasks"),
+            patch("nornflow.models.TaskModel.run") as mock_run,
+            patch.object(workflow, "_apply_filters") as mock_apply_filters,
+            patch.object(workflow, "_with_processors") as mock_with_processors,
+        ):
+
+            # Execute
+            workflow.run(mock_nornir_manager, mock_tasks_catalog, mock_filters_catalog, mock_processors)
+
+            # Verify
+            mock_apply_filters.assert_called_once_with(mock_nornir_manager, mock_filters_catalog)
+            mock_with_processors.assert_called_once_with(mock_nornir_manager, mock_processors)
+            mock_run.assert_called_once()
+            args, _ = mock_run.call_args
+            assert args[0] == mock_nornir_manager
+            assert args[1] == mock_tasks_catalog

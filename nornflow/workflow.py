@@ -305,22 +305,19 @@ class Workflow:
     ) -> None:
         """Run the workflow tasks."""
         processors = processors or []
-    
+
         self._check_tasks(tasks_catalog)
         self._apply_filters(nornir_manager, filters_catalog)
-    
-        # Apply processors based on precedence rules
         self._with_processors(nornir_manager, processors)
-    
+
         # Set task count on processors that support it
         for processor in nornir_manager.nornir.processors:
             if hasattr(processor, "total_workflow_tasks"):
                 processor.total_workflow_tasks = len(self.tasks)
-    
-        # Execute each task using its .run() method
+
         for task in self.tasks:
             task.run(nornir_manager, tasks_catalog)
-    
+
         # Call print_final_workflow_summary on processors that support it
         for processor in nornir_manager.nornir.processors:
             if hasattr(processor, "print_final_workflow_summary"):
