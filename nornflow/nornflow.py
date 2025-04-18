@@ -3,7 +3,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from nornflow import filters as builtin_filters
+from nornflow.builtins import filters as builtin_filters
 from nornflow.constants import (
     NORNFLOW_INVALID_INIT_KWARGS,
     NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS,
@@ -21,7 +21,7 @@ from nornflow.exceptions import (
     TaskLoadingError,
 )
 from nornflow.nornir_manager import NornirManager
-from nornflow.processors import DefaultNornFlowProcessor
+from nornflow.builtins import DefaultNornFlowProcessor
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import (
     discover_items_in_dir,
