@@ -160,9 +160,9 @@ def parse_processors(value: str | None) -> list[dict[str, Any]]:
     Parse a string of processor configurations into a list of processor configs.
 
     Format examples:
-      - Single processor: "class='nornflow.builtins.processors.DefaultNornFlowProcessor',args={}"
+      - Single processor: "class='nornflow.builtins.DefaultNornFlowProcessor',args={}"
       - Multiple processors:
-        "class='module.Processor1',args={};class='module.Processor2',args={'key':'value'}"
+        "class='package.module.Processor1',args={};class='package.Processor2',args={'key':'value'}"
 
     Args:
         value: String describing processor configurations
