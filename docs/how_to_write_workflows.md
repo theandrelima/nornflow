@@ -188,7 +188,7 @@ When using processors in workflows:
 workflow:
   name: "My Workflow"
   processors:
-    - class: "nornflow.builtins.processors.DefaultNornFlowProcessor"
+    - class: "nornflow.builtins.DefaultNornFlowProcessor"
       args: {}
     - class: "mypackage.CustomLogProcessor"
       args:
@@ -225,7 +225,7 @@ workflow:
     site_code: "hq"
   processors:
     #since 'processors' is defined, to still avail of DefaultNornFlowProcessor, it needs to be explicitly included in the list
-    - class: "nornflow.builtins.processors.DefaultNornFlowProcessor"
+    - class: "nornflow.builtins.DefaultNornFlowProcessor"
     - class: "mypackage.CustomProcessor"
       args:
         verbose: true

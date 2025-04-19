@@ -90,7 +90,7 @@ NornFlow will try to find a settings YAML file in the following order:
 - **Example**:
   ```yaml
   processors:
-    - class: "nornflow.builtins.processors.DefaultNornFlowProcessor"
+    - class: "nornflow.builtins.DefaultNornFlowProcessor"
       args: {} # included for completeness. If empty, it can be simply omitted. 
     - class: "mypackage.mymodule.MyCustomProcessor" 
       args:
