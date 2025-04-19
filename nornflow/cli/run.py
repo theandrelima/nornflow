@@ -418,4 +418,3 @@ def run(
             original_exception=e,
         ).show()
         raise typer.Exit(code=2)  # noqa: B904
-    

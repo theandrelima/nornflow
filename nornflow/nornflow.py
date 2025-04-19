@@ -3,7 +3,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from nornflow.builtins import filters as builtin_filters
+from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters
 from nornflow.constants import (
     NORNFLOW_INVALID_INIT_KWARGS,
     NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS,
@@ -21,7 +21,6 @@ from nornflow.exceptions import (
     TaskLoadingError,
 )
 from nornflow.nornir_manager import NornirManager
-from nornflow.builtins import DefaultNornFlowProcessor
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import (
     discover_items_in_dir,
@@ -56,7 +55,7 @@ class NornFlow:
 
     Tasks are executed in order as defined in the workflow, providing a structured
     approach to network automation operations.
-    
+
     Processor precedence follows this order (highest to lowest priority):
     1. Processors provided directly to the NornFlow constructor
     2. Processors specified in the workflow definition
@@ -630,8 +629,5 @@ class NornFlowBuilder:
                 workflow = workflow_factory.create()
 
         return NornFlow(
-            nornflow_settings=self._settings,
-            workflow=workflow,
-            processors=self._processors,
-            **self._kwargs
+            nornflow_settings=self._settings, workflow=workflow, processors=self._processors, **self._kwargs
         )
