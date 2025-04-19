@@ -1,9 +1,10 @@
-import inspect
+import inspect # noqa: I001
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters
+from nornflow.builtins import DefaultNornFlowProcessor
+from nornflow.builtins import filters as builtin_filters
 from nornflow.constants import (
     NORNFLOW_INVALID_INIT_KWARGS,
     NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS,
