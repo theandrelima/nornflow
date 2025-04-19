@@ -1,4 +1,4 @@
-import inspect # noqa: I001
+import inspect  # noqa: I001
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
