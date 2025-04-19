@@ -84,13 +84,13 @@ NornFlow will try to find a settings YAML file in the following order:
   ```  
 
 ### `processors`
-- **Description**: List of Nornir processor configurations to be applied during task/workflow execution. If not provided, NornFlow will default to using only its default processor: `nornflow.processors.DefaultNornFlowProcessor`.
+- **Description**: List of Nornir processor configurations to be applied during task/workflow execution. If not provided, NornFlow will default to using only its default processor: `nornflow.builtins.processors.DefaultNornFlowProcessor`.
 - **Type**: `list[dict]`
 - **Default**: Uses `DefaultNornFlowProcessor` if not specified
 - **Example**:
   ```yaml
   processors:
-    - class: "nornflow.processors.DefaultNornFlowProcessor"
+    - class: "nornflow.builtins.processors.DefaultNornFlowProcessor"
       args: {} # included for completeness. If empty, it can be simply omitted. 
     - class: "mypackage.mymodule.MyCustomProcessor" 
       args:

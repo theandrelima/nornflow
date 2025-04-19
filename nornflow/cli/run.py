@@ -160,9 +160,9 @@ def parse_processors(value: str | None) -> list[dict[str, Any]]:
     Parse a string of processor configurations into a list of processor configs.
 
     Format examples:
-      - Single processor: "class='nornflow.processors.DefaultNornFlowProcessor',args={}"
+      - Single processor: "class='nornflow.builtins.DefaultNornFlowProcessor',args={}"
       - Multiple processors:
-        "class='module.Processor1',args={};class='module.Processor2',args={'key':'value'}"
+        "class='package.module.Processor1',args={};class='package.Processor2',args={'key':'value'}"
 
     Args:
         value: String describing processor configurations
@@ -228,11 +228,11 @@ def get_nornflow_builder(
 
     nornflow_kwargs = {"dry_run": dry_run} if dry_run else {}
 
-    # Add processors to kwargs if specified
-    if processors:
-        nornflow_kwargs["processors"] = processors
-
     builder.with_kwargs(**nornflow_kwargs)
+
+    # Add processors using dedicated method if specified
+    if processors:
+        builder.with_processors(processors)
 
     if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS):
         target_path = Path(target)

@@ -438,7 +438,7 @@ nornflow run backup_configs --processors "class='mypackage.CustomProcessor',args
 workflow:
   processors:
       #since 'processors' is defined, if I want to also avail of DefaultNornFlowProcessor, it needs to be included in the list
-      - class: "nornflow.processors.DefaultNornFlowProcessor"
+      - class: "nornflow.builtins.DefaultNornFlowProcessor"
       - class: "mypackage.CustomProcessor"
         args:
           verbose: true

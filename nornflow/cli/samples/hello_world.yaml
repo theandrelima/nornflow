@@ -5,7 +5,7 @@ workflow:
     hosts:
     groups:
   processors:
-    - class: "nornflow.processors.DefaultNornFlowProcessor"  # this is already the default configuration
+    - class: "nornflow.builtins.DefaultNornFlowProcessor"  # this is already the default configuration
       args: {} # DefaultNornFlowProcessor doesnt take any init params
   
   tasks:

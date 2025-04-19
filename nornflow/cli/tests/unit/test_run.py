@@ -293,6 +293,7 @@ class TestProcessorIntegration:
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
         mock_instance.with_kwargs.return_value = mock_instance
+        mock_instance.with_processors.return_value = mock_instance  # Add this line
 
         # Create test processor config
         processors = [
@@ -304,11 +305,8 @@ class TestProcessorIntegration:
 
         get_nornflow_builder("test_target", {}, {}, False, "", processors)
 
-        # Verify with_kwargs was called with processors
-        mock_instance.with_kwargs.assert_called_once()
-        kwargs = mock_instance.with_kwargs.call_args[1]
-        assert "processors" in kwargs
-        assert kwargs["processors"] == processors
+        # Verify with_processors was called directly with the processors
+        mock_instance.with_processors.assert_called_once_with(processors)
 
     @patch("nornflow.cli.run.NornFlowBuilder")
     def test_multiple_processors_added_to_builder(self, mock_builder):
@@ -317,6 +315,7 @@ class TestProcessorIntegration:
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
         mock_instance.with_kwargs.return_value = mock_instance
+        mock_instance.with_processors.return_value = mock_instance  # Add this line
 
         # Create test processor configs
         processors = [
@@ -329,12 +328,8 @@ class TestProcessorIntegration:
 
         get_nornflow_builder("test_target", {}, {}, False, "", processors)
 
-        # Verify with_kwargs was called with processors
-        mock_instance.with_kwargs.assert_called_once()
-        kwargs = mock_instance.with_kwargs.call_args[1]
-        assert "processors" in kwargs
-        assert kwargs["processors"] == processors
-        assert len(kwargs["processors"]) == 2
+        # Verify with_processors was called directly with the processors
+        mock_instance.with_processors.assert_called_once_with(processors)
 
 
 class TestCLIWorkflowOverrides:
