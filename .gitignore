@@ -197,3 +197,6 @@ todo*
 
 # Ignore nornflow.yaml file in the root directory
 /nornflow.yaml
+
+# Ignore vars directory
+/vars/
