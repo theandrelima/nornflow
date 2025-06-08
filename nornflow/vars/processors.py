@@ -18,6 +18,12 @@ class NornFlowVariableProcessor(Processor):
         super().__init__()
         self.vars_manager = vars_manager
     
+    def task_started(self, task: Task) -> None:
+        pass
+    
+    def task_completed(self, task: Task, result: Result) -> None:
+        pass
+    
     def task_instance_started(self, task: Task, host: str) -> None:
         """
         Set the current host in the proxy when a task starts on a host.
@@ -44,3 +50,9 @@ class NornFlowVariableProcessor(Processor):
         """
         # Clear the host reference when done with this host
         self.vars_manager.nornir_host_proxy.current_host = None
+
+    def subtask_instance_started(self, task: Task, host: str) -> None:
+        pass
+    
+    def subtask_instance_completed(self, task: Task, host: str, result: Result) -> None:
+        pass
