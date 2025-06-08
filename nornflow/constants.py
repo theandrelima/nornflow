@@ -12,6 +12,7 @@ NONRFLOW_SETTINGS_OPTIONAL = {
     "local_filters_dirs": [],
     "imported_packages": [],
     "processors": [],
+    "vars_dir": "vars",
 }
 
 # Used to check if the kwargs passed to a NornFlow initializer are valid.

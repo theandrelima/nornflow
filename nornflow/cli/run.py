@@ -155,6 +155,21 @@ def parse_inventory_filters(value: str | None) -> dict[str, Any]:
     return parse_key_value_pairs(value, "inventory filters")
 
 
+def parse_variables(value: str | None) -> dict[str, Any]:
+    """
+    Convert a string of key=value pairs into a dictionary for CLI variables.
+
+    Args:
+        value: String in one of these formats:
+            - "server='10.0.0.1', debug=True, ports=[22,80]"
+            - "server=10.0.0.1, debug=true, ports=22,80"
+
+    Returns:
+        Dictionary of variables
+    """
+    return parse_key_value_pairs(value, "variables")
+
+
 def parse_processors(value: str | None) -> list[dict[str, Any]]:
     """
     Parse a string of processor configurations into a list of processor configs.
@@ -204,6 +219,7 @@ def get_nornflow_builder(
     dry_run: bool,
     settings_file: str = "",
     processors: list[dict[str, Any]] | None = None,
+    cli_vars: dict[str, Any] | None = None,
 ) -> NornFlowBuilder:
     """
     Build the workflow using the provided target, arguments, inventory filters, and dry-run option.
@@ -215,6 +231,7 @@ def get_nornflow_builder(
         dry_run (bool): The dry-run option.
         settings_file (str): The path to a YAML settings file for NornFlowSettings.
         processors (list): The processor configurations.
+        cli_vars (dict): CLI variables with highest precedence.
 
     Returns:
         NornFlowBuilder: The builder instance with the configured workflow.
@@ -233,6 +250,10 @@ def get_nornflow_builder(
     # Add processors using dedicated method if specified
     if processors:
         builder.with_processors(processors)
+        
+    # Add CLI variables if specified
+    if cli_vars:
+        builder.with_cli_vars(cli_vars)
 
     if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS):
         target_path = Path(target)
@@ -297,6 +318,14 @@ ARGS_OPTION = typer.Option(
     help="Task arguments in flexible format, examples:\n- \"key1='value1', key2=[1,2,3]\"\n- \"commands=show version,show ip int brief\"\n- \"config={'interface': 'value'}\"",  # noqa: E501
 )
 
+VARS_OPTION = typer.Option(
+    None,
+    "--vars",
+    "-v",
+    help="Variables in flexible format, with highest precedence in the variables system."
+    "\nExamples:\n- \"server='10.0.0.1', debug=True\"\n- \"domain='example.com', ports=[80,443]\"",
+)
+
 DRY_RUN_OPTION = typer.Option(
     False,
     "--dry-run",
@@ -323,6 +352,7 @@ def run(
     groups: list[str] | None = GROUPS_OPTION,
     inventory_filters: str | None = INVENTORY_FILTERS_OPTION,
     processors: str | None = PROCESSORS_OPTION,
+    vars: str | None = VARS_OPTION,
     dry_run: bool = DRY_RUN_OPTION,
 ) -> None:
     """
@@ -336,6 +366,9 @@ def run(
 
         # Parse inventory filters if provided
         parsed_inventory_filters = parse_inventory_filters(inventory_filters) if inventory_filters else {}
+        
+        # Parse CLI variables if provided
+        parsed_vars = parse_variables(vars) if vars else {}
 
         # Parse processors if provided
         parsed_processors = parse_processors(processors) if processors else []
@@ -371,16 +404,19 @@ def run(
             )
 
         builder = get_nornflow_builder(
-            target, parsed_args, all_inventory_filters, dry_run, settings, parsed_processors
+            target, parsed_args, all_inventory_filters, dry_run, settings, parsed_processors, parsed_vars
         )
 
         # Calculate processor info for display
         processor_info = f", processors: {parsed_processors}" if parsed_processors else ""
+        
+        # Calculate variables info for display
+        vars_info = f", vars: {parsed_vars}" if parsed_vars else ""
 
         # Update the output message to include all filters
         filter_info = f"filters: {all_inventory_filters}" if all_inventory_filters else "no filters"
         typer.secho(
-            f"Running: {target} (args: {parsed_args}, {filter_info}, dry-run: {dry_run}{processor_info})",
+            f"Running: {target} (args: {parsed_args}, {filter_info}, dry-run: {dry_run}{processor_info}{vars_info})",
             fg=typer.colors.GREEN,
         )
 

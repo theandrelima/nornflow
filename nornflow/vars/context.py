@@ -23,10 +23,10 @@ class DeviceContext:
     
     Note: This class only manages static variable sources (1-6 and 8 in precedence order)
     and does NOT directly handle Nornir inventory variables (source #7). That's handled by
-    VariableManager using NornirHostProxy.
+    VariablesManager using NornirHostProxy.
     
     The separation of environment variables in get_flat_context_without_env() is 
-    intentional to allow VariableManager to insert Nornir variables (source #7) 
+    intentional to allow VariablesManager to insert Nornir variables (source #7) 
     between higher precedence sources and environment variables, maintaining the
     documented precedence order.
     """
@@ -52,7 +52,7 @@ class DeviceContext:
         """
         Initialize the shared state for all future device contexts.
         
-        This method should be called once at VariableManager initialization.
+        This method should be called once at VariablesManager initialization.
         All future DeviceContext instances will reference this shared state
         until they need to modify a variable, at which point they'll create
         their own device-specific override.
@@ -216,33 +216,68 @@ class DeviceContext:
     def env_vars(self, value: dict[str, Any]) -> None:
         """Set all environment variables as overrides."""
         self._env_overrides = value.copy() if value else {}
+    
+    def _build_precedence_layers(self) -> list[dict[str, Any]]:
+        """
+        Build precedence layers in order from lowest to highest priority.
+        
+        Returns ordered list of variable sources according to documented precedence:
+        1. Environment variables (precedence #8 - lowest)
+        2. [Nornir inventory variables (precedence #7) - handled separately by VariablesManager]
+        3. Default variables (precedence #6)
+        4. Domain variables (precedence #5)
+        5. Paired workflow variables (precedence #4)
+        6. Inline workflow variables (precedence #3)
+        7. Runtime variables (precedence #2)
+        8. CLI variables (precedence #1 - highest)
+        """
+        return [
+            self.env_vars,               # Precedence #8 (lowest)
+            self.default_vars,           # Precedence #6
+            self.domain_vars,            # Precedence #5  
+            self.workflow_paired_vars,   # Precedence #4
+            self.workflow_inline_vars,   # Precedence #3
+            self.runtime_vars,           # Precedence #2
+            self.cli_vars,               # Precedence #1 (highest)
+        ]
+
+    def _get_flat_context_common(self, include_env_vars: bool = False) -> dict[str, Any]:
+        """
+        Build flattened context with optional environment variables.
+        
+        Args:
+            include_env_vars: If True, include environment variables at lowest precedence
+            
+        Returns:
+            dict[str, Any]: Flattened variable context following precedence order
+        """
+        precedence_layers = self._build_precedence_layers()
+        
+        # Start from env_vars layer if needed, otherwise skip it
+        start_index = 0 if include_env_vars else 1
+        
+        flat_context = {}
+        for layer in precedence_layers[start_index:]:
+            flat_context.update(layer)
+        
+        return flat_context
         
     def get_flat_context_without_env(self) -> dict[str, Any]:
         """
         Get a flattened view of all variables following precedence rules,
         excluding environment variables which have lowest precedence.
-        """
-        flat_context = {}
         
-        flat_context.update(self.default_vars)
-        flat_context.update(self.domain_vars)
-        flat_context.update(self.workflow_paired_vars)
-        flat_context.update(self.workflow_inline_vars)
-        flat_context.update(self.runtime_vars)
-        flat_context.update(self.cli_vars)
-        return flat_context
+        Used by VariablesManager for template resolution where Nornir inventory 
+        variables need to be checked at precedence #7 between higher precedence 
+        sources and environment variables.
+        """
+        return self._get_flat_context_common(include_env_vars=False)
         
     def get_flat_context(self) -> dict[str, Any]:
         """
-        Get a flattened view of all variables including env vars.
-        """
-        flat_context = {}
+        Get a flattened view of all variables including environment variables.
         
-        flat_context.update(self.env_vars)
-        flat_context.update(self.default_vars)
-        flat_context.update(self.domain_vars)
-        flat_context.update(self.workflow_paired_vars)
-        flat_context.update(self.workflow_inline_vars)
-        flat_context.update(self.runtime_vars)
-        flat_context.update(self.cli_vars)
-        return flat_context
+        Used when complete variable context is needed without special precedence 
+        handling for Nornir inventory variables.
+        """
+        return self._get_flat_context_common(include_env_vars=True)
