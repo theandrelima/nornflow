@@ -5,6 +5,7 @@ from typing import Any
 
 from nornflow.builtins import DefaultNornFlowProcessor
 from nornflow.builtins import filters as builtin_filters
+from nornflow.builtins import tasks as builtin_tasks
 from nornflow.constants import (
     NORNFLOW_INVALID_INIT_KWARGS,
     NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS,
@@ -362,12 +363,20 @@ class NornFlow:
         """
         Entrypoint method that will put in motion the logic to discover and load
         all Nornir tasks from directories specified in the NornFlow configuration.
+        
+        Tasks are loaded in two phases:
+        1. Built-in tasks from nornflow.builtins.tasks module (always available)
+        2. User-defined tasks from local_tasks_dirs (can override built-ins)
         """
         self._tasks_catalog = {}
-
+        
+        # Phase 1: Load built-in tasks
+        self._register_nornir_tasks_from_module(builtin_tasks)
+        
+        # Phase 2: Load tasks from local directories (can override built-ins)
         for task_dir in self.settings.local_tasks_dirs:
             self._discover_tasks_in_dir(task_dir)
-
+    
         if not self._tasks_catalog:
             raise EmptyTaskCatalogError()
 
@@ -569,7 +578,8 @@ class NornFlow:
         self.workflow.run(
             self.nornir_manager, 
             self.tasks_catalog, 
-            self.filters_catalog, 
+            self.filters_catalog,
+            self.settings.local_workflows_dirs,
             self.processors,
             cli_vars=self.cli_vars  # Pass CLI variables for highest precedence
         )

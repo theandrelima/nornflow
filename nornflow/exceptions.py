@@ -64,7 +64,20 @@ class NornFlowRunError(NornFlowCoreError):
 
     def __init__(self, message: str):
         super().__init__(message)
+        
 
+class TaskValidationError(NornFlowCoreError):
+    """Raised when task model validation fails."""
+    
+    def __init__(self, task_name: str, field_name: str, reason: str | None = None):
+        self.task_name = task_name
+        self.field_name = field_name
+        self.reason = reason
+        
+        message = (
+            f"Task '{task_name}' validation failed for field '{field_name}'{': ' + reason if reason else '.'}")
+        
+        super().__init__(message)
 
 ###############################################################################
 # WORKFLOW EXCEPTIONS

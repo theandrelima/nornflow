@@ -39,6 +39,9 @@ workflow:
         param2: "value2"
 ```
 
+> **NOTE:** NonrFlow workflows support a powerful variable system, but we won't cover variables at all in this document. For a comprehensive guide to NornFlow's variable system, including namespaces, precedence rules, and examples, please refer to the [NornFlow Variables System documentation](nornflow_vars.md).
+
+
 ## Required and Optional Fields
 > NOTE: Mind the indentation below. It indicates what fields are expected to be nested under what other fields.
 
@@ -247,6 +250,17 @@ workflow:
   
 ## Navigation
 
+<table width="100%" border="0" style="border-collapse: collapse;">
+<tr>
+<td width="33%" align="left" style="border: none;">
 <a href="./nornflow_and_workflows.md">← Previous: NornFlow & Workflows</a>
+</td>
+<td width="33%" align="center" style="border: none;">
+</td>
+<td width="33%" align="right" style="border: none;">
+<a href="./nornflow_vars.md">Next: NornFlow Variables System →</a>
+</td>
+</tr>
+</table>
 
 </div>

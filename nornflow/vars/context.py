@@ -1,40 +1,30 @@
-import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
-class DeviceContext:
+class NornFlowDeviceContext:
     """
-    Maintains an isolated variable context for a specific device.
+    Maintains an isolated variable context for a specific device's NornFlow Variables.
     
-    Each device gets its own copy of variables from all sources,
-    enabling per-device isolation during task execution.
+    This class handles only the default namespace (NornFlow Variables) that are accessed 
+    without prefixes like {{ variable_name }}. It does NOT manage 'host.' or 'global.' 
+    namespaces, which are handled separately by other components.
     
-    Uses shared initial state for all devices with per-variable overrides
-    to minimize memory usage, only storing values that differ from the shared state.
+    Each device gets its own view of variables from all sources within the NornFlow 
+    Default Namespace, enabling per-device isolation during task execution.
+    
+    It uses a copy-on-write strategy for shared initial state variables (CLI, Inline Workflow,
+    Domain, Default, Environment) to minimize memory usage, only storing values that 
+    differ from the shared state at the device level. Runtime variables are always 
+    device-specific.
     
     This class provides:
-    1. Memory-efficient variable storage using class-level shared state
-    2. Complete isolation between devices during parallel execution
-    3. Variable access methods that enforce precedence order
-    4. Separation of environment variables to ensure correct precedence (lowest priority)
-    5. Support for device-specific runtime variables
-    6. Per-variable granularity for overrides to maximize memory sharing
-    
-    Note: This class only manages static variable sources (1-6 and 8 in precedence order)
-    and does NOT directly handle Nornir inventory variables (source #7). That's handled by
-    VariablesManager using NornirHostProxy.
-    
-    The separation of environment variables in get_flat_context_without_env() is 
-    intentional to allow VariablesManager to insert Nornir variables (source #7) 
-    between higher precedence sources and environment variables, maintaining the
-    documented precedence order.
+    1. Memory-efficient variable storage using class-level shared initial state.
+    2. Complete isolation between devices during parallel execution.
+    3. Variable access methods that enforce the documented precedence order.
+    4. Support for device-specific runtime variables.
     """
     
-    # Class variables to store shared initial state for all device contexts
     _initial_cli_vars: dict[str, Any] = {}
     _initial_workflow_inline_vars: dict[str, Any] = {}
-    _initial_workflow_paired_vars: dict[str, Any] = {}
     _initial_domain_vars: dict[str, Any] = {}
     _initial_default_vars: dict[str, Any] = {}
     _initial_env_vars: dict[str, Any] = {}
@@ -44,7 +34,7 @@ class DeviceContext:
     def initialize_shared_state(
         cls,
         cli_vars: dict[str, Any],
-        workflow_vars: dict[str, Any],
+        inline_workflow_vars: dict[str, Any],
         domain_vars: dict[str, Any],
         default_vars: dict[str, Any],
         env_vars: dict[str, Any]
@@ -52,21 +42,20 @@ class DeviceContext:
         """
         Initialize the shared state for all future device contexts.
         
-        This method should be called once at VariablesManager initialization.
+        This method should be called once at NornFlowVariablesManager initialization.
         All future DeviceContext instances will reference this shared state
-        until they need to modify a variable, at which point they'll create
-        their own device-specific override.
+        for their initial variable layers. Device-specific modifications
+        are stored as overrides.
         
         Args:
-            cli_vars: Variables from CLI arguments
-            workflow_vars: Variables from the workflow definition
-            domain_vars: Domain-specific variables
-            default_vars: Default variables shared by all workflows
-            env_vars: Environment variables with NORNFLOW_VAR prefix
+            cli_vars: Variables from CLI arguments.
+            inline_workflow_vars: Variables from the workflow definition's 'vars' section.
+            domain_vars: Domain-specific default variables.
+            default_vars: Global default variables.
+            env_vars: Environment variables with NORNFLOW_VAR_ prefix.
         """
         cls._initial_cli_vars = cli_vars.copy()
-        cls._initial_workflow_inline_vars = workflow_vars.get("inline", {}).copy()
-        cls._initial_workflow_paired_vars = workflow_vars.get("paired", {}).copy()
+        cls._initial_workflow_inline_vars = inline_workflow_vars.copy()
         cls._initial_domain_vars = domain_vars.copy()
         cls._initial_default_vars = default_vars.copy()
         cls._initial_env_vars = env_vars.copy()
@@ -74,72 +63,43 @@ class DeviceContext:
     
     def __init__(self, host_name: str) -> None:
         """
-        Create a new device context with reference to shared initial state.
+        Create a new device context.
         
         Args:
-            host_name: Name of the device this context belongs to
+            host_name: Name of the device this context belongs to.
             
         Raises:
-            RuntimeError: If shared state hasn't been initialized
+            RuntimeError: If shared state hasn't been initialized via initialize_shared_state.
         """
         if not self.__class__._shared_state_initialized:
-            raise RuntimeError("DeviceContext shared state must be initialized before creating instances")
+            raise RuntimeError(
+                "NornFlowDeviceContext shared state must be initialized by calling "
+                "NornFlowDeviceContext.initialize_shared_state() before creating instances."
+            )
             
         self.host_name = host_name
         
-        # Device-specific overrides - only store variables that differ from shared state
         self._cli_overrides: dict[str, Any] = {}
         self._workflow_inline_overrides: dict[str, Any] = {}
-        self._workflow_paired_overrides: dict[str, Any] = {}
         self._domain_overrides: dict[str, Any] = {}
         self._default_overrides: dict[str, Any] = {}
         self._env_overrides: dict[str, Any] = {}
         
-        # Runtime vars are always device-specific (no shared state)
         self.runtime_vars: dict[str, Any] = {}
-    
-    # Methods for setting individual variables within categories
-    
-    def set_cli_var(self, name: str, value: Any) -> None:
-        """Set a single CLI variable override."""
-        self._cli_overrides[name] = value
-        
-    def set_workflow_inline_var(self, name: str, value: Any) -> None:
-        """Set a single inline workflow variable override."""
-        self._workflow_inline_overrides[name] = value
-        
-    def set_workflow_paired_var(self, name: str, value: Any) -> None:
-        """Set a single paired workflow variable override."""
-        self._workflow_paired_overrides[name] = value
-        
-    def set_domain_var(self, name: str, value: Any) -> None:
-        """Set a single domain variable override."""
-        self._domain_overrides[name] = value
-        
-    def set_default_var(self, name: str, value: Any) -> None:
-        """Set a single default variable override."""
-        self._default_overrides[name] = value
-        
-    def set_env_var(self, name: str, value: Any) -> None:
-        """Set a single environment variable override."""
-        self._env_overrides[name] = value
-        
-    # Properties that implement per-variable override behavior
     
     @property
     def cli_vars(self) -> dict[str, Any]:
         """Get CLI variables with device-specific overrides applied."""
-        if not self._cli_overrides:  # No overrides, return shared state directly
+        if not self._cli_overrides:
             return self.__class__._initial_cli_vars
         
-        # Merge shared state with overrides
         result = self.__class__._initial_cli_vars.copy()
         result.update(self._cli_overrides)
         return result
         
     @cli_vars.setter
     def cli_vars(self, value: dict[str, Any]) -> None:
-        """Set all CLI variables as overrides."""
+        """Set all CLI variables as overrides for this device."""
         self._cli_overrides = value.copy() if value else {}
         
     @property
@@ -154,23 +114,8 @@ class DeviceContext:
         
     @workflow_inline_vars.setter
     def workflow_inline_vars(self, value: dict[str, Any]) -> None:
-        """Set all inline workflow variables as overrides."""
+        """Set all inline workflow variables as overrides for this device."""
         self._workflow_inline_overrides = value.copy() if value else {}
-        
-    @property
-    def workflow_paired_vars(self) -> dict[str, Any]:
-        """Get paired workflow variables with device-specific overrides applied."""
-        if not self._workflow_paired_overrides:
-            return self.__class__._initial_workflow_paired_vars
-        
-        result = self.__class__._initial_workflow_paired_vars.copy()
-        result.update(self._workflow_paired_overrides)
-        return result
-        
-    @workflow_paired_vars.setter
-    def workflow_paired_vars(self, value: dict[str, Any]) -> None:
-        """Set all paired workflow variables as overrides."""
-        self._workflow_paired_overrides = value.copy() if value else {}
         
     @property
     def domain_vars(self) -> dict[str, Any]:
@@ -184,7 +129,7 @@ class DeviceContext:
         
     @domain_vars.setter
     def domain_vars(self, value: dict[str, Any]) -> None:
-        """Set all domain variables as overrides."""
+        """Set all domain variables as overrides for this device."""
         self._domain_overrides = value.copy() if value else {}
         
     @property
@@ -199,7 +144,7 @@ class DeviceContext:
         
     @default_vars.setter
     def default_vars(self, value: dict[str, Any]) -> None:
-        """Set all default variables as overrides."""
+        """Set all default variables as overrides for this device."""
         self._default_overrides = value.copy() if value else {}
         
     @property
@@ -214,70 +159,51 @@ class DeviceContext:
         
     @env_vars.setter
     def env_vars(self, value: dict[str, Any]) -> None:
-        """Set all environment variables as overrides."""
+        """Set all environment variables as overrides for this device."""
         self._env_overrides = value.copy() if value else {}
     
     def _build_precedence_layers(self) -> list[dict[str, Any]]:
         """
         Build precedence layers in order from lowest to highest priority.
         
+        This order is crucial for the flattening process where higher precedence
+        layers (later in this list) will override keys from lower precedence layers.
+        
         Returns ordered list of variable sources according to documented precedence:
-        1. Environment variables (precedence #8 - lowest)
-        2. [Nornir inventory variables (precedence #7) - handled separately by VariablesManager]
-        3. Default variables (precedence #6)
-        4. Domain variables (precedence #5)
-        5. Paired workflow variables (precedence #4)
-        6. Inline workflow variables (precedence #3)
-        7. Runtime variables (precedence #2)
-        8. CLI variables (precedence #1 - highest)
+        1. Environment Variables (lowest priority - precedence #6 in docs)
+        2. Default Variables (precedence #5 in docs)
+        3. Domain-specific Default Variables (precedence #4 in docs)
+        4. Inline Workflow Variables (precedence #3 in docs)
+        5. CLI Variables (precedence #2 in docs)
+        6. Runtime Variables (highest priority - precedence #1 in docs)
         """
         return [
-            self.env_vars,               # Precedence #8 (lowest)
-            self.default_vars,           # Precedence #6
-            self.domain_vars,            # Precedence #5  
-            self.workflow_paired_vars,   # Precedence #4
-            self.workflow_inline_vars,   # Precedence #3
-            self.runtime_vars,           # Precedence #2
-            self.cli_vars,               # Precedence #1 (highest)
+            self.env_vars,
+            self.default_vars,
+            self.domain_vars,  
+            self.workflow_inline_vars,
+            self.cli_vars,
+            self.runtime_vars,
         ]
 
-    def _get_flat_context_common(self, include_env_vars: bool = False) -> dict[str, Any]:
+    def get_flat_context(self) -> dict[str, Any]:
         """
-        Build flattened context with optional environment variables.
+        Get a flattened view of all NornFlow Default Namespace variables for this device,
+        following the complete precedence hierarchy.
         
-        Args:
-            include_env_vars: If True, include environment variables at lowest precedence
-            
+        Used when the complete variable context for the NornFlow Default Namespace
+        is needed. This does not include 'host.' or 'global.' namespace variables,
+        which are handled by other components.
+        
         Returns:
-            dict[str, Any]: Flattened variable context following precedence order
+            A dictionary representing the flattened variable context for this device,
+            respecting the defined precedence order from environment variables 
+            (lowest) to runtime variables (highest).
         """
         precedence_layers = self._build_precedence_layers()
         
-        # Start from env_vars layer if needed, otherwise skip it
-        start_index = 0 if include_env_vars else 1
-        
         flat_context = {}
-        for layer in precedence_layers[start_index:]:
+        for layer in precedence_layers:
             flat_context.update(layer)
         
         return flat_context
-        
-    def get_flat_context_without_env(self) -> dict[str, Any]:
-        """
-        Get a flattened view of all variables following precedence rules,
-        excluding environment variables which have lowest precedence.
-        
-        Used by VariablesManager for template resolution where Nornir inventory 
-        variables need to be checked at precedence #7 between higher precedence 
-        sources and environment variables.
-        """
-        return self._get_flat_context_common(include_env_vars=False)
-        
-    def get_flat_context(self) -> dict[str, Any]:
-        """
-        Get a flattened view of all variables including environment variables.
-        
-        Used when complete variable context is needed without special precedence 
-        handling for Nornir inventory variables.
-        """
-        return self._get_flat_context_common(include_env_vars=True)

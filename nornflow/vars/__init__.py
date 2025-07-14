@@ -8,7 +8,7 @@ This package provides the variable management functionality for NornFlow, includ
 - Template rendering with Jinja2
 """
 
-from nornflow.vars.context import DeviceContext
+from nornflow.vars.context import NornFlowDeviceContext
 from nornflow.vars.exceptions import (
     NornFlowVarsError,
     VariableDirectoryError,
@@ -16,13 +16,13 @@ from nornflow.vars.exceptions import (
     VariableNotFoundError,
     VariableResolutionError,
 )
-from nornflow.vars.manager import VariablesManager
+from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
 from nornflow.vars.proxy import NornirHostProxy
 
 __all__ = [
-    "DeviceContext", 
-    "VariablesManager", 
+    "NornFlowDeviceContext", 
+    "NornFlowVariablesManager", 
     "NornirHostProxy",
     "NornFlowVariableProcessor",
     "NornFlowVarsError",

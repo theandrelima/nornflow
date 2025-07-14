@@ -18,7 +18,7 @@ from nornflow.exceptions import (
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.utils import load_processor
-from nornflow.vars.manager import VariablesManager
+from nornflow.vars.manager import NornFlowVariablesManager
 
 # making sure pydantic_serdes sees Workflow models
 os.environ["MODELS_MODULES"] = "nornflow.models"
@@ -405,7 +405,7 @@ class Workflow:
         for filter_kwargs in filter_kwargs_list:
             nornir_manager.apply_filters(**filter_kwargs)
 
-    def _init_variable_manager(self) -> None:
+    def _init_variable_manager(self, workflows_dirs) -> None:
         """
         Initialize the VariablesManager if it hasn't been created yet.
         
@@ -420,15 +420,16 @@ class Workflow:
         variable resolution system is activated.
         """
         if self.vars_manager is None:
-            self.vars_manager = VariablesManager(
+            self.vars_manager = NornFlowVariablesManager(
                 vars_dir=self.vars_dir,
                 cli_vars=self.cli_vars,  # Uses most recent CLI vars
-                workflow_vars=self.vars,
-                workflow_path=self.workflow_path
+                inline_workflow_vars=self.vars,
+                workflow_path=self.workflow_path,
+                workflow_roots= workflows_dirs
             )
 
     def _with_processors(
-        self, nornir_manager: NornirManager, processors: list[Processor] | None = None
+        self, nornir_manager: NornirManager, workflows_dirs: list[str], processors: list[Processor] | None = None
     ) -> None:
         """
         Apply processors to the Nornir instance based on configuration.
@@ -448,7 +449,7 @@ class Workflow:
                 processors defined
         """
         # Ensure we have a variable manager
-        self._init_variable_manager()
+        self._init_variable_manager(workflows_dirs=workflows_dirs)
         
         # Create our variable processor for host-specific variable resolution
         var_processor = NornFlowVariableProcessor(self.vars_manager)
@@ -480,19 +481,19 @@ class Workflow:
         nornir_manager: NornirManager,
         tasks_catalog: dict[str, Callable],
         filters_catalog: dict[str, Callable],
+        workflows_dirs: list[str | None] = [],
         processors: list[Processor] | None = None,
         cli_vars: Optional[dict[str, Any]] = None,
     ) -> None:
-        """
-        Run the workflow tasks.
-        
+        """           
         This method orchestrates the complete workflow execution process:
         1. Updates CLI variables if provided (late binding support)
         2. Initializes the variable manager with the current variable state
         3. Applies inventory filters to narrow down target devices
         4. Sets up processors (always including NornFlowVariableProcessor first)
         5. Executes each task in the defined sequence
-        6. Prints final workflow summary via processors
+        6. If a task has the 'set_to' keyword, its result is saved as a runtime variable.
+        7. Prints final workflow summary via processors
         
         Late Binding of CLI Variables:
         The method supports late binding of CLI variables, allowing them to be provided
@@ -523,13 +524,13 @@ class Workflow:
         self._check_tasks(tasks_catalog)
         
         # Initialize variable manager with updated CLI vars
-        self._init_variable_manager()
+        self._init_variable_manager(workflows_dirs=workflows_dirs)
         
         # Apply inventory filters
         self._apply_filters(nornir_manager, filters_catalog)
         
         # Apply processors (NornFlowVariableProcessor will be added first)
-        self._with_processors(nornir_manager, processors)
+        self._with_processors(nornir_manager, workflows_dirs, processors)
 
         # Set task count on processors that support it
         for processor in nornir_manager.nornir.processors:
@@ -538,7 +539,20 @@ class Workflow:
 
         # Execute tasks in sequence
         for task in self.tasks:
-            task.run(nornir_manager, tasks_catalog)
+            # Run the task and capture its result
+            aggregated_result = task.run(nornir_manager, tasks_catalog)
+
+            # After the task runs, check if its 'set_to' attribute is defined.
+            if hasattr(task, "set_to") and task.set_to:
+                # The 'aggregated_result' is a dictionary of {host_name: Result}.
+                # We must iterate through it to set the variable for each host,
+                # because NornFlow Runtime Variables are per-device.
+                for host_name, host_result in aggregated_result.items():
+                    self.vars_manager.set_runtime_variable(
+                        name=task.set_to,
+                        value=host_result,  # The entire Nornir Result object for this host
+                        host_name=host_name,
+                    )
 
         # Call print_final_workflow_summary on processors that support it
         for processor in nornir_manager.nornir.processors:

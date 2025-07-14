@@ -1,401 +1,439 @@
 # NornFlow Variables System
 
 ## Table of Contents
-- [Variable Resolution Architecture](#variable-resolution-architecture)
-  - [Variable Sources and Precedence](#variable-sources-and-precedence-highest-to-lowest-priority)
+- [Variable Namespaces](#variable-namespaces)
+- [The `default` Namespace - NornFlow Variables](#the-default-namespace---nornflow-variables)
+  - [Variable Sources and Precedence](#variable-sources-and-precedence)
+  - [What is a Domain?](#what-is-a-domain)
   - [Per-Device Variable Context](#per-device-variable-context)
-  - [The 'global' Namespace](#the-global-namespace)
-  - [Case Sensitivity Rules](#case-sensitivity-rules)
-- [CLI Variables: Dual Nature and Flexibility](#cli-variables-dual-nature-and-flexibility)
-  - [CLI Variables as Command-Line Interface](#cli-variables-as-command-line-interface)
-  - [CLI Variables as Override Mechanism](#cli-variables-as-override-mechanism)
-  - [Late Binding and Runtime Updates](#late-binding-and-runtime-updates)
+  - [The `vars_dir` Setting](#the-vars_dir-setting)
+- [The `host` Namespace - Nornir Inventory Variables](#the-host-namespace---nornir-inventory-variables)
+  - [Nornir Inventory Variable Access](#nornir-inventory-variable-access)
+  - [Host Variable Resolution Order](#host-variable-resolution-order)
+- [Setting Variables During Workflow Execution (Runtime NornFlow Variables)](#setting-variables-during-workflow-execution-runtime-nornflow-variables)
+  - [Using the built-in `set` task](#using-the-built-in-set-task)
+  - [Advanced Operations with `set` and Jinja2](#advanced-operations-with-set-and-jinja2)
+  - [Capturing Task Outputs Directly into Variables](#capturing-task-outputs-directly-into-variables)
+- [CLI Variables and Late Binding](#cli-variables-and-late-binding)
 - [Directory Structure Example](#directory-structure-example)
   - [Domain Resolution with Multiple Workflow Directories](#domain-resolution-with-multiple-workflow-directories)
-  - [Special Cases](#special-cases)
+  - [Special Cases for Domain Resolution](#special-cases-for-domain-resolution)
   - [Example Multi-Directory Setup](#example-multi-directory-setup)
 - [Example Workflow with Variables](#example-workflow-with-variables)
 - [Variable File Contents Example](#variable-file-contents-example)
 - [Resolution Process Example](#resolution-process-example)
+- [Advanced Topics](#advanced-topics)
+  - [Case Sensitivity](#case-sensitivity)
+  - [Nested Variable Access](#nested-variable-access)
+- [Navigation](#navigation)
 
-## Variable Resolution Architecture
+## Variable Namespaces
 
-NornFlow implements a flexible variable management system with per-device isolation and optional global sharing. This section covers the core concepts you need to understand NornFlow's variable system.
+NornFlow implements a flexible variable management system that separates variables into two distinct namespaces. This separation allows for powerful and dynamic workflow configurations while maintaining clear boundaries between different types of data.
 
-### Variable Sources and Precedence (Highest to Lowest Priority)
+NornFlow provides two types of variables:
 
-When resolving variables for each device's context, NornFlow combines variables from multiple sources following this precedence order:
+1. **NornFlow Variables (Default Namespace)** - Your workflow's dynamic data
+2. **Host Namespace (`host.`)** - Read-only access to Nornir inventory data
 
-1. **CLI Variables** (***CLI is King!*** 👑)
-   - Variables passed through command line arguments with `--vars`
-   - Can also be set programmatically as override variables with highest precedence
+Let's explore each namespace in detail.
 
-2. **Runtime Variables**
-   - Set programmatically during workflow execution
+## The `default` Namespace - NornFlow Variables
+
+NornFlow Variables are accessed directly by name without any prefix:
+
+```jinja2
+{{ variable_name }}
+{{ backup_filename }}
+{{ operation_timeout }}
+```
+
+These variables form the primary way to manage dynamic data within your workflows. They are device-specific, meaning each device maintains its own isolated set of these variables during workflow execution.
+
+> **BEST PRACTICE**: Avoid creating NornFlow variables with names that begin with `host`, as this may cause confusion with the `host.` namespace prefix. For example, instead of `hostname`, consider using `device_name` or `system_hostname`.
+
+### Variable Sources and Precedence
+
+NornFlow combines variables from multiple sources to create each device's variable context. When multiple sources define the same variable name, NornFlow uses a clear precedence order (highest to lowest priority):
+
+1. **Runtime Variables** (highest priority)
+   - Variables set during workflow execution using the built-in `set` task
+   - Example: `backup_filename: "{{ host.name }}_backup.cfg"`
+   - These provide the highest level of control, allowing workflows to adapt based on discovered conditions
+   - OBS: Notice that in this example we are accessing a variable in the `host` namespace (Nornir inventory) to define a variable in the `default` (NornFlow) namespace. This is perfectly fine.
+
+2. **CLI Variables**
+   - Variables passed via `--vars` command-line option
+   - Example: `nornflow run workflow.yaml --vars "env=prod,region=us-west"`
+   - Useful for ad-hoc parameter changes or CI/CD pipeline parameters
 
 3. **Inline Workflow Variables**
-   - Defined directly in workflow YAML under the `vars:` section
+   - Variables defined inside the workflow's YAML file under `vars:` key.
+   - These are specific to the workflow in which they are defined
 
-4. **Paired Workflow Variables**
-   - From a paired file in the same directory, with same name as the workflow but prepended with '_vars' (e.g., `deploy_vars.yaml`, for a workflow file named `deploy.yaml`)
+4. **Domain-specific Default Variables**
+   - Variables that apply to all workflows within a specific "domain" *(formally defined in the next section)*
+   - Example: In `workflows/network_provisioning/setup.yaml`, the domain is "network_provisioning"
+   - **Must be stored in `{vars_dir}/{domain_name}/defaults.yaml`** - this is the only file NornFlow will check for domain-specific variables
 
-5. **Domain-specific Default Variables**
-   - Variables specific to a domain (determined by **first directory** after a workflow root)
-   - Stored in `{vars_dir}/{domain}/defaults.yaml`
-   - **Example:**
-      - For a workflow at `workflows/security/compliance/audit.yaml`, domain is "security"
-      - Variables loaded from `vars/security/defaults.yaml`
+5. **Default Variables**
+   - Global variables that apply to all workflows
+   - **Must be stored in `{vars_dir}/defaults.yaml`** - this is the only file NornFlow will check for global default variables
 
-6. **Default Variables**
-   - Shared across all workflows regardless of domain or location
-   - Stored in `{vars_dir}/defaults.yaml`
+6. **Environment Variables** (lowest priority)
+   - System environment variables prefixed with `NORNFLOW_VAR_`
+   - Example: `NORNFLOW_VAR_api_key` becomes available as `{{ api_key }}`
 
-7. **Nornir Inventory Variables**
-   - From Nornir's inventory system (includes host and inherited group variables)
+This hierarchy provides flexibility while keeping things simple (KISS) and predictable.
 
-8. **Environment Variables** (lowest priority)
-   - System environment variables with prefix `NORNFLOW_VAR_`
-   - Example: `NORNFLOW_VAR_template_dir` becomes `{{ template_dir }}`
+### What is a Domain?
 
-> **IMPORTANT NOTE**: In NornFlow, all variables are accessed directly using their name (e.g., `{{ hostname }}`, `{{ site_id }}`), regardless of their source. The system automatically searches all sources according to the precedence order above. Only the `global` namespace requires a prefix (e.g., `{{ global.variable_name }}`).
+In NornFlow's variables system, a **domain** is determined by your workflow's location within the project structure:
+
+- **Domain = First-level subdirectory name** under any configured workflow root directory
+- **Example**: For workflow `workflows/network_provisioning/site_setup.yaml`
+  - Workflow root: `workflows/` (configured in `local_workflows_dirs`)
+  - Domain: `network_provisioning`
+  - Domain variables loaded from: `vars/network_provisioning/defaults.yaml`
+
+**Special Cases:**
+- Workflows directly in a root directory (e.g., `workflows/utility.yaml`) have **no domain**
+- Workflows outside configured roots have **no domain**
+- Only workflows with a domain load domain-specific variables
+- Domain variables **must** be in a file named `defaults.yaml` within the domain subdirectory
+
+**Multiple Workflow Roots:**  
+If you configure multiple workflow directories, the domain is still determined by the first-level subdirectory under whichever root contains your workflow:
+
+```yaml
+# nornflow.yaml
+local_workflows_dirs:
+  - "core_workflows"
+  - "customer_projects/flows"
+```
+
+- `core_workflows/networking/setup.yaml` → Domain: "networking"
+- `customer_projects/flows/security/audit.yaml` → Domain: "security"
+- `customer_projects/flows/networking/custom_setup.yaml` → Domain: "networking" (yes, the same "networking" domain as above)
+
+**Important**: When the same domain name exists across multiple workflow roots (like "networking" in the example above), **all workflows with that domain name share the same domain-specific variables** from `vars/networking/defaults.yaml`. NornFlow doesn't distinguish between domains based on which workflow root they're in - only the domain name matters for variable resolution.
 
 ### Per-Device Variable Context
 
-NornFlow's core design principle is device isolation:
+Each device processed by a workflow maintains its own independent variable context:
 
-- All variables from all sources are combined into a single unified context for each device
-- Each device's context is completely isolated from other devices
-- Changes to variables during task execution affect only the current device
-- The precedence order above determines which value "wins" when the same variable name appears in multiple sources
+- Variables set for one device don't affect other devices
+- Parallel execution is safe and predictable
+- You can reason about variable states without worrying about cross-device interference
 
-### The 'global' Namespace
+### The `vars_dir` Setting
 
-For cases where you need to share data across all devices, NornFlow provides the `global` namespace:
+The `vars_dir` setting in your `nornflow.yaml` file specifies where NornFlow looks for variable files:
 
-- Variables accessed with the `global.` prefix are shared across all devices
-- Example: `{{ global.counter }}` refers to a value that all devices can see and modify
-- Changes to global namespace variables are visible to all devices immediately
-- Use this namespace with caution, as it can lead to race conditions in parallel execution
+```yaml
+# In nornflow.yaml
+vars_dir: "vars"  # Default value
+```
 
-> **IMPORTANT**: `global` is the **only** namespace in NornFlow. All other variables are accessed directly by their name without any prefix, regardless of their source.
+This creates the structure:
+- `{vars_dir}/defaults.yaml` - Global default variables
+- `{vars_dir}/{domain_name}/defaults.yaml` - Domain-specific variables
 
-### Case Sensitivity Rules
+## The `host` Namespace - Nornir Inventory Variables
 
-Variables in NornFlow are **strictly case-sensitive**:
+The `host` namespace provides read-only access to Nornir inventory data for the current device:
 
-- A variable named `fictional_var` is completely different from `FICTIONAL_VAR`
-- No automatic case conversion or matching is performed
-- This applies to ALL variable sources, including environment variables
+```jinja2
+{{ host.name }}           # Device name
+{{ host.platform }}       # Device platform  
+{{ host.data.site_id }}   # Custom inventory data
+```
 
-For environment variables, while the prefix `NORNFLOW_VAR_` must be uppercase, the remainder must exactly match the case used in templates:
+This namespace is distinct from NornFlow variables. Essentially, it's a read-only proxy to Nornir's own Inventory data, with its well established rules.
+
+### Nornir Inventory Variable Access
+
+Access any Nornir inventory data using the `host.` prefix:
+
+```jinja2
+# Core host attributes
+{{ host.name }}
+{{ host.hostname }}
+{{ host.platform }}
+
+# Custom data from inventory
+{{ host.data.site_code }}
+{{ host.data.management_vlan }}
+
+# Nested inventory data
+{{ host.data.interfaces.eth0.ip_address }}
+```
+
+### Host Variable Resolution Order
+
+When accessing `host.` variables, Nornir resolves them in this order:
+
+1. **Direct Host Attributes** - Core Nornir `Host` object properties
+2. **Host-Specific Data** - Custom variables for this specific host
+3. **Group-Inherited Data** - Variables inherited from host groups
+4. **Inventory Defaults** - Default variables defined at the inventory level
+
+## Setting Variables During Workflow Execution (Runtime NornFlow Variables)
+
+Use the built-in `set` task to create or modify NornFlow variables during workflow execution.
+
+### Using the built-in `set` task
+
+A task defined with `name: set` prompts NornFlow to call its builtin `set` task, which accepts one or more *'k:v'* pairs as `args`. For each, it will create (or edit, if it already exists) a NornFlow runtime variable with name 'k' and value 'v'. Notice that this behavior will override the value of an existing variable with name 'k'. 
+
+```yaml
+- name: set
+  args:
+    backup_filename: "{{ host.name }}_backup.cfg"
+    is_configuration_applied: true
+    current_retry_count: 0
+    interface_description: "Configured interface: {{ previous_task_result.interface_name }}"
+```
+The example above acts on 4 variables at once. These variables:
+- Take highest precedence (Runtime)
+- Override any variables from CLI, workflow, domain, or global sources
+- Are isolated on a per-device basis.
+
+> **IMPORTANT**: The `set` task only affects NornFlow variables (default namespace) for the current device. It cannot modify Nornir inventory variables (`host.` namespace).
+
+### Advanced Operations with `set` and Jinja2
+
+Use Jinja2's capabilities for dynamic variable manipulation:
+
+**Conditional Initialization and Counters:**
+```yaml
+- name: set
+  args:
+    # Initialize if undefined, then increment
+    attempt_count: "{{ attempt_count | default(0) | int + 1 }}"
+    
+    # Conditional status messages
+    status_message: "{{ 'Error: ' + last_error_code if last_error_code is defined else 'Success' }}"
+    
+    # Ensure list exists
+    processed_interfaces: "{{ processed_interfaces | default([]) }}"
+```
+
+**List and Dictionary Operations:**
+```yaml
+- name: set
+  args:
+    # Append to lists
+    collected_vlans: "{{ collected_vlans | default([]) + [10, 20, host.data.management_vlan] }}"
+    
+    # Create dictionaries
+    device_settings: "{{ {'name': host.name, 'location': host.data.location, 'contact': admin_email} }}"
+```
+
+### Capturing Task Outputs Directly into Variables
+
+Use `set_to` to capture task results directly into variables:
+
+```yaml
+- name: napalm_get
+  args:
+    getters: ["interfaces_ip"]
+  set_to: interface_ip_data  # Store the complete result here
+```
+
+> **IMPORTANT**: The `set_to` keyword is **not supported** for NornFlow's built-in `echo` and `set` tasks (makes sense, right?). Use it only with Nornir tasks that produce meaningful result objects.
+
+## CLI Variables and Late Binding
+
+CLI variables provide pre-runtime parameterization from the command line:
 
 ```bash
-# This environment variable:
-NORNFLOW_VAR_fictional_var="some value"
-
-# Will ONLY match this variable reference:
-{{ fictional_var }}
-
-# And NOT these:
-{{ FICTIONAL_VAR }}
-{{ Fictional_Var }}
+nornflow run my_workflow.yaml --vars="region=us-east,environment=prod,debug_level=2"
 ```
 
-## CLI Variables: Dual Nature and Flexibility
+These variables:
+- Have precedence #2 (override most sources except runtime variables)
+- Are available to all tasks in the workflow
+- Allow flexible parameterization without modifying workflow files
 
-CLI Variables in NornFlow serve dual purposes while maintaining the highest precedence in the variable resolution system.
-
-### CLI Variables as Command-Line Interface
-
-In their primary role, CLI variables are sourced from command-line arguments:
-
-```bash
-# Traditional CLI usage
-nornflow run deploy.yaml --vars "env=prod,debug=true,server=10.0.0.1"
+```yaml
+- name: echo
+  args:
+    msg: "Working on region: {{ region }} in {{ environment }} environment"
 ```
-
-These variables are parsed from the command line and have the highest precedence, overriding any other variable with the same names.
-
-### CLI Variables as Override Mechanism
-
-Beyond their CLI origins, CLI variables also serve as a **universal override mechanism** for programmatic use:
-
-```python
-# Programmatic usage - CLI variables as override mechanism
-workflow = WorkflowFactory.create_from_file("deploy.yaml")
-
-# Override variables based on runtime conditions
-if emergency_deployment:
-    workflow.run(cli_vars={"skip_tests": True, "fast_mode": True})
-else:
-    workflow.run(cli_vars={"thorough_checks": True})
-
-# Multi-environment deployment using same workflow
-for env in ["dev", "staging", "prod"]:
-    workflow.run(cli_vars={"environment": env, "namespace": f"app-{env}"})
-```
-
-### Late Binding and Runtime Updates
-
-NornFlow implements late binding for CLI variables, allowing them to be updated even after workflow creation:
-
-```python
-# Create workflow with initial CLI variables
-workflow = WorkflowFactory.create_from_file(
-    "deploy.yaml", 
-    cli_vars={"env": "dev", "debug": False}
-)
-
-# Later, update variables at runtime
-workflow.run(cli_vars={"env": "prod", "debug": True, "emergency": True})
-```
-
-**Key Benefits of Late Binding:**
-- **Flexibility**: Variables can be updated based on runtime conditions
-- **Reusability**: Same workflow object can be executed with different variable sets
-- **Integration**: Supports scenarios where NornFlow is embedded in larger systems
 
 ## Directory Structure Example
 
-NornFlow recommends organizing your project with a clear separation of workflows by domain:
+Organize your project with clear separation of variable files:
 
-> **Note:** This example assumes the default configuration where `vars_dir="vars"` and `local_workflows_dirs=["workflows"]`. The paths would change accordingly if you customize these settings in your nornflow.yaml file.
-
-```bash
-project/
-├── nornflow.yaml                  # Contains the `vars_dir` and `local_workflows_dirs` settings
-├── workflows/                     # Default workflow directory 
-│   ├── network_ops/               # Grouped workflows by domain 
-│   │   ├── deploy.yaml            # Workflow with inline vars section
-│   │   └── deploy_vars.yaml       # Paired variables file (lower precedence than inline vars)
-│   └── security/                  # Another domain
-│       └── audit.yaml             # Another workflow
-├── vars/                          # Variables directory (vars_dir)
-│   ├── defaults.yaml              # Default variables for all workflows
-│   ├── network_ops/               # Domain-specific variables
-│   │    └── defaults.yaml         # Variables for network_ops domain workflows
-│   └── security/                  # Another domain's variables
-│       └── defaults.yaml          # Variables for security domain workflows
-└── nornir_configs/                # Nornir configuration files
 ```
-
-### Domain Resolution with Multiple Workflow Directories
-
-NornFlow supports configuring multiple workflow directories via the `local_workflows_dirs` setting:
-
-```yaml
-local_workflows_dirs:
-  - "workflows"
-  - "custom/projects"
-  - "/path/to/other/workflows"
-
-vars_dir: "vars"
-```
-
-When resolving domain-specific variables, NornFlow uses the following approach:
-
-1. **Domain Resolution:** The domain name is determined by the **first directory after a workflow root directory**
-2. **Variable Location:** Domain-specific variables are always stored directly under `{vars_dir}/{domain-name}/defaults.yaml`
-
-> **Key Point:** Even for deeply nested workflow files, the domain is **always the first directory after the workflow root**. For example:
-> 
-> ```
-> workflows/security/compliance/pci.yaml → Domain is "security"
-> custom/projects/network/datacenter/deploy.yaml → Domain is "network"
-> ```
-
-#### Special Cases:
-
-1. **Workflows directly in a root directory:**
-   ```
-   workflows/deploy.yaml → No domain (directly in workflow root)
-   ```
-   In this case, no domain-specific variables are loaded.
-
-2. **Workflows not under any known workflow root:**
-   ```
-   some/random/path/workflow.yaml → No domain (not in a workflow root)
-   ```
-   No domain-specific variables are loaded.
-
-#### Example Multi-Directory Setup
-
-```bash
-project/
-├── workflows/                            # A workflow root 
-│   ├── security/                         # Domain 'security'                       
-│   │   ├── audit.yaml                    # Domain: "security"
-│   │   └── compliance/pci.yaml           # Domain: "security"
-│   └── network/                          # Domain 'network'
-│       └── datacenter/core/deploy.yaml   # Domain: "network"
-├── custom/projects/                      # Another workflow root
-│   ├── security/                         # Domain 'security'
-│   │   └── scan.yaml                     # Domain: "security"
-│   └── cloud/                            # Domain 'cloud'
-│       └── provision.yaml                # Domain: "cloud"
+project_root/
+├── nornflow.yaml
+├── workflows/
+│   ├── network_provisioning/      # Domain: "network_provisioning"
+│   │   └── new_site_setup.yaml
+│   └── security_audits/           # Domain: "security_audits"
+│       └── compliance_check.yaml
 ├── vars/
-│   ├── defaults.yaml                     # Variables for ALL workflows
-│   ├── security/
-│   │   └── defaults.yaml                 # Variables for 'security' domain workflows
-│   ├── network/
-│   │   └── defaults.yaml                 # Variables for 'network' domain workflows
-│   └── cloud/
-│       └── defaults.yaml                 # Variables for 'cloud' domain workflows
-└── nornflow.yaml
+│   ├── defaults.yaml              # Global variables (precedence #5)
+│   ├── network_provisioning/
+│   │   └── defaults.yaml          # Domain variables (precedence #4)
+│   └── security_audits/
+│       └── defaults.yaml
+└── tasks/
+    └── ...
 ```
 
-**Key Points:**
-1. All workflows under both `workflows/security/` and `custom/projects/security/` share the same domain-specific variables from `vars/security/defaults.yaml`
-2. Nested directories like `workflows/security/compliance/` do not create separate domains
+### Example Multi-Directory Setup
+
+```
+my_project/
+├── base_flows/                    # Workflow root
+│   ├── branch_offices/            # Domain: "branch_offices"
+│   │   └── configure_router.yaml
+│   └── utility_tasks.yaml         # No domain
+└── global_vars/
+    ├── defaults.yaml              # Global defaults
+    └── branch_offices/
+        └── defaults.yaml          # Domain defaults
+```
 
 ## Example Workflow with Variables
 
-Here's a complete example of a hypothetical `workflows/network_ops/deploy.yaml` workflow:
-
-> **Note on Example Tasks**: These are hypothetical examples for illustration purposes only.
-
 ```yaml
 workflow:
-  name: Network Configuration Deployment
-  description: "Deploys configuration to network devices"
+  name: New Site Setup
+  description: "Provisions network devices for a new site"
   
-  # Inline workflow variables (precedence #3)
+  # Inline Workflow Variables (precedence #3)
   vars:
-    template_dir: "/workflows/templates"  # Overrides template_dir in deploy_vars.yaml
-    timeout: 30
-    backup_enabled: true
-    config_sections:
-      - interfaces
-      - routing
-      - acl
+    operation_timeout: 600
+    enable_backup_post_provision: true
+    standard_services: [ntp, dns, syslog]
   
-  # Inventory filters
   inventory_filters:
-    platform: "ios"
-    
-  # Tasks with variable references
+    new_site_tag: "{{ cli_site_tag | default('PENDING_PROVISION') }}"
+
   tasks:
-    - name: create_backup
-      # Sets variables during workflow execution (device-specific)
-      task: set
+    - name: set
       args:
-        backup_path: "/backups/{{ hostname }}/{{ '%Y%m%d' | strftime }}"
+        provision_start: true
+        device_identifier: "{{ host.name }}_{{ host.platform }}"
         
-    - name: backup_config
-      task: backup_device
+    - name: my_custom_template_task
       args:
-        dest_dir: "{{ backup_path }}"  # Using device-specific variable just defined above
-        timeout: "{{ timeout }}"  # Using workflow variable
-        
-    - name: generate_config
-      task: template_config
+        target_hostname: "{{ host.name }}"
+        site_code: "{{ host.data.site_code }}"
+        services_to_enable: "{{ standard_services }}"
+      set_to: generated_config_result
+
+    - name: set
       args:
-        template: "{{ template_dir }}/{{ hostname }}.j2"
-        dest: "configs/{{ hostname }}.cfg"
-        sections: "{{ config_sections }}"
-        
-    - name: deploy_config
-      task: push_config
-      args:
-        config_file: "configs/{{ hostname }}.cfg"
-        timeout: "{{ timeout }}"
-        save_config: "{{ backup_enabled }}"
-        
-    - name: count_deployments
-      # Increments a counter shared across all devices
-      task: increment_counter
-      args:
-        counter_name: "{{ global.deployment_count }}"
-        
-    - name: verify_deployment
-      task: run_commands
-      args:
-        commands: 
-          - "show ip interface brief"
-          - "show version"
-        log_level: "{{ log_level | default('info') }}"
-        output_dir: "{{ backup_dir | default('/tmp') }}"
+        completed_steps: "{{ completed_steps | default([]) + ['config_generated'] }}"
+        action_attempts: "{{ action_attempts | default(0) | int + 1 }}"
+
+      (...)
 ```
 
 ## Variable File Contents Example
 
+**`vars/defaults.yaml` (Global Variables):**
 ```yaml
-# In deploy_vars.yaml (paired workflow file - precedence #4)
-template_dir: "/opt/templates"  # Will be overridden by inline vars in deploy.yaml
-additional_options:
-  save_on_exit: true
-  verify_config: true
+global_admin_contact: "netops-alerts@example.com"
+default_snmp_community: "public_readonly"
+default_operation_timeout: 300
 ```
 
+**`vars/network_provisioning/defaults.yaml` (Domain Variables):**
 ```yaml
-# vars/network_ops/defaults.yaml (domain defaults - precedence #5)
-ntp_servers:
-  - 10.0.0.1
-  - 10.0.0.2
-timeout_default: 120  # Overrides global timeout_default
-log_level: "debug"    # Domain-specific log level
-```
-
-```yaml
-# vars/defaults.yaml (defaults - precedence #6)
-admin_email: admin@example.com
-timeout_default: 60
-log_level: "info"
+operation_timeout: 900  # Overrides global default
+provisioning_vlans:
+  data: 100
+  voice: 110
+  guest: 120
 ```
 
 ## Resolution Process Example
 
-Given these variable definitions:
+For device `edge-router-01` in the `network_provisioning` domain:
 
+**Variable Sources:**
+1. **Runtime**: `provision_start: true`, `action_attempts: 1`
+2. **CLI**: `debug_level=5`, `operation_timeout=1200`  
+3. **Inline**: `enable_backup_post_provision: true`
+4. **Domain**: `provisioning_vlans: {data: 100, voice: 110}`
+5. **Global**: `global_admin_contact: "netops-alerts@example.com"`
+6. **Environment**: `api_token: "abcdef12345"`
+
+**Final Resolution:**
+- `{{ operation_timeout }}` → `1200` (CLI overrides domain and global)
+- `{{ provision_start }}` → `true` (Runtime, highest precedence)
+- `{{ global_admin_contact }}` → `"netops-alerts@example.com"` (Global, not overridden)
+
+**Host Variables:**
+- `{{ host.name }}` → `"edge-router-01"`
+- `{{ host.data.site_code }}` → `"NYC01"`
+
+## Advanced Topics
+
+### Case Sensitivity
+
+All variable names in NornFlow are **strictly case-sensitive**:
+
+- `myVar` is different from `MYVAR`
+- Environment variables: `NORNFLOW_VAR_api_key` becomes `{{ api_key }}` (exact case match required)
+- This applies to all variable sources and namespaces
+
+### Nested Variable Access
+
+NornFlow supports nested variable access using standard Jinja2 patterns:
+
+**Dot Notation:**
+```jinja2
+{{ my_dict.key.subkey }}
+{{ host.data.site_id }}
 ```
-# CLI: (precedence #1)
---vars "deploy_mode=test,debug=true,custom_var=cli_value"
 
-# Runtime variables (precedence #2, set for device router1):
-backup_path = "/backups/router1/20250415/"
-custom_var = "runtime_value"  # Will be overridden by CLI
-
-# workflows/network_ops/deploy.yaml: (inline workflow vars - precedence #3)
-vars:
-  template_dir: "/workflows/templates"
-  timeout: 30
-  backup_enabled: true
-
-# workflows/network_ops/deploy_vars.yaml: (paired workflow vars - precedence #4)
-template_dir: "/paired/templates"  # Overridden by inline vars
-additional_options:
-  save_on_exit: true
-
-# vars/network_ops/defaults.yaml: (domain defaults - precedence #5)
-template_dir: "/network/templates"  # Lower precedence than workflow vars
-log_level: "debug"
-
-# vars/defaults.yaml: (defaults - precedence #6)
-template_dir: "/default/templates"
-log_level: "info"
-debug: false
-
-# Nornir inventory variables for host "router1": (precedence #7)
-hostname = "router1"
-site_id = "NYC01"
-
-# Environment variables: (precedence #8)
-NORNFLOW_VAR_backup_dir="/tmp/backups"
+**Bracket Notation:**
+```jinja2
+{{ my_dict['key']['subkey'] }}
+{{ host.data['site_id'] }}
 ```
 
-For a device named "router1", variables resolve as:
+**How it Works:**
+- **Default namespace**: Nested access works through Jinja2's native dictionary handling when your variables contain nested structures
+- **Host namespace**: Nested access is handled by Nornir's `Host` object, providing access to both direct attributes and the nested `host.data` dictionary
 
-- `{{ deploy_mode }}` → "test" (CLI, precedence #1)
-- `{{ debug }}` → true (CLI, precedence #1, overriding defaults.yaml)
-- `{{ custom_var }}` → "cli_value" (CLI, precedence #1, overriding runtime)
-- `{{ backup_path }}` → "/backups/router1/20250415/" (runtime, precedence #2)
-- `{{ template_dir }}` → "/workflows/templates" (inline workflow vars, precedence #3)
-- `{{ timeout }}` → 30 (inline workflow vars, precedence #3)
-- `{{ additional_options.save_on_exit }}` → true (paired workflow vars, precedence #4)
-- `{{ log_level }}` → "debug" (domain defaults, precedence #5)
-- `{{ hostname }}` → "router1" (Nornir inventory, precedence #7)
-- `{{ site_id }}` → "NYC01" (Nornir inventory, precedence #7) 
-- `{{ backup_dir }}` → "/tmp/backups" (environment, precedence #8)
+**Example with nested data:**
+```yaml
+# In vars/defaults.yaml
+database_config:
+  host: "db.example.com"
+  credentials:
+    username: "admin"
+    password: "secret"
+```
 
-And for global variables:
-- `{{ global.deployment_count }}` → A shared variable visible to all devices (from the global namespace)
+```jinja2
+# In templates
+{{ database_config.host }}                    # "db.example.com"
+{{ database_config.credentials.username }}    # "admin"
+{{ database_config['credentials']['password'] }} # "secret"
+```
+## Navigation
+
+<div align="center">
+  
+<table width="100%" border="0" style="border-collapse: collapse;">
+<tr>
+<td width="33%" align="left" style="border: none;">
+<a href="./how_to_write_workflows.md">← Previous: Writing Workflows</a>
+</td>
+<td width="33%" align="center" style="border: none;">
+</td>
+<td width="33%" align="right" style="border: none;">
+</td>
+</tr>
+</table>
+
+</div>

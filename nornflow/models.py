@@ -2,16 +2,19 @@ from collections.abc import Callable
 from typing import Any
 
 from nornir.core.task import AggregatedResult
-from pydantic import field_validator
+from pydantic import field_validator, ConfigDict
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.models import PydanticSerdesBaseModel
 
 from nornflow.exceptions import TaskNotFoundError
 from nornflow.nornir_manager import NornirManager
 from nornflow.utils import convert_lists_to_tuples
+from nornflow.validators import run_post_creation_validation
 
 
 class TaskModel(PydanticSerdesBaseModel):
+    model_config = ConfigDict(extra="forbid")
+    
     _key = (
         "id",
         "name",
@@ -22,6 +25,7 @@ class TaskModel(PydanticSerdesBaseModel):
     id: int | None = None
     name: str
     args: HashableDict[str, str | tuple | dict | None] | None = None
+    set_to: str | None = None
 
     @classmethod
     def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "TaskModel":  # noqa: ANN002
@@ -34,7 +38,10 @@ class TaskModel(PydanticSerdesBaseModel):
         dict_args["id"] = next_id
 
         # Call parent's create method
-        return super().create(dict_args, *args, **kwargs)
+        new_task = super().create(dict_args, *args, **kwargs)
+        run_post_creation_validation(new_task)
+        return new_task
+
 
     @field_validator("args", mode="before")
     @classmethod
