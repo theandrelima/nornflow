@@ -6,6 +6,8 @@ from typing import Any
 import jinja2
 import yaml
 
+from nornflow.builtins.jinja2_filters import ALL_FILTERS
+
 from nornflow.vars.constants import (
     ENV_VAR_PREFIX,
     VARS_DIR_DEFAULT,
@@ -184,6 +186,10 @@ class NornFlowVariablesManager:
             undefined=jinja2.StrictUndefined, 
             extensions=["jinja2.ext.loopcontrols"], 
         )
+        
+        # Register builtin j2 filters
+        for filter_name, filter_func in ALL_FILTERS.items():
+            self.jinja_env.filters[filter_name] = filter_func
         
         self._device_contexts: dict[str, NornFlowDeviceContext] = {}
     

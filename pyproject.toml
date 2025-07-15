@@ -9,6 +9,7 @@ authors = [
 ]
 license = { text = "GPL-3.0-or-later" }
 dependencies = [
+    "jmespath>=1.0.1",
     "nornir>=3.5.0",
     "nornir-utils>=0.2.0",
     "pydantic-serdes>=1.0.2",
