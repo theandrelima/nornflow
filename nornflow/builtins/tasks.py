@@ -43,7 +43,8 @@ def set(task: Task, **kwargs) -> Result:
     """
     # By the time this function is called, the NornFlowVariableProcessor has already
     # resolved the Jinja2 templates and set the variables. We need to retrieve the
-    # resolved values from the variable manager to show what was actually set.
+    # resolved values from the variable manager to show what was actually set. This 
+    # task function merely handles reporting. 
     
     report = build_set_task_report(task, kwargs)
     return Result(host=task.host, result=report)

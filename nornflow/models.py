@@ -38,7 +38,7 @@ class TaskModel(NornFlowBaseModel):
     _err_on_duplicate = False
 
     # Exclude 'args' from universal Jinja2 validation since it's allowed there
-    _exclude_from_global_validators: ClassVar[tuple[str, ...]] = ("args",)
+    _exclude_from_global_validators: ClassVar[tuple[str, ...]] = ("args", "set_to")
 
     id: int | None = None
     name: str
