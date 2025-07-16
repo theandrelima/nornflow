@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 from nornir.core.task import AggregatedResult
 from pydantic import field_validator, ConfigDict
@@ -9,18 +9,36 @@ from pydantic_serdes.models import PydanticSerdesBaseModel
 from nornflow.exceptions import TaskNotFoundError
 from nornflow.nornir_manager import NornirManager
 from nornflow.utils import convert_lists_to_tuples
-from nornflow.validators import run_post_creation_validation
+from nornflow.validators import run_post_creation_task_validation, run_universal_field_validation
 
 
-class TaskModel(PydanticSerdesBaseModel):
+class NornFlowBaseModel(PydanticSerdesBaseModel):
+    """
+    Base model for all NornFlow models with strict field validation and universal field validation.
+    """
     model_config = ConfigDict(extra="forbid")
-    
+    _exclude_from_global_validators: ClassVar[tuple[str, ...]] = ()
+
+    @classmethod
+    def create(cls, model_dict: dict[str, Any], *args, **kwargs) -> "NornFlowBaseModel":
+        """
+        Create model instance with universal field validation.
+        """
+        new_instance = super().create(model_dict, *args, **kwargs)
+        run_universal_field_validation(new_instance)
+        return new_instance
+
+
+class TaskModel(NornFlowBaseModel):
     _key = (
         "id",
         "name",
     )
     _directive = "tasks"
     _err_on_duplicate = False
+
+    # Exclude 'args' from universal Jinja2 validation since it's allowed there
+    _exclude_from_global_validators: ClassVar[tuple[str, ...]] = ("args",)
 
     id: int | None = None
     name: str
@@ -37,11 +55,10 @@ class TaskModel(PydanticSerdesBaseModel):
         # Set the id in dict_args
         dict_args["id"] = next_id
 
-        # Call parent's create method
+        # Call parent's create method (runs universal validation)
         new_task = super().create(dict_args, *args, **kwargs)
-        run_post_creation_validation(new_task)
+        run_post_creation_task_validation(new_task)
         return new_task
-
 
     @field_validator("args", mode="before")
     @classmethod
@@ -87,7 +104,7 @@ class TaskModel(PydanticSerdesBaseModel):
         return nornir_manager.nornir.run(task=task_func, **task_args)
 
 
-class WorkflowModel(PydanticSerdesBaseModel):
+class WorkflowModel(NornFlowBaseModel):
     _key = ("name",)
     _directive = "workflow"
 

@@ -1,3 +1,6 @@
+import re
+
+
 # Special inventory filter keys that use NornFlow provided custom filter functions
 NORNFLOW_SPECIAL_FILTER_KEYS = ["hosts", "groups"]
 
@@ -27,3 +30,5 @@ NORNFLOW_INVALID_INIT_KWARGS = (
 )
 
 NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS = (".yaml", ".yml")
+
+JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")
