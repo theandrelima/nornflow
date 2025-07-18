@@ -9,7 +9,7 @@ from nornflow.cli.constants import (
     FILTERS_DIR,
     GREET_USER_TASK_FILE,
     HELLO_WORLD_TASK_FILE,
-    NORNFLOW_CONFIG_FILE,
+    NORNFLOW_SETTINGS,
     NORNIR_DEFAULT_CONFIG_DIR,
     SAMPLE_NORNFLOW_FILE,
     SAMPLE_NORNIR_CONFIGS_DIR,
@@ -39,7 +39,7 @@ def init(ctx: typer.Context) -> None:
 
         # Setup main directory structure and configuration files
         setup_directory_structure()
-        setup_nornflow_config_file(ctx.obj.get("settings"))
+        setup_nornflow_settings_file(ctx.obj.get("settings"))
         setup_sample_content()
 
         # Show information about the initialized setup
@@ -120,16 +120,16 @@ def setup_directory_structure() -> None:
         )
 
 
-def setup_nornflow_config_file(settings: str) -> None:
-    """Set up the NornFlow configuration file."""
-    if not os.getenv("NORNFLOW_CONFIG_FILE"):
-        if not settings and not NORNFLOW_CONFIG_FILE.exists():
-            shutil.copy(SAMPLE_NORNFLOW_FILE, NORNFLOW_CONFIG_FILE)
-            typer.secho(f"Created a sample 'nornflow.yaml': {NORNFLOW_CONFIG_FILE}", fg=typer.colors.GREEN)
+def setup_nornflow_settings_file(settings: str) -> None:
+    """Set up the NornFlow settings file."""
+    if not os.getenv("NORNFLOW_SETTINGS"):
+        if not settings and not NORNFLOW_SETTINGS.exists():
+            shutil.copy(SAMPLE_NORNFLOW_FILE, NORNFLOW_SETTINGS)
+            typer.secho(f"Created a sample 'nornflow.yaml': {NORNFLOW_SETTINGS}", fg=typer.colors.GREEN)
         elif settings:
             typer.secho(f"Trying to use informed settings file: {settings}", fg=typer.colors.YELLOW)
         else:
-            typer.secho(f"Settings file already exists: {NORNFLOW_CONFIG_FILE}", fg=typer.colors.YELLOW)
+            typer.secho(f"Settings file already exists: {NORNFLOW_SETTINGS}", fg=typer.colors.YELLOW)
 
 
 def setup_sample_content() -> None:

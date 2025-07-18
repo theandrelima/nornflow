@@ -15,7 +15,7 @@ def settings_callback(ctx: typer.Context, settings: str | None = None) -> None:
     Callback function to handle the global --settings option.
 
     This function sets the settings file path in the Typer context object. If the environment variable
-    'NORNFLOW_CONFIG_FILE' is set, it takes precedence over the --settings option. The function also
+    'NORNFLOW_SETTINGS' is set, it takes precedence over the --settings option. The function also
     provides feedback to the user about which settings file will be used.
 
     Args:
@@ -24,12 +24,12 @@ def settings_callback(ctx: typer.Context, settings: str | None = None) -> None:
     """
     ctx.obj = {"settings": ""}
 
-    # settings will only be set if 'NORNFLOW_CONFIG_FILE' is not set
-    nornflow_config_file = os.getenv("NORNFLOW_CONFIG_FILE")
+    # settings will only be set if 'NORNFLOW_SETTINGS' is not set
+    nornflow_settings_file = os.getenv("NORNFLOW_SETTINGS")
 
-    if nornflow_config_file:
+    if nornflow_settings_file:
         typer.secho(
-            "\nBecause env var 'NORNFLOW_CONFIG_FILE' is set, NornFlow will try to use it as a path "
+            "\nBecause env var 'NORNFLOW_SETTINGS' is set, NornFlow will try to use it as a path "
             "for its settings file.",
             fg=typer.colors.MAGENTA,
             bold=True,
@@ -40,7 +40,7 @@ def settings_callback(ctx: typer.Context, settings: str | None = None) -> None:
             bold=True,
         )
         typer.secho(
-            f"NORNFLOW_CONFIG_FILE='{nornflow_config_file}'\n", fg=typer.colors.BRIGHT_YELLOW, bold=True
+            f"NORNFLOW_SETTINGS='{nornflow_settings_file}'\n", fg=typer.colors.BRIGHT_YELLOW, bold=True
         )
 
         return

@@ -20,14 +20,14 @@ class NornFlowSettings:
 
     For initialization, it requires the location of a YAML file that holds the settings.
     This will be determined with the following order of preference:
-        - through an environment variable named `NORNFLOW_CONFIG_FILE`.
-        - through the `config_file` argument.
+        - through an environment variable named `NORNFLOW_SETTINGS`.
+        - through the `settings_file` argument.
         - a default file named 'nornflow.yaml' is assumed to exist.
 
     To allow for extensibility and customizations, NornFlow was designed with the following
     principles in mind:
-        1 - NornFlow settings and Nornir settings are kept separate, hence the need for a
-           `nornir_config_file` setting in the NornFlow YAML settings file.
+        1 - NornFlow settings and Nornir configs are kept separate, hence the need for a
+           `nornir_config_file` setting in the NornFlow settings YAML file.
 
         2 - a minimal set of REQUIRED settings.
 
@@ -47,8 +47,8 @@ class NornFlowSettings:
     """
 
     def __init__(self, settings_file: str = "nornflow.yaml", **kwargs: Any):
-        # Use environment variable to override config file path if set
-        self.settings_file = os.getenv("NORNFLOW_CONFIG_FILE", settings_file)
+        # Use environment variable to override settings file path if set
+        self.settings_file = os.getenv("NORNFLOW_SETTINGS", settings_file)
         self._load_settings()
         self._check_mandatory_settings()
         self._set_optional_settings(**kwargs)
@@ -59,22 +59,22 @@ class NornFlowSettings:
 
     def _load_settings(self) -> None:
         """
-        This method reads the configuration file specified by `self.settings_file`, parses its
+        This method reads the settings file specified by `self.settings_file`, parses its
         contents, and stores them in `self.loaded_settings`. If any errors occur during this
         process, appropriate custom exceptions are raised.
 
         Raises:
             SettingsFileError: If there are issues with accessing or parsing the settings file
-            SettingsDataTypeError: If the configuration data is not a dictionary
+            SettingsDataTypeError: If the settings data is not a dictionary
             NornFlowAppError: For any other unexpected errors
         """
         try:
-            config_data = read_yaml_file(self.settings_file)
+            settings_data = read_yaml_file(self.settings_file)
 
-            if not isinstance(config_data, dict):
+            if not isinstance(settings_data, dict):
                 raise SettingsDataTypeError()
 
-            self.loaded_settings = defaultdict(lambda: None, config_data)
+            self.loaded_settings = defaultdict(lambda: None, settings_data)
         except FileNotFoundError as e:
             raise SettingsFileError(self.settings_file, error_type="not_found") from e
         except PermissionError as e:

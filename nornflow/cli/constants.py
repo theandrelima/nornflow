@@ -8,7 +8,7 @@ NORNIR_DEFAULT_CONFIG_DIR = CWD / "nornir_configs"
 TASKS_DIR = CWD / "tasks"
 WORKFLOWS_DIR = CWD / "workflows"
 FILTERS_DIR = CWD / "filters"
-NORNFLOW_CONFIG_FILE = CWD / "nornflow.yaml"
+NORNFLOW_SETTINGS = CWD / "nornflow.yaml"
 
 # NornFlow's samples directory
 NORNFLOW_SAMPLES_DIR = Path(__file__).parent / "samples"
