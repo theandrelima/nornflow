@@ -111,6 +111,7 @@ class WorkflowModel(NornFlowBaseModel):
     name: str
     description: str | None = None
     inventory_filters: HashableDict[str, Any] | None = None
+    processors: tuple[HashableDict[str, Any]] | None = None
     tasks: OneToMany[TaskModel, ...]
 
     @classmethod
@@ -147,3 +148,20 @@ class WorkflowModel(NornFlowBaseModel):
             HashableDict[str, Any] | None: The inventory_filters with lists converted to tuples.
         """
         return convert_lists_to_tuples(v)
+
+    @field_validator("processors", mode="before")
+    def validate_processors(
+        cls, v: list[dict[str, Any]] | None  # noqa: N805
+    ) -> tuple[HashableDict[str, Any], ...] | None:
+        """
+        Convert processors list to tuple for serialization.
+    
+        Args:
+            v (list[HashableDict[str, Any]] | None): The processors list to validate.
+    
+        Returns:
+            tuple[HashableDict[str, Any], ...] | None: The processors as a tuple.
+        """
+        if v is None:
+            return None
+        return tuple(convert_lists_to_tuples(processor) for processor in v)
