@@ -708,7 +708,7 @@ dependencies = [
     { name = "typer" },
 ]
 
-[package.dev-dependencies]
+[package.optional-dependencies]
 dev = [
     { name = "black" },
     { name = "isort" },
@@ -716,34 +716,33 @@ dev = [
     { name = "ruff" },
 ]
 manual-tests = [
-    { name = "nornir-napalm" },
     { name = "nornir-netbox" },
+]
+optional-plugins = [
+    { name = "nornir-napalm" },
+    { name = "nornir-netmiko" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "black", marker = "extra == 'dev'", specifier = ">=25.1.0" },
+    { name = "isort", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "jmespath", specifier = ">=1.0.1" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15.0" },
     { name = "nornir", specifier = ">=3.5.0" },
+    { name = "nornir-napalm", marker = "extra == 'optional-plugins'", specifier = ">=0.5.0" },
+    { name = "nornir-netbox", marker = "extra == 'manual-tests'", specifier = ">=0.3.0" },
+    { name = "nornir-netmiko", marker = "extra == 'optional-plugins'", specifier = ">=1.0.1" },
     { name = "nornir-utils", specifier = ">=0.2.0" },
     { name = "pydantic-serdes", specifier = ">=1.0.2" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.4" },
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "termcolor", specifier = ">=2.5.0" },
     { name = "typer", specifier = ">=0.15.1" },
 ]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "black", specifier = ">=25.1.0" },
-    { name = "isort", specifier = ">=6.0.0" },
-    { name = "mypy", specifier = ">=1.15.0" },
-    { name = "ruff", specifier = ">=0.9.4" },
-]
-manual-tests = [
-    { name = "nornir-napalm", specifier = ">=0.5.0" },
-    { name = "nornir-netbox", specifier = ">=0.3.0" },
-]
+provides-extras = ["dev", "manual-tests", "optional-plugins"]
 
 [[package]]
 name = "nornir"
@@ -782,6 +781,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/1c/b9/54c305962bfc60143b3fc746111de5a90482866df2c4e62567cc4e89f6b1/nornir_netbox-0.3.0.tar.gz", hash = "sha256:bd94ab1aa1f11671a7891b7913c5c44446fb1722de3e755e0440fadc0c7a7a36", size = 8577, upload-time = "2021-09-20T20:03:49.872Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d2/9c/085903ac1b3056ee3d6986a9a29d3c1e410b9f774686e4ec525f2497afcb/nornir_netbox-0.3.0-py3-none-any.whl", hash = "sha256:b95c46c01da72db9ade1bab7e8268e73d8c4946a635f93deda8369fbe6fdc142", size = 9436, upload-time = "2021-09-20T20:03:48.708Z" },
+]
+
+[[package]]
+name = "nornir-netmiko"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "netmiko" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/94/00/ddd0b87d3493f7c853798d86f3b37fbb7decc4b5b30bd473e0f4565bc96d/nornir_netmiko-1.0.1.tar.gz", hash = "sha256:498546df001e0e499f10c5646d1356e361ccbb165b1335b89cfe8f19765e24d7", size = 7838, upload-time = "2023-12-07T18:18:34.364Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/16/63764c64087f14b2cd66f205da8570dfc13887ec43aa668de0c55a3ff92b/nornir_netmiko-1.0.1-py3-none-any.whl", hash = "sha256:eaee2944ad386b40c0719e8ac393ac63d531f44fb9a07d660bae7de430f12834", size = 11518, upload-time = "2023-12-07T18:18:33.369Z" },
 ]
 
 [[package]]
