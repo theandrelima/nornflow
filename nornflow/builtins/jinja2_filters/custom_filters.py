@@ -100,18 +100,6 @@ def deep_merge(dict1: dict[str, Any], dict2: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def default_if_none(value: Any, default_value: Any) -> Any:
-    """Return default only if value is None.
-
-    Example:
-        >>> default_if_none(None, 'fallback')
-        'fallback'
-        >>> default_if_none('', 'fallback')
-        ''
-    """
-    return default_value if value is None else value
-
-
 def random_choice(lst: list[Any]) -> Any:
     """Return random item from list.
 
@@ -132,6 +120,5 @@ CUSTOM_FILTERS = {
     'to_kebab_case': to_kebab_case,
     'json_query': json_query,
     'deep_merge': deep_merge,
-    'default_if_none': default_if_none,
     'random_choice': random_choice,
 }
