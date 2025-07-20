@@ -361,66 +361,82 @@ tasks:
 
 ## Inventory Filtering
 
-### Filter Types
+NornFlow provides powerful and flexible inventory filtering capabilities that determine which devices your workflow will target.
 
-NornFlow provides three complementary filtering mechanisms:
+### Types of Filters
 
-#### 1. Built-in Filters
-
-```yaml
-inventory_filters:
-  hosts: ["router1", "router2"]     # Specific devices
-  groups: ["core", "distribution"]  # Device groups
-```
+#### 1. Built-in NornFlow Filters
+- **hosts** - List of host names to include (matches any in list)
+- **groups** - List of group names to include (matches any in list)
 
 #### 2. Custom Filter Functions
+NornFlow can use custom filter functions defined by your `local_filters_dirs` setting (configured in `nornflow.yaml`). These functions provide advanced filtering logic beyond simple attribute matching.
 
+#### 3. Direct Attribute Filtering
+As it is the case with Nornir, any host attribute can be used as a filter key for simple equality matching:
 ```yaml
 inventory_filters:
-  in_maintenance_window:            # No parameters
-  
-  site_filter:                      # With parameters
-    region: "americas"
-    tier: "production"
+  platform: "ios"        # Filter devices with platform="ios"
+  vendor: "cisco"        # Filter devices with vendor="cisco"
+  site_code: "nyc"       # Filter devices with site_code="nyc"
 ```
 
-#### 3. Direct Attribute Matching
+### Filter Behavior
 
+1. Filters are applied sequentially in the order they appear in the YAML
+2. Each filter further narrows down the inventory selection
+3. Multiple filters are combined with AND logic - hosts must match ALL criteria to be included
+4. When processing each key under `inventory_filters` in the YAML/dict, NornFlow first checks if it matches a custom filter function name in your filters catalog. If no matching filter function is found, NornFlow treats it as a direct attribute filter, checking for hosts with that attribute matching the specified value.
+
+### Ways to Define Filter Parameters
+
+When using custom filters, parameters can be provided in several ways:
+
+#### Parameter-less Filters
 ```yaml
 inventory_filters:
-  platform: "ios"         # Matches host.platform == "ios"
-  site_code: "NYC"        # Matches host.site_code == "NYC"
-  data__vrf: "management" # Matches host.data.vrf == "management"
+  is_active:  # a filter named 'is_acive' in the Filters Catalog that doesn't expect any parameters.
 ```
 
-### Filter Application Order
-
-**Filters are applied in the exact order they appear in the YAML**, regardless of type (built-in, custom, or attribute matching). Each filter further narrows the inventory selection using AND logic.
-
-**Example:**
+#### Dictionary Parameters
 ```yaml
 inventory_filters:
-  groups: ["routers"]          # Applied first
-  platform: "iosxr"            # Applied second
-  region_filter:               # Applied third
-    regions: ["US", "EU"]
+  site_filter: # passing 2 keyword args to a 'site_filter' in the Filters Catalog
+    region: "east"
+    site_type: "campus"
+```
+
+#### Single Parameter as List or Value
+```yaml
+inventory_filters:
+  in_subnets: ["10.1.0.0/24", "10.2.0.0/24"]  # List parameter
+  exact_model: "C9300-48P"                    # Single value parameter
 ```
 
 ### Creating Custom Filters
 
-Place filter functions in your filters directory:
+Custom filters are Python functions that:
+1. Take a `Host` object as their first parameter
+2. Return `True` if the host should be included, `False` otherwise
+3. Can accept additional parameters as needed
 
-```python
-# filters/maintenance.py
-from nornir.core.inventory import Host
+Place these functions in your filters directory (default: filters) for NornFlow to discover them.
 
-def in_maintenance_window(host: Host) -> bool:
-    """Filter hosts currently in maintenance window."""
-    return host.data.get("maintenance_mode", False)
+### Example: Combined Filtering Strategy
 
-def version_check(host: Host, min_version: str) -> bool:
-    """Filter hosts running at least min_version."""
-    return host.data.get("os_version", "0.0") >= min_version
+```yaml
+workflow:
+  name: "Core Switch Upgrade"
+  inventory_filters:
+    groups: ["core_switches"]  # Applied first - selects only core switches
+    platform: "ios-xe"         # Applied second - narrows to IOS-XE devices
+    site_filter:               # Applied third - custom filter with parameters
+      region: "east"
+      priority: "high"
+    os_version_lt: "17.3.4"    # Applied fourth - custom filter for version comparison
+  tasks:
+    - name: backup_configs
+    - name: upgrade_os
 ```
 
 ## Processors

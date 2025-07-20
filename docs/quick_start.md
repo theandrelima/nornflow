@@ -2,14 +2,16 @@
 
 ## Table of Contents
 - [Installation](#installation)
-- [Your First NornFlow Project](#your-first-nornflow-project)
+- [Initialize Your Project](#your-first-nornflow-project)
 - [Running Tasks](#running-tasks)
 - [Running Workflows](#running-workflows)
-- [Working with Real Devices](#working-with-real-devices)
+- [Working with Real-World Use Case](#working-with-real-world-use-case)
 - [Using Variables](#using-variables)
 - [Filtering Inventory](#filtering-inventory)
-- [Common Patterns](#common-patterns)
 - [Useful Commands](#useful-commands)
+
+> **Note:**  
+> This document is intentionally light on each subject. Much of what's mentioned here (and more) is expanded in the [Core Concepts](./core_concepts.md) documentation.
 
 ## Installation
 
@@ -24,12 +26,23 @@ poetry add nornflow
 uv pip install nornflow
 ```
 
+### Optional Network Automation Plugins
+
+Optionally, you may want to install with the 'optional-plugins' tag, which will include `nornir-napalm` and `nornir-netmiko` with the installation.
+
+```bash
+# Install NornFlow with network automation plugins
+pip install "nornflow[optional-plugins]"
+```
+
+This will get all Nornir Napalm and Netmiko Tasks available in your Task Catalog.
+
 ## Your First NornFlow Project
 
 ### 1. Initialize NornFlow
 
-Before running any workflows, you **must initialize a NornFlow project** inside a folder.  
-This folder becomes your NornFlow workspace, and all NornFlow commands should be run from within it.
+Before using NornFlow, you **must initialize a NornFlow project** inside a folder.  
+This folder becomes your workspace, and all NornFlow commands should be run from within it.
 
 ```bash
 mkdir my_nornflow_project
@@ -39,9 +52,11 @@ nornflow init
 
 This creates:
 - 📁 tasks - Where your Nornir tasks should live
-- 📁 workflows - Holds YAML workflow definitions  
+- 📁 workflows - Holds YAML workflow definitions
+- 📁 filters - Custom Nornir inventory filters
+- 📁 vars - Will contain Global and Domain-specific default variables
 - 📁 nornir_configs - Nornir configuration
-- 📄 nornflow.yaml - NornFlow settings
+- 📑 nornflow.yaml - NornFlow settings
 
 ### 2. Check What's Available
 
@@ -52,18 +67,11 @@ nornflow show --catalog
 You'll see three catalogs:
 - **Tasks**: Individual automation actions
 - **Workflows**: Sequences of tasks
-- **Nonrnir Filters**: Ways to select specific devices
-
-Run it:
-```bash
-nornflow run hello.yaml
-```
+- **Nornir Filters**: Ways to select specific devices
 
 ## Running Tasks
 
 ### Simple Task Execution
-
-# if you ran 'nornflow init' then a sample 'hello_world' task should have been created along with a 'tasks' folder in your project's root.
 
 ```bash
 # The 'hello_world' and 'greet_user' tasks below are sample tasks automatically created by the 'nornflow init' command.
@@ -78,9 +86,7 @@ nornflow run greet_user --args "greeting='Hello', user='Network Team'"
 
 ## Running Workflows
 
-Workflows combine multiple tasks. After running `nornflow init`, a sample workflow file will be created for you: `workflows/hello_world.yaml`.
-
-Here is what the sample workflow looks like:
+Workflows combine multiple tasks. As an example, let's look at the sample `workflows/hello_world.yaml` that was created by `nornflow init`.
 
 ```yaml
 workflow: 
@@ -97,7 +103,7 @@ workflow:
 Run it:
 
 ```bash
-# Note: include the .yaml/.yml extension for workflows
+# Note: include the .yaml/.yml extension when running workflows
 nornflow run hello_world.yaml
 ```
 
@@ -107,7 +113,9 @@ nornflow run hello_world.yaml
 > 
 > This distinction helps NornFlow determine whether to run a single task or a multi-task workflow.
 
-## Working with Real Devices
+## Working with Real-World Use Case
+
+This section walks through a **hypothetical scenario** that represents a typical real-world use case. You can adapt these steps to your own environment and requirements.
 
 ### 1. Example Nornir inventory (`nornir_configs/inventory.yaml`):
 
@@ -142,27 +150,27 @@ inventory:
 
 ### 3. Verify NornFlow settings (`nornflow.yaml`):
 
-```yaml
-# Path for Nornir's config file
-nornir_config_file: "nornir_configs/config.yaml"
+NornFlow's settings file is created with sensible defaults by running `nornflow init`. You are encouraged to use these defaults, but feel free to modify the settings to best fit your scenario or use case.
 
-# Task directories to scan
+**The following is the sample `nornflow.yaml` created:**
+
+```yaml
+nornir_config_file: "nornir_configs/config.yaml"
 local_tasks_dirs:
   - "tasks"
-
-# Workflow directories to scan  
 local_workflows_dirs:
   - "workflows"
-
-# Filter directories to scan
 local_filters_dirs:
   - "filters"
-
-# Variables directory
+imported_packages: []
+dry_run: False
+processors:
+  - class: "nornflow.builtins.DefaultNornFlowProcessor"
+    args: {}
 vars_dir: "vars"
 ```
 
-### 4. Create a network workflow (`workflows/backup_configs.yaml`):
+### 4. Create a network automation workflow (`workflows/backup_configs.yaml`):
 
 ```yaml
 workflow:
@@ -256,7 +264,7 @@ workflow:
 
 ### Quick Custom Filter
 
-Create `filters/service_filter.py`:
+You can create and use your own custom python filters for trimming down the inventory that a workflow/task should run against. For example, here is a `filters/service_filter.py`:
 
 ```python
 from nornir.core.inventory import Host
@@ -270,10 +278,10 @@ def filter_by_service(host: Host, service: str) -> bool:
     return service in services
 ```
 
-Use it:
+Using it:
 
 ```bash
-nornflow run service_check --inventory-filters "filter_by_service='bgp'"
+nornflow run service_check --inventory-filters "filter_by_service={'service': 'bgp'}"
 ```
 
 ## Useful Commands
@@ -310,5 +318,3 @@ nornflow run my_workflow.yaml --dry-run
 </td>
 </tr>
 </table>
-
-</div>
