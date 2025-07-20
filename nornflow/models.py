@@ -5,6 +5,7 @@ from nornir.core.task import AggregatedResult
 from pydantic import field_validator, ConfigDict
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.models import PydanticSerdesBaseModel
+from pydantic_serdes.utils import convert_dict_to_hashabledict
 
 from nornflow.exceptions import TaskNotFoundError
 from nornflow.nornir_manager import NornirManager
@@ -164,4 +165,4 @@ class WorkflowModel(NornFlowBaseModel):
         """
         if v is None:
             return None
-        return tuple(convert_lists_to_tuples(processor) for processor in v)
+        return tuple(convert_dict_to_hashabledict(processor) for processor in v)
