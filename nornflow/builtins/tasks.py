@@ -1,6 +1,12 @@
 from nornir.core.task import Result, Task
 from nornflow.builtins.utils import build_set_task_report
+from pathlib import Path
 
+try:
+  from nornir_napalm.plugins.tasks import *
+  from nornir_netmiko.tasks import *
+except ImportError:
+  pass
 
 def set(task: Task, **kwargs) -> Result:
     """
@@ -63,3 +69,56 @@ def echo(task: Task, msg: str) -> Result:
             text: "Hello from {{ host.name }}, platform is {{ host.platform }}"
     """
     return Result(host=task.host, result=msg)
+
+
+def write_file(task: Task, filename: str = None, content: str = None, append: bool = False, mkdir: bool = True) -> Result:
+    """
+    Write content to a file, creating directories as needed.
+    
+    Args:
+        task (Task): Nornir task object
+        filename (str): Path to file to write
+        content (str): Content to write to file
+        append (bool): Append to file instead of overwriting (default: False)
+        mkdir (bool): Create parent directories if needed (default: True)
+        
+    Returns:
+        Result: Result object with the path to the written file
+    """
+    if not filename:
+        return Result(
+            host=task.host,
+            failed=True,
+            exception=ValueError("filename argument is required")
+        )
+    
+    if content is None:
+        return Result(
+            host=task.host,
+            failed=True,
+            exception=ValueError("content argument is required")
+        )
+    
+    try:
+        # Create directory if it doesn't exist
+        file_path = Path(filename)
+        if mkdir:
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write to file
+        mode = "a" if append else "w"
+        with file_path.open(mode=mode, encoding="utf-8") as f:
+            f.write(str(content))
+        
+        return Result(
+            host=task.host,
+            result={"path": str(file_path)},
+            changed=True
+        )
+    
+    except Exception as e:
+        return Result(
+            host=task.host,
+            failed=True,
+            exception=e
+        )
