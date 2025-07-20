@@ -11,7 +11,7 @@ from nornflow.exceptions import (
     SettingsDataTypeError,
     SettingsFileError,
 )
-from nornflow.utils import read_yaml_file
+from pydantic_serdes.utils import load_file_to_dict
 
 
 class NornFlowSettings:
@@ -69,7 +69,7 @@ class NornFlowSettings:
             NornFlowAppError: For any other unexpected errors
         """
         try:
-            settings_data = read_yaml_file(self.settings_file)
+            settings_data = load_file_to_dict(file_path=self.settings_file)
 
             if not isinstance(settings_data, dict):
                 raise SettingsDataTypeError()

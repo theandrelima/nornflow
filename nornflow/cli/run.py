@@ -10,7 +10,7 @@ from nornflow import NornFlowBuilder, WorkflowFactory
 from nornflow.cli.exceptions import CLIRunError
 from nornflow.constants import (
     NORNFLOW_SPECIAL_FILTER_KEYS,
-    NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS,
+    NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
 )
 from nornflow.exceptions import NornFlowAppError
 
@@ -255,7 +255,7 @@ def get_nornflow_builder(
     if cli_vars:
         builder.with_cli_vars(cli_vars)
 
-    if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS):
+    if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_YAML_EXTENSIONS):
         target_path = Path(target)
         if target_path.exists():
             absolute_path = target_path.resolve()

@@ -29,6 +29,6 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "imported_packages",
 )
 
-NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS = (".yaml", ".yml")
+NORNFLOW_SUPPORTED_YAML_EXTENSIONS = (".yaml", ".yml")
 
 JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")

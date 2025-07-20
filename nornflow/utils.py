@@ -15,21 +15,6 @@ from nornflow.exceptions import ModuleImportError, ProcessorError
 from nornflow.constants import JINJA_PATTERN
 
 
-def read_yaml_file(file_path: str) -> dict[str, Any]:
-    """
-    Reads a YAML file and returns its contents as a dictionary.
-
-    Args:
-        file_path (str): Path to the YAML file.
-
-    Returns:
-        dict[str, Any]: Dictionary containing the YAML file contents.
-    """
-    path = Path(file_path)
-    with path.open() as file:
-        return yaml.safe_load(file)
-
-
 def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
     """
     Import a module from a given file path.

@@ -8,7 +8,7 @@ from nornflow.builtins import filters as builtin_filters
 from nornflow.builtins import tasks as builtin_tasks
 from nornflow.constants import (
     NORNFLOW_INVALID_INIT_KWARGS,
-    NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS,
+    NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
 )
 from nornflow.exceptions import (
     CatalogModificationError,
@@ -497,7 +497,7 @@ class NornFlow:
             )
 
         for file in workflow_path.rglob("*"):
-            if file.suffix in NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS:
+            if file.suffix in NORNFLOW_SUPPORTED_YAML_EXTENSIONS:
                 self._workflows_catalog[file.name] = file
 
     def _check_invalid_kwargs(self, kwargs: dict[str, Any]) -> None:
