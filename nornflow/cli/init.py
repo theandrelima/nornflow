@@ -13,8 +13,10 @@ from nornflow.cli.constants import (
     NORNIR_DEFAULT_CONFIG_DIR,
     SAMPLE_NORNFLOW_FILE,
     SAMPLE_NORNIR_CONFIGS_DIR,
+    SAMPLE_VARS_FILE,
     SAMPLE_WORKFLOW_FILE,
     TASKS_DIR,
+    DEFAULT_VARS_DIR,
     WORKFLOWS_DIR,
 )
 from nornflow.cli.exceptions import CLIInitError
@@ -133,13 +135,18 @@ def setup_nornflow_settings_file(settings: str) -> None:
 
 
 def setup_sample_content() -> None:
-    """Set up sample tasks, workflows, and filters directories."""
+    """Set up sample tasks, workflows, filters, and vars directories."""
     create_directory_and_copy_sample_files(
         TASKS_DIR, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
     )
 
     create_directory_and_copy_sample_files(
         WORKFLOWS_DIR, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
+    )
+    
+    # Add this section to create the vars directory and copy sample defaults.yaml
+    create_directory_and_copy_sample_files(
+        DEFAULT_VARS_DIR, [SAMPLE_VARS_FILE], "Created a sample 'defaults.yaml' in vars directory: {}"
     )
 
     create_directory(FILTERS_DIR)
