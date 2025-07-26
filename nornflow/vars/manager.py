@@ -280,7 +280,7 @@ class NornFlowVariablesManager:
                 f"{self.workflow_roots}. Cannot determine domain from path."
             )
             return ""
-        except Exception as e:
+        except (OSError, ValueError) as e:
             logger.warning(f"Error extracting domain from path '{workflow_path}': {e}", exc_info=True)
             return ""
 

@@ -484,7 +484,7 @@ class Workflow:
         nornir_manager: NornirManager,
         tasks_catalog: dict[str, Callable],
         filters_catalog: dict[str, Callable],
-        workflows_dirs: list[str | None] = None,
+        workflows_dirs: list[str] | None = None,
         processors: list[Processor] | None = None,
         cli_vars: dict[str, Any] | None = None,
     ) -> None:
