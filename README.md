@@ -10,28 +10,37 @@
 [![Installer: uv](https://img.shields.io/badge/installer-uv-blue)](https://github.com/astral-sh/uv)
 
 
-> ***NornFlow is still in the prototype phase.***
+> ***NornFlow is still in beta phase.***
 
-NornFlow leverages the power of [Nornir](https://github.com/nornir-automation/nornir), a Python framework for network automation, to execute tasks on network devices. 
+## What is NornFlow?
+NornFlow is a lightweight workflow orchestration framework built on top of [Nornir](https://github.com/nornir-automation/nornir), bringing structure and predictability to network automation projects.
 
-NornFlow serves two main purposes:
-- a CLI-wrapper around Nornir, allowing users to invoke the execution of individual Nornir tasks.
-- an Ansible-like workflow automation tool that enables users to build and execute complex workflows through YAML files (or programmatically through its API).
+NornFlow bridges the gap between development and operations teams by providing:
 
+- A **structured workflow system** for organizing Nornir tasks into reusable automation flows
+- A **declarative YAML interface** for defining complex automation sequences
+- A **command-line interface** for running individual Nornir tasks or complete workflows
+- A **variable system** with multi-level precedence for flexible customization
 
 ## Why Use NornFlow?
 
-NornFlow provides benefits that make it a compelling choice for network automation for both developers and non-developers alike:
+NornFlow promotes collaboration between developers and network engineers:
 
-💪 **Real power for developers**: Since NornFlow is built on Nornir, developers can deliver network automation directly in Python by writing Nornir tasks as straightforward Python functions. This eliminates the need for convoluted boilerplate code to create new *'plugins'*.
+⚡️ **Unlimited Power for Developer**: Write automation logic as pure Python functions with Nornir's task interface. No boilerplate, just clean Python code.
 
-👍 **Simplicity for end-users**: Engineers who are familiar with Ansible, but not as proficient in Python and network automation development, will find NornFlow’s user experience familiar and accessible. End-users can trigger and define their network automation workflows using intuitive YAML files, much like Ansible playbooks.
+🚀 **Productivity for Operators**: Define and run workflows with familiar YAML syntax similar to Ansible playbooks, enabling network engineers to be productive regardless of their Python programming background.
+
+🧩 **Project-friendly**: Brings predictable structure to Nornir projects with:
+- Standardized directory organization
+- Consistent workflow definition patterns
+- Clear separation between tasks, workflows, and inventory
 
 
-For installation and usage, see '*Getting Started*'.
+## Documentation
 
-## Quick Start
-- [Getting Started](https://github.com/theandrelima/nornflow/tree/main/docs/getting_started.md) 🏁
-- [Settings](https://github.com/theandrelima/nornflow/tree/main/docs/nornflow_settings.md) ⚙
-- [Nonrflow & Workflows](https://github.com/theandrelima/nornflow/tree/main/docs/nornflow_and_workflows.md) 🆒
-- [How to Write Workflows](https://github.com/theandrelima/nornflow/tree/main/docs/how_to_write_workflows.md) ✅
+- [Quick Start Guide](https://github.com/theandrelima/nornflow/blob/main/docs/quick_start.md) - Get up and running fast
+- [Core Concepts](https://github.com/theandrelima/nornflow/blob/main/docs/core_concepts.md) - Learn how NornFlow works
+- [Variables Basics](https://github.com/theandrelima/nornflow/blob/main/docs/variables_basics.md) - Understand NornFlow's variable system
+- [NornFlow Settings](https://github.com/theandrelima/nornflow/blob/main/docs/nornflow_settings.md) - Configure your NornFlow environment
+- [Jinja2 Filters](https://github.com/theandrelima/nornflow/blob/main/docs/jinja2_filters.md) - Advanced template manipulation
+- [API Reference](https://github.com/theandrelima/nornflow/blob/main/docs/api_reference.md) - For developers extending NornFlow

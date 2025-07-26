@@ -1,3 +1,5 @@
+import re
+
 # Special inventory filter keys that use NornFlow provided custom filter functions
 NORNFLOW_SPECIAL_FILTER_KEYS = ["hosts", "groups"]
 
@@ -12,6 +14,7 @@ NONRFLOW_SETTINGS_OPTIONAL = {
     "local_filters_dirs": [],
     "imported_packages": [],
     "processors": [],
+    "vars_dir": "vars",
 }
 
 # Used to check if the kwargs passed to a NornFlow initializer are valid.
@@ -25,4 +28,6 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "imported_packages",
 )
 
-NORNFLOW_SUPPORTED_WORKFLOW_EXTENSIONS = (".yaml", ".yml")
+NORNFLOW_SUPPORTED_YAML_EXTENSIONS = (".yaml", ".yml")
+
+JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")

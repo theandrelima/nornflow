@@ -438,6 +438,7 @@ class TestMainCLIFunctionality:
             groups=None,
             inventory_filters="platform=ios",
             processors=None,
+            vars=None,
             dry_run=True,
         )
 
@@ -465,6 +466,7 @@ class TestMainCLIFunctionality:
             groups=None,
             inventory_filters="platform=ios,vendor=cisco",
             processors="class='tests.unit.test_processors_utils.TestProcessor',args={'name':'CLIProc'}",
+            vars=None,
             dry_run=False,
         )
 

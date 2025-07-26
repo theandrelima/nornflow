@@ -1,17 +1,40 @@
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 from nornir.core.task import AggregatedResult
-from pydantic import field_validator
+from pydantic import ConfigDict, field_validator
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.models import PydanticSerdesBaseModel
+from pydantic_serdes.utils import convert_dict_to_hashabledict
 
 from nornflow.exceptions import TaskNotFoundError
 from nornflow.nornir_manager import NornirManager
 from nornflow.utils import convert_lists_to_tuples
+from nornflow.validators import (
+    run_post_creation_task_validation,
+    run_universal_field_validation,
+)
 
 
-class TaskModel(PydanticSerdesBaseModel):
+class NornFlowBaseModel(PydanticSerdesBaseModel):
+    """
+    Base model for all NornFlow models with strict field validation and universal field validation.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    _exclude_from_global_validators: ClassVar[tuple[str, ...]] = ()
+
+    @classmethod
+    def create(cls, model_dict: dict[str, Any], *args: Any, **kwargs: Any) -> "NornFlowBaseModel":
+        """
+        Create model instance with universal field validation.
+        """
+        new_instance = super().create(model_dict, *args, **kwargs)
+        run_universal_field_validation(new_instance)
+        return new_instance
+
+
+class TaskModel(NornFlowBaseModel):
     _key = (
         "id",
         "name",
@@ -19,12 +42,16 @@ class TaskModel(PydanticSerdesBaseModel):
     _directive = "tasks"
     _err_on_duplicate = False
 
+    # Exclude 'args' from universal Jinja2 validation since it's allowed there
+    _exclude_from_global_validators: ClassVar[tuple[str, ...]] = ("args", "set_to")
+
     id: int | None = None
     name: str
     args: HashableDict[str, str | tuple | dict | None] | None = None
+    set_to: str | None = None
 
     @classmethod
-    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "TaskModel":  # noqa: ANN002
+    def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "TaskModel":
         """Create a new TaskModel with auto-incrementing id."""
         # Get current tasks and calculate next id
         current_tasks = cls.get_all()
@@ -33,8 +60,10 @@ class TaskModel(PydanticSerdesBaseModel):
         # Set the id in dict_args
         dict_args["id"] = next_id
 
-        # Call parent's create method
-        return super().create(dict_args, *args, **kwargs)
+        # Call parent's create method (runs universal validation)
+        new_task = super().create(dict_args, *args, **kwargs)
+        run_post_creation_task_validation(new_task)
+        return new_task
 
     @field_validator("args", mode="before")
     @classmethod
@@ -80,17 +109,18 @@ class TaskModel(PydanticSerdesBaseModel):
         return nornir_manager.nornir.run(task=task_func, **task_args)
 
 
-class WorkflowModel(PydanticSerdesBaseModel):
+class WorkflowModel(NornFlowBaseModel):
     _key = ("name",)
     _directive = "workflow"
 
     name: str
     description: str | None = None
     inventory_filters: HashableDict[str, Any] | None = None
+    processors: tuple[HashableDict[str, Any]] | None = None
     tasks: OneToMany[TaskModel, ...]
 
     @classmethod
-    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "WorkflowModel":  # noqa: ANN002
+    def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "WorkflowModel":
         """Create a new WorkflowModel."""
         # Tasks should already be in dict_args from the workflow definition
         if "tasks" not in dict_args:
@@ -123,3 +153,20 @@ class WorkflowModel(PydanticSerdesBaseModel):
             HashableDict[str, Any] | None: The inventory_filters with lists converted to tuples.
         """
         return convert_lists_to_tuples(v)
+
+    @field_validator("processors", mode="before")
+    def validate_processors(
+        cls, v: list[dict[str, Any]] | None  # noqa: N805
+    ) -> tuple[HashableDict[str, Any], ...] | None:
+        """
+        Convert processors list to tuple for serialization.
+
+        Args:
+            v (list[HashableDict[str, Any]] | None): The processors list to validate.
+
+        Returns:
+            tuple[HashableDict[str, Any], ...] | None: The processors as a tuple.
+        """
+        if v is None:
+            return None
+        return tuple(convert_dict_to_hashabledict(processor) for processor in v)

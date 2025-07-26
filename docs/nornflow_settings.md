@@ -8,6 +8,7 @@
   - [`local_tasks_dirs`](#local_tasks_dirs)
   - [`local_workflows_dirs`](#local_workflows_dirs)
   - [`local_filters_dirs`](#local_filters_dirs)
+  - [`vars_dir`](#vars_dir)
   - [`dry_run`](#dry_run)
   - [`processors`](#processors)
   - [`imported_packages`](#imported_packages)
@@ -73,6 +74,17 @@ NornFlow will try to find a settings YAML file in the following order:
   ```
 - **Note**: For details on how these filters can be used in workflows, see the [Inventory Filtering](./how_to_write_workflows.md#inventory-filtering) section in the Workflows documentation.
 
+### `vars_dir`
+
+- **Description**: Path to the directory containing variable files for NornFlow's variable system. This directory will store global variables (`defaults.yaml`) and domain-specific variables.
+- **Type**: `str`
+- **Default**: "vars"
+- **Example**:
+  ```yaml
+  vars_dir: "variables"
+  ```
+- **Note**: For details on how variables are loaded and their precedence, see the [Variables Basics](./variables_basics.md) documentation.
+
 ### `dry_run`
 
 - **Description**: If set to True, NornFlow will invoke Nornir in dry-run mode.
@@ -90,7 +102,7 @@ NornFlow will try to find a settings YAML file in the following order:
 - **Example**:
   ```yaml
   processors:
-    - class: "nornflow.builtins.processors.DefaultNornFlowProcessor"
+    - class: "nornflow.builtins.DefaultNornFlowProcessor"
       args: {} # included for completeness. If empty, it can be simply omitted. 
     - class: "mypackage.mymodule.MyCustomProcessor" 
       args:
@@ -145,12 +157,12 @@ In fact, even the choice of words here is purposeful: you may have noticed that 
 <table width="100%" border="0" style="border-collapse: collapse;">
 <tr>
 <td width="33%" align="left" style="border: none;">
-<a href="./getting_started.md">← Previous: Getting Started</a>
+<a href="./variables_basics.md">← Previous: Variables Basics</a>
 </td>
 <td width="33%" align="center" style="border: none;">
 </td>
 <td width="33%" align="right" style="border: none;">
-<a href="./nornflow_and_workflows.md">Next: NornFlow & Workflows →</a>
+<a href="./jinja2_filters.md">Next: Jinja2 Filters Reference →</a>
 </td>
 </tr>
 </table>

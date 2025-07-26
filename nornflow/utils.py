@@ -5,28 +5,17 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Literal
 
-import yaml
 from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
 
-from nornflow.exceptions import ModuleImportError, ProcessorError
-
-
-def read_yaml_file(file_path: str) -> dict[str, Any]:
-    """
-    Reads a YAML file and returns its contents as a dictionary.
-
-    Args:
-        file_path (str): Path to the YAML file.
-
-    Returns:
-        dict[str, Any]: Dictionary containing the YAML file contents.
-    """
-    path = Path(file_path)
-    with path.open() as file:
-        return yaml.safe_load(file)
+from nornflow.constants import JINJA_PATTERN
+from nornflow.exceptions import (
+    DirectoryNotFoundError,
+    ModuleImportError,
+    ProcessorError,
+)
 
 
 def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
@@ -207,8 +196,6 @@ def discover_items_in_dir(dir_path: str, register_func: Callable, error_context:
         DirectoryNotFoundError: If directory doesn't exist
         ModuleImportError: If module import fails
     """
-    from nornflow.exceptions import DirectoryNotFoundError
-
     path = Path(dir_path)
     if not path.is_dir():
         raise DirectoryNotFoundError(directory=dir_path, extra_message=f"Couldn't load {error_context}.")
@@ -236,3 +223,28 @@ def process_module_attributes(module: Any, predicate_func: Callable, process_fun
         attr = getattr(module, attr_name)
         if predicate_func(attr):
             process_func(attr_name, attr)
+
+
+def check_for_jinja2_recursive(obj: Any, path: str) -> None:
+    """
+    Recursively check for Jinja2 code in nested structures.
+
+    Args:
+        obj: Object to check (can be dict, list, string, etc.)
+        path: Current path in the object structure (for error messages)
+
+    Raises:
+        ValueError: If Jinja2 code is found
+    """
+    if isinstance(obj, str):
+        if JINJA_PATTERN.search(obj):
+            raise ValueError(
+                f"Jinja2 code found in '{path}' which is not allowed. "
+                "Jinja2 expressions are only permitted in specific fields like task args."
+            )
+    elif isinstance(obj, dict):
+        for key, value in obj.items():
+            check_for_jinja2_recursive(value, f"{path}.{key}")
+    elif isinstance(obj, list | tuple):
+        for idx, item in enumerate(obj):
+            check_for_jinja2_recursive(item, f"{path}[{idx}]")

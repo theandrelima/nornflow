@@ -1,0 +1,3 @@
+# By default, NornFlow will lookup Global Variables (if any) in this file
+# These will be available in all workflows and can be overridden by domain variables,
+# workflow variables, CLI variables, and runtime variables.

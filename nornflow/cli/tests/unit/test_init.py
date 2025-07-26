@@ -7,7 +7,7 @@ from nornflow.cli.init import (
     init,
     setup_builder,
     setup_directory_structure,
-    setup_nornflow_config_file,
+    setup_nornflow_settings_file,
     setup_sample_content,
     show_info_post_init,
 )
@@ -27,7 +27,7 @@ class TestInitCommand:
     @patch("nornflow.cli.init.setup_builder")
     @patch("nornflow.cli.init.get_user_confirmation")
     @patch("nornflow.cli.init.setup_directory_structure")
-    @patch("nornflow.cli.init.setup_nornflow_config_file")
+    @patch("nornflow.cli.init.setup_nornflow_settings_file")
     @patch("nornflow.cli.init.setup_sample_content")
     @patch("nornflow.cli.init.show_info_post_init")
     def test_init_successful(
@@ -172,7 +172,7 @@ class TestSetupFunctions:
         # Verify shutil.copy or copytree were called to populate directories
         assert mock_copy.call_count + mock_copytree.call_count > 0
 
-    @patch("nornflow.cli.init.NORNFLOW_CONFIG_FILE")
+    @patch("nornflow.cli.init.NORNFLOW_SETTINGS")
     @patch("nornflow.cli.init.SAMPLE_NORNFLOW_FILE")
     @patch("nornflow.cli.init.shutil.copy")
     @patch("nornflow.cli.init.typer.secho")
@@ -180,11 +180,11 @@ class TestSetupFunctions:
     def test_setup_nornflow_config_no_settings(
         self, mock_getenv, mock_secho, mock_copy, mock_sample, mock_config
     ):
-        """Test setup_nornflow_config_file with no settings."""
+        """Test setup_nornflow_settings_file with no settings."""
         # Make Path.exists return False to ensure file is copied
         mock_config.exists.return_value = False
 
-        setup_nornflow_config_file("")
+        setup_nornflow_settings_file("")
 
         # Verify config file was copied
         mock_copy.assert_called_once_with(mock_sample, mock_config)

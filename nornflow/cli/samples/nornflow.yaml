@@ -67,3 +67,19 @@ dry_run: False
 processors:
   - class: "nornflow.builtins.DefaultNornFlowProcessor"
     args: {}
+
+# Path to the directory containing variable files for NornFlow's templating system.
+# This directory is used to store variables at different scopes:
+#   - Global variables in "{vars_dir}/globals.yaml"
+#   - Domain-specific variables in "{vars_dir}/{domain}/globals.yaml"
+#
+# Variable resolution follows this precedence (highest to lowest):
+# 1. CLI variables (passed with --vars, there is no '-v' shortcut for this option)
+# 2. Workflow-specific variables (from workflow YAML or paired _vars.yaml file)
+# 3. Domain-specific global variables (from vars_dir/<domain>/globals.yaml)
+# 4. Global variables (from vars_dir/globals.yaml)
+# 5. Nornir inventory variables
+# 6. Environment variables (with NORNFLOW_VAR_ prefix)
+#
+# If not specified, defaults to "vars" in the project root directory.
+vars_dir: "vars"
