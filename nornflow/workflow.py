@@ -298,7 +298,7 @@ class Workflow:
         Args:
             key (str): The filter name/key from inventory_filters
             filter_values (Any): The value associated with the filter key
-            filters_catalog (dict[str, Callable): Dictionary of available filter functions
+            filters_catalog (dict[str, Callable]): Dictionary of available filter functions
 
         Returns:
             dict[str, Any]: Dictionary with filter_func and any parameters to be passed to Nornir
