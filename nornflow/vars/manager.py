@@ -193,7 +193,7 @@ class NornFlowVariablesManager:
         self.jinja_env = jinja2.Environment(
             undefined=jinja2.StrictUndefined,
             extensions=["jinja2.ext.loopcontrols"],
-            autoescape=jinja2.select_autoescape(),
+            autoescape=False,  # noqa: S701 - Network automation tool, not generating HTML
         )
 
         # Register builtin j2 filters
