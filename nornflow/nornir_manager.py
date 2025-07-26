@@ -59,8 +59,7 @@ class NornirManager:
             kwargs: The kwargs dictionary to modify in-place
         """
         for key in NONRFLOW_SETTINGS_OPTIONAL:
-            if key in kwargs:
-                del kwargs[key]
+            kwargs.pop(key, None)
 
     def apply_filters(self, **kwargs) -> Nornir:
         """

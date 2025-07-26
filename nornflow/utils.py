@@ -11,7 +11,11 @@ from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
 
 from nornflow.constants import JINJA_PATTERN
-from nornflow.exceptions import ModuleImportError, ProcessorError
+from nornflow.exceptions import (
+    DirectoryNotFoundError,
+    ModuleImportError,
+    ProcessorError,
+)
 
 
 def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
@@ -192,8 +196,6 @@ def discover_items_in_dir(dir_path: str, register_func: Callable, error_context:
         DirectoryNotFoundError: If directory doesn't exist
         ModuleImportError: If module import fails
     """
-    from nornflow.exceptions import DirectoryNotFoundError
-
     path = Path(dir_path)
     if not path.is_dir():
         raise DirectoryNotFoundError(directory=dir_path, extra_message=f"Couldn't load {error_context}.")
