@@ -74,9 +74,7 @@ def echo(task: Task, msg: str) -> Result:
     return Result(host=task.host, result=msg)
 
 
-def write_file(
-    task: Task, filename: str, content: str, append: bool = False, mkdir: bool = True
-) -> Result:
+def write_file(task: Task, filename: str, content: str, append: bool = False, mkdir: bool = True) -> Result:
     """
     Write content to a file, creating directories as needed.
 

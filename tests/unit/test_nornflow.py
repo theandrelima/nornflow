@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from nornflow import NornFlowBuilder
 from nornflow.exceptions import (
@@ -32,7 +33,7 @@ class TestNornFlowBasicCreation:
         assert isinstance(nornflow, NornFlow)
         assert "hello_world" in nornflow.tasks_catalog
         assert "set" in nornflow.tasks_catalog
-        assert "hello_world" in nornflow.tasks_catalog 
+        assert "hello_world" in nornflow.tasks_catalog
 
     def test_create_with_invalid_kwargs(self):
         """Test creating NornFlow with invalid kwargs."""
@@ -52,7 +53,7 @@ class TestNornFlowValidation:
         tasks_dir.mkdir()
 
         settings = NornFlowSettings(local_tasks_dirs=[str(tasks_dir)])
-        with patch('nornflow.nornflow.builtin_tasks', {}):
+        with patch("nornflow.nornflow.builtin_tasks", {}):
             with pytest.raises(NornFlowInitializationError) as exc_info:
                 NornFlow(nornflow_settings=settings)
 
@@ -61,12 +62,12 @@ class TestNornFlowValidation:
     def test_invalid_tasks_directory(self):
         """Test error when tasks directory doesn't exist is wrapped in NornFlowInitializationError."""
         settings = NornFlowSettings(local_tasks_dirs=["/nonexistent/dir"])
-        
+
         # Patch the builtin_tasks to be empty so that the task catalog will be empty
-        with patch('nornflow.nornflow.builtin_tasks', {}):
+        with patch("nornflow.nornflow.builtin_tasks", {}):
             with pytest.raises(NornFlowInitializationError) as exc_info:
                 NornFlow(nornflow_settings=settings)
-    
+
         assert isinstance(exc_info.value.__cause__, EmptyTaskCatalogError)
 
     def test_property_modifications(self, basic_nornflow):
