@@ -207,4 +207,4 @@ class NornFlowDeviceContext:
         for layer in precedence_layers:
             flat_context.update(layer)
 
-        return
+        return flat_context
