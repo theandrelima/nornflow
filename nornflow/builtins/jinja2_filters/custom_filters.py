@@ -2,8 +2,9 @@
 
 import random
 import re
-import jmespath
 from typing import Any
+
+import jmespath
 
 
 def flatten_list(lst: list[Any]) -> list[Any]:
@@ -40,7 +41,7 @@ def chunk_list(lst: list[Any], size: int) -> list[list[Any]]:
         >>> chunk_list([1, 2, 3, 4, 5], 2)
         [[1, 2], [3, 4], [5]]
     """
-    return [lst[i:i + size] for i in range(0, len(lst), size)]
+    return [lst[i : i + size] for i in range(0, len(lst), size)]
 
 
 def regex_replace(string: str, pattern: str, replacement: str, flags: int = 0) -> str:
@@ -60,8 +61,8 @@ def to_snake_case(string: str) -> str:
         >>> to_snake_case('MyVariableName')
         'my_variable_name'
     """
-    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', string)
-    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+    s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", string)
+    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
 
 def to_kebab_case(string: str) -> str:
@@ -71,7 +72,7 @@ def to_kebab_case(string: str) -> str:
         >>> to_kebab_case('MyVariableName')
         'my-variable-name'
     """
-    return to_snake_case(string).replace('_', '-')
+    return to_snake_case(string).replace("_", "-")
 
 
 def json_query(data: Any, query: str) -> Any:
@@ -107,18 +108,18 @@ def random_choice(lst: list[Any]) -> Any:
         >>> random_choice([1, 2, 3])  # result may vary
         2
     """
-    return random.choice(lst) if lst else None
+    return random.choice(lst) if lst else None  # noqa: S311
 
 
 # Registry of custom filters
 CUSTOM_FILTERS = {
-    'flatten_list': flatten_list,
-    'unique_list': unique_list,
-    'chunk_list': chunk_list,
-    'regex_replace': regex_replace,
-    'to_snake_case': to_snake_case,
-    'to_kebab_case': to_kebab_case,
-    'json_query': json_query,
-    'deep_merge': deep_merge,
-    'random_choice': random_choice,
+    "flatten_list": flatten_list,
+    "unique_list": unique_list,
+    "chunk_list": chunk_list,
+    "regex_replace": regex_replace,
+    "to_snake_case": to_snake_case,
+    "to_kebab_case": to_kebab_case,
+    "json_query": json_query,
+    "deep_merge": deep_merge,
+    "random_choice": random_choice,
 }

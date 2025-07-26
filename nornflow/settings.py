@@ -3,6 +3,7 @@ from collections import defaultdict
 from typing import Any
 
 import yaml
+from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.constants import NONRFLOW_SETTINGS_MANDATORY, NONRFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import (
@@ -11,7 +12,6 @@ from nornflow.exceptions import (
     SettingsDataTypeError,
     SettingsFileError,
 )
-from pydantic_serdes.utils import load_file_to_dict
 
 
 class NornFlowSettings:

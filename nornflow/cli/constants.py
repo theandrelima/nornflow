@@ -1,5 +1,6 @@
 from pathlib import Path
-from nornflow.vars.constants import VARS_DIR_DEFAULT, DEFAULTS_FILENAME
+
+from nornflow.vars.constants import DEFAULTS_FILENAME, VARS_DIR_DEFAULT
 
 # Directory where the user is running the CLI from
 CWD = Path.cwd()

@@ -5,14 +5,13 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Literal
 
-import yaml
 from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
 
-from nornflow.exceptions import ModuleImportError, ProcessorError
 from nornflow.constants import JINJA_PATTERN
+from nornflow.exceptions import ModuleImportError, ProcessorError
 
 
 def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
@@ -244,6 +243,6 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
     elif isinstance(obj, dict):
         for key, value in obj.items():
             check_for_jinja2_recursive(value, f"{path}.{key}")
-    elif isinstance(obj, (list, tuple)):
+    elif isinstance(obj, list | tuple):
         for idx, item in enumerate(obj):
             check_for_jinja2_recursive(item, f"{path}[{idx}]")

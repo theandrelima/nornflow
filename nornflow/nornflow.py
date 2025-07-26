@@ -75,12 +75,12 @@ class NornFlow:
     CLI variables in NornFlow serve a dual purpose:
     1. Traditional CLI usage: Variables parsed from command-line arguments (--vars)
     2. Override mechanism: Programmatically set variables with highest precedence
-    
+
     This dual nature allows CLI variables to be:
     - Set during NornFlow initialization for workflow creation
     - Updated at runtime during workflow execution for maximum flexibility
     - Used as a universal override mechanism in programmatic scenarios
-    
+
     The term "CLI variables" reflects their highest precedence nature and primary
     source (command-line interface), while also serving as a flexible override
     mechanism for any high-priority variable needs.
@@ -116,7 +116,7 @@ class NornFlow:
         try:
             # Store processors from explicit parameter
             self._kwargs_processors = processors
-            
+
             # Store CLI variables - these have highest precedence in variable resolution
             # and serve as both CLI-sourced variables and programmatic overrides
             self._cli_vars = cli_vars or {}
@@ -215,20 +215,20 @@ class NornFlow:
             SettingsModificationError: Always raised to prevent direct setting of the settings.
         """
         raise SettingsModificationError()
-        
+
     @property
     def cli_vars(self) -> dict[str, Any]:
         """
         Get the CLI variables with highest precedence in the variable resolution chain.
-        
+
         While named "CLI variables" due to their primary source being command-line arguments,
         these variables serve a dual purpose:
         1. Storage for variables parsed from CLI arguments (--vars)
         2. Universal override mechanism for programmatic variable setting
-        
+
         These variables always have the highest precedence, overriding any other variable
         source including workflow variables, environment variables, and defaults.
-        
+
         Returns:
             dict[str, Any]: Dictionary containing the CLI variables.
         """
@@ -238,15 +238,15 @@ class NornFlow:
     def cli_vars(self, value: Any) -> None:
         """
         Prevent setting the CLI variables directly after initialization.
-        
+
         CLI variables are set during NornFlow initialization and passed to workflows
         during execution. To modify variables at runtime, use the workflow.run()
         method's cli_vars parameter, which supports late binding. A NornFlow instance
         itself does not allow direct modification of its CLI variables after initialization.
-        
+
         Args:
             value (Any): Attempted value to set.
-            
+
         Raises:
             SettingsModificationError: Always raised to prevent direct modification.
         """
@@ -363,20 +363,20 @@ class NornFlow:
         """
         Entrypoint method that will put in motion the logic to discover and load
         all Nornir tasks from directories specified in the NornFlow configuration.
-        
+
         Tasks are loaded in two phases:
         1. Built-in tasks from nornflow.builtins.tasks module (always available)
         2. User-defined tasks from local_tasks_dirs (can override built-ins)
         """
         self._tasks_catalog = {}
-        
+
         # Phase 1: Load built-in tasks
         self._register_nornir_tasks_from_module(builtin_tasks)
-        
+
         # Phase 2: Load tasks from local directories (can override built-ins)
         for task_dir in self.settings.local_tasks_dirs:
             self._discover_tasks_in_dir(task_dir)
-    
+
         if not self._tasks_catalog:
             raise EmptyTaskCatalogError()
 
@@ -551,8 +551,8 @@ class NornFlow:
         4. Executes the workflow tasks against the filtered inventory
 
         Processor Precedence:
-        If processors were specified via constructor kwargs (typically from CLI), they take 
-        precedence over workflow-specific processors, which in turn take precedence over 
+        If processors were specified via constructor kwargs (typically from CLI), they take
+        precedence over workflow-specific processors, which in turn take precedence over
         global processors from settings.
 
         CLI Variables:
@@ -576,12 +576,12 @@ class NornFlow:
         # Pass nornir_manager, catalogs, processors and cli_vars to workflow.run
         # CLI variables are passed with highest precedence in variable resolution
         self.workflow.run(
-            self.nornir_manager, 
-            self.tasks_catalog, 
+            self.nornir_manager,
+            self.tasks_catalog,
             self.filters_catalog,
             self.settings.local_workflows_dirs,
             self.processors,
-            cli_vars=self.cli_vars  # Pass CLI variables for highest precedence
+            cli_vars=self.cli_vars,  # Pass CLI variables for highest precedence
         )
 
 
@@ -595,18 +595,18 @@ class NornFlowBuilder:
     - Processor registration
     - CLI variables (with highest precedence in variable resolution)
     - Additional keyword arguments
-    
+
     CLI Variables in Builder Context:
     The builder's `with_cli_vars()` method sets variables that will have the highest
     precedence in the variable resolution system. While termed "CLI variables" due to
     their primary use case (command-line arguments), these serve as a universal
     override mechanism in the builder pattern:
-    
+
     - Can represent actual CLI arguments parsed by a command-line interface
     - Can be set programmatically for workflow customization
     - Always override any other variable source (workflow vars, defaults, etc.)
     - Are passed to the workflow during execution with late-binding support
-    
+
     Usage Examples:
         # Basic usage
         builder = NornFlowBuilder()
@@ -614,22 +614,22 @@ class NornFlowBuilder:
                           .with_workflow_name('deploy')
                           .with_cli_vars({'env': 'prod', 'debug': True})
                           .build()
-        
+
         # Programmatic override usage
         builder = NornFlowBuilder()
         if emergency_mode:
             cli_overrides = {'skip_tests': True, 'timeout': 300}
         else:
             cli_overrides = {'run_full_suite': True}
-            
+
         nornflow = builder.with_workflow_object(workflow)
                           .with_cli_vars(cli_overrides)
                           .build()
-    
+
     Order of preference for building a NornFlowSettings object:
       1. with_settings_object()
       2. with_settings_path()
-      
+
     Order of preference for building a Workflow object:
       1. with_workflow_object()
       2. with_workflow_name()
@@ -749,31 +749,31 @@ class NornFlowBuilder:
         """
         self._processors = processors
         return self
-        
+
     def with_cli_vars(self, cli_vars: dict[str, Any]) -> "NornFlowBuilder":
         """
         Set CLI variables for the NornFlow instance.
-        
+
         These variables have the highest precedence in the variable resolution order
         and serve a dual purpose:
         1. Primary: Storage for variables parsed from CLI arguments (--vars)
         2. Secondary: Universal override mechanism for programmatic variable setting
-        
+
         They override any variables from other sources including workflow variables,
         domain defaults, and environment variables. The variables are passed to
         workflows during execution with support for late binding.
-        
+
         Usage Examples:
             # Traditional CLI argument representation
             builder.with_cli_vars({'env': 'prod', 'debug': True})
-            
+
             # Programmatic override usage
             emergency_vars = {'skip_validation': True, 'fast_mode': True}
             builder.with_cli_vars(emergency_vars)
-        
+
         Args:
             cli_vars: Dictionary of variables with highest precedence
-            
+
         Returns:
             NornFlowBuilder: The builder instance.
         """
@@ -813,19 +813,16 @@ class NornFlowBuilder:
             # and leave it to the factory to decide which one to use
             if self._workflow_path or self._workflow_dict:
                 workflow_factory = WorkflowFactory(
-                    workflow_path=self._workflow_path, 
+                    workflow_path=self._workflow_path,
                     workflow_dict=self._workflow_dict,
-                    cli_vars=self._cli_vars  # Pass CLI vars to WorkflowFactory for workflow creation
+                    cli_vars=self._cli_vars,  # Pass CLI vars to WorkflowFactory for workflow creation
                 )
                 workflow = workflow_factory.create()
 
         kwargs = self._kwargs.copy()
         if self._cli_vars is not None:
             kwargs["cli_vars"] = self._cli_vars
-            
+
         return NornFlow(
-            nornflow_settings=self._settings, 
-            workflow=workflow, 
-            processors=self._processors, 
-            **kwargs
+            nornflow_settings=self._settings, workflow=workflow, processors=self._processors, **kwargs
         )

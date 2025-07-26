@@ -250,7 +250,7 @@ def get_nornflow_builder(
     # Add processors using dedicated method if specified
     if processors:
         builder.with_processors(processors)
-        
+
     # Add CLI variables if specified
     if cli_vars:
         builder.with_cli_vars(cli_vars)
@@ -366,7 +366,7 @@ def run(
 
         # Parse inventory filters if provided
         parsed_inventory_filters = parse_inventory_filters(inventory_filters) if inventory_filters else {}
-        
+
         # Parse CLI variables if provided
         parsed_vars = parse_variables(vars) if vars else {}
 
@@ -409,14 +409,15 @@ def run(
 
         # Calculate processor info for display
         processor_info = f", processors: {parsed_processors}" if parsed_processors else ""
-        
+
         # Calculate variables info for display
         vars_info = f", vars: {parsed_vars}" if parsed_vars else ""
 
         # Update the output message to include all filters
         filter_info = f"filters: {all_inventory_filters}" if all_inventory_filters else "no filters"
         typer.secho(
-            f"Running: {target} (args: {parsed_args}, {filter_info}, dry-run: {dry_run}{processor_info}{vars_info})",
+            f"Running: {target} (args: {parsed_args}, {filter_info}, dry-run: {dry_run}"
+            f"{processor_info}{vars_info})",
             fg=typer.colors.GREEN,
         )
 

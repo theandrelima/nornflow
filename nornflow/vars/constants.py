@@ -9,10 +9,10 @@ DEFAULTS_FILENAME = "defaults.yaml"
 
 # Template markers for detecting Jinja2 templates - all opening variations
 JINJA2_MARKERS = [
-    "{{",   # Standard variable output
+    "{{",  # Standard variable output
     "{{-",  # Variable with left whitespace control
-    "{%",   # Statement/control structure
+    "{%",  # Statement/control structure
     "{%-",  # Statement with left whitespace control
-    "{#",   # Comment
-    "{#-"   # Comment with left whitespace control
+    "{#",  # Comment
+    "{#-",  # Comment with left whitespace control
 ]

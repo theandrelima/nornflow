@@ -1,6 +1,5 @@
 import re
 
-
 # Special inventory filter keys that use NornFlow provided custom filter functions
 NORNFLOW_SPECIAL_FILTER_KEYS = ["hosts", "groups"]
 

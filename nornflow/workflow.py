@@ -1,14 +1,12 @@
 import os
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from nornir.core.processor import Processor
 from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
 
-from nornflow.vars.constants import VARS_DIR_DEFAULT
-from nornflow.vars.processors import NornFlowVariableProcessor
 from nornflow.exceptions import (
     ProcessorError,
     TaskNotFoundError,
@@ -18,7 +16,9 @@ from nornflow.exceptions import (
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.utils import load_processor
+from nornflow.vars.constants import VARS_DIR_DEFAULT
 from nornflow.vars.manager import NornFlowVariablesManager
+from nornflow.vars.processors import NornFlowVariableProcessor
 
 # making sure pydantic_serdes sees Workflow models
 os.environ["MODELS_MODULES"] = "nornflow.models"
@@ -50,43 +50,43 @@ class Workflow:
     4. Ordered parameters as list: `filter_name: [value1, value2]` mapping to multiple parameters
     5. Single value parameter: `filter_name: value` for a filter with one parameter
     6. Direct attribute filtering: `attribute: value` for filtering by host attributes
-    
+
     These formats allow maximum flexibility in workflow definition files while
     maintaining readability.
 
     Variables and CLI Variables:
     The workflow integrates with NornFlow's variable resolution system and supports
     both initialization-time and late-binding of CLI variables:
-    
+
     - CLI variables can be provided during workflow creation via WorkflowFactory
     - CLI variables can also be provided/updated at runtime via the run() method
     - This dual approach allows maximum flexibility in different usage scenarios
-    
+
     CLI Variables - Dual Nature:
     While named "CLI variables" due to their primary source being command-line arguments,
     these variables serve a dual purpose in NornFlow:
     1. Traditional CLI usage: Variables parsed from command-line arguments (--vars)
     2. Override mechanism: Programmatically set variables with highest precedence
-    
+
     This dual nature allows CLI variables to be:
     - Set during workflow creation for traditional CLI workflows
     - Updated at runtime for dynamic behavior and programmatic control
     - Used as a universal override mechanism in complex automation scenarios
-    
+
     The term "CLI variables" reflects their highest precedence nature and primary
     source, while also serving as a flexible override mechanism for any high-priority
     variable needs.
-    
+
     For detailed information about the variable system hierarchy and precedence,
     see the NornFlow documentation.
     """
 
     def __init__(
-        self, 
+        self,
         workflow_dict: dict[str, Any],
         vars_dir: str = VARS_DIR_DEFAULT,
-        cli_vars: Optional[dict[str, Any]] = None,
-        workflow_path: Optional[Path] = None,
+        cli_vars: dict[str, Any] | None = None,
+        workflow_path: Path | None = None,
     ):
         """
         Initialize the Workflow object.
@@ -94,7 +94,7 @@ class Workflow:
         Args:
             workflow_dict (dict[str, Any]): Dictionary representing the workflow configuration
             vars_dir (str): Directory containing variable files
-            cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the 
+            cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
                 variable resolution chain. While named "CLI variables" due to their primary
                 source being command-line arguments, these serve as a universal override
                 mechanism that can be:
@@ -108,15 +108,15 @@ class Workflow:
         generate_from_dict(self.workflow_dict)
         self.records = get_global_data_store().records
         self.processors_config = self.workflow_dict.get("workflow", {}).get("processors")
-        
+
         # Store variable-related parameters
         self.vars_dir = vars_dir
         self._cli_vars = cli_vars or {}  # Direct assignment for initialization
         self.workflow_path = workflow_path
-        
+
         # Extract workflow vars from the workflow definition
         self.vars = self.workflow_dict.get("workflow", {}).get("vars", {})
-        
+
         # Initialize variable manager (lazily in run() if needed)
         self.vars_manager = None
 
@@ -124,15 +124,15 @@ class Workflow:
     def cli_vars(self) -> dict[str, Any]:
         """
         Get the CLI variables with highest precedence in the variable resolution chain.
-        
+
         While named "CLI variables" due to their primary source being command-line arguments,
         these variables serve a dual purpose:
         1. Storage for variables parsed from CLI arguments (--vars)
         2. Universal override mechanism for programmatic variable setting
-        
+
         These variables always have the highest precedence, overriding any other variable
         source including workflow variables, environment variables, and defaults.
-        
+
         Returns:
             dict[str, Any]: Dictionary containing the CLI variables.
         """
@@ -143,13 +143,13 @@ class Workflow:
         """
         Set CLI variables. This supports both initialization-time setting and
         late-binding during the run() method.
-        
+
         The late-binding capability allows CLI variables to be updated at runtime,
         supporting scenarios where:
         - NornFlow.run() passes updated CLI variables to workflows
         - Programmatic systems need to override variables based on runtime conditions
         - Same workflow object needs to be executed with different variable sets
-        
+
         Args:
             value (dict[str, Any]): Dictionary of CLI variables with highest precedence
         """
@@ -221,17 +221,17 @@ class Workflow:
 
         This method processes each filter key in inventory_filters and determines the appropriate
         handling approach. The filter processing supports two main scenarios:
-        
+
         Custom Filter Functions:
         When the filter key exists in filters_catalog, it's treated as a custom filter function.
         These filters are processed by _process_custom_filter() which handles multiple parameter
         formats (see Filter Parameter Formats in class docstring).
-        
+
         Direct Attribute Filtering:
         When the filter key is not in filters_catalog, it's treated as direct Nornir host
         attribute filtering (like name, platform, hostname, etc.). These are passed directly
         to Nornir's filtering system.
-        
+
         Each filter is processed in the order defined in the workflow, with filters applied
         sequentially to narrow down the inventory selection (AND logic).
 
@@ -276,21 +276,21 @@ class Workflow:
               is_active:          # No parameters needed
               # or
               is_active: null     # Explicit null
-            
+
         Format 2: Named Parameters (Dictionary)
             inventory_filters:
               site_filter:
                 region: "east"
                 site_type: "campus"
-            
+
         Format 3: Collection Parameter (List/Tuple for Single Parameter)
             inventory_filters:
               in_subnets: ["10.1.0.0/24", "10.2.0.0/24"]
-            
+
         Format 4: Ordered Parameters (List/Tuple for Multiple Parameters)
             inventory_filters:
               location_filter: ["nyc", "hq"]  # Maps to (city, building) parameters
-            
+
         Format 5: Single Scalar Parameter
             inventory_filters:
               exact_model: "C9300-48P"
@@ -347,12 +347,12 @@ class Workflow:
     ) -> dict[str, Any]:
         """
         Handle dictionary-format filter parameters (Format 2).
-        
+
         This method validates that all required parameters are provided when using
         the dictionary format for filter parameters. Dictionary format provides
         the most explicit mapping of parameter names to values and is the most
         readable format for complex filters with multiple parameters.
-        
+
         Example usage in workflow YAML:
             inventory_filters:
               site_filter:
@@ -405,15 +405,15 @@ class Workflow:
         for filter_kwargs in filter_kwargs_list:
             nornir_manager.apply_filters(**filter_kwargs)
 
-    def _init_variable_manager(self, workflows_dirs) -> None:
+    def _init_variable_manager(self, workflows_dirs: list[str]) -> None:
         """
         Initialize the VariablesManager if it hasn't been created yet.
-        
+
         This lazy initialization pattern ensures that:
         1. The VariablesManager is only created when actually needed (during workflow execution)
         2. CLI variables can be updated via late binding before the manager is created
         3. The most up-to-date variable values are used when resolving variables
-        
+
         The manager integrates variables from multiple sources based on NornFlow's
         precedence rules, with CLI variables having the highest priority. The lazy
         initialization allows CLI variables to be updated at runtime before the
@@ -425,15 +425,18 @@ class Workflow:
                 cli_vars=self.cli_vars,  # Uses most recent CLI vars
                 inline_workflow_vars=self.vars,
                 workflow_path=self.workflow_path,
-                workflow_roots= workflows_dirs
+                workflow_roots=workflows_dirs,
             )
 
     def _with_processors(
-        self, nornir_manager: NornirManager, workflows_dirs: list[str], processors: list[Processor] | None = None
+        self,
+        nornir_manager: NornirManager,
+        workflows_dirs: list[str],
+        processors: list[Processor] | None = None,
     ) -> None:
         """
         Apply processors to the Nornir instance based on configuration.
-        
+
         IMPORTANT: Always adds NornFlowVariableProcessor as the first processor
         to ensure host context is available for variable resolution.
 
@@ -450,13 +453,13 @@ class Workflow:
         """
         # Ensure we have a variable manager
         self._init_variable_manager(workflows_dirs=workflows_dirs)
-        
+
         # Create our variable processor for host-specific variable resolution
         var_processor = NornFlowVariableProcessor(self.vars_manager)
-        
+
         # Start with the variable processor
         all_processors = [var_processor]
-        
+
         # Apply workflow-specific processors if defined
         if self.processors_config:
             try:
@@ -472,7 +475,7 @@ class Workflow:
         # Otherwise use processors passed as parameter if provided
         elif processors:
             all_processors.extend(processors)
-            
+
         # Apply all processors
         nornir_manager.apply_processors(all_processors)
 
@@ -481,11 +484,11 @@ class Workflow:
         nornir_manager: NornirManager,
         tasks_catalog: dict[str, Callable],
         filters_catalog: dict[str, Callable],
-        workflows_dirs: list[str | None] = [],
+        workflows_dirs: list[str | None] = None,
         processors: list[Processor] | None = None,
-        cli_vars: Optional[dict[str, Any]] = None,
+        cli_vars: dict[str, Any] | None = None,
     ) -> None:
-        """           
+        """
         This method orchestrates the complete workflow execution process:
         1. Updates CLI variables if provided (late binding support)
         2. Initializes the variable manager with the current variable state
@@ -494,21 +497,21 @@ class Workflow:
         5. Executes each task in the defined sequence
         6. If a task has the 'set_to' keyword, its result is saved as a runtime variable.
         7. Prints final workflow summary via processors
-        
+
         Late Binding of CLI Variables:
         The method supports late binding of CLI variables, allowing them to be provided
         or updated at runtime even after the workflow is created. This design enables:
         - NornFlow.run() to pass its CLI variables to workflows at execution time
         - Programmatic systems to override variables based on runtime conditions
         - The same workflow object to be reused with different variable sets
-        
+
         The late binding pattern ensures maximum flexibility while maintaining the
         highest precedence for CLI variables in the variable resolution system.
-        
+
         Args:
             nornir_manager: The NornirManager instance for task execution
             tasks_catalog: Dictionary of available task functions
-            filters_catalog: Dictionary of available filter functions  
+            filters_catalog: Dictionary of available filter functions
             processors: List of processors to apply (if no workflow-specific processors)
             cli_vars: Optional CLI variables with highest precedence. Can override
                 those set during initialization, enabling late binding for maximum
@@ -517,18 +520,18 @@ class Workflow:
         # Update CLI variables if provided (late binding)
         if cli_vars is not None:
             self.cli_vars = cli_vars
-        
+
         processors = processors or []
 
         # Make sure tasks exist in the catalog
         self._check_tasks(tasks_catalog)
-        
+
         # Initialize variable manager with updated CLI vars
         self._init_variable_manager(workflows_dirs=workflows_dirs)
-        
+
         # Apply inventory filters
         self._apply_filters(nornir_manager, filters_catalog)
-        
+
         # Apply processors (NornFlowVariableProcessor will be added first)
         self._with_processors(nornir_manager, workflows_dirs, processors)
 
@@ -570,30 +573,30 @@ class WorkflowFactory:
         - Alternatively, use the static methods create_from_file() or create_from_dict().
 
     If both workflow_path and workflow_dict are provided, the file path takes precedence.
-    
+
     CLI Variables in Factory Context:
     The factory supports setting CLI variables at workflow creation time. These variables
     have the highest precedence in the variable resolution system and serve a dual purpose:
-    
+
     1. Traditional CLI representation: Variables parsed from command-line arguments
     2. Programmatic override mechanism: Variables set for highest precedence control
-    
+
     The factory-set CLI variables can be:
     - Used immediately during workflow creation for variable resolution
     - Updated later via the workflow.run() method (late binding) for maximum flexibility
     - Overridden by runtime CLI variables passed to workflow execution
-    
+
     This dual approach allows maximum flexibility in how and when CLI variables are
     provided to workflows, supporting both traditional CLI usage and advanced programmatic
     scenarios.
     """
 
     def __init__(
-        self, 
-        workflow_path: str | Path | None = None, 
+        self,
+        workflow_path: str | Path | None = None,
         workflow_dict: dict[str, Any] | None = None,
         vars_dir: str = VARS_DIR_DEFAULT,
-        cli_vars: Optional[dict[str, Any]] = None,
+        cli_vars: dict[str, Any] | None = None,
     ):
         """
         Initialize the WorkflowFactory.
@@ -624,17 +627,9 @@ class WorkflowFactory:
             WorkflowInitializationError: If neither workflow_path nor workflow_dict is provided.
         """
         if self.workflow_path:
-            return self.create_from_file(
-                self.workflow_path, 
-                vars_dir=self.vars_dir, 
-                cli_vars=self.cli_vars
-            )
+            return self.create_from_file(self.workflow_path, vars_dir=self.vars_dir, cli_vars=self.cli_vars)
         if self.workflow_dict:
-            return self.create_from_dict(
-                self.workflow_dict, 
-                vars_dir=self.vars_dir,
-                cli_vars=self.cli_vars
-            )
+            return self.create_from_dict(self.workflow_dict, vars_dir=self.vars_dir, cli_vars=self.cli_vars)
 
         raise WorkflowInitializationError("Either workflow_path or workflow_dict must be provided.")
 
@@ -642,7 +637,7 @@ class WorkflowFactory:
     def create_from_file(
         workflow_path: str | Path,
         vars_dir: str = VARS_DIR_DEFAULT,
-        cli_vars: Optional[dict[str, Any]] = None,
+        cli_vars: dict[str, Any] | None = None,
     ) -> Workflow:
         """
         Create a Workflow object from a file.
@@ -659,18 +654,15 @@ class WorkflowFactory:
         loaded_dict = load_file_to_dict(workflow_path)
         path_obj = Path(workflow_path) if isinstance(workflow_path, str) else workflow_path
         return WorkflowFactory.create_from_dict(
-            loaded_dict, 
-            vars_dir=vars_dir, 
-            cli_vars=cli_vars,
-            workflow_path=path_obj
+            loaded_dict, vars_dir=vars_dir, cli_vars=cli_vars, workflow_path=path_obj
         )
 
     @staticmethod
     def create_from_dict(
         workflow_dict: dict[str, Any],
         vars_dir: str = VARS_DIR_DEFAULT,
-        cli_vars: Optional[dict[str, Any]] = None,
-        workflow_path: Optional[Path] = None,
+        cli_vars: dict[str, Any] | None = None,
+        workflow_path: Path | None = None,
     ) -> Workflow:
         """
         Create a Workflow object from a dictionary.

@@ -6,6 +6,7 @@ import typer
 
 from nornflow import NornFlowBuilder
 from nornflow.cli.constants import (
+    DEFAULT_VARS_DIR,
     FILTERS_DIR,
     GREET_USER_TASK_FILE,
     HELLO_WORLD_TASK_FILE,
@@ -16,7 +17,6 @@ from nornflow.cli.constants import (
     SAMPLE_VARS_FILE,
     SAMPLE_WORKFLOW_FILE,
     TASKS_DIR,
-    DEFAULT_VARS_DIR,
     WORKFLOWS_DIR,
 )
 from nornflow.cli.exceptions import CLIInitError
@@ -143,7 +143,7 @@ def setup_sample_content() -> None:
     create_directory_and_copy_sample_files(
         WORKFLOWS_DIR, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
     )
-    
+
     # Add this section to create the vars directory and copy sample defaults.yaml
     create_directory_and_copy_sample_files(
         DEFAULT_VARS_DIR, [SAMPLE_VARS_FILE], "Created a sample 'defaults.yaml' in vars directory: {}"

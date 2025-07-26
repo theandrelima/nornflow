@@ -1,6 +1,7 @@
 """Python builtin functions wrapped as Jinja2 filters."""
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 
 def filter_enumerate(iterable: Iterable[Any], start: int = 0) -> list[tuple[int, Any]]:
@@ -10,7 +11,7 @@ def filter_enumerate(iterable: Iterable[Any], start: int = 0) -> list[tuple[int,
 
 def filter_zip(*iterables: Iterable[Any]) -> list[tuple[Any, ...]]:
     """Combine sequences."""
-    return list(zip(*iterables))
+    return list(zip(*iterables, strict=False))
 
 
 def filter_range(*args: int) -> list[int]:
@@ -30,9 +31,9 @@ def filter_split(string: str, sep: str = None, maxsplit: int = -1) -> list[str]:
 
 # Registry of builtin filters
 PY_WRAPPER_FILTERS = {
-    'enumerate': filter_enumerate,
-    'zip': filter_zip,
-    'range': filter_range,
-    'divmod': filter_divmod,
-    'splitx': filter_split,
+    "enumerate": filter_enumerate,
+    "zip": filter_zip,
+    "range": filter_range,
+    "divmod": filter_divmod,
+    "splitx": filter_split,
 }

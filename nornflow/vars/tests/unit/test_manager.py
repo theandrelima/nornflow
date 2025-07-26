@@ -1,10 +1,11 @@
 import os
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
+import pytest
+
+from nornflow.vars.exceptions import VariableDirectoryError
 from nornflow.vars.manager import NornFlowVariablesManager
-from nornflow.vars.exceptions import VariableDirectoryError, VariableLoadError
 
 
 class TestVariableManager:
@@ -12,15 +13,15 @@ class TestVariableManager:
         """Test initializing the manager with a valid vars directory."""
         manager = NornFlowVariablesManager(vars_dir=str(vars_dir))
         assert manager.vars_dir == Path(vars_dir)
-        
+
     def test_init_with_invalid_dir(self, tmp_path):
         """Test initializing with a path that exists but isn't a directory."""
         invalid_path = tmp_path / "not_a_dir"
         invalid_path.write_text("not a directory")
-        
+
         with pytest.raises(VariableDirectoryError):
             NornFlowVariablesManager(vars_dir=str(invalid_path))
-    
+
     def test_environment_variables_loading(self):
         """Test loading environment variables with NORNFLOW_VAR_ prefix."""
         with patch.dict(os.environ, {"NORNFLOW_VAR_test": "env_value"}):
@@ -28,28 +29,28 @@ class TestVariableManager:
             env_vars = manager._load_environment_variables()
             assert "test" in env_vars
             assert env_vars["test"] == "env_value"
-    
+
     def test_domain_extraction_from_path(self, workflows_dir):
         """Test extracting domain from workflow path."""
         workflow_path = Path(workflows_dir / "networking" / "config.yaml")
-        
+
         manager = NornFlowVariablesManager(workflow_roots=[str(workflows_dir)])
         domain = manager._extract_domain_from_path(workflow_path)
         assert domain == "networking"
-    
+
     def test_get_device_context_creates_new(self, basic_manager):
         """Test that get_device_context creates a new context if none exists."""
         ctx = basic_manager.get_device_context("device1")
         assert ctx.host_name == "device1"
-        
+
     def test_set_runtime_variable(self, basic_manager):
         """Test setting a runtime variable for a host."""
         basic_manager.set_runtime_variable("test_var", "test_value", "device1")
-        
+
         ctx = basic_manager.get_device_context("device1")
         assert "test_var" in ctx.runtime_vars
         assert ctx.runtime_vars["test_var"] == "test_value"
-    
+
     def test_get_nornflow_variable_precedence(self, setup_manager):
         """Test variable precedence when getting a variable."""
         # Test precedence

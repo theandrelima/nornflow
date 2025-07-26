@@ -2,7 +2,7 @@ from collections.abc import Callable
 from typing import Any, ClassVar
 
 from nornir.core.task import AggregatedResult
-from pydantic import field_validator, ConfigDict
+from pydantic import ConfigDict, field_validator
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.models import PydanticSerdesBaseModel
 from pydantic_serdes.utils import convert_dict_to_hashabledict
@@ -10,18 +10,22 @@ from pydantic_serdes.utils import convert_dict_to_hashabledict
 from nornflow.exceptions import TaskNotFoundError
 from nornflow.nornir_manager import NornirManager
 from nornflow.utils import convert_lists_to_tuples
-from nornflow.validators import run_post_creation_task_validation, run_universal_field_validation
+from nornflow.validators import (
+    run_post_creation_task_validation,
+    run_universal_field_validation,
+)
 
 
 class NornFlowBaseModel(PydanticSerdesBaseModel):
     """
     Base model for all NornFlow models with strict field validation and universal field validation.
     """
+
     model_config = ConfigDict(extra="forbid")
     _exclude_from_global_validators: ClassVar[tuple[str, ...]] = ()
 
     @classmethod
-    def create(cls, model_dict: dict[str, Any], *args, **kwargs) -> "NornFlowBaseModel":
+    def create(cls, model_dict: dict[str, Any], *args: Any, **kwargs: Any) -> "NornFlowBaseModel":
         """
         Create model instance with universal field validation.
         """
@@ -47,7 +51,7 @@ class TaskModel(NornFlowBaseModel):
     set_to: str | None = None
 
     @classmethod
-    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "TaskModel":  # noqa: ANN002
+    def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "TaskModel":
         """Create a new TaskModel with auto-incrementing id."""
         # Get current tasks and calculate next id
         current_tasks = cls.get_all()
@@ -116,7 +120,7 @@ class WorkflowModel(NornFlowBaseModel):
     tasks: OneToMany[TaskModel, ...]
 
     @classmethod
-    def create(cls, dict_args: dict[str, Any], *args, **kwargs) -> "WorkflowModel":  # noqa: ANN002
+    def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "WorkflowModel":
         """Create a new WorkflowModel."""
         # Tasks should already be in dict_args from the workflow definition
         if "tasks" not in dict_args:
@@ -156,10 +160,10 @@ class WorkflowModel(NornFlowBaseModel):
     ) -> tuple[HashableDict[str, Any], ...] | None:
         """
         Convert processors list to tuple for serialization.
-    
+
         Args:
             v (list[HashableDict[str, Any]] | None): The processors list to validate.
-    
+
         Returns:
             tuple[HashableDict[str, Any], ...] | None: The processors as a tuple.
         """

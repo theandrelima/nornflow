@@ -7,36 +7,37 @@ import jinja2
 import yaml
 
 from nornflow.builtins.jinja2_filters import ALL_FILTERS
-
 from nornflow.vars.constants import (
-    ENV_VAR_PREFIX,
-    VARS_DIR_DEFAULT,
     DEFAULTS_FILENAME,
+    ENV_VAR_PREFIX,
     JINJA2_MARKERS,
+    VARS_DIR_DEFAULT,
 )
-       
+from nornflow.vars.context import NornFlowDeviceContext
 from nornflow.vars.exceptions import (
     VariableDirectoryError,
     VariableLoadError,
     VariableNotFoundError,
     VariableResolutionError,
 )
-
-from nornflow.vars.context import NornFlowDeviceContext
 from nornflow.vars.proxy import NornirHostProxy
 
 logger = logging.getLogger(__name__)
 
+# Constants for magic values
+MAX_LOG_VALUE_LENGTH = 80
+
 
 class HostNamespace:
     """
-    Provides read-only access to the Nornir host inventory data via the 'host.' prefix 
+    Provides read-only access to the Nornir host inventory data via the 'host.' prefix
     within Jinja2 templates.
-    
+
     This class acts as a proxy to the NornirHostProxy, ensuring that attribute
     access (e.g., {{ host.name }}) is correctly routed to the current host's data.
     """
-    def __init__(self, vars_manager: 'NornFlowVariablesManager', host_name: str):
+
+    def __init__(self, vars_manager: "NornFlowVariablesManager", host_name: str):
         """
         Initializes the HostNamespace.
 
@@ -46,8 +47,8 @@ class HostNamespace:
         """
         self._vars_manager = vars_manager
         self._host_name = host_name
-        self._proxy = vars_manager.nornir_host_proxy 
-    
+        self._proxy = vars_manager.nornir_host_proxy
+
     def __getattr__(self, name: str) -> Any:
         """
         Retrieves an attribute (variable or data key) from the Nornir host's inventory.
@@ -68,15 +69,17 @@ class HostNamespace:
             # Ensure the NornirHostProxy is targeting the correct host for this access
             self._proxy.current_host_name = self._host_name
             return getattr(self._proxy, name)
-        except AttributeError:
+        except AttributeError as err:
             # Raise a more NornFlow-specific error for clarity in logs/exceptions
-            raise VariableNotFoundError(f"Host attribute or data key '{name}' not found for host '{self._host_name}'.")
+            raise VariableNotFoundError(
+                f"Host attribute or data key '{name}' not found for host '{self._host_name}'."
+            ) from err
 
 
 class VariableLookupContext(dict):
     """
     Custom dictionary used as the context for Jinja2 template rendering in NornFlow.
-    
+
     This class provides access to:
     - NornFlow Default Namespace variables: These are the variables loaded from various
       sources (CLI, runtime, inline, domain, default, environment) and are directly
@@ -84,7 +87,10 @@ class VariableLookupContext(dict):
     - 'host.' namespace: Provides read-only access to Nornir inventory data for the
       current host, facilitated by the `HostNamespace` class (e.g., `{{ host.name }}`).
     """
-    def __init__(self, vars_manager: 'NornFlowVariablesManager', host_name: str, base_nornflow_vars: dict[str, Any]):
+
+    def __init__(
+        self, vars_manager: "NornFlowVariablesManager", host_name: str, base_nornflow_vars: dict[str, Any]
+    ):
         """
         Initializes the VariableLookupContext.
 
@@ -94,17 +100,17 @@ class VariableLookupContext(dict):
             base_nornflow_vars: A dictionary containing the flattened NornFlow Default
                                 Namespace variables for the current device.
         """
-        super().__init__(base_nornflow_vars) # Initialize with flattened NornFlow default vars
+        super().__init__(base_nornflow_vars)  # Initialize with flattened NornFlow default vars
         self._vars_manager = vars_manager
         self._host_name = host_name
-            
+
         # Make the 'host.' namespace available in the Jinja2 context
         # e.g., {{ host.name }}
-        self['host'] = HostNamespace(vars_manager, host_name)
-    
+        self["host"] = HostNamespace(vars_manager, host_name)
+
 
 class NornFlowVariablesManager:
-    """   
+    """
     Manages the loading, accessing, and resolution of variables from multiple sources,
     strictly adhering to NornFlow's documented precedence order. It supports
     device-specific contexts (`NornFlowDeviceContext`) to ensure variable isolation
@@ -117,11 +123,11 @@ class NornFlowVariablesManager:
     4. Domain-specific Default Variables (from `{vars_dir}/{domain}/defaults.yaml`)
     5. Default Variables (from `{vars_dir}/defaults.yaml`)
     6. Environment Variables (prefixed with `NORNFLOW_VAR_`)
-    
+
     The 'host.' namespace provides read-only access to Nornir inventory data
     (e.g., `{{ host.hostname }}`).
     """
-    
+
     def __init__(
         self,
         vars_dir: str = VARS_DIR_DEFAULT,
@@ -133,66 +139,69 @@ class NornFlowVariablesManager:
         """
         Initializes the NornFlowVariablesManager.
 
-        This involves setting up paths, loading initial variable layers (environment, 
+        This involves setting up paths, loading initial variable layers (environment,
         default, domain-specific), and preparing the shared state for device contexts.
 
         Args:
-            vars_dir: The root directory where NornFlow variable files (`defaults.yaml`, 
+            vars_dir: The root directory where NornFlow variable files (`defaults.yaml`,
                       domain-specific `defaults.yaml`) are stored.
             cli_vars: A dictionary of variables provided via command-line arguments.
-            inline_workflow_vars: A dictionary of variables defined directly within the 
+            inline_workflow_vars: A dictionary of variables defined directly within the
                                   workflow's `vars` section.
             workflow_path: The `pathlib.Path` object representing the currently executing
                            workflow file. Used to determine the domain for domain-specific
                            variables.
             workflow_roots: A list of root directory paths where workflows are stored.
                             Used in conjunction with `workflow_path` to determine the domain.
-        
+
         Raises:
             VariableDirectoryError: If `vars_dir` exists but is not a directory.
         """
         self.vars_dir = Path(vars_dir)
         self._cli_vars = cli_vars or {}
         self._inline_workflow_vars = inline_workflow_vars or {}
-        
+
         self.workflow_path = workflow_path
         self.workflow_roots = [Path(root) for root in (workflow_roots or [])]
-        
+
         self._default_vars: dict[str, Any] = {}
-        self._domain_vars: dict[str, Any] = {} # Loaded based on workflow_path
+        self._domain_vars: dict[str, Any] = {}  # Loaded based on workflow_path
         self._env_vars = self._load_environment_variables()
-        
+
         self.nornir_host_proxy = NornirHostProxy()
-        
+
         if self.vars_dir.exists():
             if not self.vars_dir.is_dir():
-                raise VariableDirectoryError(f"Specified vars_dir '{self.vars_dir}' exists but is not a directory.")
-            
+                raise VariableDirectoryError(
+                    f"Specified vars_dir '{self.vars_dir}' exists but is not a directory."
+                )
+
             defaults_path = self.vars_dir / DEFAULTS_FILENAME
             self._default_vars = self._load_vars_from_file(defaults_path, "Default Variables")
-            
-            if workflow_path: # Only attempt to load domain vars if a workflow path is provided
+
+            if workflow_path:  # Only attempt to load domain vars if a workflow path is provided
                 self._domain_vars = self._load_domain_variables(workflow_path)
-        
+
         NornFlowDeviceContext.initialize_shared_state(
             cli_vars=self._cli_vars,
             inline_workflow_vars=self._inline_workflow_vars,
             domain_vars=self._domain_vars,
             default_vars=self._default_vars,
-            env_vars=self._env_vars
+            env_vars=self._env_vars,
         )
-        
+
         self.jinja_env = jinja2.Environment(
-            undefined=jinja2.StrictUndefined, 
-            extensions=["jinja2.ext.loopcontrols"], 
+            undefined=jinja2.StrictUndefined,
+            extensions=["jinja2.ext.loopcontrols"],
+            autoescape=jinja2.select_autoescape(),
         )
-        
+
         # Register builtin j2 filters
         for filter_name, filter_func in ALL_FILTERS.items():
             self.jinja_env.filters[filter_name] = filter_func
-        
+
         self._device_contexts: dict[str, NornFlowDeviceContext] = {}
-    
+
     def _load_environment_variables(self) -> dict[str, Any]:
         """
         Loads environment variables that are prefixed with `NORNFLOW_VAR_`.
@@ -204,12 +213,12 @@ class NornFlowVariablesManager:
         env_vars: dict[str, Any] = {}
         for key, value in os.environ.items():
             if key.startswith(ENV_VAR_PREFIX):
-                var_name = key[len(ENV_VAR_PREFIX):]
-                if var_name: 
+                var_name = key[len(ENV_VAR_PREFIX) :]
+                if var_name:
                     env_vars[var_name] = value
         logger.debug(f"Loaded environment variables with prefix '{ENV_VAR_PREFIX}': {list(env_vars.keys())}")
         return env_vars
-    
+
     def _load_domain_variables(self, workflow_path: Path) -> dict[str, Any]:
         """
         Loads domain-specific default variables from `{vars_dir}/{domain}/defaults.yaml`.
@@ -224,13 +233,15 @@ class NornFlowVariablesManager:
         """
         domain = self._extract_domain_from_path(workflow_path)
         if not domain:
-            logger.debug(f"No domain determined for workflow '{workflow_path}'. Skipping domain variable loading.")
+            logger.debug(
+                f"No domain determined for workflow '{workflow_path}'. Skipping domain variable loading."
+            )
             return {}
-            
+
         domain_vars_path = self.vars_dir / domain / DEFAULTS_FILENAME
         logger.debug(f"Attempting to load domain variables for domain '{domain}' from '{domain_vars_path}'.")
         return self._load_vars_from_file(domain_vars_path, f"Domain Variables for '{domain}'")
-        
+
     def _extract_domain_from_path(self, workflow_path: Path) -> str:
         """
         Extracts the domain name from a workflow's path.
@@ -246,25 +257,33 @@ class NornFlowVariablesManager:
         """
         try:
             abs_workflow_path = workflow_path.resolve()
-            for root_dir_path_str in self.workflow_roots: 
+            for root_dir_path_str in self.workflow_roots:
                 abs_root_path = Path(root_dir_path_str).resolve()
-                
+
                 if abs_workflow_path.is_relative_to(abs_root_path):
                     relative_path = abs_workflow_path.relative_to(abs_root_path)
-                    if relative_path.parts and len(relative_path.parts) > 1: 
+                    if relative_path.parts and len(relative_path.parts) > 1:
                         domain_name = relative_path.parts[0]
-                        logger.debug(f"Extracted domain '{domain_name}' for workflow '{workflow_path}' based on root '{abs_root_path}'.")
+                        logger.debug(
+                            f"Extracted domain '{domain_name}' for workflow '{workflow_path}' "
+                            f"based on root '{abs_root_path}'."
+                        )
                         return domain_name
-                    else: 
-                        logger.debug(f"Workflow '{workflow_path}' is directly in a workflow root '{abs_root_path}'. No domain identified from path structure.")
-                        return "" 
-            
-            logger.debug(f"Workflow path '{workflow_path}' not found under any configured workflow roots: {self.workflow_roots}. Cannot determine domain from path.")
+                    logger.debug(
+                        f"Workflow '{workflow_path}' is directly in a workflow root '{abs_root_path}'. "
+                        "No domain identified from path structure."
+                    )
+                    return ""
+
+            logger.debug(
+                f"Workflow path '{workflow_path}' not found under any configured workflow roots: "
+                f"{self.workflow_roots}. Cannot determine domain from path."
+            )
             return ""
-        except Exception as e: 
+        except Exception as e:
             logger.warning(f"Error extracting domain from path '{workflow_path}': {e}", exc_info=True)
             return ""
-        
+
     def _load_vars_from_file(self, file_path: Path, context_description: str) -> dict[str, Any]:
         """
         Loads variables from a specified YAML file.
@@ -287,25 +306,33 @@ class NornFlowVariablesManager:
             logger.debug(f"{context_description} file not found at '{file_path}'. Skipping.")
             return {}
         if not file_path.is_file():
-            logger.warning(f"Expected {context_description} file at '{file_path}' is not a regular file. Skipping.")
+            logger.warning(
+                f"Expected {context_description} file at '{file_path}' is not a regular file. Skipping."
+            )
             return {}
-            
+
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with file_path.open(encoding="utf-8") as f:
                 loaded_vars = yaml.safe_load(f)
-                if loaded_vars is None: 
-                    logger.debug(f"{context_description} file '{file_path}' is empty or contains only null values.")
+                if loaded_vars is None:
+                    logger.debug(
+                        f"{context_description} file '{file_path}' is empty or contains only null values."
+                    )
                     return {}
                 if not isinstance(loaded_vars, dict):
-                    raise VariableLoadError(str(file_path), f"Expected a dictionary from {context_description} file, but got {type(loaded_vars)}.")
+                    raise VariableLoadError(
+                        str(file_path),
+                        f"Expected a dictionary from {context_description} file, "
+                        f"but got {type(loaded_vars)}.",
+                    )
                 logger.debug(f"Successfully loaded {context_description} from '{file_path}'.")
                 return loaded_vars
         except yaml.YAMLError as e:
-            logger.error(f"YAML parsing error in {context_description} file '{file_path}': {e}")
-            raise VariableLoadError(str(file_path), f"YAML parsing error: {e}")
-        except Exception as e: 
-            logger.error(f"Unexpected error loading {context_description} file '{file_path}': {e}", exc_info=True)
-            raise VariableLoadError(str(file_path), f"Unexpected error: {e}")
+            logger.exception(f"YAML parsing error in {context_description} file '{file_path}'")
+            raise VariableLoadError(str(file_path), f"YAML parsing error: {e}") from e
+        except Exception as e:
+            logger.exception(f"Unexpected error loading {context_description} file '{file_path}'")
+            raise VariableLoadError(str(file_path), f"Unexpected error: {e}") from e
 
     def get_device_context(self, host_name: str) -> NornFlowDeviceContext:
         """
@@ -324,8 +351,8 @@ class NornFlowVariablesManager:
 
     def set_runtime_variable(self, name: str, value: Any, host_name: str) -> None:
         """
-        Sets a runtime variable for a specific host. 
-        
+        Sets a runtime variable for a specific host.
+
         Runtime variables are created or modified during workflow execution.
 
         Args:
@@ -333,19 +360,24 @@ class NornFlowVariablesManager:
             value: The value to assign to the variable.
             host_name: The name of the host for which this variable is being set.
         """
-        if not host_name: 
+        if not host_name:
             logger.error("Cannot set runtime variable: host_name is missing.")
             return
 
         ctx = self.get_device_context(host_name)
-        ctx.runtime_vars[name] = value 
-        logger.debug(f"Runtime variable '{name}' set for host '{host_name}'. Value: {str(value)[:80]}{'...' if len(str(value)) > 80 else ''}")
+        ctx.runtime_vars[name] = value
+        value_str = str(value)
+        logger.debug(
+            f"Runtime variable '{name}' set for host '{host_name}'. Value: "
+            f"{value_str[:MAX_LOG_VALUE_LENGTH]}"
+            f"{'...' if len(value_str) > MAX_LOG_VALUE_LENGTH else ''}"
+        )
 
     def get_nornflow_variable(self, var_name: str, host_name: str) -> Any:
         """
         Retrieves a NornFlow Default Namespace variable for a specific host,
         respecting the full 6-level precedence order.
-        
+
         This method queries the NornFlow Default Namespace.
 
         Args:
@@ -362,17 +394,21 @@ class NornFlowVariablesManager:
             raise VariableNotFoundError(var_name, "Host name not provided for NornFlow variable lookup.")
 
         device_ctx = self.get_device_context(host_name)
-        flat_context = device_ctx.get_flat_context() 
-        
+        flat_context = device_ctx.get_flat_context()
+
         if var_name in flat_context:
             return flat_context[var_name]
-            
-        raise VariableNotFoundError(var_name, f"NornFlow variable '{var_name}' not found in Default Namespace for host '{host_name}'.")
 
-    def resolve_string(self, template_str: str, host_name: str, additional_vars: dict[str, Any] | None = None) -> str:
+        raise VariableNotFoundError(
+            var_name, f"NornFlow variable '{var_name}' not found in Default Namespace for host '{host_name}'."
+        )
+
+    def resolve_string(
+        self, template_str: str, host_name: str, additional_vars: dict[str, Any] | None = None
+    ) -> str:
         """
         Resolves a Jinja2 template string using variables for a specific host.
-        
+
         Context provides access to Default Namespace and 'host.' namespace.
 
         Args:
@@ -388,37 +424,42 @@ class NornFlowVariablesManager:
             VariableResolutionError: If template resolution fails or host_name is missing.
         """
         if not isinstance(template_str, str):
-            return template_str 
-            
+            return template_str
+
         if not any(marker in template_str for marker in JINJA2_MARKERS):
             return template_str
-            
+
         if not host_name:
             raise VariableResolutionError(template_str, "Host name not provided for template resolution.")
 
         try:
             template = self.jinja_env.from_string(template_str)
             device_ctx = self.get_device_context(host_name)
-            
+
             nornflow_default_vars = device_ctx.get_flat_context()
-            
+
             resolution_context_dict = nornflow_default_vars.copy()
             if additional_vars:
                 resolution_context_dict.update(additional_vars)
-                
+
             context_for_jinja = VariableLookupContext(self, host_name, resolution_context_dict)
             return template.render(context_for_jinja)
-            
+
         except jinja2.exceptions.UndefinedError as e:
-            logger.error(f"Jinja2 UndefinedError for host '{host_name}' in template '{template_str}': {e}")
-            raise VariableResolutionError(template_str, f"Undefined variable: {e}")
-        except VariableNotFoundError as e: 
-            logger.error(f"NornFlow VariableNotFoundError for host '{host_name}' in template '{template_str}': {e}")
-            raise VariableResolutionError(template_str, str(e))
-        except Exception as e: 
-            logger.error(f"Jinja2 TemplateError or unexpected issue for host '{host_name}' in template '{template_str}': {e}", exc_info=True)
-            raise VariableResolutionError(template_str, f"Template rendering error: {e}")
-    
+            logger.exception(f"Jinja2 UndefinedError for host '{host_name}' in template '{template_str}'")
+            raise VariableResolutionError(template_str, f"Undefined variable: {e}") from e
+        except VariableNotFoundError as e:
+            logger.exception(
+                f"NornFlow VariableNotFoundError for host '{host_name}' in template '{template_str}'"
+            )
+            raise VariableResolutionError(template_str, str(e)) from e
+        except Exception as e:
+            logger.exception(
+                f"Jinja2 TemplateError or unexpected issue for host '{host_name}' "
+                f"in template '{template_str}'"
+            )
+            raise VariableResolutionError(template_str, f"Template rendering error: {e}") from e
+
     def resolve_data(self, data: Any, host_name: str, additional_vars: dict[str, Any] | None = None) -> Any:
         """
         Recursively resolves Jinja2 templates within a data structure.
@@ -433,9 +474,8 @@ class NornFlowVariablesManager:
         """
         if isinstance(data, str):
             return self.resolve_string(data, host_name, additional_vars)
-        elif isinstance(data, list):
+        if isinstance(data, list):
             return [self.resolve_data(item, host_name, additional_vars) for item in data]
-        elif isinstance(data, dict):
+        if isinstance(data, dict):
             return {k: self.resolve_data(v, host_name, additional_vars) for k, v in data.items()}
-        else:
-            return data
+        return data

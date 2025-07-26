@@ -21,11 +21,11 @@ from nornflow.vars.processors import NornFlowVariableProcessor
 from nornflow.vars.proxy import NornirHostProxy
 
 __all__ = [
-    "NornFlowDeviceContext", 
-    "NornFlowVariablesManager", 
-    "NornirHostProxy",
+    "NornFlowDeviceContext",
     "NornFlowVariableProcessor",
+    "NornFlowVariablesManager",
     "NornFlowVarsError",
+    "NornirHostProxy",
     "VariableDirectoryError",
     "VariableLoadError",
     "VariableNotFoundError",

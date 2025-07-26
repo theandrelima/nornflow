@@ -1,7 +1,4 @@
-import pytest
 from unittest.mock import MagicMock
-
-from nornflow.vars.processors import NornFlowVariableProcessor
 
 
 class TestVariableProcessor:
@@ -53,11 +50,11 @@ class TestVariableProcessor:
         task = MagicMock()
         task.set_to = "backup_result"
         host = mock_host
-        
+
         # Set the result value explicitly to make test deterministic
         mock_result.result = "Router configuration backup"
 
-        # First we need to manually set the variable since the current processor 
+        # First we need to manually set the variable since the current processor
         # implementation doesn't handle set_to (it's handled in workflow.py)
         processor.vars_manager.set_runtime_variable("backup_result", mock_result.result, "test_device")
 

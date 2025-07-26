@@ -1,12 +1,15 @@
-from nornir.core.task import Result, Task
-from nornflow.builtins.utils import build_set_task_report
 from pathlib import Path
 
+from nornir.core.task import Result, Task
+
+from nornflow.builtins.utils import build_set_task_report
+
 try:
-  from nornir_napalm.plugins.tasks import *
-  from nornir_netmiko.tasks import *
+    from nornir_napalm.plugins.tasks import *  # noqa: F403
+    from nornir_netmiko.tasks import *  # noqa: F403
 except ImportError:
-  pass
+    pass
+
 
 def set(task: Task, **kwargs) -> Result:
     """
@@ -31,7 +34,7 @@ def set(task: Task, **kwargs) -> Result:
 
     Returns:
         Result: A Nornir Result object indicating the task was processed.
-                The `result` attribute contains a detailed report of what 
+                The `result` attribute contains a detailed report of what
                 variables were set and their resolved values.
 
     Example in workflow YAML:
@@ -49,9 +52,9 @@ def set(task: Task, **kwargs) -> Result:
     """
     # By the time this function is called, the NornFlowVariableProcessor has already
     # resolved the Jinja2 templates and set the variables. We need to retrieve the
-    # resolved values from the variable manager to show what was actually set. This 
-    # task function merely handles reporting. 
-    
+    # resolved values from the variable manager to show what was actually set. This
+    # task function merely handles reporting.
+
     report = build_set_task_report(task, kwargs)
     return Result(host=task.host, result=report)
 
@@ -62,7 +65,7 @@ def echo(task: Task, msg: str) -> Result:
 
     Returns:
         Result object containing the echoed text
-    
+
     Example:
         echo:
           args:
@@ -71,54 +74,40 @@ def echo(task: Task, msg: str) -> Result:
     return Result(host=task.host, result=msg)
 
 
-def write_file(task: Task, filename: str = None, content: str = None, append: bool = False, mkdir: bool = True) -> Result:
+def write_file(
+    task: Task, filename: str = None, content: str = None, append: bool = False, mkdir: bool = True
+) -> Result:
     """
     Write content to a file, creating directories as needed.
-    
+
     Args:
         task (Task): Nornir task object
         filename (str): Path to file to write
         content (str): Content to write to file
         append (bool): Append to file instead of overwriting (default: False)
         mkdir (bool): Create parent directories if needed (default: True)
-        
+
     Returns:
         Result: Result object with the path to the written file
     """
     if not filename:
-        return Result(
-            host=task.host,
-            failed=True,
-            exception=ValueError("filename argument is required")
-        )
-    
+        return Result(host=task.host, failed=True, exception=ValueError("filename argument is required"))
+
     if content is None:
-        return Result(
-            host=task.host,
-            failed=True,
-            exception=ValueError("content argument is required")
-        )
-    
+        return Result(host=task.host, failed=True, exception=ValueError("content argument is required"))
+
     try:
         # Create directory if it doesn't exist
         file_path = Path(filename)
         if mkdir:
             file_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Write to file
         mode = "a" if append else "w"
         with file_path.open(mode=mode, encoding="utf-8") as f:
             f.write(str(content))
-        
-        return Result(
-            host=task.host,
-            result={"path": str(file_path)},
-            changed=True
-        )
-    
+
+        return Result(host=task.host, result={"path": str(file_path)}, changed=True)
+
     except Exception as e:
-        return Result(
-            host=task.host,
-            failed=True,
-            exception=e
-        )
+        return Result(host=task.host, failed=True, exception=e)
