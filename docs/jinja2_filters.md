@@ -16,7 +16,7 @@
 
 ## Introduction
 
-NornFlow supports all standard Jinja2 filters plus custom filters designed for network automation. Filters transform variables using the pipe (`|`) symbol:
+NornFlow supports all standard Jinja2 filters plus custom filters included for some common automation scenarios. Filters transform variables using the pipe (`|`) symbol:
 
 ```yaml
 # Basic syntax

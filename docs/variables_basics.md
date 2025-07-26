@@ -50,7 +50,7 @@ export NORNFLOW_VAR_api_token="secret123"
 nornflow run workflow.yaml
 ```
 
-Access without prefix:
+Access it in your workflow without the 'NORNFLOW_VAR_' prefix:
 ```yaml
 tasks:
   - name: api_call
@@ -96,7 +96,7 @@ For a workflow at `workflows/backup/daily.yaml`:
 - Domain is `backup`
 - Domain variables go in `vars/backup/defaults.yaml`
 
-> **Note:** Like Global Variables, Domain Variables are loaded from a file named 'defaults.yaml' within a subdirectory matching the domain name in your configured `vars_dir` (e.g., `vars/backup/defaults.yaml`). If this file doesn't exist, NornFlow simply skips domain variables resolution.
+> **Note:** Like Global Variables, Domain Variables are loaded from a file named `defaults.yaml` within a subdirectory matching the domain name in your configured `vars_dir` (e.g., `vars/backup/defaults.yaml`). If this file doesn't exist, NornFlow simply skips domain variables resolution.
 
 ```yaml
 # vars/backup/defaults.yaml

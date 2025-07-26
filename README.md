@@ -12,28 +12,23 @@
 
 > ***NornFlow is still in beta phase.***
 
-NornFlow is a lightweight workflow orchestration framework built on top of [Nornir](https://github.com/nornir-automation/nornir), bringing structure and predictability to network automation projects.
-
 ## What is NornFlow?
+NornFlow is a lightweight workflow orchestration framework built on top of [Nornir](https://github.com/nornir-automation/nornir), bringing structure and predictability to network automation projects.
 
 NornFlow bridges the gap between development and operations teams by providing:
 
 - A **structured workflow system** for organizing Nornir tasks into reusable automation flows
 - A **declarative YAML interface** for defining complex automation sequences
-- A **command-line interface** for running individual tasks or complete workflows
+- A **command-line interface** for running individual Nornir tasks or complete workflows
 - A **variable system** with multi-level precedence for flexible customization
 
 ## Why Use NornFlow?
 
 NornFlow promotes collaboration between developers and network engineers:
 
-💪 **Developer-friendly**: Write automation logic as pure Python functions with Nornir's task interface. No boilerplate, no plugins, just clean Python code.
+⚡️ **Unlimited Power for Developer**: Write automation logic as pure Python functions with Nornir's task interface. No boilerplate, just clean Python code.
 
-👍 **Operations-friendly**: Define and run workflows with familiar YAML syntax similar to Ansible playbooks, enabling team members to be productive regardless of their Python programming background.
-
-🔧 **Team-friendly**: Even when the same team handles both development and operations, NornFlow provides a clean separation of concerns:
-- Developers focus on task implementation details
-- Operators focus on workflow logic and task sequencing
+🚀 **Productivity for Operators**: Define and run workflows with familiar YAML syntax similar to Ansible playbooks, enabling network engineers to be productive regardless of their Python programming background.
 
 🧩 **Project-friendly**: Brings predictable structure to Nornir projects with:
 - Standardized directory organization

@@ -10,9 +10,9 @@
 - [Filtering Inventory](#filtering-inventory)
 - [Useful Commands](#useful-commands)
 
-> **Note:**  
-> This document is intentionally light on each subject. Much of what's mentioned here (and more) is expanded in the [Core Concepts](./core_concepts.md) documentation.
-
+> **Notes:** 
+> 1. This document is intentionally light on each subject. Much of what's mentioned here (and more) is expanded in the [Core Concepts](./core_concepts.md) documentation.
+> 2. Throughout the whole documentation, we won't go into the details about Nornir's configs and concepts (tasks, inventory, filters, etc). Those are pre-requisites to use NornFlow. You may want to check [Nornir's docs](https://github.com/nornir-automation/nornir).
 ## Installation
 
 ```bash
@@ -28,7 +28,7 @@ uv pip install nornflow
 
 ### Optional Network Automation Plugins
 
-Optionally, you may want to install with the 'optional-plugins' tag, which will include `nornir-napalm` and `nornir-netmiko` with the installation.
+Optionally, you may want to install NonrFlow with the 'optional-plugins' tag, which will include `nornir-napalm` and `nornir-netmiko`.
 
 ```bash
 # Install NornFlow with network automation plugins
@@ -65,9 +65,9 @@ nornflow show --catalog
 ```
 
 You'll see three catalogs:
-- **Tasks**: Individual automation actions
-- **Workflows**: Sequences of tasks
-- **Nornir Filters**: Ways to select specific devices
+- **Tasks**: Individual Nornir tasks, that represent a single automation action.
+- **Workflows**: Sequences of tasks grouped in a YAML file, representing a set of tasks that should be executed together over an invetory to achieve a end-goal.
+- **Nornir Filters**: Nornir filters that allow to select specific devices from the whole inventory to run either tasks or workflows against.
 
 ## Running Tasks
 
@@ -75,7 +75,7 @@ You'll see three catalogs:
 
 ```bash
 # The 'hello_world' and 'greet_user' tasks below are sample tasks automatically created by the 'nornflow init' command.
-# You can manually delete them from the 'tasks' folder if you wish.
+# You can manually delete them from the 'tasks' folder after initialization if you wish.
 
 # Run a task on all devices (note: no file extension needed for tasks)
 nornflow run hello_world

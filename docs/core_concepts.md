@@ -40,6 +40,71 @@ NornFlow is a workflow orchestration framework built on top of Nornir. It provid
 
 This guide covers the fundamental concepts you need to understand to effectively use NornFlow.
 
+## Declarative vs. Imperative
+
+
+Before we go any further, there's an **important clarification** to be made about a rather 'hot topic' within the network-automation community:  
+When we say NornFlow provides a *"declarative way to define workflows"* we're referring to the workflow structure and orchestration itself, not the individual tasks within those workflows. The declarative vs. imperative nature of each task depends entirely on how the task developer chose to implement it. NornFlow simply provides the framework to organize and execute these tasks in a predictable, YAML-defined manner.
+
+**Example - Task Implementation Approaches**:
+
+```python
+# IMPERATIVE task - tells the system HOW to do something
+def create_vlan(task: Task, vlan_id: int, vlan_name: str) -> Result:
+    """Creates a VLAN by sending configuration commands."""
+    commands = [
+        f"vlan {vlan_id}",
+        f"name {vlan_name}",
+        "exit"
+    ]
+    # Sends commands regardless of current state
+    result = task.run(netmiko_send_config, config_commands=commands)
+    return Result(host=task.host, result=f"Created VLAN {vlan_id}")
+
+# DECLARATIVE task - tells the system WHAT the end state should be
+def ensure_vlan(task: Task, vlan_id: int, vlan_name: str) -> Result:
+    """Ensures a VLAN exists with the specified configuration."""
+    # First, check current state
+    existing_vlans = task.run(get_vlans)
+    
+    if vlan_id in existing_vlans:
+        if existing_vlans[vlan_id]['name'] == vlan_name:
+            return Result(host=task.host, result=f"VLAN {vlan_id} already exists with correct name")
+        else:
+            # Update name if different
+            task.run(netmiko_send_config, config_commands=[
+                f"vlan {vlan_id}",
+                f"name {vlan_name}"
+            ])
+            return Result(host=task.host, result=f"Updated VLAN {vlan_id} name to {vlan_name}")
+    else:
+        # Create VLAN if it doesn't exist
+        task.run(netmiko_send_config, config_commands=[
+            f"vlan {vlan_id}",
+            f"name {vlan_name}"
+        ])
+        return Result(host=task.host, result=f"Created VLAN {vlan_id}")
+```
+
+Both tasks can be used identically in NornFlow workflows:
+
+```yaml
+workflow:
+  name: "VLAN Management"
+  tasks:
+    - name: create_vlan      # Imperative approach
+      args:
+        vlan_id: 100
+        vlan_name: "SERVERS"
+        
+    - name: ensure_vlan      # Declarative approach  
+      args:
+        vlan_id: 100
+        vlan_name: "SERVERS"
+```
+
+The choice between imperative and declarative task implementation is up to the task developer, not NornFlow itself.
+
 ## Architecture Overview
 
 NornFlow's architecture consists of three main components working together:
