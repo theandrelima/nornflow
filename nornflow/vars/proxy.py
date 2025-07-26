@@ -4,7 +4,7 @@ from typing import Any
 from nornir.core import Nornir
 from nornir.core.inventory import Host
 
-from nornflow.vars.exceptions import HostContextError
+from nornflow.vars.exceptions import HostContextError, VariableNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -120,13 +120,13 @@ class NornirHostProxy:
         1. Direct host attributes (e.g., name, platform, data).
         2. Keys within the `host.data` dictionary (which is already fully resolved
            by Nornir, including group and default data).
-
+    
         Args:
             name: The name of the attribute or data key.
-
+    
         Returns:
             The value if found.
-
+    
         Raises:
             HostContextError: If `self._current_host` is not set
                 (safeguard, shouldbe caught by `__getattr__`).
@@ -135,6 +135,9 @@ class NornirHostProxy:
         if not self._current_host:
             # This check is a safeguard; __getattr__ should prevent calls if _current_host is None.
             raise HostContextError("NornirHostProxy: _get_host_value called with no current host.")
-
+    
         # Try to retrieve 'name' using Host.get(), which covers direct attributes, data, and inheritance.
-        return self._current_host.get(name)
+        value = self._current_host.get(name)
+        if value is None:
+            raise VariableNotFoundError(f"Attribute or key '{name}' not found in host '{self._current_host.name}'.")
+        return value
