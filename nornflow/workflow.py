@@ -477,7 +477,7 @@ class Workflow:
             all_processors.extend(processors)
 
         # Apply all processors
-        nornir_manager.apply_processors(all_processors)
+        nornir_manager.apply_processors(all_processors)        
 
     def run(
         self,
@@ -487,6 +487,7 @@ class Workflow:
         workflows_dirs: list[str] | None = None,
         processors: list[Processor] | None = None,
         cli_vars: dict[str, Any] | None = None,
+        dry_run: bool = False,
     ) -> None:
         """
         This method orchestrates the complete workflow execution process:
@@ -516,10 +517,15 @@ class Workflow:
             cli_vars: Optional CLI variables with highest precedence. Can override
                 those set during initialization, enabling late binding for maximum
                 flexibility in variable management.
+            dry_run: Whether to execute the workflow in dry-run mode
         """
         # Update CLI variables if provided (late binding)
         if cli_vars is not None:
             self.cli_vars = cli_vars
+
+        # Determine effective dry_run mode: CLI parameter takes precedence over workflow setting
+        workflow_model = self.records["WorkflowModel"][0]
+        effective_dry_run = dry_run or workflow_model.dry_run
 
         processors = processors or []
 
@@ -540,8 +546,11 @@ class Workflow:
             if hasattr(processor, "total_workflow_tasks"):
                 processor.total_workflow_tasks = len(self.tasks)
 
-        # Execute tasks in sequence
+        # Execute tasks in sequence with dry-run support
         for task in self.tasks:
+            # Pass dry-run context to task execution
+            nornir_manager.set_dry_run(effective_dry_run)
+            
             # Run the task and capture its result
             aggregated_result = task.run(nornir_manager, tasks_catalog)
 

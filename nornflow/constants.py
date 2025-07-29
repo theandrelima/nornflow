@@ -8,7 +8,6 @@ NONRFLOW_SETTINGS_MANDATORY = ("nornir_config_file",)
 
 # used to track the optional kwargs for a NornFlowSettings object
 NONRFLOW_SETTINGS_OPTIONAL = {
-    "dry_run": False,
     "local_tasks_dirs": [],
     "local_workflows_dirs": [],
     "local_filters_dirs": [],
@@ -28,6 +27,21 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "imported_packages",
 )
 
-NORNFLOW_SUPPORTED_YAML_EXTENSIONS = (".yaml", ".yml")
+# Nornir supported task result types
+NORNIR_SUPPORTED_TASK_RESULT_TYPES = ["echo", "command"]
 
-JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")
+# Supported formats used for the show command
+NORNFLOW_SUPPORTED_FORMATS = ("json", "yaml", "table")
+
+# Supported extensions
+NORNFLOW_SUPPORTED_YAML_EXTENSIONS = [".yaml", ".yml"]
+
+# Default paths
+TASKS_DIR_DEFAULT = "tasks"
+FILTERS_DIR_DEFAULT = "filters"
+WORKFLOWS_DIR_DEFAULT = "workflows"
+NORNIR_CONFIG_FILE_DEFAULT = "nornir_config.yaml"
+VARS_DIR_DEFAULT = "vars"
+
+# Default inventory filter keys
+JINJA_PATTERN = re.compile(r"{{.*?}}")
