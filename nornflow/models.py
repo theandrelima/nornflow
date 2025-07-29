@@ -118,6 +118,7 @@ class WorkflowModel(NornFlowBaseModel):
     inventory_filters: HashableDict[str, Any] | None = None
     processors: tuple[HashableDict[str, Any]] | None = None
     tasks: OneToMany[TaskModel, ...]
+    dry_run: bool = False
 
     @classmethod
     def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "WorkflowModel":

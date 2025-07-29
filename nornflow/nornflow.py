@@ -138,7 +138,6 @@ class NornFlow:
             # Create NornirManager instead of directly initializing Nornir
             self.nornir_manager = NornirManager(
                 nornir_settings=self.settings.nornir_config_file,
-                dry_run=self.settings.dry_run,
                 **kwargs,
             )
         except NornFlowInitializationError:
@@ -540,7 +539,7 @@ class NornFlow:
 
             self.workflow = WorkflowFactory(workflow_path=workflow_path).create()
 
-    def run(self) -> None:
+    def run(self, dry_run: bool = False) -> None:
         """
         Execute the configured workflow with the current NornFlow settings.
 
@@ -563,6 +562,9 @@ class NornFlow:
         The workflow's run() method supports late binding, allowing these CLI variables
         to be updated or overridden at runtime if needed.
 
+        Args:
+            dry_run: Whether to run the workflow in dry-run mode
+
         Raises:
             NornFlowRunError: If no workflow is configured or workflow execution fails
         """
@@ -582,6 +584,7 @@ class NornFlow:
             self.settings.local_workflows_dirs,
             self.processors,
             cli_vars=self.cli_vars,  # Pass CLI variables for highest precedence
+            dry_run=dry_run,
         )
 
 

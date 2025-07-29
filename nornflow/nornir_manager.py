@@ -5,7 +5,7 @@ from nornir.core import Nornir
 from nornir.core.processor import Processor
 
 from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL
-from nornflow.exceptions import ProcessorError
+from nornflow.exceptions import ProcessorError, NornFlowNornirError
 
 
 class NornirManager:
@@ -27,13 +27,12 @@ class NornirManager:
     - Sequential application of multiple filters with AND logic
     """
 
-    def __init__(self, nornir_settings: str, dry_run: bool, **kwargs):
+    def __init__(self, nornir_settings: str, **kwargs):
         """
         Initialize the NornirManager with a Nornir configuration.
 
         Args:
             nornir_settings: Path to Nornir config file (YAML)
-            dry_run: Whether to run Nornir tasks in dry-run mode
             **kwargs: Additional arguments to pass to InitNornir
         """
         # Clean up kwargs before passing to InitNornir
@@ -41,13 +40,11 @@ class NornirManager:
 
         # Store settings
         self.nornir_settings = nornir_settings
-        self.dry_run = dry_run
         self.kwargs = kwargs
 
         # Create regular Nornir instance
         self.nornir = InitNornir(
             config_file=self.nornir_settings,
-            dry_run=self.dry_run,
             **kwargs,
         )
 
@@ -107,3 +104,22 @@ class NornirManager:
 
         self.nornir = self.nornir.with_processors(processors)
         return self.nornir
+    
+    def set_dry_run(self, value: bool = True) -> None:
+        """       
+        Sets the dry_run flag in the Nornir instance's global data state.
+        This flag is used by Nornir's task execution system to determine whether
+        tasks should be executed in dry-run mode (simulation) or normal mode.
+        
+        Args:
+            value (bool): True to enable dry-run mode, False to disable it.
+                Defaults to True for backward compatibility.
+        
+        Example:
+            manager.set_dry_run(True)   # Enable dry-run mode
+            manager.set_dry_run(False)  # Disable dry-run mode
+        """
+        if not isinstance(value, bool):
+            raise NornFlowNornirError(f"dry_run value must be a boolean, got {type(value).__name__}: {value}")
+    
+        self.nornir.data.dry_run = value

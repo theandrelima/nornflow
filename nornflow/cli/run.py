@@ -216,7 +216,6 @@ def get_nornflow_builder(
     target: str,
     args: dict,
     inventory_filters: dict,
-    dry_run: bool,
     settings_file: str = "",
     processors: list[dict[str, Any]] | None = None,
     cli_vars: dict[str, Any] | None = None,
@@ -228,7 +227,6 @@ def get_nornflow_builder(
         target (str): The name of the task or workflow to run.
         args (dict): The task arguments.
         inventory_filters (dict): The inventory filters.
-        dry_run (bool): The dry-run option.
         settings_file (str): The path to a YAML settings file for NornFlowSettings.
         processors (list): The processor configurations.
         cli_vars (dict): CLI variables with highest precedence.
@@ -242,10 +240,6 @@ def get_nornflow_builder(
 
     if settings_file:
         builder.with_settings_path(settings_file)
-
-    nornflow_kwargs = {"dry_run": dry_run} if dry_run else {}
-
-    builder.with_kwargs(**nornflow_kwargs)
 
     # Add processors using dedicated method if specified
     if processors:
@@ -271,8 +265,7 @@ def get_nornflow_builder(
             "workflow": {
                 "name": f"Task {target} - exec {timestamp}",
                 "description": (
-                    f"ran with 'nornflow run' CLI (args: {args}, filters: {inventory_filters}, "
-                    f"dry-run: {dry_run})"
+                    f"ran with 'nornflow run' CLI (args: {args}, filters: {inventory_filters})"
                 ),
                 "inventory_filters": inventory_filters,
                 "processors": processors if processors else None,
@@ -404,7 +397,7 @@ def run(
             )
 
         builder = get_nornflow_builder(
-            target, parsed_args, all_inventory_filters, dry_run, settings, parsed_processors, parsed_vars
+            target, parsed_args, all_inventory_filters, settings, parsed_processors, parsed_vars
         )
 
         # Calculate processor info for display
@@ -422,7 +415,7 @@ def run(
         )
 
         nornflow = builder.build()
-        nornflow.run()
+        nornflow.run(dry_run=dry_run)
 
     except NornFlowAppError as e:
         CLIRunError(
