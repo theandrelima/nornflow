@@ -10,6 +10,7 @@ from nornflow.cli.constants import (
     FILTERS_DIR,
     GREET_USER_TASK_FILE,
     HELLO_WORLD_TASK_FILE,
+    INIT_BANNER,
     NORNFLOW_SETTINGS,
     NORNIR_DEFAULT_CONFIG_DIR,
     SAMPLE_NORNFLOW_FILE,
@@ -156,6 +157,9 @@ def display_banner() -> None:
     """
     Display a banner message with borders.
     """
+    # Print the ASCII banner first in purple
+    typer.secho(INIT_BANNER, fg=typer.colors.MAGENTA)
+    
     banner_message = (
         "The 'init' command creates directories, and samples for configs, tasks and\n"
         "workflows files, all with default values that you can modify as desired.\n"
