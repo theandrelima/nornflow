@@ -10,25 +10,24 @@ class TestNornirManager:
 
     def test_init_with_minimal_params(self, mock_init_nornir, mock_nornir):
         """Test initialization with minimal parameters."""
-        manager = NornirManager(nornir_settings="dummy_config.yaml", dry_run=False)
+        manager = NornirManager(nornir_settings="dummy_config.yaml")
 
         # Verify InitNornir was called with correct params
-        mock_init_nornir.assert_called_once_with(config_file="dummy_config.yaml", dry_run=False)
+        mock_init_nornir.assert_called_once_with(config_file="dummy_config.yaml")
 
         # Verify properties were set correctly
         assert manager.nornir_settings == "dummy_config.yaml"
-        assert manager.dry_run is False
         assert manager.nornir == mock_nornir
         # Removed check for _local_tasks_nornir which was unused and has been removed
 
     def test_init_with_additional_params(self, mock_init_nornir):
         """Test initialization with additional parameters."""
         additional_params = {"runner": "threaded", "num_workers": 10}
-        manager = NornirManager(nornir_settings="dummy_config.yaml", dry_run=True, **additional_params)
+        manager = NornirManager(nornir_settings="dummy_config.yaml", **additional_params)
 
         # Verify InitNornir was called with correct params including additional ones
         mock_init_nornir.assert_called_once_with(
-            config_file="dummy_config.yaml", dry_run=True, runner="threaded", num_workers=10
+            config_file="dummy_config.yaml", runner="threaded", num_workers=10
         )
 
     def test_init_filters_out_nornflow_params(self, mock_init_nornir):
@@ -49,22 +48,17 @@ class TestNornirManager:
         # Verify InitNornir was called without NornFlow-specific params
         _, call_kwargs = mock_init_nornir.call_args
 
-        # Check that all NornFlow params were removed (except dry_run, which is special)
+        # Check that all NornFlow params were removed
         for param in NONRFLOW_SETTINGS_OPTIONAL:
-            if param != "dry_run":  # Special case: dry_run is passed to InitNornir
-                assert param not in call_kwargs
+            assert param not in call_kwargs
 
         # Check that valid Nornir params remain
         assert "runner" in call_kwargs
         assert call_kwargs["runner"] == "threaded"
 
-        # Special case: verify dry_run is present and has the right value
-        assert "dry_run" in call_kwargs
-        assert call_kwargs["dry_run"] == "value_dry_run"
-
     def test_remove_optional_nornflow_settings_from_kwargs(self, mock_init_nornir):
         """Test the _remove_optional_nornflow_settings_from_kwargs method."""
-        manager = NornirManager(nornir_settings="dummy_config.yaml", dry_run=False)
+        manager = NornirManager(nornir_settings="dummy_config.yaml")
 
         # Create test kwargs with some NornFlow settings
         kwargs = {
@@ -83,7 +77,7 @@ class TestNornirManager:
 
     def test_apply_filters_with_valid_filters(self, mock_nornir, mock_init_nornir):
         """Test applying valid filters."""
-        manager = NornirManager(nornir_settings="dummy_config.yaml", dry_run=False)
+        manager = NornirManager(nornir_settings="dummy_config.yaml")
 
         # Apply some filters
         result = manager.apply_filters(name="device1", group="routers")
@@ -99,7 +93,7 @@ class TestNornirManager:
 
     def test_apply_filters_with_no_filters(self, mock_init_nornir):
         """Test applying no filters raises an error."""
-        manager = NornirManager(nornir_settings="dummy_config.yaml", dry_run=False)
+        manager = NornirManager(nornir_settings="dummy_config.yaml")
 
         # Verify calling apply_filters with no args raises an error
         with pytest.raises(ProcessorError, match="No filters informed."):
@@ -107,7 +101,7 @@ class TestNornirManager:
 
     def test_apply_processors_with_valid_processors(self, mock_init_nornir, mock_nornir, mock_processor):
         """Test applying valid processors."""
-        manager = NornirManager(nornir_settings="dummy_config.yaml", dry_run=False)
+        manager = NornirManager(nornir_settings="dummy_config.yaml")
 
         # Apply the processor
         result = manager.apply_processors([mock_processor])
@@ -123,7 +117,7 @@ class TestNornirManager:
 
     def test_apply_processors_with_no_processors(self, mock_init_nornir):
         """Test applying no processors raises an error."""
-        manager = NornirManager(nornir_settings="dummy_config.yaml", dry_run=False)
+        manager = NornirManager(nornir_settings="dummy_config.yaml")
 
         # Verify calling apply_processors with empty list raises an error
         with pytest.raises(ProcessorError, match="No processors informed."):
