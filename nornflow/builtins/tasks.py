@@ -93,35 +93,24 @@ def write_file(task: Task, filename: str, content: str, append: bool = False, mk
 
     if content is None:
         return Result(host=task.host, failed=True, exception=ValueError("content argument is required"))
+    
+    file_path = Path(filename)
+    
+    if task.is_dry_run():
+        return Result(
+            host=task.host, 
+            result={
+                "path": str(file_path),
+                "dry_run": True,
+                "message": f"Would have created file: {file_path}",
+                "operation": "write" if not append else "append",
+                "would_create_dirs": mkdir and not file_path.parent.exists(),
+                "content_size_bytes": len(str(content)) if content else 0
+            },
+            changed=True
+        )
 
     try:
-        file_path = Path(filename)
-        
-        # Dry run mode - simulate the operation without making changes
-        if task.dry_run:
-            # Check if directories would need to be created
-            dirs_to_create = []
-            if mkdir and not file_path.parent.exists():
-                dirs_to_create = [str(file_path.parent)]
-            
-            # Check if file exists to determine if it would be created or modified
-            file_exists = file_path.exists()
-            action = "append to" if (append and file_exists) else ("modify" if file_exists else "create")
-            
-            result_data = {
-                "path": str(file_path),
-                "action": f"would {action} file",
-                "content_length": len(str(content)),
-                "mode": "append" if append else "write",
-                "dry_run": True
-            }
-            
-            if dirs_to_create:
-                result_data["directories_to_create"] = dirs_to_create
-                
-            return Result(host=task.host, result=result_data, changed=True)
-        
-        # Normal execution mode
         # Create directory if it doesn't exist
         if mkdir:
             file_path.parent.mkdir(parents=True, exist_ok=True)
