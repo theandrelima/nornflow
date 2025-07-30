@@ -400,20 +400,6 @@ def run(
             target, parsed_args, all_inventory_filters, settings, parsed_processors, parsed_vars
         )
 
-        # Calculate processor info for display
-        processor_info = f", processors: {parsed_processors}" if parsed_processors else ""
-
-        # Calculate variables info for display
-        vars_info = f", vars: {parsed_vars}" if parsed_vars else ""
-
-        # Update the output message to include all filters
-        filter_info = f"filters: {all_inventory_filters}" if all_inventory_filters else "no filters"
-        typer.secho(
-            f"Running: {target} (args: {parsed_args}, {filter_info}, dry-run: {dry_run}"
-            f"{processor_info}{vars_info})",
-            fg=typer.colors.GREEN,
-        )
-
         nornflow = builder.build()
         nornflow.run(dry_run=dry_run)
 
