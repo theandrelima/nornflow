@@ -15,7 +15,7 @@ from nornflow.exceptions import (
 )
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
-from nornflow.utils import load_processor
+from nornflow.utils import load_processor, print_workflow_summary
 from nornflow.vars.constants import VARS_DIR_DEFAULT
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
@@ -540,6 +540,17 @@ class Workflow:
 
         # Apply processors (NornFlowVariableProcessor will be added first)
         self._with_processors(nornir_manager, workflows_dirs, processors)
+
+        # Print comprehensive workflow summary after loading
+        hosts_count = len(nornir_manager.nornir.inventory.hosts)
+        print_workflow_summary(
+            workflow_model=workflow_model,
+            effective_dry_run=effective_dry_run,
+            hosts_count=hosts_count,
+            inventory_filters=self.inventory_filters,
+            workflow_vars=self.vars,
+            cli_vars=self._cli_vars,
+        )
 
         # Set task count on processors that support it
         for processor in nornir_manager.nornir.processors:

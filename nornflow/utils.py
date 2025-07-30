@@ -1,5 +1,8 @@
 import importlib
 import inspect
+import click
+from termcolor import colored
+from tabulate import tabulate
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -248,3 +251,66 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
     elif isinstance(obj, list | tuple):
         for idx, item in enumerate(obj):
             check_for_jinja2_recursive(item, f"{path}[{idx}]")
+
+
+def print_workflow_summary(
+    workflow_model: Any,
+    effective_dry_run: bool,
+    hosts_count: int,
+    inventory_filters: dict[str, Any],
+    workflow_vars: dict[str, Any],
+    cli_vars: dict[str, Any],
+) -> None:
+    """
+    Print a comprehensive workflow summary before execution.
+
+    Args:
+        workflow_model: The workflow model containing name and description
+        effective_dry_run: Whether dry-run mode is enabled
+        hosts_count: Number of hosts in the filtered inventory
+        inventory_filters: Dictionary of applied inventory filters
+        workflow_vars: Workflow-defined variables
+        cli_vars: CLI variables with highest precedence
+    """
+    print("\n" + "━" * 80)
+    click.secho(" Workflow: ", bold=True, nl=False)
+    print(workflow_model.name)
+    
+    if workflow_model.description:
+        click.secho(" Description: ", bold=True, nl=False)
+        print(workflow_model.description)
+    
+    click.secho(" Dry-run mode: ", bold=True, nl=False)
+    print('Enabled' if effective_dry_run else 'Disabled')
+    
+    # Show inventory filters if any
+    if inventory_filters:
+        click.secho(" Inventory filters: ", bold=True, nl=False)
+        print(inventory_filters)
+    
+    # Show filtered inventory summary
+    click.secho(" Total hosts: ", bold=True, nl=False)
+    print(f"{hosts_count} host(s)")
+    
+    # Show variables (excluding sensitive ones)
+    all_vars = {}
+    if workflow_vars:
+        all_vars.update({"Workflow Variables": workflow_vars})
+    if cli_vars:
+        all_vars.update({"CLI Variables (highest precedence)": cli_vars})
+    
+    if all_vars:
+        vars_table = []
+        for var_type, var_dict in all_vars.items():
+            vars_table.append([var_type, ""])
+            for k, v in var_dict.items():
+                # Mask passwords/secrets
+                display_v = "********" if "password" in k.lower() or "secret" in k.lower() else str(v)
+                vars_table.append([f"  {k}", display_v])
+        
+        if vars_table:
+            print()
+            click.secho(" Variables:", bold=True)
+            print(tabulate(vars_table, tablefmt="simple"))
+    
+    print("━" * 80 + "\n")
