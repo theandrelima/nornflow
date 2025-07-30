@@ -784,7 +784,7 @@ wheels = [
 
 [[package]]
 name = "nornflow"
-version = "0.2.1"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "jmespath" },
@@ -825,7 +825,7 @@ requires-dist = [
     { name = "nornir-netbox", marker = "extra == 'manual-tests'", specifier = ">=0.3.0" },
     { name = "nornir-netmiko", marker = "extra == 'optional-plugins'", specifier = ">=1.0.1" },
     { name = "nornir-utils", specifier = ">=0.2.0" },
-    { name = "pydantic-serdes", specifier = ">=1.0.2" },
+    { name = "pydantic-serdes", specifier = ">=1.0.3" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
@@ -1062,7 +1062,7 @@ wheels = [
 
 [[package]]
 name = "pydantic-serdes"
-version = "1.0.2"
+version = "1.0.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "email-validator" },
@@ -1072,9 +1072,9 @@ dependencies = [
     { name = "sortedcontainers" },
     { name = "toml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fd/27/07f15a9ea4bd88d70564bbb2707ffa8c366dd2de3fe20aec528b28b553a5/pydantic_serdes-1.0.2.tar.gz", hash = "sha256:6f1a526789dc6703c53ce7ed16859545fb6caa5c4368680fc1fee5043a436c2c", size = 17436, upload-time = "2025-02-23T11:50:26.716Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/6d/69ef956be3a481545aa6685a936fc35725ce66782e56805b62cc09cabe26/pydantic_serdes-1.0.3.tar.gz", hash = "sha256:16774a8f6728727403c010cca59af54f14369c342db69e2948d09195e192deea", size = 17799, upload-time = "2025-07-30T15:25:19.375Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/6c/928866648540351af1c08bcf49198a32d4c95acfaf8201aecb45436f1e26/pydantic_serdes-1.0.2-py3-none-any.whl", hash = "sha256:5eab528b16b87b3bcb54443d690e9f9e8d7aa4e1eb78614f64687e2205770df4", size = 20751, upload-time = "2025-02-23T11:50:25.119Z" },
+    { url = "https://files.pythonhosted.org/packages/61/3c/34c82eece029502808401b3bfd0b906038df1a746c03bcb1af522c15b8f1/pydantic_serdes-1.0.3-py3-none-any.whl", hash = "sha256:c77f4fd59f11d2ec24cc3ab93d42bbfc247c12b51cc479dfe8dab13a21c6c4f0", size = 21151, upload-time = "2025-07-30T15:25:18.527Z" },
 ]
 
 [[package]]
