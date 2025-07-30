@@ -105,7 +105,6 @@ class TestNornflowBuilderIntegration:
         """Test building a NornFlow object for a task execution."""
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
-        mock_instance.with_kwargs.return_value = mock_instance
 
         from nornflow.cli.run import get_nornflow_builder
 
@@ -113,18 +112,11 @@ class TestNornflowBuilderIntegration:
             target="my_task",
             args={"arg1": "value1"},
             inventory_filters={"platform": "ios"},
-            dry_run=True,
             settings_file="settings.yaml",
         )
 
         # Assert that with_settings_path was called with the correct settings file
         mock_instance.with_settings_path.assert_called_once_with("settings.yaml")
-
-        # Assert that with_kwargs was called with the correct arguments
-        mock_instance.with_kwargs.assert_called()
-        kwargs = mock_instance.with_kwargs.call_args[1]
-        assert "dry_run" in kwargs
-        assert kwargs["dry_run"] is True
 
         # Assert that with_workflow_dict was called
         mock_instance.with_workflow_dict.assert_called()
@@ -139,7 +131,6 @@ class TestNornflowBuilderIntegration:
         """Test building a NornFlow object for a workflow specified by path."""
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
-        mock_instance.with_kwargs.return_value = mock_instance
 
         # Create a mock workflow object
         mock_workflow = MagicMock()
@@ -156,7 +147,6 @@ class TestNornflowBuilderIntegration:
                 target=workflow_file,
                 args={},
                 inventory_filters={"platform": "ios"},
-                dry_run=False,
                 settings_file="",
             )
 
@@ -176,7 +166,6 @@ class TestNornflowBuilderIntegration:
         """Test building a NornFlow object for a workflow specified by name."""
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
-        mock_instance.with_kwargs.return_value = mock_instance
         mock_instance.with_workflow_name.return_value = mock_instance
 
         # Setup mock path instance
@@ -190,7 +179,6 @@ class TestNornflowBuilderIntegration:
             target="my_workflow.yaml",
             args={},
             inventory_filters={"platform": "ios"},
-            dry_run=False,
             settings_file="",
         )
 
@@ -202,7 +190,6 @@ class TestNornflowBuilderIntegration:
         """Test building a NornFlow object with dry_run enabled."""
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
-        mock_instance.with_kwargs.return_value = mock_instance
 
         from nornflow.cli.run import get_nornflow_builder
 
@@ -210,22 +197,17 @@ class TestNornflowBuilderIntegration:
             target="my_task",
             args={},
             inventory_filters={},
-            dry_run=True,
             settings_file="",
         )
 
-        # Assert that with_kwargs was called with dry_run=True
-        mock_instance.with_kwargs.assert_called()
-        kwargs = mock_instance.with_kwargs.call_args[1]
-        assert "dry_run" in kwargs
-        assert kwargs["dry_run"] is True
+        # Assert builder was created (dry_run no longer affects construction)
+        mock_builder.assert_called_once()
 
     @patch("nornflow.cli.run.NornFlowBuilder")
     def test_get_nornflow_builder_no_dry_run(self, mock_builder):
         """Test building a NornFlow object with dry_run disabled."""
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
-        mock_instance.with_kwargs.return_value = mock_instance
 
         from nornflow.cli.run import get_nornflow_builder
 
@@ -233,21 +215,17 @@ class TestNornflowBuilderIntegration:
             target="my_task",
             args={},
             inventory_filters={},
-            dry_run=False,
             settings_file="",
         )
 
-        # Assert that with_kwargs was called, but dry_run is not in kwargs
-        mock_instance.with_kwargs.assert_called()
-        kwargs = mock_instance.with_kwargs.call_args[1]
-        assert "dry_run" not in kwargs
+        # Assert builder was created (dry_run no longer affects construction)
+        mock_builder.assert_called_once()
 
     @patch("nornflow.cli.run.NornFlowBuilder")
     def test_get_nornflow_builder_settings_file(self, mock_builder):
         """Test building a NornFlow object with a settings file."""
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
-        mock_instance.with_kwargs.return_value = mock_instance
 
         from nornflow.cli.run import get_nornflow_builder
 
@@ -255,7 +233,6 @@ class TestNornflowBuilderIntegration:
             target="my_task",
             args={},
             inventory_filters={},
-            dry_run=False,
             settings_file="my_settings.yaml",
         )
 
@@ -267,7 +244,6 @@ class TestNornflowBuilderIntegration:
         """Test building a NornFlow object without a settings file."""
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
-        mock_instance.with_kwargs.return_value = mock_instance
 
         from nornflow.cli.run import get_nornflow_builder
 
@@ -275,7 +251,6 @@ class TestNornflowBuilderIntegration:
             target="my_task",
             args={},
             inventory_filters={},
-            dry_run=False,
             settings_file="",
         )
 
@@ -292,8 +267,6 @@ class TestProcessorIntegration:
         # Setup the mock
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
-        mock_instance.with_kwargs.return_value = mock_instance
-        mock_instance.with_processors.return_value = mock_instance  # Add this line
 
         # Create test processor config
         processors = [
@@ -303,9 +276,9 @@ class TestProcessorIntegration:
         # Call get_nornflow_builder with processors
         from nornflow.cli.run import get_nornflow_builder
 
-        get_nornflow_builder("test_target", {}, {}, False, "", processors)
+        get_nornflow_builder("test_target", {}, {}, "", processors)
 
-        # Verify with_processors was called directly with the processors
+        # Verify with_processors was called with the processors
         mock_instance.with_processors.assert_called_once_with(processors)
 
     @patch("nornflow.cli.run.NornFlowBuilder")
@@ -314,8 +287,6 @@ class TestProcessorIntegration:
         # Setup the mock
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
-        mock_instance.with_kwargs.return_value = mock_instance
-        mock_instance.with_processors.return_value = mock_instance  # Add this line
 
         # Create test processor configs
         processors = [
@@ -326,9 +297,9 @@ class TestProcessorIntegration:
         # Call get_nornflow_builder with processors
         from nornflow.cli.run import get_nornflow_builder
 
-        get_nornflow_builder("test_target", {}, {}, False, "", processors)
+        get_nornflow_builder("test_target", {}, {}, "", processors)
 
-        # Verify with_processors was called directly with the processors
+        # Verify with_processors was called with the processors
         mock_instance.with_processors.assert_called_once_with(processors)
 
 
@@ -341,7 +312,6 @@ class TestCLIWorkflowOverrides:
         """Test that CLI inventory filters override those in workflow file."""
         mock_instance = MagicMock()
         mock_builder.return_value = mock_instance
-        mock_instance.with_kwargs.return_value = mock_instance
 
         # Create a mock workflow object with workflow_dict attribute
         mock_workflow = MagicMock()
@@ -360,7 +330,6 @@ class TestCLIWorkflowOverrides:
                 target=workflow_file,
                 args={},
                 inventory_filters={"platform": "ios", "vendor": "cisco"},
-                dry_run=False,
                 settings_file="",
             )
 
@@ -407,7 +376,6 @@ class TestCLIErrorHandling:
                 target=non_existent_file,
                 args={},
                 inventory_filters={},
-                dry_run=False,
                 settings_file="",
             )
 
@@ -444,7 +412,7 @@ class TestMainCLIFunctionality:
 
         # Verify sequence of calls
         mock_get_builder.assert_called_once()
-        mock_nornflow.run.assert_called_once()
+        mock_nornflow.run.assert_called_once_with(dry_run=True)
 
     @patch("nornflow.cli.run.get_nornflow_builder")
     def test_run_task(self, mock_get_builder):
@@ -472,8 +440,8 @@ class TestMainCLIFunctionality:
 
         # Verify get_nornflow_builder was called with correct params
         mock_get_builder.assert_called_once()
-        # Verify run was called
-        mock_nornflow.run.assert_called_once()
+        # Verify run was called with dry_run parameter
+        mock_nornflow.run.assert_called_once_with(dry_run=False)
 
 
 # Prevent pytest from treating TestProcessor classes as test classes
