@@ -95,8 +95,34 @@ def write_file(task: Task, filename: str, content: str, append: bool = False, mk
         return Result(host=task.host, failed=True, exception=ValueError("content argument is required"))
 
     try:
-        # Create directory if it doesn't exist
         file_path = Path(filename)
+        
+        # Dry run mode - simulate the operation without making changes
+        if task.dry_run:
+            # Check if directories would need to be created
+            dirs_to_create = []
+            if mkdir and not file_path.parent.exists():
+                dirs_to_create = [str(file_path.parent)]
+            
+            # Check if file exists to determine if it would be created or modified
+            file_exists = file_path.exists()
+            action = "append to" if (append and file_exists) else ("modify" if file_exists else "create")
+            
+            result_data = {
+                "path": str(file_path),
+                "action": f"would {action} file",
+                "content_length": len(str(content)),
+                "mode": "append" if append else "write",
+                "dry_run": True
+            }
+            
+            if dirs_to_create:
+                result_data["directories_to_create"] = dirs_to_create
+                
+            return Result(host=task.host, result=result_data, changed=True)
+        
+        # Normal execution mode
+        # Create directory if it doesn't exist
         if mkdir:
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
