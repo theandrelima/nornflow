@@ -27,21 +27,8 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "imported_packages",
 )
 
-# Nornir supported task result types
-NORNIR_SUPPORTED_TASK_RESULT_TYPES = ["echo", "command"]
-
-# Supported formats used for the show command
-NORNFLOW_SUPPORTED_FORMATS = ("json", "yaml", "table")
-
 # Supported extensions
 NORNFLOW_SUPPORTED_YAML_EXTENSIONS = [".yaml", ".yml"]
-
-# Default paths
-TASKS_DIR_DEFAULT = "tasks"
-FILTERS_DIR_DEFAULT = "filters"
-WORKFLOWS_DIR_DEFAULT = "workflows"
-NORNIR_CONFIG_FILE_DEFAULT = "nornir_config.yaml"
-VARS_DIR_DEFAULT = "vars"
 
 # Default inventory filter keys
 JINJA_PATTERN = re.compile(r"{{.*?}}")

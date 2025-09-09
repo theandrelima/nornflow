@@ -537,7 +537,11 @@ class NornFlow:
             if not workflow_path:
                 raise NornFlowRunError(f"Workflow '{workflow_name}' not found in the workflows catalog.")
 
-            self.workflow = WorkflowFactory(workflow_path=workflow_path).create()
+            self.workflow = WorkflowFactory(
+                workflow_path=workflow_path,
+                settings=self.settings,
+                cli_vars=self.cli_vars,
+            ).create()
 
     def run(self, dry_run: bool = False) -> None:
         """
@@ -818,7 +822,8 @@ class NornFlowBuilder:
                 workflow_factory = WorkflowFactory(
                     workflow_path=self._workflow_path,
                     workflow_dict=self._workflow_dict,
-                    cli_vars=self._cli_vars,  # Pass CLI vars to WorkflowFactory for workflow creation
+                    settings=self._settings,
+                    cli_vars=self._cli_vars,
                 )
                 workflow = workflow_factory.create()
 

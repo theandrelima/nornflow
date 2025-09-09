@@ -6,7 +6,6 @@ import typer
 
 from nornflow import NornFlowBuilder
 from nornflow.cli.constants import (
-    DEFAULT_VARS_DIR,
     FILTERS_DIR,
     GREET_USER_TASK_FILE,
     HELLO_WORLD_TASK_FILE,
@@ -43,10 +42,15 @@ def init(ctx: typer.Context) -> None:
         # Setup main directory structure and configuration files
         setup_directory_structure()
         setup_nornflow_settings_file(ctx.obj.get("settings"))
-        setup_sample_content()
+        
+        # Build NornFlow to get settings with vars_dir
+        nornflow = builder.build()
+        
+        # Setup sample content including vars directory from settings
+        setup_sample_content(nornflow)
 
         # Show information about the initialized setup
-        show_info_post_init(builder)
+        show_info_post_init(nornflow)
 
     except FileNotFoundError as e:
         CLIInitError(
@@ -135,7 +139,7 @@ def setup_nornflow_settings_file(settings: str) -> None:
             typer.secho(f"Settings file already exists: {NORNFLOW_SETTINGS}", fg=typer.colors.YELLOW)
 
 
-def setup_sample_content() -> None:
+def setup_sample_content(nornflow) -> None:
     """Set up sample tasks, workflows, filters, and vars directories."""
     create_directory_and_copy_sample_files(
         TASKS_DIR, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
@@ -145,9 +149,10 @@ def setup_sample_content() -> None:
         WORKFLOWS_DIR, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
     )
 
-    # Add this section to create the vars directory and copy sample defaults.yaml
+    # Use vars_dir from NornFlow settings instead of hardcoded constant
+    vars_dir = Path(nornflow.settings.vars_dir)
     create_directory_and_copy_sample_files(
-        DEFAULT_VARS_DIR, [SAMPLE_VARS_FILE], "Created a sample 'defaults.yaml' in vars directory: {}"
+        vars_dir, [SAMPLE_VARS_FILE], "Created a sample 'defaults.yaml' in vars directory: {}"
     )
 
     create_directory(FILTERS_DIR)
@@ -209,10 +214,9 @@ def create_directory(dir_path: Path) -> bool:
     return False
 
 
-def show_info_post_init(builder: NornFlowBuilder) -> None:
+def show_info_post_init(nornflow) -> None:
     """
     Display all information about NornFlow, equivalent to running 'nornflow show --all'.
     """
-    nornflow = builder.build()
     show_nornflow_settings(nornflow)
     show_catalog(nornflow)

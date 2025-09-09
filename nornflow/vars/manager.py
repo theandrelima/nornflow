@@ -11,7 +11,6 @@ from nornflow.vars.constants import (
     DEFAULTS_FILENAME,
     ENV_VAR_PREFIX,
     JINJA2_MARKERS,
-    VARS_DIR_DEFAULT,
 )
 from nornflow.vars.context import NornFlowDeviceContext
 from nornflow.vars.exceptions import (
@@ -130,7 +129,7 @@ class NornFlowVariablesManager:
 
     def __init__(
         self,
-        vars_dir: str = VARS_DIR_DEFAULT,
+        vars_dir: str,
         cli_vars: dict[str, Any] | None = None,
         inline_workflow_vars: dict[str, Any] | None = None,
         workflow_path: Path | None = None,

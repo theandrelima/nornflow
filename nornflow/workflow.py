@@ -15,8 +15,8 @@ from nornflow.exceptions import (
 )
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
+from nornflow.settings import NornFlowSettings
 from nornflow.utils import load_processor, print_workflow_summary
-from nornflow.vars.constants import VARS_DIR_DEFAULT
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
 
@@ -84,7 +84,7 @@ class Workflow:
     def __init__(
         self,
         workflow_dict: dict[str, Any],
-        vars_dir: str = VARS_DIR_DEFAULT,
+        settings: NornFlowSettings,
         cli_vars: dict[str, Any] | None = None,
         workflow_path: Path | None = None,
     ):
@@ -93,7 +93,7 @@ class Workflow:
 
         Args:
             workflow_dict (dict[str, Any]): Dictionary representing the workflow configuration
-            vars_dir (str): Directory containing variable files
+            settings (NornFlowSettings): NornFlow settings object containing all configuration
             cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
                 variable resolution chain. While named "CLI variables" due to their primary
                 source being command-line arguments, these serve as a universal override
@@ -109,8 +109,10 @@ class Workflow:
         self.records = get_global_data_store().records
         self.processors_config = self.workflow_dict.get("workflow", {}).get("processors")
 
+        # Store settings object
+        self.settings = settings
+        
         # Store variable-related parameters
-        self.vars_dir = vars_dir
         self._cli_vars = cli_vars or {}  # Direct assignment for initialization
         self.workflow_path = workflow_path
 
@@ -421,7 +423,7 @@ class Workflow:
         """
         if self.vars_manager is None:
             self.vars_manager = NornFlowVariablesManager(
-                vars_dir=self.vars_dir,
+                vars_dir=self.settings.vars_dir,  # Use settings object!
                 cli_vars=self.cli_vars,  # Uses most recent CLI vars
                 inline_workflow_vars=self.vars,
                 workflow_path=self.workflow_path,
@@ -477,7 +479,7 @@ class Workflow:
             all_processors.extend(processors)
 
         # Apply all processors
-        nornir_manager.apply_processors(all_processors)        
+        nornir_manager.apply_processors(all_processors)
 
     def run(
         self,
@@ -615,7 +617,7 @@ class WorkflowFactory:
         self,
         workflow_path: str | Path | None = None,
         workflow_dict: dict[str, Any] | None = None,
-        vars_dir: str = VARS_DIR_DEFAULT,
+        settings: NornFlowSettings | None = None,
         cli_vars: dict[str, Any] | None = None,
     ):
         """
@@ -624,7 +626,8 @@ class WorkflowFactory:
         Args:
             workflow_path (str | Path | None): Path to the workflow file
             workflow_dict (dict[str, Any] | None): Dictionary representing the workflow
-            vars_dir (str): Directory containing variable files
+            settings (Optional[NornFlowSettings]): NornFlow settings object. If not provided,
+                a default one will be created.
             cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
                 variable resolution chain. While named "CLI variables" due to their primary
                 source being command-line arguments, these serve as a universal override
@@ -633,7 +636,7 @@ class WorkflowFactory:
         """
         self.workflow_path = workflow_path
         self.workflow_dict = workflow_dict
-        self.vars_dir = vars_dir
+        self.settings = settings or NornFlowSettings()
         self.cli_vars = cli_vars or {}
 
     def create(self) -> Workflow:
@@ -647,16 +650,24 @@ class WorkflowFactory:
             WorkflowInitializationError: If neither workflow_path nor workflow_dict is provided.
         """
         if self.workflow_path:
-            return self.create_from_file(self.workflow_path, vars_dir=self.vars_dir, cli_vars=self.cli_vars)
+            return self.create_from_file(
+                self.workflow_path, 
+                settings=self.settings,
+                cli_vars=self.cli_vars
+            )
         if self.workflow_dict:
-            return self.create_from_dict(self.workflow_dict, vars_dir=self.vars_dir, cli_vars=self.cli_vars)
+            return self.create_from_dict(
+                self.workflow_dict, 
+                settings=self.settings,
+                cli_vars=self.cli_vars
+            )
 
         raise WorkflowInitializationError("Either workflow_path or workflow_dict must be provided.")
 
     @staticmethod
     def create_from_file(
         workflow_path: str | Path,
-        vars_dir: str = VARS_DIR_DEFAULT,
+        settings: NornFlowSettings | None = None,
         cli_vars: dict[str, Any] | None = None,
     ) -> Workflow:
         """
@@ -664,7 +675,8 @@ class WorkflowFactory:
 
         Args:
             workflow_path (str | Path): Path to the workflow file
-            vars_dir (str): Directory containing variable files
+            settings (NornFlowSettings | None): NornFlow settings object. If not provided,
+                a default one will be created.
             cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
                 variable resolution chain
 
@@ -673,14 +685,18 @@ class WorkflowFactory:
         """
         loaded_dict = load_file_to_dict(workflow_path)
         path_obj = Path(workflow_path) if isinstance(workflow_path, str) else workflow_path
-        return WorkflowFactory.create_from_dict(
-            loaded_dict, vars_dir=vars_dir, cli_vars=cli_vars, workflow_path=path_obj
+        settings = settings or NornFlowSettings()
+        return Workflow(
+            loaded_dict, 
+            settings=settings,
+            cli_vars=cli_vars, 
+            workflow_path=path_obj
         )
 
     @staticmethod
     def create_from_dict(
         workflow_dict: dict[str, Any],
-        vars_dir: str = VARS_DIR_DEFAULT,
+        settings: NornFlowSettings | None = None,
         cli_vars: dict[str, Any] | None = None,
         workflow_path: Path | None = None,
     ) -> Workflow:
@@ -689,7 +705,8 @@ class WorkflowFactory:
 
         Args:
             workflow_dict (dict[str, Any]): Dictionary representing the workflow
-            vars_dir (str): Directory containing variable files
+            settings (NornFlowSettings | None): NornFlow settings object. If not provided,
+                a default one will be created.
             cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
                 variable resolution chain
             workflow_path (Optional[Path]): Path to the workflow file (for domain variables)
@@ -697,9 +714,10 @@ class WorkflowFactory:
         Returns:
             Workflow: The created Workflow object.
         """
+        settings = settings or NornFlowSettings()
         return Workflow(
             workflow_dict,
-            vars_dir=vars_dir,
+            settings=settings,
             cli_vars=cli_vars,
             workflow_path=workflow_path,
         )

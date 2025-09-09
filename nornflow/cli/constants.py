@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from nornflow.vars.constants import DEFAULTS_FILENAME, VARS_DIR_DEFAULT
+from nornflow.vars.constants import DEFAULTS_FILENAME
 
 # Directory where the user is running the CLI from
 CWD = Path.cwd()
@@ -11,7 +11,6 @@ TASKS_DIR = CWD / "tasks"
 WORKFLOWS_DIR = CWD / "workflows"
 FILTERS_DIR = CWD / "filters"
 NORNFLOW_SETTINGS = CWD / "nornflow.yaml"
-DEFAULT_VARS_DIR = CWD / VARS_DIR_DEFAULT
 
 # NornFlow's samples directory
 NORNFLOW_SAMPLES_DIR = Path(__file__).parent / "samples"
@@ -37,4 +36,3 @@ INIT_BANNER = """ ██████   █████                          
  █████  ░░█████░░██████  █████     ████ █████ █████       █████░░██████   ░░████░████   
 ░░░░░    ░░░░░  ░░░░░░  ░░░░░     ░░░░ ░░░░░ ░░░░░       ░░░░░  ░░░░░░     ░░░░ ░░░░    
                                                                                       """
-                                                                                      
