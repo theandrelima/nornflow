@@ -22,19 +22,23 @@ class TestVariableManager:
         with pytest.raises(VariableDirectoryError):
             NornFlowVariablesManager(vars_dir=str(invalid_path))
 
-    def test_environment_variables_loading(self):
+    def test_environment_variables_loading(self, tmp_path):
         """Test loading environment variables with NORNFLOW_VAR_ prefix."""
         with patch.dict(os.environ, {"NORNFLOW_VAR_test": "env_value"}):
-            manager = NornFlowVariablesManager()
+            temp_vars_dir = tmp_path / "temp_vars"
+            temp_vars_dir.mkdir()
+            manager = NornFlowVariablesManager(vars_dir=str(temp_vars_dir))
             env_vars = manager._load_environment_variables()
             assert "test" in env_vars
             assert env_vars["test"] == "env_value"
 
-    def test_domain_extraction_from_path(self, workflows_dir):
+    def test_domain_extraction_from_path(self, workflows_dir, tmp_path):
         """Test extracting domain from workflow path."""
         workflow_path = Path(workflows_dir / "networking" / "config.yaml")
 
-        manager = NornFlowVariablesManager(workflow_roots=[str(workflows_dir)])
+        temp_vars_dir = tmp_path / "temp_vars"
+        temp_vars_dir.mkdir()
+        manager = NornFlowVariablesManager(vars_dir=str(temp_vars_dir), workflow_roots=[str(workflows_dir)])
         domain = manager._extract_domain_from_path(workflow_path)
         assert domain == "networking"
 

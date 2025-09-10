@@ -42,6 +42,8 @@ class TestInitCommand:
         """Test successful initialization."""
         # Setup mocks
         mock_builder = MagicMock()
+        mock_nornflow = MagicMock()
+        mock_builder.build.return_value = mock_nornflow
         mock_setup_builder.return_value = mock_builder
         mock_confirmation.return_value = True
         mock_ctx = MagicMock()
@@ -55,8 +57,8 @@ class TestInitCommand:
         mock_confirmation.assert_called_once()
         mock_setup_dirs.assert_called_once()
         mock_setup_config.assert_called_once_with("test_settings.yaml")
-        mock_setup_sample_content.assert_called_once()
-        mock_show_info.assert_called_once_with(mock_builder)
+        mock_setup_sample_content.assert_called_once_with(mock_nornflow)
+        mock_show_info.assert_called_once_with(mock_nornflow)
 
     @patch("nornflow.cli.init.setup_builder")
     @patch("nornflow.cli.init.get_user_confirmation")
@@ -197,8 +199,9 @@ class TestSetupFunctions:
         """Test setup_sample_content copies sample files."""
         # Configure the mock
         mock_create_and_copy.return_value = None
+        mock_nornflow = MagicMock()
 
-        setup_sample_content()
+        setup_sample_content(mock_nornflow)
 
         # Verify create_directory_and_copy_sample_files was called at least 2 times
         assert mock_create_and_copy.call_count >= 2
@@ -208,14 +211,10 @@ class TestSetupFunctions:
     @patch("nornflow.cli.init.show_catalog")
     def test_show_info_post_init(self, mock_show_catalog, mock_show_settings):
         """Test show_info_post_init displays information."""
-        mock_builder = MagicMock()
         mock_nornflow = MagicMock()
-        mock_builder.build.return_value = mock_nornflow
 
-        show_info_post_init(mock_builder)
+        show_info_post_init(mock_nornflow)
 
-        # Should build the NornFlow object
-        mock_builder.build.assert_called_once()
         # Should call show functions
         mock_show_settings.assert_called_once_with(mock_nornflow)
         mock_show_catalog.assert_called_once_with(mock_nornflow)

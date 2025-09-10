@@ -141,9 +141,13 @@ def workflows_dir(tmp_path):
 
 
 @pytest.fixture
-def basic_manager():
+def basic_manager(tmp_path):
     """Create a basic variable manager without any variable files."""
-    manager = NornFlowVariablesManager()
+    # Create a temporary vars directory
+    temp_vars_dir = tmp_path / "temp_vars"
+    temp_vars_dir.mkdir()
+    
+    manager = NornFlowVariablesManager(vars_dir=str(temp_vars_dir))
 
     # Add Jinja2 filters from ALL_FILTERS
     for filter_name, filter_func in ALL_FILTERS.items():
