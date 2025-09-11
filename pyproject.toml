@@ -107,6 +107,7 @@ no-lines-before = ["local-folder"]
 
 [tool.black]
 line-length = 110
+extend-exclude = '(^|/)tests/'
 
 [tool.isort]
 profile = "black"
