@@ -275,30 +275,30 @@ def print_workflow_summary(
     print("\n" + "━" * 80)
     click.secho(" Workflow: ", bold=True, nl=False)
     print(workflow_model.name)
-    
+
     if workflow_model.description:
         click.secho(" Description: ", bold=True, nl=False)
         print(workflow_model.description)
-    
+
     click.secho(" Dry-run mode: ", bold=True, nl=False)
-    print('Enabled' if effective_dry_run else 'Disabled')
-    
+    print("Enabled" if effective_dry_run else "Disabled")
+
     # Show inventory filters if any
     if inventory_filters:
         click.secho(" Inventory filters: ", bold=True, nl=False)
         print(inventory_filters)
-    
+
     # Show filtered inventory summary
     click.secho(" Total hosts: ", bold=True, nl=False)
     print(f"{hosts_count} host(s)")
-    
+
     # Show variables (excluding sensitive ones)
     all_vars = {}
     if workflow_vars:
         all_vars.update({"Workflow Variables": workflow_vars})
     if cli_vars:
         all_vars.update({"CLI Variables (highest precedence)": cli_vars})
-    
+
     if all_vars:
         vars_table = []
         for var_type, var_dict in all_vars.items():
@@ -307,10 +307,10 @@ def print_workflow_summary(
                 # Mask passwords/secrets
                 display_v = "********" if "password" in k.lower() or "secret" in k.lower() else str(v)
                 vars_table.append([f"  {k}", display_v])
-        
+
         if vars_table:
             print()
             click.secho(" Variables:", bold=True)
             print(tabulate(vars_table, tablefmt="simple"))
-    
+
     print("━" * 80 + "\n")

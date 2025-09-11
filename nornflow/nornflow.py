@@ -123,7 +123,7 @@ class NornFlow:
             # Store CLI variables - these have highest precedence in variable resolution
             # and serve as both CLI-sourced variables and programmatic overrides
             self._cli_vars = cli_vars or {}
-            
+
             # Store CLI inventory filters - these override workflow inventory filters
             self._cli_filters = cli_filters or {}
 
@@ -817,13 +817,13 @@ class NornFlowBuilder:
     def with_cli_filters(self, cli_filters: dict[str, Any]) -> "NornFlowBuilder":
         """
         Set CLI inventory filters for the NornFlow instance.
-        
+
         These filters have the highest precedence and completely override
         any inventory filters defined in the workflow YAML.
-        
+
         Args:
             cli_filters: Dictionary of inventory filters with highest precedence
-            
+
         Returns:
             NornFlowBuilder: The builder instance.
         """

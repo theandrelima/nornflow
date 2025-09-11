@@ -248,7 +248,7 @@ def get_nornflow_builder(
     # Add CLI variables if specified
     if cli_vars:
         builder.with_cli_vars(cli_vars)
-        
+
     # Add CLI filters if specified
     if inventory_filters:
         builder.with_cli_filters(inventory_filters)
@@ -266,9 +266,7 @@ def get_nornflow_builder(
         workflow_dict = {
             "workflow": {
                 "name": f"Task {target} - exec {timestamp}",
-                "description": (
-                    f"ran with 'nornflow run' CLI (args: {args}, filters: {inventory_filters})"
-                ),
+                "description": (f"ran with 'nornflow run' CLI (args: {args}, filters: {inventory_filters})"),
                 "tasks": [
                     {"name": target, "args": args or {}},
                 ],

@@ -36,9 +36,10 @@ def groups(host: Host, groups: list[str]) -> bool:
         return True
     return any(group in host.groups for group in groups)
 
+
 def manufacturer_contains(host: Host, text: str) -> bool:
     try:
-        mfr = host.data['device_type']['manufacturer']['name']
+        mfr = host.data["device_type"]["manufacturer"]["name"]
         return text in mfr
     except (KeyError, TypeError):
         return False

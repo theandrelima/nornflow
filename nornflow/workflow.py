@@ -215,16 +215,16 @@ class Workflow:
     def inventory_filters(self) -> dict[str, Any]:
         """
         Get the inventory filters for the workflow.
-    
+
         If CLI inventory filters are provided, they completely override
         any workflow-defined filters. Otherwise, workflow filters are used.
-    
+
         Returns:
             dict[str, Any]: Dictionary of inventory filters.
         """
         if self._cli_filters:
             return self._cli_filters
-            
+
         return self.records["WorkflowModel"][0].inventory_filters or {}
 
     def _check_tasks(self, tasks_catalog: dict[str, Callable]) -> None:
@@ -426,7 +426,7 @@ class Workflow:
         Args:
             nornir_manager (NornirManager): The NornirManager instance to apply filters to
             filters_catalog (dict[str, Callable]): Dictionary of available filter functions
-        """            
+        """
         filter_kwargs_list = self._get_filtering_kwargs(filters_catalog)
         if not filter_kwargs_list:
             return
@@ -554,7 +554,7 @@ class Workflow:
         # Update CLI variables if provided (late binding)
         if cli_vars is not None:
             self.cli_vars = cli_vars
-            
+
         # Update CLI filters if provided (late binding)
         if cli_filters is not None:
             self.cli_filters = cli_filters
@@ -597,7 +597,7 @@ class Workflow:
         for task in self.tasks:
             # Pass dry-run context to task execution
             nornir_manager.set_dry_run(effective_dry_run)
-            
+
             # Run the task and capture its result
             aggregated_result = task.run(nornir_manager, tasks_catalog)
 
@@ -689,18 +689,18 @@ class WorkflowFactory:
         """
         if self.workflow_path:
             return self.create_from_file(
-                self.workflow_path, 
-                settings=self.settings,
-                cli_vars=self.cli_vars,
-                cli_filters=self.cli_filters
-            )
-        if self.workflow_dict:
-            return self.create_from_dict(
-                self.workflow_dict, 
+                self.workflow_path,
                 settings=self.settings,
                 cli_vars=self.cli_vars,
                 cli_filters=self.cli_filters,
-                workflow_path=None
+            )
+        if self.workflow_dict:
+            return self.create_from_dict(
+                self.workflow_dict,
+                settings=self.settings,
+                cli_vars=self.cli_vars,
+                cli_filters=self.cli_filters,
+                workflow_path=None,
             )
 
         raise WorkflowInitializationError("Either workflow_path or workflow_dict must be provided.")
@@ -730,11 +730,7 @@ class WorkflowFactory:
         path_obj = Path(workflow_path) if isinstance(workflow_path, str) else workflow_path
         settings = settings or NornFlowSettings()
         return Workflow(
-            loaded_dict, 
-            settings=settings,
-            cli_vars=cli_vars, 
-            workflow_path=path_obj,
-            cli_filters=cli_filters
+            loaded_dict, settings=settings, cli_vars=cli_vars, workflow_path=path_obj, cli_filters=cli_filters
         )
 
     @staticmethod

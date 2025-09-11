@@ -170,9 +170,7 @@ class WorkflowModel(NornFlowBaseModel):
         return tuple(convert_to_hashable(processor) for processor in v)
 
     @field_validator("vars", mode="before")
-    def validate_vars(
-        cls, v: dict[str, Any] | None  # noqa: N805
-    ) -> HashableDict[str, Any] | None:
+    def validate_vars(cls, v: dict[str, Any] | None) -> HashableDict[str, Any] | None:  # noqa: N805
         """
         Convert workflow variables to fully hashable structure.
 

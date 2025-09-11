@@ -104,22 +104,22 @@ class NornirManager:
 
         self.nornir = self.nornir.with_processors(processors)
         return self.nornir
-    
+
     def set_dry_run(self, value: bool = False) -> None:
-        """       
+        """
         Sets the dry_run flag in the Nornir instance's global data state.
         This flag is used by Nornir's task execution system to determine whether
         tasks should be executed in dry-run mode (simulation) or normal mode.
-        
+
         Args:
             value (bool): True to enable dry-run mode, False to disable it.
                 Defaults to False.
-        
+
         Example:
             manager.set_dry_run(True)   # Enable dry-run mode
             manager.set_dry_run(False)  # Disable dry-run mode (default)
         """
         if not isinstance(value, bool):
             raise NornFlowNornirError(f"dry_run value must be a boolean, got {type(value).__name__}: {value}")
-    
+
         self.nornir.data.dry_run = value
