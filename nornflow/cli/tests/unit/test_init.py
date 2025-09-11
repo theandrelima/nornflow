@@ -192,20 +192,24 @@ class TestSetupFunctions:
         mock_copy.assert_called_once_with(mock_sample, mock_config)
         mock_secho.assert_called_once()
 
+    @patch("nornflow.cli.init.copy_sample_files_to_dir")
     @patch("nornflow.cli.init.create_directory_and_copy_sample_files")
     @patch("nornflow.cli.init.typer.secho")
     @patch("nornflow.cli.init.Path")
-    def test_setup_sample_content(self, mock_path, mock_secho, mock_create_and_copy):
+    def test_setup_sample_content(self, mock_path, mock_secho, mock_create_and_copy, mock_copy_files):
         """Test setup_sample_content copies sample files."""
-        # Configure the mock
+        # Configure the mocks
         mock_create_and_copy.return_value = None
+        mock_copy_files.return_value = None
         mock_nornflow = MagicMock()
-
+    
         setup_sample_content(mock_nornflow)
-
-        # Verify create_directory_and_copy_sample_files was called at least 2 times
-        assert mock_create_and_copy.call_count >= 2
-        mock_secho.assert_called()
+    
+        # Verify copy_sample_files_to_dir is called twice
+        assert mock_copy_files.call_count == 2
+        
+        # Verify create_directory_and_copy_sample_files is called once
+        assert mock_create_and_copy.call_count == 1
 
     @patch("nornflow.cli.init.show_nornflow_settings")
     @patch("nornflow.cli.init.show_catalog")
