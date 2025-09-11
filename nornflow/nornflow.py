@@ -615,17 +615,17 @@ class NornFlow:
             # Simply disable workflow processors to enforce kwargs precedence
             self.workflow.processors_config = None
 
-        # Pass nornir_manager, catalogs, processors, cli_vars and cli_filters to workflow.run
-        self.workflow.run(
-            self.nornir_manager,
-            self.tasks_catalog,
-            self.filters_catalog,
-            self.settings.local_workflows_dirs,
-            self.processors,
-            cli_vars=self.cli_vars,
-            cli_filters=self.cli_filters,
-            dry_run=dry_run,
-        )
+        with self.nornir_manager:
+            self.workflow.run(
+                self.nornir_manager,
+                self.tasks_catalog,
+                self.filters_catalog,
+                self.settings.local_workflows_dirs,
+                self.processors,
+                cli_vars=self.cli_vars,
+                cli_filters=self.cli_filters,
+                dry_run=dry_run,
+            )
 
 
 class NornFlowBuilder:
