@@ -165,12 +165,12 @@ class TestShowCommand:
     @patch("nornflow.cli.show.CLIShowError")
     def test_show_nornflow_error(self, mock_error, mock_builder):
         """Test 'show' handles NornFlowAppError correctly."""
-        from nornflow.exceptions import NornFlowAppError
+        from nornflow.exceptions import NornFlowError
 
         # Setup mocks
         mock_builder_instance = MagicMock()
         mock_builder.return_value = mock_builder_instance
-        mock_builder_instance.build.side_effect = NornFlowAppError("Test error")
+        mock_builder_instance.build.side_effect = NornFlowError("Test error")
         mock_error_instance = MagicMock()
         mock_error.return_value = mock_error_instance
         mock_ctx = MagicMock()

@@ -7,6 +7,7 @@ import pytest
 from nornflow.builtins.jinja2_filters import ALL_FILTERS
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
+from nornflow.vars.exceptions import TemplateError
 
 
 class TestHostNamespace:
@@ -236,9 +237,7 @@ def setup_manager(vars_dir, workflows_dir, mock_host_proxy, mock_host):
         except Exception as e:
             # Preserve the original exception behavior
             if isinstance(e, jinja2.exceptions.UndefinedError) and "undefined_var" in str(e):
-                from nornflow.vars.exceptions import VariableResolutionError
-
-                raise VariableResolutionError(template_str, f"Undefined variable: {e}")
+                raise TemplateError(f"Error resolving template: {e}")
             raise type(e)(str(e))
 
     # Replace the original method with our patched version

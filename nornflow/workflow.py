@@ -9,9 +9,8 @@ from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
 
 from nornflow.exceptions import (
     ProcessorError,
-    TaskNotFoundError,
-    WorkflowInitializationError,
-    WorkflowInventoryFilterError,
+    TaskError,
+    WorkflowError,
 )
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
@@ -197,7 +196,7 @@ class Workflow:
             wf_dict (dict[str, Any]): The workflow dictionary.
         """
         if "workflow" not in wf_dict:
-            raise WorkflowInitializationError("Missing 'workflow' in workflow definition")
+            raise WorkflowError("Missing 'workflow' key in workflow definition")
 
         self._workflow_dict = wf_dict
 
@@ -222,8 +221,8 @@ class Workflow:
         Returns:
             dict[str, Any]: Dictionary of inventory filters.
         """
-        if self._cli_filters:
-            return self._cli_filters
+        if self.cli_filters:
+            return self.cli_filters
 
         return self.records["WorkflowModel"][0].inventory_filters or {}
 
@@ -242,7 +241,7 @@ class Workflow:
         missing_tasks = [task_name for task_name in task_names if task_name not in tasks_catalog]
 
         if missing_tasks:
-            raise TaskNotFoundError(missing_tasks)
+            raise TaskError(f"Tasks not found in catalog: {missing_tasks}")
 
     def _get_filtering_kwargs(self, filters_catalog: dict[str, Callable]) -> list[dict[str, Any]]:
         """
@@ -366,7 +365,7 @@ class Workflow:
             return filter_kwargs
 
         # If we reached here, the parameter format is incompatible with the filter
-        raise WorkflowInventoryFilterError(
+        raise WorkflowError(
             f"Filter '{key}' expects {len(param_names)} parameters {param_names}, "
             f"but got incompatible value: {filter_values}"
         )
@@ -404,7 +403,7 @@ class Workflow:
         # Check that all required parameters are provided
         missing_params = set(param_names) - set(filter_values.keys())
         if missing_params:
-            raise WorkflowInventoryFilterError(
+            raise WorkflowError(
                 f"Filter '{key}' requires parameters {param_names}, but missing: {missing_params}"
             )
 
@@ -703,7 +702,7 @@ class WorkflowFactory:
                 workflow_path=None,
             )
 
-        raise WorkflowInitializationError("Either workflow_path or workflow_dict must be provided.")
+        raise WorkflowError("Either workflow_path or workflow_dict must be provided.")
 
     @staticmethod
     def create_from_file(

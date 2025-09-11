@@ -1,7 +1,7 @@
 import sys
 from typing import Any
 
-from nornflow.exceptions import TaskValidationError
+from nornflow.exceptions import TaskError
 from nornflow.utils import check_for_jinja2_recursive
 
 
@@ -20,7 +20,7 @@ def run_post_creation_task_validation(task: "TaskModel") -> None:
         task: The TaskModel instance to validate
 
     Raises:
-        TaskValidationError: If any field validation fails
+        TaskError: If any field validation fails
     """
     # Get only the fields defined in TaskModel class, not inherited ones
     task_model_fields = set(task.model_fields.keys())
@@ -41,31 +41,28 @@ def run_post_creation_task_validation(task: "TaskModel") -> None:
 
                 # Validator must return a tuple (bool, str)
                 if not isinstance(result, tuple) or len(result) != 2:  # noqa: PLR2004
-                    raise TaskValidationError(
-                        task_name=task.name,
-                        field_name=field_name,
-                        reason=(
-                            f"Validator '{validator_name}' must return a tuple (bool, str), "
-                            f"got {type(result).__name__}"
-                        ),
+                    raise TaskError(
+                        f"Task '{task.name}' validation failed for field '{field_name}': "
+                        f"Validator '{validator_name}' must return a tuple (bool, str), "
+                        f"got {type(result).__name__}"
                     )
 
                 is_valid, error_message = result
 
                 # If validator returns False, raise exception with provided message
                 if is_valid is False:
-                    raise TaskValidationError(
-                        task_name=task.name,
-                        field_name=field_name,
-                        reason=error_message if error_message else None,
-                    )
+                    error_msg = f"Task '{task.name}' validation failed for field '{field_name}'"
+                    if error_message:
+                        error_msg += f": {error_message}"
+                    raise TaskError(error_msg)
 
             except Exception as e:
-                # If validator raises an exception, wrap it in TaskValidationError
-                if isinstance(e, TaskValidationError):
+                # If validator raises an exception, wrap it in TaskError
+                if isinstance(e, TaskError):
                     raise
-                raise TaskValidationError(
-                    task_name=task.name, field_name=field_name, reason=f"Validator error: {e!s}"
+                raise TaskError(
+                    f"Task '{task.name}' validation failed for field '{field_name}': "
+                    f"Validator error: {e!s}"
                 ) from e
 
 
@@ -85,7 +82,7 @@ def run_universal_field_validation(instance: "NornFlowBaseModel") -> None:
         instance: The model instance to validate
 
     Raises:
-        TaskValidationError: If any universal validation fails
+        TaskError: If any universal validation fails
     """
     # Get all field names for this model
     all_fields = set(instance.model_fields.keys())
@@ -116,31 +113,29 @@ def run_universal_field_validation(instance: "NornFlowBaseModel") -> None:
 
                 # Validator must return a tuple (bool, str)
                 if not isinstance(result, tuple) or len(result) != 2:  # noqa: PLR2004
-                    raise TaskValidationError(
-                        task_name=getattr(instance, "name", "unknown"),
-                        field_name=field_name,
-                        reason=(
-                            f"Universal validator '{validator_name}' must return a tuple (bool, str), "
-                            f"got {type(result).__name__}"
-                        ),
+                    task_name = getattr(instance, "name", "unknown")
+                    raise TaskError(
+                        f"Validation failed for '{task_name}' field '{field_name}': "
+                        f"Universal validator '{validator_name}' must return a tuple (bool, str), "
+                        f"got {type(result).__name__}"
                     )
 
                 is_valid, error_message = result
 
                 if is_valid is False:
-                    raise TaskValidationError(
-                        task_name=getattr(instance, "name", "unknown"),
-                        field_name=field_name,
-                        reason=error_message if error_message else None,
-                    )
+                    task_name = getattr(instance, "name", "unknown")
+                    error_msg = f"Validation failed for '{task_name}' field '{field_name}'"
+                    if error_message:
+                        error_msg += f": {error_message}"
+                    raise TaskError(error_msg)
 
             except Exception as e:
-                if isinstance(e, TaskValidationError):
+                if isinstance(e, TaskError):
                     raise
-                raise TaskValidationError(
-                    task_name=getattr(instance, "name", "unknown"),
-                    field_name=field_name,
-                    reason=f"Universal validator '{validator_name}' error: {e!s}",
+                task_name = getattr(instance, "name", "unknown")
+                raise TaskError(
+                    f"Validation failed for '{task_name}' field '{field_name}': "
+                    f"Universal validator '{validator_name}' error: {e!s}"
                 ) from e
 
 

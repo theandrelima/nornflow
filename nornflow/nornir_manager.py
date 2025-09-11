@@ -5,7 +5,7 @@ from nornir.core import Nornir
 from nornir.core.processor import Processor
 
 from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL
-from nornflow.exceptions import NornFlowNornirError, ProcessorError
+from nornflow.exceptions import CoreError, ProcessorError
 
 
 class NornirManager:
@@ -166,6 +166,9 @@ class NornirManager:
             manager.set_dry_run(False)  # Disable dry-run mode (default)
         """
         if not isinstance(value, bool):
-            raise NornFlowNornirError(f"dry_run value must be a boolean, got {type(value).__name__}: {value}")
+            raise CoreError(
+                f"dry_run value must be a boolean, got {type(value).__name__}: {value}",
+                component="NornirManager"
+            )
 
         self.nornir.data.dry_run = value

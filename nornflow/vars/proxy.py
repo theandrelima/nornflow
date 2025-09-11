@@ -4,7 +4,7 @@ from typing import Any
 from nornir.core import Nornir
 from nornir.core.inventory import Host
 
-from nornflow.vars.exceptions import HostContextError, VariableNotFoundError
+from nornflow.vars.exceptions import VariableError
 
 logger = logging.getLogger(__name__)
 
@@ -100,13 +100,13 @@ class NornirHostProxy:
             The value of the attribute/key from the host's inventory.
 
         Raises:
-            HostContextError: If no Nornir instance or current host is set.
-            VariableNotFoundError: If the attribute/key is not found.
+            VariableError: If no Nornir instance or current host is set.
+            VariableError: If the attribute/key is not found.
         """
         if not self._nornir:
-            raise HostContextError("NornirHostProxy: Nornir instance not set. Cannot resolve host variables.")
+            raise VariableError("NornirHostProxy: Nornir instance not set. Cannot resolve host variables.")
         if not self._current_host:
-            raise HostContextError(
+            raise VariableError(
                 "NornirHostProxy: No active host context. "
                 "Ensure NornFlowVariableProcessor correctly sets current_host_name."
             )
@@ -128,18 +128,18 @@ class NornirHostProxy:
             The value if found.
 
         Raises:
-            HostContextError: If `self._current_host` is not set
+            VariableError: If `self._current_host` is not set
                 (safeguard, shouldbe caught by `__getattr__`).
-            VariableNotFoundError: If the name is not found.
+            VariableError: If the name is not found.
         """
         if not self._current_host:
             # This check is a safeguard; __getattr__ should prevent calls if _current_host is None.
-            raise HostContextError("NornirHostProxy: _get_host_value called with no current host.")
+            raise VariableError("NornirHostProxy: _get_host_value called with no current host.")
 
         # Try to retrieve 'name' using Host.get(), which covers direct attributes, data, and inheritance.
         value = self._current_host.get(name)
         if value is None:
-            raise VariableNotFoundError(
+            raise VariableError(
                 f"Attribute or key '{name}' not found in host '{self._current_host.name}'."
             )
         return value

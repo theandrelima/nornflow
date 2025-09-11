@@ -7,7 +7,7 @@ from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.models import PydanticSerdesBaseModel
 from pydantic_serdes.utils import convert_to_hashable
 
-from nornflow.exceptions import TaskNotFoundError
+from nornflow.exceptions import TaskError
 from nornflow.nornir_manager import NornirManager
 from nornflow.validators import (
     run_post_creation_task_validation,
@@ -92,12 +92,12 @@ class TaskModel(NornFlowBaseModel):
             AggregatedResult: The results of the task execution
 
         Raises:
-            TaskNotFoundError: If the task name is not found in the tasks catalog
+            TaskError: If the task name is not found in the tasks catalog
         """
         # Get the task function from the catalog
         task_func = tasks_catalog.get(self.name)
         if not task_func:
-            raise TaskNotFoundError(f"Task function for '{self.name}' not found in tasks catalog")
+            raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")
 
         task_args = {} if self.args is None else dict(self.args)
 

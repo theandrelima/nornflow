@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from nornflow.vars.exceptions import VariableDirectoryError
+from nornflow.vars.exceptions import VariableError
 from nornflow.vars.manager import NornFlowVariablesManager
 
 
@@ -19,7 +19,7 @@ class TestVariableManager:
         invalid_path = tmp_path / "not_a_dir"
         invalid_path.write_text("not a directory")
 
-        with pytest.raises(VariableDirectoryError):
+        with pytest.raises(VariableError):
             NornFlowVariablesManager(vars_dir=str(invalid_path))
 
     def test_environment_variables_loading(self, tmp_path):
