@@ -42,10 +42,10 @@ def init(ctx: typer.Context) -> None:
         # Setup main directory structure and configuration files
         setup_directory_structure()
         setup_nornflow_settings_file(ctx.obj.get("settings"))
-        
+
         # Build NornFlow to get settings with vars_dir
         nornflow = builder.build()
-        
+
         # Setup sample content including vars directory from settings
         setup_sample_content(nornflow)
 
@@ -164,7 +164,7 @@ def display_banner() -> None:
     """
     # Print the ASCII banner first in purple
     typer.secho(INIT_BANNER, fg=typer.colors.MAGENTA)
-    
+
     banner_message = (
         "The 'init' command creates directories, and samples for configs, tasks and\n"
         "workflows files, all with default values that you can modify as desired.\n"

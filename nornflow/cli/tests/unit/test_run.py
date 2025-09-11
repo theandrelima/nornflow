@@ -347,10 +347,7 @@ class TestCLIWorkflowOverrides:
             mock_instance.with_workflow_object.assert_called_once_with(mock_workflow)
 
             # Assert that with_cli_filters was called with the correct filters
-            mock_instance.with_cli_filters.assert_called_once_with({
-                "platform": "ios", 
-                "vendor": "cisco"
-            })
+            mock_instance.with_cli_filters.assert_called_once_with({"platform": "ios", "vendor": "cisco"})
         finally:
             if Path(workflow_file).exists():
                 Path(workflow_file).unlink()

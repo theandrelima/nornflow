@@ -146,7 +146,7 @@ def basic_manager(tmp_path):
     # Create a temporary vars directory
     temp_vars_dir = tmp_path / "temp_vars"
     temp_vars_dir.mkdir()
-    
+
     manager = NornFlowVariablesManager(vars_dir=str(temp_vars_dir))
 
     # Add Jinja2 filters from ALL_FILTERS
