@@ -28,7 +28,7 @@ NORNFLOW_INVALID_INIT_KWARGS = (
 )
 
 # Supported extensions
-NORNFLOW_SUPPORTED_YAML_EXTENSIONS = [".yaml", ".yml"]
+NORNFLOW_SUPPORTED_YAML_EXTENSIONS = (".yaml", ".yml")
 
 # Default inventory filter keys
 JINJA_PATTERN = re.compile(r'({{.*?}}|{%-?.*?-%?})')
