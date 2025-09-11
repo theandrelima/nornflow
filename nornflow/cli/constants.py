@@ -1,3 +1,4 @@
+# ruff: noqa: W291
 from pathlib import Path
 
 from nornflow.vars.constants import DEFAULTS_FILENAME

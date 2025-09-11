@@ -9,7 +9,6 @@ from pydantic_serdes.utils import convert_to_hashable
 
 from nornflow.exceptions import TaskNotFoundError
 from nornflow.nornir_manager import NornirManager
-from nornflow.utils import convert_lists_to_tuples
 from nornflow.validators import (
     run_post_creation_task_validation,
     run_universal_field_validation,
@@ -75,7 +74,8 @@ class TaskModel(NornFlowBaseModel):
             v (HashableDict[str, Any] | None): The args dictionary to validate.
 
         Returns:
-            HashableDict[str, Any] | None: The validated args with all nested structures converted to hashable equivalents.
+            HashableDict[str, Any] | None: The validated args with all nested structures
+                converted to hashable equivalents.
         """
         return convert_to_hashable(v)
 
@@ -148,7 +148,8 @@ class WorkflowModel(NornFlowBaseModel):
             v (HashableDict[str, Any] | None): The inventory_filters value to validate.
 
         Returns:
-            HashableDict[str, Any] | None: The inventory_filters with all nested structures converted to hashable equivalents.
+            HashableDict[str, Any] | None: The inventory_filters with all nested
+                 structures converted to hashable equivalents.
         """
         return convert_to_hashable(v)
 
@@ -163,7 +164,8 @@ class WorkflowModel(NornFlowBaseModel):
             v (list[HashableDict[str, Any]] | None): The processors list to validate.
 
         Returns:
-            tuple[HashableDict[str, Any], ...] | None: The processors as a tuple with hashable nested structures.
+            tuple[HashableDict[str, Any], ...] | None: The processors as a tuple with
+                hashable nested structures.
         """
         if v is None:
             return None
@@ -178,6 +180,7 @@ class WorkflowModel(NornFlowBaseModel):
             v (dict[str, Any] | None): The vars dictionary to validate.
 
         Returns:
-            HashableDict[str, Any] | None: The vars with all nested structures converted to hashable equivalents.
+            HashableDict[str, Any] | None: The vars with all nested structures
+                converted to hashable equivalents.
         """
         return convert_to_hashable(v)

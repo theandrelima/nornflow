@@ -1,17 +1,17 @@
+# ruff: noqa: T201
 import importlib
 import inspect
-import click
-from termcolor import colored
-from tabulate import tabulate
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Literal
 
+import click
 from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
+from tabulate import tabulate
 
 from nornflow.constants import JINJA_PATTERN
 from nornflow.exceptions import (
