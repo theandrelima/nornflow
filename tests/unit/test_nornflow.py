@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -129,3 +129,61 @@ class TestNornFlowBuilder:
             .build()
         )
         assert nornflow.workflow == valid_workflow
+
+
+class TestNornFlowExecution:
+    """Test suite for NornFlow execution and connection management."""
+
+    @patch("nornflow.nornflow.NornirManager")
+    def test_run_uses_context_manager(self, mock_nornir_manager_class):
+        """Test that run() method uses the NornirManager as a context manager."""
+        # Setup
+        mock_nornir_manager = MagicMock()
+        mock_nornir_manager_class.return_value = mock_nornir_manager
+        mock_nornir_manager.__enter__.return_value = mock_nornir_manager
+        
+        mock_workflow = MagicMock()
+        mock_settings = MagicMock()
+        mock_settings.nornir_config_file = "dummy_config.yaml"
+        
+        nornflow = NornFlow(
+            workflow=mock_workflow,
+            nornflow_settings=mock_settings,
+        )
+        
+        # Execute run method
+        nornflow.run()
+        
+        # Verify context manager was used
+        mock_nornir_manager.__enter__.assert_called_once()
+        mock_nornir_manager.__exit__.assert_called_once()
+        
+        # Verify workflow was run
+        mock_workflow.run.assert_called_once()
+
+    @patch("nornflow.nornflow.NornirManager")
+    def test_run_handles_exceptions(self, mock_nornir_manager_class):
+        """Test that connections are closed even if workflow raises an exception."""
+        # Setup
+        mock_nornir_manager = MagicMock()
+        mock_nornir_manager_class.return_value = mock_nornir_manager
+        mock_nornir_manager.__enter__.return_value = mock_nornir_manager
+        
+        mock_workflow = MagicMock()
+        mock_workflow.run.side_effect = ValueError("Test exception")
+        
+        mock_settings = MagicMock()
+        mock_settings.nornir_config_file = "dummy_config.yaml"
+        
+        nornflow = NornFlow(
+            workflow=mock_workflow,
+            nornflow_settings=mock_settings,
+        )
+        
+        # Execute run method, expect exception
+        with pytest.raises(ValueError):
+            nornflow.run()
+        
+        # Verify context manager's exit was called (connections closed)
+        mock_nornir_manager.__enter__.assert_called_once()
+        mock_nornir_manager.__exit__.assert_called()
