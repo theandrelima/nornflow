@@ -4,7 +4,7 @@ import pytest
 from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.exceptions import PydanticSerdesTypeError
 
-from nornflow.exceptions import TaskNotFoundError, WorkflowInitializationError
+from nornflow.exceptions import TaskError, WorkflowError
 from nornflow.models import TaskModel
 from nornflow.workflow import Workflow, WorkflowFactory
 
@@ -20,7 +20,7 @@ class TestWorkflowBasicCreation:
     def test_create_with_no_parameters(self):
         """Test creating a workflow with no parameters."""
         factory = WorkflowFactory()
-        with pytest.raises(WorkflowInitializationError) as exc_info:
+        with pytest.raises(WorkflowError) as exc_info:
             factory.create()
         assert "Either workflow_path or workflow_dict must be provided" in str(exc_info.value)
 
@@ -90,7 +90,7 @@ class TestWorkflowSuccessfulCreation:
         workflow = WorkflowFactory.create_from_dict(valid_workflow_dict)
         tasks_catalog = {}  # Empty catalog to trigger error
 
-        with pytest.raises(TaskNotFoundError) as exc_info:
+        with pytest.raises(TaskError) as exc_info:
             workflow._check_tasks(tasks_catalog)
         assert f"{self.test_name}_task" in str(exc_info.value)
 

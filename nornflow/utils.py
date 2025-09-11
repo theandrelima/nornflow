@@ -15,9 +15,10 @@ from tabulate import tabulate
 
 from nornflow.constants import JINJA_PATTERN
 from nornflow.exceptions import (
-    DirectoryNotFoundError,
-    ModuleImportError,
+    CoreError,
     ProcessorError,
+    ResourceError,
+    WorkflowError,
 )
 
 
@@ -33,14 +34,17 @@ def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
         ModuleType: Imported module.
 
     Raises:
-        ModuleImportError: If there is an error importing the module.
+        CoreError: If there is an error importing the module.
     """
     try:
         spec = importlib.util.spec_from_file_location(module_name, module_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
     except Exception as e:
-        raise ModuleImportError(module_name, module_path, str(e)) from e
+        raise CoreError(
+            f"Failed to import module '{module_name}' from '{module_path}': {str(e)}",
+            component="ModuleLoader"
+        ) from e
 
     return module
 
@@ -196,12 +200,13 @@ def discover_items_in_dir(dir_path: str, register_func: Callable, error_context:
         error_context: Context for error messages (e.g., "tasks", "filters")
 
     Raises:
-        DirectoryNotFoundError: If directory doesn't exist
-        ModuleImportError: If module import fails
+        CoreError: If directory doesn't exist or module import fails
     """
     path = Path(dir_path)
     if not path.is_dir():
-        raise DirectoryNotFoundError(directory=dir_path, extra_message=f"Couldn't load {error_context}.")
+        raise ResourceError(
+            f"Directory not found: {dir_path}. Couldn't load {error_context}."
+        )
 
     for py_file in path.rglob("*.py"):
         module_name = py_file.stem
@@ -210,7 +215,10 @@ def discover_items_in_dir(dir_path: str, register_func: Callable, error_context:
             module = import_module_from_path(module_name, module_path)
             register_func(module)
         except Exception as e:
-            raise ModuleImportError(module_name, module_path, str(e)) from e
+            raise CoreError(
+                f"Failed to import module '{module_name}' from '{module_path}': {str(e)}",
+                component="ItemDiscovery"
+            ) from e
 
 
 def process_module_attributes(module: Any, predicate_func: Callable, process_func: Callable) -> None:
@@ -237,11 +245,11 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
         path: Current path in the object structure (for error messages)
 
     Raises:
-        ValueError: If Jinja2 code is found
+        WorkflowError: If Jinja2 code is found
     """
     if isinstance(obj, str):
         if JINJA_PATTERN.search(obj):
-            raise ValueError(
+            raise WorkflowError(
                 f"Jinja2 code found in '{path}' which is not allowed. "
                 "Jinja2 expressions are only permitted in specific fields like task args."
             )

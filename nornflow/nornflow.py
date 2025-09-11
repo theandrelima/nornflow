@@ -11,16 +11,14 @@ from nornflow.constants import (
     NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
 )
 from nornflow.exceptions import (
-    CatalogModificationError,
-    DirectoryNotFoundError,
-    EmptyTaskCatalogError,
-    FilterLoadingError,
-    NornFlowAppError,
-    NornFlowInitializationError,
-    NornFlowRunError,
-    NornirConfigError,
-    SettingsModificationError,
-    TaskLoadingError,
+    CatalogError,
+    CoreError,
+    InitializationError,
+    WorkflowError,
+    ProcessorError,
+    NornirError,
+    ResourceError,
+    SettingsError,
 )
 from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
@@ -146,12 +144,11 @@ class NornFlow:
                 nornir_settings=self.settings.nornir_config_file,
                 **kwargs,
             )
-        except NornFlowInitializationError:
-            # Re-raise NornFlowInitializationError as is
+        except CoreError:
             raise
         except Exception as e:
-            # Wrap any other exception in NornFlowInitializationError
-            raise NornFlowInitializationError(f"Failed to initialize NornFlow: {e!s}") from e
+            # Wrap any other exception in InitializationError
+            raise InitializationError(f"Failed to initialize NornFlow: {e!s}", component="NornFlow") from e
 
     def _load_processors(self) -> None:
         """
@@ -195,7 +192,7 @@ class NornFlow:
 
     @nornir_configs.setter
     def nornir_configs(self, value: Any) -> None:
-        raise NornirConfigError()
+        raise NornirError("Nornir configurations cannot be modified directly. Use NornFlowSettings to configure Nornir.")
 
     @property
     def settings(self) -> NornFlowSettings:
@@ -219,7 +216,8 @@ class NornFlow:
         Raises:
             SettingsModificationError: Always raised to prevent direct setting of the settings.
         """
-        raise SettingsModificationError()
+        raise SettingsError("Cannot set settings directly. Settings must be either passed as a "
+                           "NornFlowSettings object or as keyword arguments to the NornFlow initializer.")
 
     @property
     def cli_vars(self) -> dict[str, Any]:
@@ -240,22 +238,18 @@ class NornFlow:
         return self._cli_vars
 
     @cli_vars.setter
-    def cli_vars(self, value: Any) -> None:
-        """
-        Prevent setting the CLI variables directly after initialization.
-
-        CLI variables are set during NornFlow initialization and passed to workflows
-        during execution. To modify variables at runtime, use the workflow.run()
-        method's cli_vars parameter, which supports late binding. A NornFlow instance
-        itself does not allow direct modification of its CLI variables after initialization.
-
+    def cli_vars(self, value: dict[str, Any]) -> None:
+        """Update CLI variables that override workflow-defined variables.
+        
         Args:
-            value (Any): Attempted value to set.
-
+            value: Dictionary of variable names and values.
+            
         Raises:
-            SettingsModificationError: Always raised to prevent direct modification.
+            CoreError: If value is not a dictionary.
         """
-        raise SettingsModificationError("CLI variables cannot be modified after initialization")
+        if not isinstance(value, dict):
+            raise CoreError(f"CLI variables must be a dictionary, got {type(value).__name__}", component="NornFlow")
+        self._cli_vars = value
 
     @property
     def cli_filters(self) -> dict[str, Any]:
@@ -273,21 +267,18 @@ class NornFlow:
         return self._cli_filters
 
     @cli_filters.setter
-    def cli_filters(self, value: Any) -> None:
-        """
-        Prevent setting the CLI inventory filters directly after initialization.
-
-        CLI filters are set during NornFlow initialization and passed to workflows
-        during execution. To modify filters at runtime, use the workflow.run()
-        method's cli_filters parameter, which supports late binding.
-
+    def cli_filters(self, value: dict[str, Any]) -> None:
+        """Update CLI inventory filters that override workflow-defined filters.
+        
         Args:
-            value (Any): Attempted value to set.
-
+            value: Dictionary of filter names and arguments.
+            
         Raises:
-            SettingsModificationError: Always raised to prevent direct modification.
+            CoreError: If value is not a dictionary.
         """
-        raise SettingsModificationError("CLI filters cannot be modified after initialization")
+        if not isinstance(value, dict):
+            raise CoreError(f"CLI filters must be a dictionary, got {type(value).__name__}", component="NornFlow")
+        self._cli_filters = value
 
     @property
     def tasks_catalog(self) -> dict[str, Callable]:
@@ -307,7 +298,7 @@ class NornFlow:
         Raises:
             AttributeError: Always raised to prevent direct setting of the tasks catalog.
         """
-        raise CatalogModificationError("tasks")
+        raise CatalogError("Cannot set tasks catalog directly.", catalog_name="tasks")
 
     @property
     def workflows_catalog(self) -> dict[str, Path]:
@@ -327,7 +318,7 @@ class NornFlow:
         Raises:
             AttributeError: Always raised to prevent direct setting of the tasks catalog.
         """
-        raise CatalogModificationError("workflows")
+        raise CatalogError("Cannot set workflows catalog directly.", catalog_name="workflows")
 
     @property
     def filters_catalog(self) -> dict[str, Callable]:
@@ -347,7 +338,7 @@ class NornFlow:
         Raises:
             AttributeError: Always raised to prevent direct setting of the filters catalog.
         """
-        raise CatalogModificationError("filters")
+        raise CatalogError("Cannot set filters catalog directly.", catalog_name="filters")
 
     @property
     def workflow(self) -> Workflow | str:
@@ -368,7 +359,7 @@ class NornFlow:
             value (Any): The workflow object to set.
         """
         if not isinstance(value, Workflow):
-            raise NornFlowAppError(  # Changed from NornFlowError
+            raise WorkflowError(  
                 f"NornFlow.workflow MUST be a Workflow object, but an object of {type(value)} was "
                 f"provided: {value}"
             )
@@ -392,8 +383,9 @@ class NornFlow:
         Raises:
             SettingsModificationError: Always raised to prevent direct setting of processors.
         """
-        raise NornFlowInitializationError(
-            message="Processors cannot be set directly, but must be loaded from nornflow settings file."
+        raise ProcessorError(
+            message="Processors cannot be set directly, but must be loaded from nornflow settings file.",
+            component="NornFlow"
         )
 
     def _load_tasks_catalog(self) -> None:
@@ -415,7 +407,7 @@ class NornFlow:
             self._discover_tasks_in_dir(task_dir)
 
         if not self._tasks_catalog:
-            raise EmptyTaskCatalogError()
+            raise CatalogError("No tasks were found. The Tasks Catalog can't be empty.", catalog_name="tasks")
 
     def _discover_tasks_in_dir(self, task_dir: str) -> None:
         """
@@ -429,11 +421,11 @@ class NornFlow:
             discover_items_in_dir(
                 task_dir, lambda module: self._register_nornir_tasks_from_module(module), "tasks"
             )
-        except DirectoryNotFoundError:
+        except ResourceError:
             # Just continue if directory doesn't exist
             pass
         except Exception as e:
-            raise TaskLoadingError(f"Error loading tasks: {e!s}") from e
+            raise ResourceError(f"Error loading tasks: {e!s}", resource_type="tasks", resource_name=task_dir) from e
 
     def _register_nornir_tasks_from_module(self, module: Any) -> None:
         """
@@ -480,11 +472,11 @@ class NornFlow:
                 lambda module: self._register_nornir_filters_from_module(module),
                 "filters",
             )
-        except DirectoryNotFoundError:
+        except ResourceError:
             # Just continue if directory doesn't exist
             pass
         except Exception as e:
-            raise FilterLoadingError(f"Error loading filters: {e!s}") from e
+            raise ResourceError(f"Error loading filters: {e!s}", resource_type="filters", resource_name=filter_dir) from e
 
     def _register_nornir_filters_from_module(self, module: Any) -> None:
         """
@@ -529,8 +521,10 @@ class NornFlow:
         """
         workflow_path = Path(workflow_dir)
         if not workflow_path.is_dir():
-            raise DirectoryNotFoundError(  # Changed from LocalDirectoryNotFoundError
-                directory=workflow_dir, extra_message="Couldn't load workflows."
+            raise ResourceError(
+                message="Couldn't load workflows.", 
+                resource_type="directory", 
+                resource_name=workflow_dir
             )
 
         for file in workflow_path.rglob("*"):
@@ -549,7 +543,10 @@ class NornFlow:
         """
         invalid_keys = [key for key in kwargs if key in NORNFLOW_INVALID_INIT_KWARGS]
         if invalid_keys:
-            raise NornFlowInitializationError(invalid_kwargs=invalid_keys)
+            raise InitializationError(
+                f"Invalid kwarg(s) passed to NornFlow initializer: {', '.join(invalid_keys)}",
+                component="NornFlow"
+            )
 
     def _ensure_workflow(self) -> None:
         """
@@ -566,14 +563,14 @@ class NornFlow:
             the workflows catalog.
         """
         if not self.workflow:
-            raise NornFlowRunError("No Workflow object was provided.")
+            raise WorkflowError("No Workflow object was provided.", component="NornFlow")
 
         if isinstance(self.workflow, str):
             workflow_name = self.workflow
             workflow_path = self.workflows_catalog.get(workflow_name)
 
             if not workflow_path:
-                raise NornFlowRunError(f"Workflow '{workflow_name}' not found in the workflows catalog.")
+                raise WorkflowError(f"Workflow '{workflow_name}' not found in the workflows catalog.", component="NornFlow")
 
             self.workflow = WorkflowFactory(
                 workflow_path=workflow_path,

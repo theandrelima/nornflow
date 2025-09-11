@@ -12,7 +12,7 @@ from nornflow.constants import (
     NORNFLOW_SPECIAL_FILTER_KEYS,
     NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
 )
-from nornflow.exceptions import NornFlowAppError
+from nornflow.exceptions import NornFlowError
 
 app = typer.Typer(help="Run NornFlow tasks and workflows")
 
@@ -401,7 +401,7 @@ def run(
         nornflow = builder.build()
         nornflow.run(dry_run=dry_run)
 
-    except NornFlowAppError as e:
+    except NornFlowError as e:
         CLIRunError(
             message=f"NornFlow error while running {target}: {e}",
             hint="Check your task configuration, inventory filters, and NornFlow setup.",

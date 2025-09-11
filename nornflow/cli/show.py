@@ -13,7 +13,7 @@ from termcolor import colored
 from nornflow import NornFlowBuilder
 from nornflow.cli.constants import CWD, DESCRIPTION_FIRST_SENTENCE_LENGTH
 from nornflow.cli.exceptions import CLIShowError
-from nornflow.exceptions import NornFlowAppError
+from nornflow.exceptions import NornFlowError
 
 app = typer.Typer()
 
@@ -68,7 +68,7 @@ def show(
         ).show()
         raise typer.Exit(code=2)  # noqa: B904
 
-    except NornFlowAppError as e:
+    except NornFlowError as e:
         # Generic handler for all NornFlow exceptions
         CLIShowError(
             message=f"NornFlow configuration error: {e}",

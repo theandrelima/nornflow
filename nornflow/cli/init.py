@@ -21,7 +21,7 @@ from nornflow.cli.constants import (
 )
 from nornflow.cli.exceptions import CLIInitError
 from nornflow.cli.show import show_catalog, show_nornflow_settings
-from nornflow.exceptions import NornFlowAppError
+from nornflow.exceptions import NornFlowError
 
 app = typer.Typer()
 
@@ -79,7 +79,7 @@ def init(ctx: typer.Context) -> None:
         ).show()
         raise typer.Exit(code=2)  # noqa: B904
 
-    except NornFlowAppError as e:
+    except NornFlowError as e:
         CLIInitError(
             message=f"NornFlow error: {e}",
             hint="There was an issue with the NornFlow configuration.",

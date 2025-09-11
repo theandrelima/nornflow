@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 from nornir.core.task import AggregatedResult
 
-from nornflow.exceptions import TaskNotFoundError
+from nornflow.exceptions import TaskError
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
 
@@ -42,7 +42,7 @@ class TestTaskModel:
 
         # Verify the correct exception is raised
         with pytest.raises(
-            TaskNotFoundError, match="Task function for 'missing_task' not found in tasks catalog"
+            TaskError, match="Task function for 'missing_task' not found in tasks catalog"
         ):
             task_model.run(mock_nornir_manager, empty_catalog)
 
