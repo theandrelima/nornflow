@@ -43,6 +43,9 @@ def init(ctx: typer.Context) -> None:
         setup_directory_structure()
         setup_nornflow_settings_file(ctx.obj.get("settings"))
 
+        # Create required directories before building NornFlow to prevent initialization errors
+        create_required_directories()
+
         # Build NornFlow to get settings with vars_dir
         nornflow = builder.build()
 
@@ -93,6 +96,16 @@ def init(ctx: typer.Context) -> None:
         raise typer.Exit(code=2)  # noqa: B904
 
 
+def create_required_directories() -> None:
+    """Create all required directories before NornFlow initialization."""
+    create_directory(TASKS_DIR)
+    create_directory(WORKFLOWS_DIR)
+    create_directory(FILTERS_DIR)
+
+    # If vars_dir is different from default, it will be created later
+    # based on the actual settings after NornFlow is built
+
+
 def setup_builder(ctx: typer.Context) -> NornFlowBuilder:
     """Set up and configure the NornFlowBuilder."""
     builder = NornFlowBuilder()
@@ -141,11 +154,12 @@ def setup_nornflow_settings_file(settings: str) -> None:
 
 def setup_sample_content(nornflow: NornFlow) -> None:
     """Set up sample tasks, workflows, filters, and vars directories."""
-    create_directory_and_copy_sample_files(
+    # Copy sample files to the already created directories
+    copy_sample_files_to_dir(
         TASKS_DIR, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
     )
 
-    create_directory_and_copy_sample_files(
+    copy_sample_files_to_dir(
         WORKFLOWS_DIR, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
     )
 
@@ -155,29 +169,12 @@ def setup_sample_content(nornflow: NornFlow) -> None:
         vars_dir, [SAMPLE_VARS_FILE], "Created a sample 'defaults.yaml' in vars directory: {}"
     )
 
-    create_directory(FILTERS_DIR)
 
-
-def display_banner() -> None:
-    """
-    Display a banner message with borders.
-    """
-    # Print the ASCII banner first in purple
-    typer.secho(INIT_BANNER, fg=typer.colors.MAGENTA)
-
-    banner_message = (
-        "The 'init' command creates directories, and samples for configs, tasks and\n"
-        "workflows files, all with default values that you can modify as desired.\n"
-        "No customization of 'init' parameters available yet.\n\nDo you want to continue?"
-    )
-    lines = banner_message.split("\n")
-    max_length = max(len(line) for line in lines)
-    border = "+" + "-" * (max_length + 2) + "+"
-    typer.secho(border, fg=typer.colors.CYAN, bold=True)
-    for line in lines:
-        padded_line = line + " " * (max_length - len(line))
-        typer.secho(f"| {padded_line} |", fg=typer.colors.CYAN, bold=True)
-    typer.secho(border, fg=typer.colors.CYAN, bold=True)
+def copy_sample_files_to_dir(dir_path: Path, sample_files: list[Path], sample_message: str) -> None:
+    """Copy sample files to an existing directory."""
+    for sample_file in sample_files:
+        shutil.copy(sample_file, dir_path / sample_file.name)
+    typer.secho(sample_message.format(dir_path), fg=typer.colors.GREEN)
 
 
 def create_directory_and_copy_sample_files(
@@ -212,6 +209,28 @@ def create_directory(dir_path: Path) -> bool:
         return True
     typer.secho(f"Directory already exists: {dir_path}", fg=typer.colors.YELLOW)
     return False
+
+
+def display_banner() -> None:
+    """
+    Display a banner message with borders.
+    """
+    # Print the ASCII banner first in purple
+    typer.secho(INIT_BANNER, fg=typer.colors.MAGENTA)
+
+    banner_message = (
+        "The 'init' command creates directories, and samples for configs, tasks and\n"
+        "workflows files, all with default values that you can modify as desired.\n"
+        "No customization of 'init' parameters available yet.\n\nDo you want to continue?"
+    )
+    lines = banner_message.split("\n")
+    max_length = max(len(line) for line in lines)
+    border = "+" + "-" * (max_length + 2) + "+"
+    typer.secho(border, fg=typer.colors.CYAN, bold=True)
+    for line in lines:
+        padded_line = line + " " * (max_length - len(line))
+        typer.secho(f"| {padded_line} |", fg=typer.colors.CYAN, bold=True)
+    typer.secho(border, fg=typer.colors.CYAN, bold=True)
 
 
 def show_info_post_init(nornflow: NornFlow) -> None:
