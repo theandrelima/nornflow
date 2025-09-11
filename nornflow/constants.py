@@ -31,4 +31,4 @@ NORNFLOW_INVALID_INIT_KWARGS = (
 NORNFLOW_SUPPORTED_YAML_EXTENSIONS = (".yaml", ".yml")
 
 # Default inventory filter keys
-JINJA_PATTERN = re.compile(r'({{.*?}}|{%-?.*?-%?})')
+JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")
