@@ -92,6 +92,7 @@ class NornFlow:
         workflow: Workflow | None = None,
         processors: list[dict[str, Any]] | None = None,
         cli_vars: dict[str, Any] | None = None,
+        cli_filters: dict[str, Any] | None = None,
         **kwargs: Any,
     ):
         """
@@ -108,6 +109,8 @@ class NornFlow:
                 - Set programmatically for workflow customization
                 - Updated at runtime for dynamic behavior
                 These variables always override any other variable source.
+            cli_filters: Inventory filters with highest precedence. These completely override
+                any inventory filters defined in the workflow YAML.
             **kwargs: Additional keyword arguments passed to NornFlowSettings
 
         Raises:
@@ -120,6 +123,9 @@ class NornFlow:
             # Store CLI variables - these have highest precedence in variable resolution
             # and serve as both CLI-sourced variables and programmatic overrides
             self._cli_vars = cli_vars or {}
+            
+            # Store CLI inventory filters - these override workflow inventory filters
+            self._cli_filters = cli_filters or {}
 
             # Some kwargs should only be set through the YAML settings file.
             self._check_invalid_kwargs(kwargs)
@@ -250,6 +256,38 @@ class NornFlow:
             SettingsModificationError: Always raised to prevent direct modification.
         """
         raise SettingsModificationError("CLI variables cannot be modified after initialization")
+
+    @property
+    def cli_filters(self) -> dict[str, Any]:
+        """
+        Get the CLI inventory filters with highest precedence.
+
+        These inventory filters completely override any filters defined in the workflow YAML.
+        Like CLI variables, they serve a dual purpose:
+        1. Storage for inventory filters parsed from CLI arguments (--inventory-filters)
+        2. Universal override mechanism for programmatic inventory filtering
+
+        Returns:
+            dict[str, Any]: Dictionary containing the CLI inventory filters.
+        """
+        return self._cli_filters
+
+    @cli_filters.setter
+    def cli_filters(self, value: Any) -> None:
+        """
+        Prevent setting the CLI inventory filters directly after initialization.
+
+        CLI filters are set during NornFlow initialization and passed to workflows
+        during execution. To modify filters at runtime, use the workflow.run()
+        method's cli_filters parameter, which supports late binding.
+
+        Args:
+            value (Any): Attempted value to set.
+
+        Raises:
+            SettingsModificationError: Always raised to prevent direct modification.
+        """
+        raise SettingsModificationError("CLI filters cannot be modified after initialization")
 
     @property
     def tasks_catalog(self) -> dict[str, Callable]:
@@ -541,6 +579,7 @@ class NornFlow:
                 workflow_path=workflow_path,
                 settings=self.settings,
                 cli_vars=self.cli_vars,
+                cli_filters=self.cli_filters,
             ).create()
 
     def run(self, dry_run: bool = False) -> None:
@@ -550,7 +589,7 @@ class NornFlow:
         This method orchestrates the complete workflow execution process:
         1. Ensures a workflow is configured and ready
         2. Applies processor precedence rules
-        3. Passes all necessary catalogs and CLI variables to the workflow
+        3. Passes all necessary catalogs, CLI variables, and CLI filters to the workflow
         4. Executes the workflow tasks against the filtered inventory
 
         Processor Precedence:
@@ -558,13 +597,10 @@ class NornFlow:
         precedence over workflow-specific processors, which in turn take precedence over
         global processors from settings.
 
-        CLI Variables:
-        The CLI variables stored in this NornFlow instance are passed to the workflow
-        and have the highest precedence in the variable resolution system. These variables
-        can originate from actual CLI arguments or be set programmatically as overrides.
-
-        The workflow's run() method supports late binding, allowing these CLI variables
-        to be updated or overridden at runtime if needed.
+        CLI Variables and CLI Filters:
+        The CLI variables and CLI filters stored in this NornFlow instance are passed to the workflow
+        and have the highest precedence in their respective systems. These can originate from
+        actual CLI arguments or be set programmatically as overrides.
 
         Args:
             dry_run: Whether to run the workflow in dry-run mode
@@ -579,15 +615,15 @@ class NornFlow:
             # Simply disable workflow processors to enforce kwargs precedence
             self.workflow.processors_config = None
 
-        # Pass nornir_manager, catalogs, processors and cli_vars to workflow.run
-        # CLI variables are passed with highest precedence in variable resolution
+        # Pass nornir_manager, catalogs, processors, cli_vars and cli_filters to workflow.run
         self.workflow.run(
             self.nornir_manager,
             self.tasks_catalog,
             self.filters_catalog,
             self.settings.local_workflows_dirs,
             self.processors,
-            cli_vars=self.cli_vars,  # Pass CLI variables for highest precedence
+            cli_vars=self.cli_vars,
+            cli_filters=self.cli_filters,
             dry_run=dry_run,
         )
 
@@ -601,18 +637,18 @@ class NornFlowBuilder:
     - Workflow configuration (via object, name, path or dictionary)
     - Processor registration
     - CLI variables (with highest precedence in variable resolution)
+    - CLI inventory filters (with highest precedence for inventory filtering)
     - Additional keyword arguments
 
     CLI Variables in Builder Context:
     The builder's `with_cli_vars()` method sets variables that will have the highest
     precedence in the variable resolution system. While termed "CLI variables" due to
     their primary use case (command-line arguments), these serve as a universal
-    override mechanism in the builder pattern:
+    override mechanism in the builder pattern.
 
-    - Can represent actual CLI arguments parsed by a command-line interface
-    - Can be set programmatically for workflow customization
-    - Always override any other variable source (workflow vars, defaults, etc.)
-    - Are passed to the workflow during execution with late-binding support
+    CLI Inventory Filters in Builder Context:
+    The builder's `with_cli_filters()` method sets inventory filters that will completely
+    override any inventory filters defined in the workflow YAML.
 
     Usage Examples:
         # Basic usage
@@ -620,17 +656,7 @@ class NornFlowBuilder:
         nornflow = builder.with_settings_path('settings.yaml')
                           .with_workflow_name('deploy')
                           .with_cli_vars({'env': 'prod', 'debug': True})
-                          .build()
-
-        # Programmatic override usage
-        builder = NornFlowBuilder()
-        if emergency_mode:
-            cli_overrides = {'skip_tests': True, 'timeout': 300}
-        else:
-            cli_overrides = {'run_full_suite': True}
-
-        nornflow = builder.with_workflow_object(workflow)
-                          .with_cli_vars(cli_overrides)
+                          .with_cli_filters({'hosts': ['router1', 'router2']})
                           .build()
 
     Order of preference for building a NornFlowSettings object:
@@ -659,6 +685,7 @@ class NornFlowBuilder:
         self._workflow_name: str | None = None
         self._processors: list[dict[str, Any]] | None = None
         self._cli_vars: dict[str, Any] | None = None
+        self._cli_filters: dict[str, Any] | None = None
         self._kwargs: dict[str, Any] = {}
 
     def with_settings_object(self, settings_object: NornFlowSettings) -> "NornFlowBuilder":
@@ -787,6 +814,22 @@ class NornFlowBuilder:
         self._cli_vars = cli_vars
         return self
 
+    def with_cli_filters(self, cli_filters: dict[str, Any]) -> "NornFlowBuilder":
+        """
+        Set CLI inventory filters for the NornFlow instance.
+        
+        These filters have the highest precedence and completely override
+        any inventory filters defined in the workflow YAML.
+        
+        Args:
+            cli_filters: Dictionary of inventory filters with highest precedence
+            
+        Returns:
+            NornFlowBuilder: The builder instance.
+        """
+        self._cli_filters = cli_filters
+        return self
+
     def with_kwargs(self, **kwargs: Any) -> "NornFlowBuilder":
         """
         Set additional keyword arguments for the builder.
@@ -809,6 +852,7 @@ class NornFlowBuilder:
         - Workflow (from various sources based on precedence)
         - Processors (if specified)
         - CLI variables (with highest precedence in variable resolution)
+        - CLI inventory filters (with highest precedence for inventory filtering)
 
         Returns:
             NornFlow: The constructed NornFlow object with all configurations applied.
@@ -824,12 +868,15 @@ class NornFlowBuilder:
                     workflow_dict=self._workflow_dict,
                     settings=self._settings,
                     cli_vars=self._cli_vars,
+                    cli_filters=self._cli_filters,
                 )
                 workflow = workflow_factory.create()
 
         kwargs = self._kwargs.copy()
         if self._cli_vars is not None:
             kwargs["cli_vars"] = self._cli_vars
+        if self._cli_filters is not None:
+            kwargs["cli_filters"] = self._cli_filters
 
         return NornFlow(
             nornflow_settings=self._settings, workflow=workflow, processors=self._processors, **kwargs

@@ -214,8 +214,8 @@ def parse_processors(value: str | None) -> list[dict[str, Any]]:
 
 def get_nornflow_builder(
     target: str,
-    args: dict,
-    inventory_filters: dict,
+    args: dict[str, Any],
+    inventory_filters: dict[str, Any],
     settings_file: str = "",
     processors: list[dict[str, Any]] | None = None,
     cli_vars: dict[str, Any] | None = None,
@@ -248,14 +248,16 @@ def get_nornflow_builder(
     # Add CLI variables if specified
     if cli_vars:
         builder.with_cli_vars(cli_vars)
+        
+    # Add CLI filters if specified
+    if inventory_filters:
+        builder.with_cli_filters(inventory_filters)
 
     if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_YAML_EXTENSIONS):
         target_path = Path(target)
         if target_path.exists():
             absolute_path = target_path.resolve()
             wf = WorkflowFactory.create_from_file(absolute_path)
-            if inventory_filters:
-                wf.workflow_dict["workflow"]["inventory_filters"] = inventory_filters
             builder.with_workflow_object(wf)
         else:
             builder.with_workflow_name(target)
@@ -267,8 +269,6 @@ def get_nornflow_builder(
                 "description": (
                     f"ran with 'nornflow run' CLI (args: {args}, filters: {inventory_filters})"
                 ),
-                "inventory_filters": inventory_filters,
-                "processors": processors if processors else None,
                 "tasks": [
                     {"name": target, "args": args or {}},
                 ],
