@@ -4,7 +4,7 @@ from pathlib import Path
 
 import typer
 
-from nornflow import NornFlowBuilder
+from nornflow import NornFlow, NornFlowBuilder
 from nornflow.cli.constants import (
     FILTERS_DIR,
     GREET_USER_TASK_FILE,
@@ -139,7 +139,7 @@ def setup_nornflow_settings_file(settings: str) -> None:
             typer.secho(f"Settings file already exists: {NORNFLOW_SETTINGS}", fg=typer.colors.YELLOW)
 
 
-def setup_sample_content(nornflow) -> None:
+def setup_sample_content(nornflow: NornFlow) -> None:
     """Set up sample tasks, workflows, filters, and vars directories."""
     create_directory_and_copy_sample_files(
         TASKS_DIR, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
@@ -214,7 +214,7 @@ def create_directory(dir_path: Path) -> bool:
     return False
 
 
-def show_info_post_init(nornflow) -> None:
+def show_info_post_init(nornflow: NornFlow) -> None:
     """
     Display all information about NornFlow, equivalent to running 'nornflow show --all'.
     """

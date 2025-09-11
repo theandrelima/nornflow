@@ -5,7 +5,7 @@ from nornir.core import Nornir
 from nornir.core.processor import Processor
 
 from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL
-from nornflow.exceptions import ProcessorError, NornFlowNornirError
+from nornflow.exceptions import NornFlowNornirError, ProcessorError
 
 
 class NornirManager:
