@@ -123,7 +123,9 @@ class TestNornflowBuilderIntegration:
         workflow_dict = mock_instance.with_workflow_dict.call_args[0][0]
         assert workflow_dict["workflow"]["tasks"][0]["name"] == "my_task"
         assert workflow_dict["workflow"]["tasks"][0]["args"] == {"arg1": "value1"}
-        assert workflow_dict["workflow"]["inventory_filters"] == {"platform": "ios"}
+
+        # Assert that with_cli_filters was called with the correct filters
+        mock_instance.with_cli_filters.assert_called_once_with({"platform": "ios"})
 
     @patch("nornflow.cli.run.NornFlowBuilder")
     @patch("nornflow.cli.run.WorkflowFactory")
@@ -333,15 +335,25 @@ class TestCLIWorkflowOverrides:
                 settings_file="",
             )
 
-            # Verify workflow_dict was modified with CLI filters
-            assert mock_workflow.workflow_dict["workflow"]["inventory_filters"] == {
-                "platform": "ios",
-                "vendor": "cisco",
-            }
+            # Check that WorkflowFactory.create_from_file was called with a Path object
+            mock_factory.create_from_file.assert_called_once()
+            # Get the actual call args
+            call_args = mock_factory.create_from_file.call_args[0]
+            # Verify it's a Path object with the right value
+            assert isinstance(call_args[0], Path)
+            assert call_args[0].name == workflow_file
 
+            # Assert that with_workflow_object was called with the workflow
+            mock_instance.with_workflow_object.assert_called_once_with(mock_workflow)
+
+            # Assert that with_cli_filters was called with the correct filters
+            mock_instance.with_cli_filters.assert_called_once_with({
+                "platform": "ios", 
+                "vendor": "cisco"
+            })
         finally:
-            # Clean up the dummy workflow file
-            Path(workflow_file).unlink()
+            if Path(workflow_file).exists():
+                Path(workflow_file).unlink()
 
 
 class TestCLIErrorHandling:
