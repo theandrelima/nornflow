@@ -1,10 +1,9 @@
-# ruff: noqa: T201
 import importlib
 import inspect
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import click
 from nornir.core.inventory import Host
@@ -13,7 +12,7 @@ from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
 from tabulate import tabulate
 
-from nornflow.constants import JINJA_PATTERN
+from nornflow.constants import JINJA_PATTERN, NORNFLOW_SUPPORTED_YAML_EXTENSIONS
 from nornflow.exceptions import (
     CoreError,
     ProcessorError,
@@ -129,6 +128,38 @@ def is_nornir_filter(attr: Callable) -> bool:  # noqa: PLR0911
 
     except (ValueError, TypeError):
         return False
+
+
+def process_filter(attr: Callable) -> tuple[Callable, list[str]]:
+    """
+    Process a filter function to extract its parameters and return both the function and param info.
+    
+    This allows filter registration to capture parameter names for use in workflow definitions.
+    
+    Args:
+        attr: The filter function to process
+        
+    Returns:
+        Tuple containing (filter_function, parameter_names)
+    """
+    sig = inspect.signature(attr)
+    # Skip the first parameter (host) and get remaining parameter names
+    param_names = list(sig.parameters.keys())[1:]
+    return (attr, param_names)
+
+
+def is_workflow_file(file_path: str | Path) -> bool:
+    """
+    Check if a file is a valid NornFlow workflow file.
+    
+    Args:
+        file_path: Path to the file to check
+        
+    Returns:
+        True if the file is a workflow file, False otherwise
+    """
+    path = Path(file_path)
+    return path.is_file() and path.suffix in NORNFLOW_SUPPORTED_YAML_EXTENSIONS
 
 
 def load_processor(processor_config: dict) -> Processor:
