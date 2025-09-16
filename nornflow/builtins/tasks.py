@@ -4,12 +4,6 @@ from nornir.core.task import Result, Task
 
 from nornflow.builtins.utils import build_set_task_report
 
-try:
-    from nornir_napalm.plugins.tasks import *  # noqa: F403
-    from nornir_netmiko.tasks import *  # noqa: F403
-except ImportError:
-    pass
-
 
 def set(task: Task, **kwargs) -> Result:
     """

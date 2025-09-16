@@ -46,11 +46,6 @@ manual-tests = [
     "nornir-netbox>=0.3.0",
 ]
 
-optional-plugins = [
-    "nornir-napalm>=0.5.0",
-    "nornir-netmiko>=1.0.1",
-]
-
 [tool.ruff]
 line-length = 110
 target-version = "py310"
