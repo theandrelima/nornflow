@@ -107,21 +107,24 @@ def show(
 
 def show_catalog(nornflow: "NornFlow") -> None:
     """
-    Display the task catalog, workflows catalog, and filters catalog.
+    Display the task catalog, filters catalog, and workflows catalog in that order.
     """
     show_formatted_table(
-        "TASKS CATALOG", render_task_catalog_table_data, ["Task Name", "Description", "Location"], nornflow
-    )
-    show_formatted_table(
-        "WORKFLOWS CATALOG",
-        render_workflows_catalog_table_data,
-        ["Workflow Name", "Description", "Location"],
-        nornflow,
+        "TASKS CATALOG", 
+        render_task_catalog_table_data, 
+        ["Task Name", "Description", "Source (python module)"], 
+        nornflow
     )
     show_formatted_table(
         "FILTERS CATALOG",
         render_filters_catalog_table_data,
-        ["Filter Name", "Description", "Location"],
+        ["Filter Name", "Description", "Source (python module)"],
+        nornflow,
+    )
+    show_formatted_table(
+        "WORKFLOWS CATALOG",
+        render_workflows_catalog_table_data,
+        ["Workflow Name", "Description", "Source (file path)"],
         nornflow,
     )
 
@@ -166,6 +169,57 @@ def show_formatted_table(
     typer.echo(table)
 
 
+def get_source_from_catalog(catalog, item_name):
+    """
+    Get source information from catalog metadata.
+
+    Args:
+        catalog: The catalog containing the item.
+        item_name: Name of the item to look up.
+
+    Returns:
+        str: The formatted source path.
+    """
+    item_info = catalog.get_item_info(item_name)
+    
+    if not item_info:
+        return "Unknown"
+    
+    # For built-ins or properly formatted module names (contains dots)
+    if "module_name" in item_info and "." in item_info["module_name"]:
+        return item_info["module_name"]
+    
+    # For local Python modules, convert file path to dotted path
+    if "module_path" in item_info:
+        module_path = Path(item_info["module_path"])
+        try:
+            relative_path = module_path.relative_to(CWD)
+            # Convert path/to/file.py to path.to.file
+            parts = relative_path.parts
+            # Remove .py extension from last part
+            if parts[-1].endswith('.py'):
+                parts = list(parts[:-1]) + [parts[-1][:-3]]
+            return '.'.join(parts)
+        except ValueError:
+            return str(module_path)
+    
+    # Handle explicit import sources like nornir_napalm.plugins.tasks.napalm_get
+    if "module_name" in item_info and item_name.startswith("napalm_"):
+        # For NAPALM tasks, use the actual module name for proper attribution
+        return f"nornir_napalm.plugins.tasks.{item_name}"
+    
+    # For workflow files, keep the file path format
+    if "file_path" in item_info:
+        file_path = Path(item_info["file_path"])
+        try:
+            relative_path = file_path.relative_to(CWD)
+            return f"./{relative_path}"
+        except ValueError:
+            return str(file_path)
+            
+    return "Unknown"
+
+
 def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
     Render the task catalog as a list of lists (suitable for tabulate).
@@ -176,8 +230,15 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     Returns:
         list[list[str]]: The table data.
     """
+    tasks_catalog = nornflow.tasks_catalog
     table_data = []
-    for task_name, task_func in nornflow.tasks_catalog.items():
+    
+    # Get all task names organized: built-ins first, then others
+    task_names = list(sorted(tasks_catalog.get_builtin_items()))
+    task_names.extend(sorted(tasks_catalog.get_custom_items()))
+    
+    for task_name in task_names:
+        task_func = tasks_catalog[task_name]
         # Get the docstring, or use a placeholder if None
         docstring = task_func.__doc__ or "No description available"
 
@@ -187,28 +248,13 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
             first_sentence = first_sentence[:97] + "..."
         wrapped_text = textwrap.fill(first_sentence, width=60)
 
-        # Get the Python dotted path to the function
-        module = inspect.getmodule(task_func)
-        if module is not None:
-            module_path = module.__name__
-            # Show just the module path without the function name
-            function_path = module_path
-        else:
-            # Fallback to the file location with relative path if possible
-            file_path = Path(inspect.getfile(task_func))
-
-            # Try to make it relative to CWD
-            try:
-                relative_path = file_path.relative_to(CWD)
-                function_path = f"./{relative_path}"
-            except ValueError:
-                # If the file is not within CWD, use absolute path as fallback
-                function_path = str(file_path)
+        # Get source from catalog metadata
+        source_path = get_source_from_catalog(tasks_catalog, task_name)
 
         colored_task_name = colored(task_name, "cyan", attrs=["bold"])
         colored_docstring = colored(wrapped_text, "yellow")
-        colored_location = colored(function_path, "light_green")
-        table_data.append([colored_task_name, colored_docstring, colored_location])
+        colored_source = colored(source_path, "light_green")
+        table_data.append([colored_task_name, colored_docstring, colored_source])
     return table_data
 
 
@@ -222,10 +268,12 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
     Returns:
         list[list[str]]: The table data.
     """
+    workflows_catalog = nornflow.workflows_catalog
     table_data = []
-    for workflow_name, workflow_path in nornflow.workflows_catalog.items():
+    
+    for workflow_name, workflow_path in sorted(workflows_catalog.items()):
         try:
-            with workflow_path.open() as f:  # Using Path.open() instead of the built-in open()
+            with workflow_path.open() as f:
                 workflow_dict = yaml.safe_load(f)
                 description = workflow_dict["workflow"].get("description", "No description available")
         except Exception:
@@ -234,18 +282,13 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
         # Wrap the description
         description = textwrap.fill(description, width=60)
 
-        # Determine the relative path if possible
-        try:
-            relative_path = workflow_path.relative_to(CWD)
-            path_str = f"./{relative_path}"
-        except ValueError:
-            # If the file is not within CWD, use absolute path as fallback
-            path_str = str(workflow_path)
+        # Get source from catalog metadata
+        source_path = get_source_from_catalog(workflows_catalog, workflow_name)
 
         colored_workflow_name = colored(workflow_name, "cyan", attrs=["bold"])
         colored_description = colored(description, "yellow")
-        colored_location = colored(path_str, "light_green")
-        table_data.append([colored_workflow_name, colored_description, colored_location])
+        colored_source = colored(source_path, "light_green")
+        table_data.append([colored_workflow_name, colored_description, colored_source])
     return table_data
 
 
@@ -259,8 +302,15 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     Returns:
         list[list[str]]: The table data.
     """
+    filters_catalog = nornflow.filters_catalog
     table_data = []
-    for filter_name, (filter_func, param_names) in nornflow.filters_catalog.items():
+    
+    # Get all filter names organized: built-ins first, then others
+    filter_names = list(sorted(filters_catalog.get_builtin_items()))
+    filter_names.extend(sorted(filters_catalog.get_custom_items()))
+    
+    for filter_name in filter_names:
+        filter_func, param_names = filters_catalog[filter_name]
         # Get the docstring, or use a placeholder if None
         docstring = filter_func.__doc__ or "No description available"
 
@@ -278,28 +328,13 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
         # Format as two separate lines
         description = f"{first_sentence}\n{param_info}"
 
-        # Get the Python dotted path to the function
-        module = inspect.getmodule(filter_func)
-        if module is not None:
-            module_path = module.__name__
-            # Show just the module path without the function name
-            function_path = module_path
-        else:
-            # Fallback to the file location with relative path if possible
-            file_path = Path(inspect.getfile(filter_func))
-
-            # Try to make it relative to CWD
-            try:
-                relative_path = file_path.relative_to(CWD)
-                function_path = f"./{relative_path}"
-            except ValueError:
-                # If the file is not within CWD, use absolute path as fallback
-                function_path = str(file_path)
+        # Get source from catalog metadata
+        source_path = get_source_from_catalog(filters_catalog, filter_name)
 
         colored_filter_name = colored(filter_name, "cyan", attrs=["bold"])
         colored_docstring = colored(description, "yellow")
-        colored_location = colored(function_path, "light_green")
-        table_data.append([colored_filter_name, colored_docstring, colored_location])
+        colored_source = colored(source_path, "light_green")
+        table_data.append([colored_filter_name, colored_docstring, colored_source])
     return table_data
 
 
