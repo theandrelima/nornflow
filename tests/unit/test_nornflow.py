@@ -8,6 +8,7 @@ from nornflow.exceptions import (
     CoreError,
     NornFlowError, 
     NornirError,
+    ResourceError,
     SettingsError,
 )
 from nornflow.nornflow import NornFlow
@@ -75,28 +76,21 @@ class TestNornFlowValidation:
             assert "tasks catalog" in str(exc_info.value).lower()
 
     def test_invalid_tasks_directory(self):
-        """Test error when tasks directory doesn't exist is wrapped in NornFlowError."""
+        """Test error when tasks directory doesn't exist raises ResourceError."""
         settings = NornFlowSettings(local_tasks_dirs=["/nonexistent/dir"])
 
-        # Directly mock the builtin_tasks to be empty and intercept the CatalogError
-        with patch("nornflow.nornflow.builtin_tasks", {}), \
-             patch("nornflow.nornflow.CatalogError", wraps=CatalogError) as mock_catalog_error:
-            
-            # The initialization should raise NornFlowError wrapping a CatalogError
-            with pytest.raises(NornFlowError) as exc_info:
-                NornFlow(nornflow_settings=settings)
-
-            # Verify that CatalogError was called with the expected message and catalog_name
-            mock_catalog_error.assert_called_with(
-                "No tasks were found. The Tasks Catalog can't be empty.",
-                catalog_name="tasks"
-            )
-            
-            # Verify the top exception is NornFlowError
-            assert isinstance(exc_info.value, NornFlowError)
-            
-            # Verify the error message contains expected text
-            assert "tasks catalog" in str(exc_info.value).lower()
+        # The initialization should raise NornFlowError wrapping a ResourceError
+        with pytest.raises(NornFlowError) as exc_info:
+            NornFlow(nornflow_settings=settings)
+        
+        # Verify the top exception is NornFlowError
+        assert isinstance(exc_info.value, NornFlowError)
+        
+        # Verify the original exception is ResourceError about directory not existing
+        original_exception = exc_info.value.__cause__
+        assert isinstance(original_exception, ResourceError)
+        assert "does not exist" in str(original_exception)
+        assert "/nonexistent/dir" in str(original_exception)
 
     def test_property_modifications(self, basic_nornflow):
         """Test that properties cannot be modified directly."""
