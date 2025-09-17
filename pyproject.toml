@@ -37,7 +37,6 @@ include = ["nornflow*"]
 [project.optional-dependencies]
 dev = [
     "black>=25.1.0",
-    "isort>=6.0.0",
     "mypy>=1.15.0",
     "ruff>=0.9.4",
     "pytest-cov>=6.0.0",
@@ -99,13 +98,11 @@ case-sensitive = false
 order-by-type = false
 combine-as-imports = true
 no-lines-before = ["local-folder"]
+known-first-party = ["nornflow"]
 
 [tool.black]
 line-length = 110
 extend-exclude = '(^|/)tests/'
-
-[tool.isort]
-profile = "black"
 
 [project.scripts]
 nornflow = "nornflow.cli.entrypoint:app"
