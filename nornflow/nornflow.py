@@ -192,7 +192,9 @@ class NornFlow:
 
     @nornir_configs.setter
     def nornir_configs(self, value: Any) -> None:
-        raise NornirError("Nornir configurations cannot be modified directly. Use NornFlowSettings to configure Nornir.")
+        raise NornirError(
+            "Nornir configurations cannot be modified directly. Use NornFlowSettings to configure Nornir."
+        )
 
     @property
     def settings(self) -> NornFlowSettings:
@@ -216,8 +218,10 @@ class NornFlow:
         Raises:
             SettingsModificationError: Always raised to prevent direct setting of the settings.
         """
-        raise SettingsError("Cannot set settings directly. Settings must be either passed as a "
-                           "NornFlowSettings object or as keyword arguments to the NornFlow initializer.")
+        raise SettingsError(
+            "Cannot set settings directly. Settings must be either passed as a "
+            "NornFlowSettings object or as keyword arguments to the NornFlow initializer."
+        )
 
     @property
     def cli_vars(self) -> dict[str, Any]:
@@ -240,15 +244,17 @@ class NornFlow:
     @cli_vars.setter
     def cli_vars(self, value: dict[str, Any]) -> None:
         """Update CLI variables that override workflow-defined variables.
-        
+
         Args:
             value: Dictionary of variable names and values.
-            
+
         Raises:
             CoreError: If value is not a dictionary.
         """
         if not isinstance(value, dict):
-            raise CoreError(f"CLI variables must be a dictionary, got {type(value).__name__}", component="NornFlow")
+            raise CoreError(
+                f"CLI variables must be a dictionary, got {type(value).__name__}", component="NornFlow"
+            )
         self._cli_vars = value
 
     @property
@@ -269,15 +275,17 @@ class NornFlow:
     @cli_filters.setter
     def cli_filters(self, value: dict[str, Any]) -> None:
         """Update CLI inventory filters that override workflow-defined filters.
-        
+
         Args:
             value: Dictionary of filter names and arguments.
-            
+
         Raises:
             CoreError: If value is not a dictionary.
         """
         if not isinstance(value, dict):
-            raise CoreError(f"CLI filters must be a dictionary, got {type(value).__name__}", component="NornFlow")
+            raise CoreError(
+                f"CLI filters must be a dictionary, got {type(value).__name__}", component="NornFlow"
+            )
         self._cli_filters = value
 
     @property
@@ -359,7 +367,7 @@ class NornFlow:
             value (Any): The workflow object to set.
         """
         if not isinstance(value, Workflow):
-            raise WorkflowError(  
+            raise WorkflowError(
                 f"NornFlow.workflow MUST be a Workflow object, but an object of {type(value)} was "
                 f"provided: {value}"
             )
@@ -385,87 +393,88 @@ class NornFlow:
         """
         raise ProcessorError(
             message="Processors cannot be set directly, but must be loaded from nornflow settings file.",
-            component="NornFlow"
+            component="NornFlow",
         )
 
     def _load_tasks_catalog(self) -> None:
         """
         Load all Nornir tasks from built-ins and from directories specified in settings.
-        
+
         Tasks are loaded in two phases:
         1. Built-in tasks from nornflow.builtins.tasks module
         2. User-defined tasks from local_tasks_dirs
         """
         self._tasks_catalog = PythonEntityCatalog(name="tasks")
-    
+
         # Phase 1: Load built-in tasks
         self._tasks_catalog.register_from_module(builtin_tasks, predicate=is_nornir_task)
-        
+
         # Phase 2: Load tasks from local directories
         for task_dir in self.settings.local_tasks_dirs:
             try:
-                self._tasks_catalog.discover_items_in_dir(
-                    task_dir, 
-                    predicate=is_nornir_task
-                )
+                self._tasks_catalog.discover_items_in_dir(task_dir, predicate=is_nornir_task)
             except ResourceError:
                 # Just continue if directory doesn't exist
                 pass
             except Exception as e:
-                raise ResourceError(f"Error loading tasks: {e!s}", resource_type="tasks", resource_name=task_dir) from e
-    
+                raise ResourceError(
+                    f"Error loading tasks: {e!s}", resource_type="tasks", resource_name=task_dir
+                ) from e
+
         if self._tasks_catalog.is_empty:
             raise CatalogError("No tasks were found. The Tasks Catalog can't be empty.", catalog_name="tasks")
-    
+
     def _load_filters_catalog(self) -> None:
         """
         Load inventory filters from built-ins and from directories specified in settings.
-        
+
         Filters are loaded in two phases:
         1. Built-in filters from nornflow.builtins.filters module
         2. User-defined filters from configured local_filters_dirs
         """
         self._filters_catalog = PythonEntityCatalog(name="filters")
-    
+
         # Phase 1: Load built-in filters
-        self._filters_catalog.register_from_module(builtin_filters, predicate=is_nornir_filter, transform_item=process_filter)
-        
+        self._filters_catalog.register_from_module(
+            builtin_filters, predicate=is_nornir_filter, transform_item=process_filter
+        )
+
         # Phase 2: Load filters from local directories
         for filter_dir in self.settings.local_filters_dirs:
             try:
                 self._filters_catalog.discover_items_in_dir(
-                    filter_dir,
-                    predicate=is_nornir_filter,
-                    transform_item=process_filter
+                    filter_dir, predicate=is_nornir_filter, transform_item=process_filter
                 )
             except ResourceError:
                 # Just continue if directory doesn't exist
                 pass
             except Exception as e:
-                raise ResourceError(f"Error loading filters: {e!s}", resource_type="filters", resource_name=filter_dir) from e
+                raise ResourceError(
+                    f"Error loading filters: {e!s}", resource_type="filters", resource_name=filter_dir
+                ) from e
 
     def _load_workflows_catalog(self) -> None:
         """
         Discover and load workflow files from directories specified in settings.
-        
+
         This catalogs the available workflow files for later use when a workflow
         is requested by name.
         """
         self._workflows_catalog = FileCatalog(name="workflows")
-        
+
         # Process each workflow directory using FileCatalog's discover_items_in_dir
         for workflow_dir in self.settings.local_workflows_dirs:
             try:
                 self._workflows_catalog.discover_items_in_dir(
-                    workflow_dir,
-                    predicate=is_workflow_file,
-                    recursive=True
+                    workflow_dir, predicate=is_workflow_file, recursive=True
                 )
             except ResourceError:
                 # Just continue if directory doesn't exist
                 pass
             except Exception as e:
-                raise ResourceError(f"Error loading workflows: {e!s}", resource_type="workflows", resource_name=workflow_dir) from e
+                raise ResourceError(
+                    f"Error loading workflows: {e!s}", resource_type="workflows", resource_name=workflow_dir
+                ) from e
 
     def _check_invalid_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
@@ -481,13 +490,13 @@ class NornFlow:
         if invalid_keys:
             raise InitializationError(
                 f"Invalid kwarg(s) passed to NornFlow initializer: {', '.join(invalid_keys)}",
-                component="NornFlow"
+                component="NornFlow",
             )
 
     def _ensure_workflow(self) -> None:
         """
         Ensure a valid workflow is available before execution.
-        
+
         If self.workflow is a string, resolve it to a Workflow object using
         the workflows catalog. If the workflow is not found or not set,
         raise an appropriate error.
@@ -503,7 +512,9 @@ class NornFlow:
             workflow_path = self._workflows_catalog.get(workflow_name)
 
             if not workflow_path:
-                raise WorkflowError(f"Workflow '{workflow_name}' not found in the workflows catalog.", component="NornFlow")
+                raise WorkflowError(
+                    f"Workflow '{workflow_name}' not found in the workflows catalog.", component="NornFlow"
+                )
 
             self.workflow = WorkflowFactory(
                 workflow_path=workflow_path,
