@@ -6,7 +6,6 @@ This module defines exceptions specific to the variable management subsystem.
 
 from nornflow.exceptions import NornFlowError
 
-
 ###############################################################################
 # VARIABLE EXCEPTIONS
 ###############################################################################
@@ -44,10 +43,7 @@ class TemplateError(VariableError):
 
     def __init__(self, message: str = "", template: str = ""):
         # Truncate very long templates
-        if len(template) > 100:
-            template_preview = template[:97] + "..."
-        else:
-            template_preview = template
+        template_preview = template[:97] + "..." if len(template) > 100 else template  # noqa: PLR2004
 
         context = f" Template: '{template_preview}'" if template else ""
         super().__init__(f"{message}{context}")
