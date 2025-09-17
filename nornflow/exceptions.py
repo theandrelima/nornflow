@@ -39,12 +39,13 @@ class CoreError(NornFlowError):
 
 class CatalogError(CoreError):
     """Base for all catalog-related errors."""
-    
+
     def __init__(self, message: str = "", catalog_name: str = ""):
         # Format as "{name} catalog error: {message}"
         prefix = f"{catalog_name.capitalize()} catalog error: " if catalog_name else ""
         super().__init__(f"{prefix}{message}")
         self.catalog_name = catalog_name
+
 
 class InitializationError(CoreError):
     """Base for all initialization-related errors."""
@@ -65,7 +66,7 @@ class WorkflowError(NornFlowError):
 
 class TaskError(WorkflowError):
     """Base for all task-related errors."""
-    
+
     def __init__(self, message: str = "", task_name: str = ""):
         prefix = f"Task '{task_name}': " if task_name else ""
         super().__init__(f"{prefix}{message}")
@@ -74,7 +75,7 @@ class TaskError(WorkflowError):
 
 class FilterError(WorkflowError):
     """Base for all filter-related errors."""
-    
+
     def __init__(self, message: str = "", filter_name: str = ""):
         prefix = f"Filter '{filter_name}': " if filter_name else ""
         super().__init__(f"{prefix}{message}")
@@ -92,7 +93,7 @@ class SettingsError(NornFlowError):
 
     These relate to configuration and settings management.
     """
-    
+
     def __init__(self, message: str = "", setting: str = ""):
         prefix = f"Setting '{setting}': " if setting else ""
         super().__init__(f"{prefix}{message}")
@@ -127,7 +128,7 @@ class ResourceError(NornFlowError):
 
     These relate to file, module, and other resource access issues.
     """
-    
+
     def __init__(self, message: str = "", resource_type: str = "", resource_name: str = ""):
         prefix = f"{resource_type} '{resource_name}': " if resource_type and resource_name else ""
         super().__init__(f"{prefix}{message}")

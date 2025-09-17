@@ -67,35 +67,27 @@ class NornFlowSettings:
             settings_data = load_file_to_dict(file_path=self.settings_file)
 
             if not isinstance(settings_data, dict):
-                raise SettingsError(
-                    f"Settings data must be a dictionary, got {type(settings_data).__name__}"
-                )
+                raise SettingsError(f"Settings data must be a dictionary, got {type(settings_data).__name__}")
 
             self.loaded_settings = defaultdict(lambda: None, settings_data)
         except FileNotFoundError as e:
             raise ResourceError(
                 f"Settings file not found: {self.settings_file}",
                 resource_type="File",
-                resource_name=self.settings_file
+                resource_name=self.settings_file,
             ) from e
         except PermissionError as e:
             raise ResourceError(
                 f"Permission denied accessing settings file: {self.settings_file}",
                 resource_type="File",
-                resource_name=self.settings_file
+                resource_name=self.settings_file,
             ) from e
         except yaml.YAMLError as e:
-            raise SettingsError(
-                f"Failed to parse YAML settings file '{self.settings_file}': {str(e)}"
-            ) from e
+            raise SettingsError(f"Failed to parse YAML settings file '{self.settings_file}': {str(e)}") from e
         except TypeError as e:
-            raise SettingsError(
-                f"Invalid data type in settings file: {str(e)}"
-            ) from e
+            raise SettingsError(f"Invalid data type in settings file: {str(e)}") from e
         except Exception as e:
-            raise NornFlowError(
-                f"An unexpected error occurred while loading settings: {e}"
-            ) from e
+            raise NornFlowError(f"An unexpected error occurred while loading settings: {e}") from e
 
     def _check_mandatory_settings(self) -> None:
         """
@@ -106,15 +98,9 @@ class NornFlowSettings:
         """
         for setting in NONRFLOW_SETTINGS_MANDATORY:
             if setting not in self.loaded_settings:
-                raise SettingsError(
-                    f"Mandatory setting is missing from configuration",
-                    setting=setting
-                )
+                raise SettingsError(f"Mandatory setting is missing from configuration", setting=setting)
             if not self.loaded_settings[setting]:
-                raise SettingsError(
-                    f"Mandatory setting is empty in configuration",
-                    setting=setting
-                )
+                raise SettingsError(f"Mandatory setting is empty in configuration", setting=setting)
 
     def _set_optional_settings(self, **kwargs: Any) -> None:
         """

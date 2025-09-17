@@ -21,35 +21,29 @@ app = typer.Typer()
 def show(
     ctx: typer.Context,
     catalog: bool = typer.Option(
-        False, "--catalog", "-c", help="Display the task, workflow, and filter catalogs (legacy option)", hidden=True
+        False,
+        "--catalog",
+        "-c",
+        help="Display the task, workflow, and filter catalogs (legacy option)",
+        hidden=True,
     ),
     catalogs: bool = typer.Option(
         False, "--catalogs", help="Display all catalogs: tasks, filters, and workflows"
     ),
-    tasks: bool = typer.Option(
-        False, "--tasks", "-t", help="Display the task catalog"
-    ),
-    filters: bool = typer.Option(
-        False, "--filters", "-f", help="Display the filter catalog"
-    ),
-    workflows: bool = typer.Option(
-        False, "--workflows", "-w", help="Display the workflow catalog"
-    ),
-    settings: bool = typer.Option(
-        False, "--settings", "-s", help="Display current NornFlow Settings"
-    ),
+    tasks: bool = typer.Option(False, "--tasks", "-t", help="Display the task catalog"),
+    filters: bool = typer.Option(False, "--filters", "-f", help="Display the filter catalog"),
+    workflows: bool = typer.Option(False, "--workflows", "-w", help="Display the workflow catalog"),
+    settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
     nornir_configs: bool = typer.Option(
         False, "--nornir-configs", "-n", help="Display current Nornir Configs"
     ),
-    all: bool = typer.Option(
-        False, "--all", "-a", help="Display all information"
-    ),
+    all: bool = typer.Option(False, "--all", "-a", help="Display all information"),
 ) -> None:
     """
     Displays summary info about NornFlow.
     """
     show_all_catalogs = catalog or catalogs
-    
+
     if not any([show_all_catalogs, tasks, filters, workflows, settings, nornir_configs, all]):
         raise typer.BadParameter(
             "You must provide at least one option: --catalogs, --tasks, --filters, --workflows, "
@@ -83,7 +77,7 @@ def show(
                     show_filters_catalog(nornflow)
                 if workflows:
                     show_workflows_catalog(nornflow)
-                    
+
             if settings:
                 show_nornflow_settings(nornflow)
             if nornir_configs:
@@ -140,10 +134,10 @@ def show_catalog(nornflow: "NornFlow") -> None:
 def show_tasks_catalog(nornflow: "NornFlow") -> None:
     """Display the tasks catalog."""
     show_formatted_table(
-        "TASKS CATALOG", 
-        render_task_catalog_table_data, 
-        ["Task Name", "Description", "Source (python module)"], 
-        nornflow
+        "TASKS CATALOG",
+        render_task_catalog_table_data,
+        ["Task Name", "Description", "Source (python module)"],
+        nornflow,
     )
 
 
@@ -211,27 +205,27 @@ def get_source_from_catalog(catalog, item_name):
         The formatted source path.
     """
     item_info = catalog.get_item_info(item_name)
-    
+
     if not item_info:
         return "Unknown"
-    
+
     if "module_name" in item_info and "." in item_info["module_name"]:
         return item_info["module_name"]
-    
+
     if "module_path" in item_info:
         module_path = Path(item_info["module_path"])
         try:
             relative_path = module_path.relative_to(CWD)
             parts = relative_path.parts
-            if parts[-1].endswith('.py'):
+            if parts[-1].endswith(".py"):
                 parts = list(parts[:-1]) + [parts[-1][:-3]]
-            return '.'.join(parts)
+            return ".".join(parts)
         except ValueError:
             return str(module_path)
-    
+
     if "module_name" in item_info and item_name.startswith("napalm_"):
         return f"nornir_napalm.plugins.tasks.{item_name}"
-    
+
     if "file_path" in item_info:
         file_path = Path(item_info["file_path"])
         try:
@@ -239,7 +233,7 @@ def get_source_from_catalog(catalog, item_name):
             return f"./{relative_path}"
         except ValueError:
             return str(file_path)
-            
+
     return "Unknown"
 
 
@@ -254,10 +248,10 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
     tasks_catalog = nornflow.tasks_catalog
     table_data = []
-    
+
     task_names = list(sorted(tasks_catalog.get_builtin_items()))
     task_names.extend(sorted(tasks_catalog.get_custom_items()))
-    
+
     for task_name in task_names:
         task_func = tasks_catalog[task_name]
         docstring = task_func.__doc__ or "No description available"
@@ -287,7 +281,7 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
     """
     workflows_catalog = nornflow.workflows_catalog
     table_data = []
-    
+
     for workflow_name, workflow_path in sorted(workflows_catalog.items()):
         try:
             with workflow_path.open() as f:
@@ -318,10 +312,10 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """
     filters_catalog = nornflow.filters_catalog
     table_data = []
-    
+
     filter_names = list(sorted(filters_catalog.get_builtin_items()))
     filter_names.extend(sorted(filters_catalog.get_custom_items()))
-    
+
     for filter_name in filter_names:
         filter_func, param_names = filters_catalog[filter_name]
         docstring = filter_func.__doc__ or "No description available"

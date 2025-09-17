@@ -139,7 +139,5 @@ class NornirHostProxy:
         # Try to retrieve 'name' using Host.get(), which covers direct attributes, data, and inheritance.
         value = self._current_host.get(name)
         if value is None:
-            raise VariableError(
-                f"Attribute or key '{name}' not found in host '{self._current_host.name}'."
-            )
+            raise VariableError(f"Attribute or key '{name}' not found in host '{self._current_host.name}'.")
         return value

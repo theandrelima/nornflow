@@ -166,9 +166,7 @@ class NornFlowVariablesManager:
 
         if self.vars_dir.exists():
             if not self.vars_dir.is_dir():
-                raise VariableError(
-                    f"Specified vars_dir '{self.vars_dir}' exists but is not a directory."
-                )
+                raise VariableError(f"Specified vars_dir '{self.vars_dir}' exists but is not a directory.")
 
             defaults_path = self.vars_dir / DEFAULTS_FILENAME
             self._default_vars = self._load_vars_from_file(defaults_path, "Default Variables")
@@ -325,7 +323,9 @@ class NornFlowVariablesManager:
             raise VariableError(f"YAML parsing error in {context_description} file '{file_path}': {e}") from e
         except Exception as e:
             logger.exception(f"Unexpected error loading {context_description} file '{file_path}'")
-            raise VariableError(f"Unexpected error loading {context_description} file '{file_path}': {e}") from e
+            raise VariableError(
+                f"Unexpected error loading {context_description} file '{file_path}': {e}"
+            ) from e
 
     def get_device_context(self, host_name: str) -> NornFlowDeviceContext:
         """
@@ -442,9 +442,7 @@ class NornFlowVariablesManager:
             logger.exception(f"Jinja2 UndefinedError for host '{host_name}' in template '{template_str}'")
             raise TemplateError(f"Undefined variable in template '{template_str}': {e}") from e
         except VariableError as e:
-            logger.exception(
-                f"NornFlow VariableError for host '{host_name}' in template '{template_str}'"
-            )
+            logger.exception(f"NornFlow VariableError for host '{host_name}' in template '{template_str}'")
             raise TemplateError(f"Variable error in template '{template_str}': {e}") from e
         except Exception as e:
             logger.exception(

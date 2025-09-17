@@ -41,7 +41,7 @@ def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
     except Exception as e:
         raise CoreError(
             f"Failed to import module '{module_name}' from '{module_path}': {str(e)}",
-            component="ModuleLoader"
+            component="ModuleLoader",
         ) from e
 
     return module
@@ -132,12 +132,12 @@ def is_nornir_filter(attr: Callable) -> bool:  # noqa: PLR0911
 def process_filter(attr: Callable) -> tuple[Callable, list[str]]:
     """
     Process a filter function to extract its parameters and return both the function and param info.
-    
+
     This allows filter registration to capture parameter names for use in workflow definitions.
-    
+
     Args:
         attr: The filter function to process
-        
+
     Returns:
         Tuple containing (filter_function, parameter_names)
     """
@@ -150,10 +150,10 @@ def process_filter(attr: Callable) -> tuple[Callable, list[str]]:
 def is_workflow_file(file_path: str | Path) -> bool:
     """
     Check if a file is a valid NornFlow workflow file.
-    
+
     Args:
         file_path: Path to the file to check
-        
+
     Returns:
         True if the file is a workflow file, False otherwise
     """
