@@ -9,14 +9,13 @@ from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
 
 from nornflow.exceptions import (
     ProcessorError,
-    TaskNotFoundError,
-    WorkflowInitializationError,
-    WorkflowInventoryFilterError,
+    TaskError,
+    WorkflowError,
 )
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
-from nornflow.utils import load_processor
-from nornflow.vars.constants import VARS_DIR_DEFAULT
+from nornflow.settings import NornFlowSettings
+from nornflow.utils import load_processor, print_workflow_summary
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
 
@@ -84,8 +83,9 @@ class Workflow:
     def __init__(
         self,
         workflow_dict: dict[str, Any],
-        vars_dir: str = VARS_DIR_DEFAULT,
+        settings: NornFlowSettings,
         cli_vars: dict[str, Any] | None = None,
+        cli_filters: dict[str, Any] | None = None,
         workflow_path: Path | None = None,
     ):
         """
@@ -93,7 +93,7 @@ class Workflow:
 
         Args:
             workflow_dict (dict[str, Any]): Dictionary representing the workflow configuration
-            vars_dir (str): Directory containing variable files
+            settings (NornFlowSettings): NornFlow settings object containing all configuration
             cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
                 variable resolution chain. While named "CLI variables" due to their primary
                 source being command-line arguments, these serve as a universal override
@@ -102,22 +102,19 @@ class Workflow:
                 - Set programmatically for workflow customization
                 - Updated at runtime via the run() method for maximum flexibility
                 These variables always override any other variable source.
+            cli_filters (Optional[dict[str, Any]]): Inventory filters from CLI that override
+                workflow inventory filters. Like cli_vars, these have the highest precedence.
             workflow_path (Optional[Path]): Path to the workflow file (for domain variables)
         """
         self.workflow_dict = workflow_dict
         generate_from_dict(self.workflow_dict)
         self.records = get_global_data_store().records
         self.processors_config = self.workflow_dict.get("workflow", {}).get("processors")
-
-        # Store variable-related parameters
-        self.vars_dir = vars_dir
-        self._cli_vars = cli_vars or {}  # Direct assignment for initialization
+        self.settings = settings
+        self._cli_vars = cli_vars or {}
+        self._cli_filters = cli_filters or {}
         self.workflow_path = workflow_path
-
-        # Extract workflow vars from the workflow definition
         self.vars = self.workflow_dict.get("workflow", {}).get("vars", {})
-
-        # Initialize variable manager (lazily in run() if needed)
         self.vars_manager = None
 
     @property
@@ -156,6 +153,31 @@ class Workflow:
         self._cli_vars = value or {}
 
     @property
+    def cli_filters(self) -> dict[str, Any]:
+        """
+        Get the CLI inventory filters with highest precedence.
+
+        These filters override any inventory filters defined in the workflow YAML.
+        Like CLI variables, they serve as a mechanism for the CLI to override
+        workflow-defined settings.
+
+        Returns:
+            dict[str, Any]: Dictionary containing the CLI inventory filters.
+        """
+        return self._cli_filters
+
+    @cli_filters.setter
+    def cli_filters(self, value: dict[str, Any]) -> None:
+        """
+        Set CLI inventory filters. This supports both initialization-time setting and
+        late-binding during the run() method.
+
+        Args:
+            value (dict[str, Any]): Dictionary of CLI inventory filters with highest precedence
+        """
+        self._cli_filters = value or {}
+
+    @property
     def workflow_dict(self) -> dict[str, Any]:
         """
         Get the workflow dictionary.
@@ -174,7 +196,7 @@ class Workflow:
             wf_dict (dict[str, Any]): The workflow dictionary.
         """
         if "workflow" not in wf_dict:
-            raise WorkflowInitializationError("Missing 'workflow' in workflow definition")
+            raise WorkflowError("Missing 'workflow' key in workflow definition")
 
         self._workflow_dict = wf_dict
 
@@ -193,9 +215,15 @@ class Workflow:
         """
         Get the inventory filters for the workflow.
 
+        If CLI inventory filters are provided, they completely override
+        any workflow-defined filters. Otherwise, workflow filters are used.
+
         Returns:
             dict[str, Any]: Dictionary of inventory filters.
         """
+        if self.cli_filters:
+            return self.cli_filters
+
         return self.records["WorkflowModel"][0].inventory_filters or {}
 
     def _check_tasks(self, tasks_catalog: dict[str, Callable]) -> None:
@@ -213,7 +241,7 @@ class Workflow:
         missing_tasks = [task_name for task_name in task_names if task_name not in tasks_catalog]
 
         if missing_tasks:
-            raise TaskNotFoundError(missing_tasks)
+            raise TaskError(f"Tasks not found in catalog: {missing_tasks}")
 
     def _get_filtering_kwargs(self, filters_catalog: dict[str, Callable]) -> list[dict[str, Any]]:
         """
@@ -337,7 +365,7 @@ class Workflow:
             return filter_kwargs
 
         # If we reached here, the parameter format is incompatible with the filter
-        raise WorkflowInventoryFilterError(
+        raise WorkflowError(
             f"Filter '{key}' expects {len(param_names)} parameters {param_names}, "
             f"but got incompatible value: {filter_values}"
         )
@@ -375,7 +403,7 @@ class Workflow:
         # Check that all required parameters are provided
         missing_params = set(param_names) - set(filter_values.keys())
         if missing_params:
-            raise WorkflowInventoryFilterError(
+            raise WorkflowError(
                 f"Filter '{key}' requires parameters {param_names}, but missing: {missing_params}"
             )
 
@@ -421,7 +449,7 @@ class Workflow:
         """
         if self.vars_manager is None:
             self.vars_manager = NornFlowVariablesManager(
-                vars_dir=self.vars_dir,
+                vars_dir=self.settings.vars_dir,  # Use settings object!
                 cli_vars=self.cli_vars,  # Uses most recent CLI vars
                 inline_workflow_vars=self.vars,
                 workflow_path=self.workflow_path,
@@ -487,6 +515,8 @@ class Workflow:
         workflows_dirs: list[str] | None = None,
         processors: list[Processor] | None = None,
         cli_vars: dict[str, Any] | None = None,
+        cli_filters: dict[str, Any] | None = None,
+        dry_run: bool = False,
     ) -> None:
         """
         This method orchestrates the complete workflow execution process:
@@ -516,10 +546,21 @@ class Workflow:
             cli_vars: Optional CLI variables with highest precedence. Can override
                 those set during initialization, enabling late binding for maximum
                 flexibility in variable management.
+            cli_filters: Optional CLI inventory filters with highest precedence.
+                Can override those set during initialization, enabling late binding.
+            dry_run: Whether to execute the workflow in dry-run mode
         """
         # Update CLI variables if provided (late binding)
         if cli_vars is not None:
             self.cli_vars = cli_vars
+
+        # Update CLI filters if provided (late binding)
+        if cli_filters is not None:
+            self.cli_filters = cli_filters
+
+        # Determine effective dry_run mode: CLI parameter takes precedence over workflow setting
+        workflow_model = self.records["WorkflowModel"][0]
+        effective_dry_run = dry_run or workflow_model.dry_run
 
         processors = processors or []
 
@@ -535,13 +576,27 @@ class Workflow:
         # Apply processors (NornFlowVariableProcessor will be added first)
         self._with_processors(nornir_manager, workflows_dirs, processors)
 
+        # Print comprehensive workflow summary after loading
+        hosts_count = len(nornir_manager.nornir.inventory.hosts)
+        print_workflow_summary(
+            workflow_model=workflow_model,
+            effective_dry_run=effective_dry_run,
+            hosts_count=hosts_count,
+            inventory_filters=self.inventory_filters,
+            workflow_vars=self.vars,
+            cli_vars=self._cli_vars,
+        )
+
         # Set task count on processors that support it
         for processor in nornir_manager.nornir.processors:
             if hasattr(processor, "total_workflow_tasks"):
                 processor.total_workflow_tasks = len(self.tasks)
 
-        # Execute tasks in sequence
+        # Execute tasks in sequence with dry-run support
         for task in self.tasks:
+            # Pass dry-run context to task execution
+            nornir_manager.set_dry_run(effective_dry_run)
+
             # Run the task and capture its result
             aggregated_result = task.run(nornir_manager, tasks_catalog)
 
@@ -595,8 +650,9 @@ class WorkflowFactory:
         self,
         workflow_path: str | Path | None = None,
         workflow_dict: dict[str, Any] | None = None,
-        vars_dir: str = VARS_DIR_DEFAULT,
+        settings: NornFlowSettings | None = None,
         cli_vars: dict[str, Any] | None = None,
+        cli_filters: dict[str, Any] | None = None,
     ):
         """
         Initialize the WorkflowFactory.
@@ -604,17 +660,21 @@ class WorkflowFactory:
         Args:
             workflow_path (str | Path | None): Path to the workflow file
             workflow_dict (dict[str, Any] | None): Dictionary representing the workflow
-            vars_dir (str): Directory containing variable files
+            settings (Optional[NornFlowSettings]): NornFlow settings object. If not provided,
+                a default one will be created.
             cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
                 variable resolution chain. While named "CLI variables" due to their primary
                 source being command-line arguments, these serve as a universal override
                 mechanism. These variables can be overridden later during workflow execution
                 if new CLI variables are provided to workflow.run().
+            cli_filters (Optional[dict[str, Any]]): Inventory filters with highest precedence.
+                These override any inventory filters defined in the workflow YAML.
         """
         self.workflow_path = workflow_path
         self.workflow_dict = workflow_dict
-        self.vars_dir = vars_dir
+        self.settings = settings or NornFlowSettings()
         self.cli_vars = cli_vars or {}
+        self.cli_filters = cli_filters or {}
 
     def create(self) -> Workflow:
         """
@@ -627,41 +687,57 @@ class WorkflowFactory:
             WorkflowInitializationError: If neither workflow_path nor workflow_dict is provided.
         """
         if self.workflow_path:
-            return self.create_from_file(self.workflow_path, vars_dir=self.vars_dir, cli_vars=self.cli_vars)
+            return self.create_from_file(
+                self.workflow_path,
+                settings=self.settings,
+                cli_vars=self.cli_vars,
+                cli_filters=self.cli_filters,
+            )
         if self.workflow_dict:
-            return self.create_from_dict(self.workflow_dict, vars_dir=self.vars_dir, cli_vars=self.cli_vars)
+            return self.create_from_dict(
+                self.workflow_dict,
+                settings=self.settings,
+                cli_vars=self.cli_vars,
+                cli_filters=self.cli_filters,
+                workflow_path=None,
+            )
 
-        raise WorkflowInitializationError("Either workflow_path or workflow_dict must be provided.")
+        raise WorkflowError("Either workflow_path or workflow_dict must be provided.")
 
     @staticmethod
     def create_from_file(
         workflow_path: str | Path,
-        vars_dir: str = VARS_DIR_DEFAULT,
+        settings: NornFlowSettings | None = None,
         cli_vars: dict[str, Any] | None = None,
+        cli_filters: dict[str, Any] | None = None,
     ) -> Workflow:
         """
         Create a Workflow object from a file.
 
         Args:
             workflow_path (str | Path): Path to the workflow file
-            vars_dir (str): Directory containing variable files
+            settings (NornFlowSettings | None): NornFlow settings object. If not provided,
+                a default one will be created.
             cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
                 variable resolution chain
+            cli_filters (Optional[dict[str, Any]]): Inventory filters with highest precedence
 
         Returns:
             Workflow: The created Workflow object.
         """
         loaded_dict = load_file_to_dict(workflow_path)
         path_obj = Path(workflow_path) if isinstance(workflow_path, str) else workflow_path
-        return WorkflowFactory.create_from_dict(
-            loaded_dict, vars_dir=vars_dir, cli_vars=cli_vars, workflow_path=path_obj
+        settings = settings or NornFlowSettings()
+        return Workflow(
+            loaded_dict, settings=settings, cli_vars=cli_vars, workflow_path=path_obj, cli_filters=cli_filters
         )
 
     @staticmethod
     def create_from_dict(
         workflow_dict: dict[str, Any],
-        vars_dir: str = VARS_DIR_DEFAULT,
+        settings: NornFlowSettings | None = None,
         cli_vars: dict[str, Any] | None = None,
+        cli_filters: dict[str, Any] | None = None,
         workflow_path: Path | None = None,
     ) -> Workflow:
         """
@@ -669,17 +745,21 @@ class WorkflowFactory:
 
         Args:
             workflow_dict (dict[str, Any]): Dictionary representing the workflow
-            vars_dir (str): Directory containing variable files
+            settings (NornFlowSettings | None): NornFlow settings object. If not provided,
+                a default one will be created.
             cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
                 variable resolution chain
+            cli_filters (Optional[dict[str, Any]]): Inventory filters with highest precedence
             workflow_path (Optional[Path]): Path to the workflow file (for domain variables)
 
         Returns:
             Workflow: The created Workflow object.
         """
+        settings = settings or NornFlowSettings()
         return Workflow(
             workflow_dict,
-            vars_dir=vars_dir,
+            settings=settings,
             cli_vars=cli_vars,
             workflow_path=workflow_path,
+            cli_filters=cli_filters,
         )

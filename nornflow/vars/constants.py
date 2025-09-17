@@ -1,9 +1,6 @@
 # Prefix for environment variables that should be loaded into the variable system
 ENV_VAR_PREFIX = "NORNFLOW_VAR_"
 
-# Default directory for variable files
-VARS_DIR_DEFAULT = "vars"
-
 # File name for default variables
 DEFAULTS_FILENAME = "defaults.yaml"
 

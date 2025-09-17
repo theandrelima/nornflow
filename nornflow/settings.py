@@ -6,12 +6,7 @@ import yaml
 from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.constants import NONRFLOW_SETTINGS_MANDATORY, NONRFLOW_SETTINGS_OPTIONAL
-from nornflow.exceptions import (
-    MandatorySettingError,
-    NornFlowAppError,
-    SettingsDataTypeError,
-    SettingsFileError,
-)
+from nornflow.exceptions import NornFlowError, ResourceError, SettingsError
 
 
 class NornFlowSettings:
@@ -64,40 +59,48 @@ class NornFlowSettings:
         process, appropriate custom exceptions are raised.
 
         Raises:
-            SettingsFileError: If there are issues with accessing or parsing the settings file
-            SettingsDataTypeError: If the settings data is not a dictionary
-            NornFlowAppError: For any other unexpected errors
+            ResourceError: If the settings file is not found or cannot be accessed
+            SettingsError: If there are issues with parsing the settings file or data type
+            NornFlowError: For any other unexpected errors
         """
         try:
             settings_data = load_file_to_dict(file_path=self.settings_file)
 
             if not isinstance(settings_data, dict):
-                raise SettingsDataTypeError()
+                raise SettingsError(f"Settings data must be a dictionary, got {type(settings_data).__name__}")
 
             self.loaded_settings = defaultdict(lambda: None, settings_data)
         except FileNotFoundError as e:
-            raise SettingsFileError(self.settings_file, error_type="not_found") from e
+            raise ResourceError(
+                f"Settings file not found: {self.settings_file}",
+                resource_type="File",
+                resource_name=self.settings_file,
+            ) from e
         except PermissionError as e:
-            raise SettingsFileError(self.settings_file, error_type="permission") from e
+            raise ResourceError(
+                f"Permission denied accessing settings file: {self.settings_file}",
+                resource_type="File",
+                resource_name=self.settings_file,
+            ) from e
         except yaml.YAMLError as e:
-            raise SettingsFileError(self.settings_file, error_type="parsing", error_details=str(e)) from e
+            raise SettingsError(f"Failed to parse YAML settings file '{self.settings_file}': {e!s}") from e
         except TypeError as e:
-            raise SettingsDataTypeError() from e
+            raise SettingsError(f"Invalid data type in settings file: {e!s}") from e
         except Exception as e:
-            raise NornFlowAppError(f"An unexpected error occurred: {e}") from e
+            raise NornFlowError(f"An unexpected error occurred while loading settings: {e}") from e
 
     def _check_mandatory_settings(self) -> None:
         """
         Check if all mandatory settings are present and not empty in the configuration.
 
         Raises:
-            MandatorySettingError: If a mandatory setting is missing or empty.
+            SettingsError: If a mandatory setting is missing or empty.
         """
         for setting in NONRFLOW_SETTINGS_MANDATORY:
             if setting not in self.loaded_settings:
-                raise MandatorySettingError(setting, missing=True)
+                raise SettingsError("Mandatory setting is missing from configuration", setting=setting)
             if not self.loaded_settings[setting]:
-                raise MandatorySettingError(setting, missing=False)
+                raise SettingsError("Mandatory setting is empty in configuration", setting=setting)
 
     def _set_optional_settings(self, **kwargs: Any) -> None:
         """

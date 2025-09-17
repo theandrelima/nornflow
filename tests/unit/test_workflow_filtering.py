@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
-from nornflow.exceptions import WorkflowInventoryFilterError
+from nornflow.exceptions import WorkflowError
 from nornflow.workflow import Workflow
 
 
@@ -90,8 +90,8 @@ class TestWorkflowFiltering:
         # Create our test instance with incomplete dictionary parameters
         inventory_filters = {"location": {"city": "New York"}}  # Missing 'building' parameter
 
-        # Should raise WorkflowInventoryFilterError
-        with pytest.raises(WorkflowInventoryFilterError) as excinfo:
+        # Should raise WorkflowError
+        with pytest.raises(WorkflowError) as excinfo:
             self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
 
         assert "missing" in str(excinfo.value)
@@ -144,8 +144,8 @@ class TestWorkflowFiltering:
         # Location expects 2 parameters but we're providing just one string
         inventory_filters = {"location": "New York"}  # Scalar for multi-param function
 
-        # Should raise WorkflowInventoryFilterError
-        with pytest.raises(WorkflowInventoryFilterError) as excinfo:
+        # Should raise WorkflowError
+        with pytest.raises(WorkflowError) as excinfo:
             self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
 
         assert "expects 2 parameters" in str(excinfo.value)

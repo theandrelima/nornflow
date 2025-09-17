@@ -11,15 +11,9 @@ from nornflow.vars.constants import (
     DEFAULTS_FILENAME,
     ENV_VAR_PREFIX,
     JINJA2_MARKERS,
-    VARS_DIR_DEFAULT,
 )
 from nornflow.vars.context import NornFlowDeviceContext
-from nornflow.vars.exceptions import (
-    VariableDirectoryError,
-    VariableLoadError,
-    VariableNotFoundError,
-    VariableResolutionError,
-)
+from nornflow.vars.exceptions import TemplateError, VariableError
 from nornflow.vars.proxy import NornirHostProxy
 
 logger = logging.getLogger(__name__)
@@ -63,7 +57,7 @@ class HostNamespace:
             The value of the attribute from the host's inventory.
 
         Raises:
-            VariableNotFoundError: If the attribute is not found in the host's inventory.
+            VariableError: If the attribute is not found in the host's inventory.
         """
         try:
             # Ensure the NornirHostProxy is targeting the correct host for this access
@@ -71,7 +65,7 @@ class HostNamespace:
             return getattr(self._proxy, name)
         except AttributeError as err:
             # Raise a more NornFlow-specific error for clarity in logs/exceptions
-            raise VariableNotFoundError(
+            raise VariableError(
                 f"Host attribute or data key '{name}' not found for host '{self._host_name}'."
             ) from err
 
@@ -130,7 +124,7 @@ class NornFlowVariablesManager:
 
     def __init__(
         self,
-        vars_dir: str = VARS_DIR_DEFAULT,
+        vars_dir: str,
         cli_vars: dict[str, Any] | None = None,
         inline_workflow_vars: dict[str, Any] | None = None,
         workflow_path: Path | None = None,
@@ -155,7 +149,7 @@ class NornFlowVariablesManager:
                             Used in conjunction with `workflow_path` to determine the domain.
 
         Raises:
-            VariableDirectoryError: If `vars_dir` exists but is not a directory.
+            VariableError: If `vars_dir` exists but is not a directory.
         """
         self.vars_dir = Path(vars_dir)
         self._cli_vars = cli_vars or {}
@@ -172,9 +166,7 @@ class NornFlowVariablesManager:
 
         if self.vars_dir.exists():
             if not self.vars_dir.is_dir():
-                raise VariableDirectoryError(
-                    f"Specified vars_dir '{self.vars_dir}' exists but is not a directory."
-                )
+                raise VariableError(f"Specified vars_dir '{self.vars_dir}' exists but is not a directory.")
 
             defaults_path = self.vars_dir / DEFAULTS_FILENAME
             self._default_vars = self._load_vars_from_file(defaults_path, "Default Variables")
@@ -299,8 +291,8 @@ class NornFlowVariablesManager:
             a dictionary.
 
         Raises:
-            VariableLoadError: If there's a YAML parsing error or an unexpected
-                               error during file loading.
+            VariableError: If there's a YAML parsing error or an unexpected
+                           error during file loading.
         """
         if not file_path.exists():
             logger.debug(f"{context_description} file not found at '{file_path}'. Skipping.")
@@ -320,19 +312,20 @@ class NornFlowVariablesManager:
                     )
                     return {}
                 if not isinstance(loaded_vars, dict):
-                    raise VariableLoadError(
-                        str(file_path),
-                        f"Expected a dictionary from {context_description} file, "
-                        f"but got {type(loaded_vars)}.",
+                    raise VariableError(
+                        f"Expected a dictionary from {context_description} file at '{file_path}', "
+                        f"but got {type(loaded_vars).__name__}."
                     )
                 logger.debug(f"Successfully loaded {context_description} from '{file_path}'.")
                 return loaded_vars
         except yaml.YAMLError as e:
             logger.exception(f"YAML parsing error in {context_description} file '{file_path}'")
-            raise VariableLoadError(str(file_path), f"YAML parsing error: {e}") from e
+            raise VariableError(f"YAML parsing error in {context_description} file '{file_path}': {e}") from e
         except Exception as e:
             logger.exception(f"Unexpected error loading {context_description} file '{file_path}'")
-            raise VariableLoadError(str(file_path), f"Unexpected error: {e}") from e
+            raise VariableError(
+                f"Unexpected error loading {context_description} file '{file_path}': {e}"
+            ) from e
 
     def get_device_context(self, host_name: str) -> NornFlowDeviceContext:
         """
@@ -388,10 +381,10 @@ class NornFlowVariablesManager:
             The value of the variable.
 
         Raises:
-            VariableNotFoundError: If the variable is not found or host_name is missing.
+            VariableError: If the variable is not found or host_name is missing.
         """
         if not host_name:
-            raise VariableNotFoundError(var_name, "Host name not provided for NornFlow variable lookup.")
+            raise VariableError(f"Host name not provided for NornFlow variable lookup: {var_name}")
 
         device_ctx = self.get_device_context(host_name)
         flat_context = device_ctx.get_flat_context()
@@ -399,8 +392,8 @@ class NornFlowVariablesManager:
         if var_name in flat_context:
             return flat_context[var_name]
 
-        raise VariableNotFoundError(
-            var_name, f"NornFlow variable '{var_name}' not found in Default Namespace for host '{host_name}'."
+        raise VariableError(
+            f"NornFlow variable '{var_name}' not found in Default Namespace for host '{host_name}'."
         )
 
     def resolve_string(
@@ -421,7 +414,7 @@ class NornFlowVariablesManager:
             The resolved string. Returns input if not a string or no Jinja2 markers.
 
         Raises:
-            VariableResolutionError: If template resolution fails or host_name is missing.
+            TemplateError: If template resolution fails or host_name is missing.
         """
         if not isinstance(template_str, str):
             return template_str
@@ -430,7 +423,7 @@ class NornFlowVariablesManager:
             return template_str
 
         if not host_name:
-            raise VariableResolutionError(template_str, "Host name not provided for template resolution.")
+            raise TemplateError(f"Host name not provided for template resolution: {template_str}")
 
         try:
             template = self.jinja_env.from_string(template_str)
@@ -447,18 +440,16 @@ class NornFlowVariablesManager:
 
         except jinja2.exceptions.UndefinedError as e:
             logger.exception(f"Jinja2 UndefinedError for host '{host_name}' in template '{template_str}'")
-            raise VariableResolutionError(template_str, f"Undefined variable: {e}") from e
-        except VariableNotFoundError as e:
-            logger.exception(
-                f"NornFlow VariableNotFoundError for host '{host_name}' in template '{template_str}'"
-            )
-            raise VariableResolutionError(template_str, str(e)) from e
+            raise TemplateError(f"Undefined variable in template '{template_str}': {e}") from e
+        except VariableError as e:
+            logger.exception(f"NornFlow VariableError for host '{host_name}' in template '{template_str}'")
+            raise TemplateError(f"Variable error in template '{template_str}': {e}") from e
         except Exception as e:
             logger.exception(
                 f"Jinja2 TemplateError or unexpected issue for host '{host_name}' "
                 f"in template '{template_str}'"
             )
-            raise VariableResolutionError(template_str, f"Template rendering error: {e}") from e
+            raise TemplateError(f"Template rendering error in '{template_str}': {e}") from e
 
     def resolve_data(self, data: Any, host_name: str, additional_vars: dict[str, Any] | None = None) -> Any:
         """

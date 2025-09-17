@@ -4,15 +4,26 @@ on:
   push:
     branches: [ "*" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
   workflow_dispatch:
 
 jobs:
+  enforce-branch-policy:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure PRs to main come from develop
+        run: |
+          if [[ "${{ github.head_ref }}" != "develop" ]]; then
+            echo "Merges to main are only allowed from develop. Current source: ${{ github.head_ref }}"
+            exit 1
+          fi
+
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
     - uses: actions/checkout@v5
@@ -59,8 +70,3 @@ jobs:
       run: |
         source .venv/bin/activate
         black --check .
-
-    - name: Check imports with isort
-      run: |
-        source .venv/bin/activate
-        isort --check-only --diff .

@@ -5,7 +5,7 @@ from nornir.core import Nornir
 from nornir.core.processor import Processor
 
 from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL
-from nornflow.exceptions import ProcessorError
+from nornflow.exceptions import CoreError, ProcessorError
 
 
 class NornirManager:
@@ -20,6 +20,7 @@ class NornirManager:
     - Creating and initializing Nornir objects from configuration files
     - Applying inventory filters (both direct attribute and function-based)
     - Managing processor application to Nornir instances
+    - Properly managing connection lifecycle through context manager support
 
     The filtering system supports:
     - Direct attribute filtering on any host property
@@ -27,13 +28,12 @@ class NornirManager:
     - Sequential application of multiple filters with AND logic
     """
 
-    def __init__(self, nornir_settings: str, dry_run: bool, **kwargs):
+    def __init__(self, nornir_settings: str, **kwargs):
         """
         Initialize the NornirManager with a Nornir configuration.
 
         Args:
             nornir_settings: Path to Nornir config file (YAML)
-            dry_run: Whether to run Nornir tasks in dry-run mode
             **kwargs: Additional arguments to pass to InitNornir
         """
         # Clean up kwargs before passing to InitNornir
@@ -41,15 +41,58 @@ class NornirManager:
 
         # Store settings
         self.nornir_settings = nornir_settings
-        self.dry_run = dry_run
         self.kwargs = kwargs
 
         # Create regular Nornir instance
         self.nornir = InitNornir(
             config_file=self.nornir_settings,
-            dry_run=self.dry_run,
             **kwargs,
         )
+
+    def __enter__(self) -> "NornirManager":
+        """
+        Enter the context manager protocol.
+
+        Returns:
+            self: The NornirManager instance for use in the context block
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
+        """
+        Exit the context manager protocol, ensuring connections are cleaned up.
+
+        This method is called when exiting a 'with' block and ensures all network
+        connections are properly closed, even if an exception occurred or the
+        execution was interrupted (e.g., with Ctrl+C).
+
+        Args:
+            exc_type: Exception type if an exception was raised in the context block, else None
+            exc_val: Exception value if an exception was raised, else None
+            exc_tb: Traceback if an exception was raised, else None
+        """
+        self.close_connections()
+
+    def close_connections(self) -> None:
+        """
+        Close all Nornir connections to prevent resources from hanging.
+
+        This implementation silently closes connections without producing
+        task output to keep the user interface clean.
+        """
+        if hasattr(self, "nornir"):
+            # Store original processors
+            original_processors = self.nornir.processors.copy()
+
+            try:
+                # Clear processors to prevent output during connection closure
+                self.nornir.processors.clear()
+
+                # Close connections
+                self.nornir.close_connections(on_good=True, on_failed=True)
+            finally:
+                # Restore processors
+                self.nornir.processors = original_processors
 
     def _remove_optional_nornflow_settings_from_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
@@ -107,3 +150,25 @@ class NornirManager:
 
         self.nornir = self.nornir.with_processors(processors)
         return self.nornir
+
+    def set_dry_run(self, value: bool = False) -> None:
+        """
+        Sets the dry_run flag in the Nornir instance's global data state.
+        This flag is used by Nornir's task execution system to determine whether
+        tasks should be executed in dry-run mode (simulation) or normal mode.
+
+        Args:
+            value (bool): True to enable dry-run mode, False to disable it.
+                Defaults to False.
+
+        Example:
+            manager.set_dry_run(True)   # Enable dry-run mode
+            manager.set_dry_run(False)  # Disable dry-run mode (default)
+        """
+        if not isinstance(value, bool):
+            raise CoreError(
+                f"dry_run value must be a boolean, got {type(value).__name__}: {value}",
+                component="NornirManager",
+            )
+
+        self.nornir.data.dry_run = value

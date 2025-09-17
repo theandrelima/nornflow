@@ -194,6 +194,7 @@ todo*
 # bkp files and dirs
 *.bkp
 *_bkp
+backups/
 
 # Ignore nornflow.yaml file in the root directory
 /nornflow.yaml
