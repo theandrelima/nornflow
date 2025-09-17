@@ -1,3 +1,4 @@
+# ruff: noqa: T201
 import importlib
 import inspect
 from collections.abc import Callable
@@ -5,16 +6,18 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Literal
 
+import click
 from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
+from tabulate import tabulate
 
-from nornflow.constants import JINJA_PATTERN
+from nornflow.constants import JINJA_PATTERN, NORNFLOW_SUPPORTED_YAML_EXTENSIONS
 from nornflow.exceptions import (
-    DirectoryNotFoundError,
-    ModuleImportError,
+    CoreError,
     ProcessorError,
+    WorkflowError,
 )
 
 
@@ -30,14 +33,17 @@ def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
         ModuleType: Imported module.
 
     Raises:
-        ModuleImportError: If there is an error importing the module.
+        CoreError: If there is an error importing the module.
     """
     try:
         spec = importlib.util.spec_from_file_location(module_name, module_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
     except Exception as e:
-        raise ModuleImportError(module_name, module_path, str(e)) from e
+        raise CoreError(
+            f"Failed to import module '{module_name}' from '{module_path}': {e!s}",
+            component="ModuleLoader",
+        ) from e
 
     return module
 
@@ -124,6 +130,38 @@ def is_nornir_filter(attr: Callable) -> bool:  # noqa: PLR0911
         return False
 
 
+def process_filter(attr: Callable) -> tuple[Callable, list[str]]:
+    """
+    Process a filter function to extract its parameters and return both the function and param info.
+
+    This allows filter registration to capture parameter names for use in workflow definitions.
+
+    Args:
+        attr: The filter function to process
+
+    Returns:
+        Tuple containing (filter_function, parameter_names)
+    """
+    sig = inspect.signature(attr)
+    # Skip the first parameter (host) and get remaining parameter names
+    param_names = list(sig.parameters.keys())[1:]
+    return (attr, param_names)
+
+
+def is_workflow_file(file_path: str | Path) -> bool:
+    """
+    Check if a file is a valid NornFlow workflow file.
+
+    Args:
+        file_path: Path to the file to check
+
+    Returns:
+        True if the file is a workflow file, False otherwise
+    """
+    path = Path(file_path)
+    return path.is_file() and path.suffix in NORNFLOW_SUPPORTED_YAML_EXTENSIONS
+
+
 def load_processor(processor_config: dict) -> Processor:
     """
     Dynamically load and instantiate a processor from config.
@@ -183,48 +221,6 @@ def convert_lists_to_tuples(dictionary: HashableDict[str, Any] | None) -> Hashab
     )
 
 
-def discover_items_in_dir(dir_path: str, register_func: Callable, error_context: str) -> None:
-    """
-    Discover and register items from Python modules in a directory.
-
-    Args:
-        dir_path: Path to the directory to scan
-        register_func: Function to call for each module found
-        error_context: Context for error messages (e.g., "tasks", "filters")
-
-    Raises:
-        DirectoryNotFoundError: If directory doesn't exist
-        ModuleImportError: If module import fails
-    """
-    path = Path(dir_path)
-    if not path.is_dir():
-        raise DirectoryNotFoundError(directory=dir_path, extra_message=f"Couldn't load {error_context}.")
-
-    for py_file in path.rglob("*.py"):
-        module_name = py_file.stem
-        module_path = str(py_file)
-        try:
-            module = import_module_from_path(module_name, module_path)
-            register_func(module)
-        except Exception as e:
-            raise ModuleImportError(module_name, module_path, str(e)) from e
-
-
-def process_module_attributes(module: Any, predicate_func: Callable, process_func: Callable) -> None:
-    """
-    Process module attributes that match a predicate function.
-
-    Args:
-        module: Module to process
-        predicate_func: Function that determines if an attribute should be processed
-        process_func: Function that processes the attribute
-    """
-    for attr_name in dir(module):
-        attr = getattr(module, attr_name)
-        if predicate_func(attr):
-            process_func(attr_name, attr)
-
-
 def check_for_jinja2_recursive(obj: Any, path: str) -> None:
     """
     Recursively check for Jinja2 code in nested structures.
@@ -234,11 +230,11 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
         path: Current path in the object structure (for error messages)
 
     Raises:
-        ValueError: If Jinja2 code is found
+        WorkflowError: If Jinja2 code is found
     """
     if isinstance(obj, str):
         if JINJA_PATTERN.search(obj):
-            raise ValueError(
+            raise WorkflowError(
                 f"Jinja2 code found in '{path}' which is not allowed. "
                 "Jinja2 expressions are only permitted in specific fields like task args."
             )
@@ -248,3 +244,66 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
     elif isinstance(obj, list | tuple):
         for idx, item in enumerate(obj):
             check_for_jinja2_recursive(item, f"{path}[{idx}]")
+
+
+def print_workflow_summary(
+    workflow_model: Any,
+    effective_dry_run: bool,
+    hosts_count: int,
+    inventory_filters: dict[str, Any],
+    workflow_vars: dict[str, Any],
+    cli_vars: dict[str, Any],
+) -> None:
+    """
+    Print a comprehensive workflow summary before execution.
+
+    Args:
+        workflow_model: The workflow model containing name and description
+        effective_dry_run: Whether dry-run mode is enabled
+        hosts_count: Number of hosts in the filtered inventory
+        inventory_filters: Dictionary of applied inventory filters
+        workflow_vars: Workflow-defined variables
+        cli_vars: CLI variables with highest precedence
+    """
+    print("\n" + "━" * 80)
+    click.secho(" Workflow: ", bold=True, nl=False)
+    print(workflow_model.name)
+
+    if workflow_model.description:
+        click.secho(" Description: ", bold=True, nl=False)
+        print(workflow_model.description)
+
+    click.secho(" Dry-run mode: ", bold=True, nl=False)
+    print("Enabled" if effective_dry_run else "Disabled")
+
+    # Show inventory filters if any
+    if inventory_filters:
+        click.secho(" Inventory filters: ", bold=True, nl=False)
+        print(inventory_filters)
+
+    # Show filtered inventory summary
+    click.secho(" Total hosts: ", bold=True, nl=False)
+    print(f"{hosts_count} host(s)")
+
+    # Show variables (excluding sensitive ones)
+    all_vars = {}
+    if workflow_vars:
+        all_vars.update({"Workflow Variables": workflow_vars})
+    if cli_vars:
+        all_vars.update({"CLI Variables (highest precedence)": cli_vars})
+
+    if all_vars:
+        vars_table = []
+        for var_type, var_dict in all_vars.items():
+            vars_table.append([var_type, ""])
+            for k, v in var_dict.items():
+                # Mask passwords/secrets
+                display_v = "********" if "password" in k.lower() or "secret" in k.lower() else str(v)
+                vars_table.append([f"  {k}", display_v])
+
+        if vars_table:
+            print()
+            click.secho(" Variables:", bold=True)
+            print(tabulate(vars_table, tablefmt="simple"))
+
+    print("━" * 80 + "\n")

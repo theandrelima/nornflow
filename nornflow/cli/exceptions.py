@@ -9,12 +9,12 @@ import traceback
 from rich.console import Console
 from rich.panel import Panel
 
-from nornflow.exceptions import NornFlowAppError
+from nornflow.exceptions import NornFlowError
 
 console = Console(stderr=True)
 
 
-class NornFlowCLIError(NornFlowAppError):
+class NornFlowCLIError(NornFlowError):
     """
     Base exception class for CLI-related errors.
 

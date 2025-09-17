@@ -1,14 +1,15 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from nornflow import NornFlowBuilder
 from nornflow.exceptions import (
-    CatalogModificationError,
-    EmptyTaskCatalogError,
-    NornFlowInitializationError,
-    NornirConfigError,
-    SettingsModificationError,
+    CatalogError,
+    CoreError,
+    NornFlowError, 
+    NornirError,
+    ResourceError,
+    SettingsError,
 )
 from nornflow.nornflow import NornFlow
 from nornflow.settings import NornFlowSettings
@@ -37,7 +38,7 @@ class TestNornFlowBasicCreation:
 
     def test_create_with_invalid_kwargs(self):
         """Test creating NornFlow with invalid kwargs."""
-        with pytest.raises(NornFlowInitializationError):
+        with pytest.raises(NornFlowError):
             NornFlow(config_file="invalid.yaml")  # config_file is invalid init kwarg
 
 
@@ -48,40 +49,61 @@ class TestNornFlowValidation:
         self.test_name = request.function.__name__
 
     def test_empty_tasks_catalog(self, tmp_path):
-        """Test error when no tasks are found is wrapped in NornFlowInitializationError."""
+        """Test error when no tasks are found is wrapped in NornFlowError."""
         tasks_dir = tmp_path / "empty_tasks"
         tasks_dir.mkdir()
 
         settings = NornFlowSettings(local_tasks_dirs=[str(tasks_dir)])
-        with patch("nornflow.nornflow.builtin_tasks", {}):
-            with pytest.raises(NornFlowInitializationError) as exc_info:
+        
+        # Directly mock the builtin_tasks to be empty and intercept the CatalogError
+        with patch("nornflow.nornflow.builtin_tasks", {}), \
+             patch("nornflow.nornflow.CatalogError", wraps=CatalogError) as mock_catalog_error:
+            
+            # The initialization should raise NornFlowError wrapping a CatalogError
+            with pytest.raises(NornFlowError) as exc_info:
                 NornFlow(nornflow_settings=settings)
 
-        assert isinstance(exc_info.value.__cause__, EmptyTaskCatalogError)
+            # Verify that CatalogError was called with the expected message and catalog_name
+            mock_catalog_error.assert_called_with(
+                "No tasks were found. The Tasks Catalog can't be empty.",
+                catalog_name="tasks"
+            )
+            
+            # Verify the top exception is NornFlowError
+            assert isinstance(exc_info.value, NornFlowError)
+            
+            # Verify the error message contains expected text
+            assert "tasks catalog" in str(exc_info.value).lower()
 
     def test_invalid_tasks_directory(self):
-        """Test error when tasks directory doesn't exist is wrapped in NornFlowInitializationError."""
+        """Test error when tasks directory doesn't exist raises ResourceError."""
         settings = NornFlowSettings(local_tasks_dirs=["/nonexistent/dir"])
 
-        # Patch the builtin_tasks to be empty so that the task catalog will be empty
-        with patch("nornflow.nornflow.builtin_tasks", {}):
-            with pytest.raises(NornFlowInitializationError) as exc_info:
-                NornFlow(nornflow_settings=settings)
-
-        assert isinstance(exc_info.value.__cause__, EmptyTaskCatalogError)
+        # The initialization should raise NornFlowError wrapping a ResourceError
+        with pytest.raises(NornFlowError) as exc_info:
+            NornFlow(nornflow_settings=settings)
+        
+        # Verify the top exception is NornFlowError
+        assert isinstance(exc_info.value, NornFlowError)
+        
+        # Verify the original exception is ResourceError about directory not existing
+        original_exception = exc_info.value.__cause__
+        assert isinstance(original_exception, ResourceError)
+        assert "does not exist" in str(original_exception)
+        assert "/nonexistent/dir" in str(original_exception)
 
     def test_property_modifications(self, basic_nornflow):
         """Test that properties cannot be modified directly."""
-        with pytest.raises(NornirConfigError):
+        with pytest.raises(NornirError):
             basic_nornflow.nornir_configs = {}
 
-        with pytest.raises(SettingsModificationError):
+        with pytest.raises(SettingsError):
             basic_nornflow.settings = NornFlowSettings()
 
-        with pytest.raises(CatalogModificationError):
+        with pytest.raises(CoreError):
             basic_nornflow.tasks_catalog = {}
 
-        with pytest.raises(CatalogModificationError):
+        with pytest.raises(CoreError):
             basic_nornflow.workflows_catalog = {}
 
 
@@ -129,3 +151,61 @@ class TestNornFlowBuilder:
             .build()
         )
         assert nornflow.workflow == valid_workflow
+
+
+class TestNornFlowExecution:
+    """Test suite for NornFlow execution and connection management."""
+
+    @patch("nornflow.nornflow.NornirManager")
+    def test_run_uses_context_manager(self, mock_nornir_manager_class):
+        """Test that run() method uses the NornirManager as a context manager."""
+        # Setup
+        mock_nornir_manager = MagicMock()
+        mock_nornir_manager_class.return_value = mock_nornir_manager
+        mock_nornir_manager.__enter__.return_value = mock_nornir_manager
+        
+        mock_workflow = MagicMock()
+        mock_settings = MagicMock()
+        mock_settings.nornir_config_file = "dummy_config.yaml"
+        
+        nornflow = NornFlow(
+            workflow=mock_workflow,
+            nornflow_settings=mock_settings,
+        )
+        
+        # Execute run method
+        nornflow.run()
+        
+        # Verify context manager was used
+        mock_nornir_manager.__enter__.assert_called_once()
+        mock_nornir_manager.__exit__.assert_called_once()
+        
+        # Verify workflow was run
+        mock_workflow.run.assert_called_once()
+
+    @patch("nornflow.nornflow.NornirManager")
+    def test_run_handles_exceptions(self, mock_nornir_manager_class):
+        """Test that connections are closed even if workflow raises an exception."""
+        # Setup
+        mock_nornir_manager = MagicMock()
+        mock_nornir_manager_class.return_value = mock_nornir_manager
+        mock_nornir_manager.__enter__.return_value = mock_nornir_manager
+        
+        mock_workflow = MagicMock()
+        mock_workflow.run.side_effect = ValueError("Test exception")
+        
+        mock_settings = MagicMock()
+        mock_settings.nornir_config_file = "dummy_config.yaml"
+        
+        nornflow = NornFlow(
+            workflow=mock_workflow,
+            nornflow_settings=mock_settings,
+        )
+        
+        # Execute run method, expect exception
+        with pytest.raises(ValueError):
+            nornflow.run()
+        
+        # Verify context manager's exit was called (connections closed)
+        mock_nornir_manager.__enter__.assert_called_once()
+        mock_nornir_manager.__exit__.assert_called()

@@ -12,7 +12,7 @@ from nornflow.constants import (
     NORNFLOW_SPECIAL_FILTER_KEYS,
     NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
 )
-from nornflow.exceptions import NornFlowAppError
+from nornflow.exceptions import NornFlowError
 
 app = typer.Typer(help="Run NornFlow tasks and workflows")
 
@@ -214,9 +214,8 @@ def parse_processors(value: str | None) -> list[dict[str, Any]]:
 
 def get_nornflow_builder(
     target: str,
-    args: dict,
-    inventory_filters: dict,
-    dry_run: bool,
+    args: dict[str, Any],
+    inventory_filters: dict[str, Any],
     settings_file: str = "",
     processors: list[dict[str, Any]] | None = None,
     cli_vars: dict[str, Any] | None = None,
@@ -228,7 +227,6 @@ def get_nornflow_builder(
         target (str): The name of the task or workflow to run.
         args (dict): The task arguments.
         inventory_filters (dict): The inventory filters.
-        dry_run (bool): The dry-run option.
         settings_file (str): The path to a YAML settings file for NornFlowSettings.
         processors (list): The processor configurations.
         cli_vars (dict): CLI variables with highest precedence.
@@ -243,10 +241,6 @@ def get_nornflow_builder(
     if settings_file:
         builder.with_settings_path(settings_file)
 
-    nornflow_kwargs = {"dry_run": dry_run} if dry_run else {}
-
-    builder.with_kwargs(**nornflow_kwargs)
-
     # Add processors using dedicated method if specified
     if processors:
         builder.with_processors(processors)
@@ -255,13 +249,15 @@ def get_nornflow_builder(
     if cli_vars:
         builder.with_cli_vars(cli_vars)
 
+    # Add CLI filters if specified
+    if inventory_filters:
+        builder.with_cli_filters(inventory_filters)
+
     if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_YAML_EXTENSIONS):
         target_path = Path(target)
         if target_path.exists():
             absolute_path = target_path.resolve()
             wf = WorkflowFactory.create_from_file(absolute_path)
-            if inventory_filters:
-                wf.workflow_dict["workflow"]["inventory_filters"] = inventory_filters
             builder.with_workflow_object(wf)
         else:
             builder.with_workflow_name(target)
@@ -270,12 +266,7 @@ def get_nornflow_builder(
         workflow_dict = {
             "workflow": {
                 "name": f"Task {target} - exec {timestamp}",
-                "description": (
-                    f"ran with 'nornflow run' CLI (args: {args}, filters: {inventory_filters}, "
-                    f"dry-run: {dry_run})"
-                ),
-                "inventory_filters": inventory_filters,
-                "processors": processors if processors else None,
+                "description": (f"ran with 'nornflow run' CLI (args: {args}, filters: {inventory_filters})"),
                 "tasks": [
                     {"name": target, "args": args or {}},
                 ],
@@ -404,27 +395,13 @@ def run(
             )
 
         builder = get_nornflow_builder(
-            target, parsed_args, all_inventory_filters, dry_run, settings, parsed_processors, parsed_vars
-        )
-
-        # Calculate processor info for display
-        processor_info = f", processors: {parsed_processors}" if parsed_processors else ""
-
-        # Calculate variables info for display
-        vars_info = f", vars: {parsed_vars}" if parsed_vars else ""
-
-        # Update the output message to include all filters
-        filter_info = f"filters: {all_inventory_filters}" if all_inventory_filters else "no filters"
-        typer.secho(
-            f"Running: {target} (args: {parsed_args}, {filter_info}, dry-run: {dry_run}"
-            f"{processor_info}{vars_info})",
-            fg=typer.colors.GREEN,
+            target, parsed_args, all_inventory_filters, settings, parsed_processors, parsed_vars
         )
 
         nornflow = builder.build()
-        nornflow.run()
+        nornflow.run(dry_run=dry_run)
 
-    except NornFlowAppError as e:
+    except NornFlowError as e:
         CLIRunError(
             message=f"NornFlow error while running {target}: {e}",
             hint="Check your task configuration, inventory filters, and NornFlow setup.",

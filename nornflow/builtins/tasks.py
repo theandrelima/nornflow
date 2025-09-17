@@ -4,12 +4,6 @@ from nornir.core.task import Result, Task
 
 from nornflow.builtins.utils import build_set_task_report
 
-try:
-    from nornir_napalm.plugins.tasks import *  # noqa: F403
-    from nornir_netmiko.tasks import *  # noqa: F403
-except ImportError:
-    pass
-
 
 def set(task: Task, **kwargs) -> Result:
     """
@@ -94,9 +88,24 @@ def write_file(task: Task, filename: str, content: str, append: bool = False, mk
     if content is None:
         return Result(host=task.host, failed=True, exception=ValueError("content argument is required"))
 
+    file_path = Path(filename)
+
+    if task.is_dry_run():
+        return Result(
+            host=task.host,
+            result={
+                "path": str(file_path),
+                "dry_run": True,
+                "message": f"Would have created file: {file_path}",
+                "operation": "write" if not append else "append",
+                "would_create_dirs": mkdir and not file_path.parent.exists(),
+                "content_size_bytes": len(str(content)) if content else 0,
+            },
+            changed=True,
+        )
+
     try:
         # Create directory if it doesn't exist
-        file_path = Path(filename)
         if mkdir:
             file_path.parent.mkdir(parents=True, exist_ok=True)
 

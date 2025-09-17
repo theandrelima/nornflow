@@ -4,12 +4,12 @@ from pathlib import Path
 
 import typer
 
-from nornflow import NornFlowBuilder
+from nornflow import NornFlow, NornFlowBuilder
 from nornflow.cli.constants import (
-    DEFAULT_VARS_DIR,
     FILTERS_DIR,
     GREET_USER_TASK_FILE,
     HELLO_WORLD_TASK_FILE,
+    INIT_BANNER,
     NORNFLOW_SETTINGS,
     NORNIR_DEFAULT_CONFIG_DIR,
     SAMPLE_NORNFLOW_FILE,
@@ -21,7 +21,7 @@ from nornflow.cli.constants import (
 )
 from nornflow.cli.exceptions import CLIInitError
 from nornflow.cli.show import show_catalog, show_nornflow_settings
-from nornflow.exceptions import NornFlowAppError
+from nornflow.exceptions import NornFlowError
 
 app = typer.Typer()
 
@@ -42,10 +42,18 @@ def init(ctx: typer.Context) -> None:
         # Setup main directory structure and configuration files
         setup_directory_structure()
         setup_nornflow_settings_file(ctx.obj.get("settings"))
-        setup_sample_content()
+
+        # Create required directories before building NornFlow to prevent initialization errors
+        create_required_directories()
+
+        # Build NornFlow to get settings with vars_dir
+        nornflow = builder.build()
+
+        # Setup sample content including vars directory from settings
+        setup_sample_content(nornflow)
 
         # Show information about the initialized setup
-        show_info_post_init(builder)
+        show_info_post_init(nornflow)
 
     except FileNotFoundError as e:
         CLIInitError(
@@ -71,7 +79,7 @@ def init(ctx: typer.Context) -> None:
         ).show()
         raise typer.Exit(code=2)  # noqa: B904
 
-    except NornFlowAppError as e:
+    except NornFlowError as e:
         CLIInitError(
             message=f"NornFlow error: {e}",
             hint="There was an issue with the NornFlow configuration.",
@@ -86,6 +94,16 @@ def init(ctx: typer.Context) -> None:
             original_exception=e,
         ).show()
         raise typer.Exit(code=2)  # noqa: B904
+
+
+def create_required_directories() -> None:
+    """Create all required directories before NornFlow initialization."""
+    create_directory(TASKS_DIR)
+    create_directory(WORKFLOWS_DIR)
+    create_directory(FILTERS_DIR)
+
+    # If vars_dir is different from default, it will be created later
+    # based on the actual settings after NornFlow is built
 
 
 def setup_builder(ctx: typer.Context) -> NornFlowBuilder:
@@ -134,41 +152,29 @@ def setup_nornflow_settings_file(settings: str) -> None:
             typer.secho(f"Settings file already exists: {NORNFLOW_SETTINGS}", fg=typer.colors.YELLOW)
 
 
-def setup_sample_content() -> None:
+def setup_sample_content(nornflow: NornFlow) -> None:
     """Set up sample tasks, workflows, filters, and vars directories."""
-    create_directory_and_copy_sample_files(
+    # Copy sample files to the already created directories
+    copy_sample_files_to_dir(
         TASKS_DIR, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
     )
 
-    create_directory_and_copy_sample_files(
+    copy_sample_files_to_dir(
         WORKFLOWS_DIR, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
     )
 
-    # Add this section to create the vars directory and copy sample defaults.yaml
+    # Use vars_dir from NornFlow settings instead of hardcoded constant
+    vars_dir = Path(nornflow.settings.vars_dir)
     create_directory_and_copy_sample_files(
-        DEFAULT_VARS_DIR, [SAMPLE_VARS_FILE], "Created a sample 'defaults.yaml' in vars directory: {}"
+        vars_dir, [SAMPLE_VARS_FILE], "Created a sample 'defaults.yaml' in vars directory: {}"
     )
 
-    create_directory(FILTERS_DIR)
 
-
-def display_banner() -> None:
-    """
-    Display a banner message with borders.
-    """
-    banner_message = (
-        "The 'init' command creates directories, and samples for configs, tasks and\n"
-        "workflows files, all with default values that you can modify as desired.\n"
-        "No customization of 'init' parameters available yet.\n\nDo you want to continue?"
-    )
-    lines = banner_message.split("\n")
-    max_length = max(len(line) for line in lines)
-    border = "+" + "-" * (max_length + 2) + "+"
-    typer.secho(border, fg=typer.colors.CYAN, bold=True)
-    for line in lines:
-        padded_line = line + " " * (max_length - len(line))
-        typer.secho(f"| {padded_line} |", fg=typer.colors.CYAN, bold=True)
-    typer.secho(border, fg=typer.colors.CYAN, bold=True)
+def copy_sample_files_to_dir(dir_path: Path, sample_files: list[Path], sample_message: str) -> None:
+    """Copy sample files to an existing directory."""
+    for sample_file in sample_files:
+        shutil.copy(sample_file, dir_path / sample_file.name)
+    typer.secho(sample_message.format(dir_path), fg=typer.colors.GREEN)
 
 
 def create_directory_and_copy_sample_files(
@@ -205,10 +211,31 @@ def create_directory(dir_path: Path) -> bool:
     return False
 
 
-def show_info_post_init(builder: NornFlowBuilder) -> None:
+def display_banner() -> None:
+    """
+    Display a banner message with borders.
+    """
+    # Print the ASCII banner first in purple
+    typer.secho(INIT_BANNER, fg=typer.colors.MAGENTA)
+
+    banner_message = (
+        "The 'init' command creates directories, and samples for configs, tasks and\n"
+        "workflows files, all with default values that you can modify as desired.\n"
+        "No customization of 'init' parameters available yet.\n\nDo you want to continue?"
+    )
+    lines = banner_message.split("\n")
+    max_length = max(len(line) for line in lines)
+    border = "+" + "-" * (max_length + 2) + "+"
+    typer.secho(border, fg=typer.colors.CYAN, bold=True)
+    for line in lines:
+        padded_line = line + " " * (max_length - len(line))
+        typer.secho(f"| {padded_line} |", fg=typer.colors.CYAN, bold=True)
+    typer.secho(border, fg=typer.colors.CYAN, bold=True)
+
+
+def show_info_post_init(nornflow: NornFlow) -> None:
     """
     Display all information about NornFlow, equivalent to running 'nornflow show --all'.
     """
-    nornflow = builder.build()
     show_nornflow_settings(nornflow)
     show_catalog(nornflow)

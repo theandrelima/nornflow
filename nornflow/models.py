@@ -5,11 +5,10 @@ from nornir.core.task import AggregatedResult
 from pydantic import ConfigDict, field_validator
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.models import PydanticSerdesBaseModel
-from pydantic_serdes.utils import convert_dict_to_hashabledict
+from pydantic_serdes.utils import convert_to_hashable
 
-from nornflow.exceptions import TaskNotFoundError
+from nornflow.exceptions import TaskError
 from nornflow.nornir_manager import NornirManager
-from nornflow.utils import convert_lists_to_tuples
 from nornflow.validators import (
     run_post_creation_task_validation,
     run_universal_field_validation,
@@ -69,19 +68,16 @@ class TaskModel(NornFlowBaseModel):
     @classmethod
     def validate_args(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:
         """
-        Validate the args dictionary and convert any lists in values to tuples.
-
-        This validation ensures args contains only hashable values by converting
-        non-hashable lists to hashable tuples, which is required for proper model
-        serialization and comparison.
+        Validate the args dictionary and convert to fully hashable structure.
 
         Args:
             v (HashableDict[str, Any] | None): The args dictionary to validate.
 
         Returns:
-            HashableDict[str, Any] | None: The validated args with lists converted to tuples.
+            HashableDict[str, Any] | None: The validated args with all nested structures
+                converted to hashable equivalents.
         """
-        return convert_lists_to_tuples(v)
+        return convert_to_hashable(v)
 
     def run(self, nornir_manager: NornirManager, tasks_catalog: dict[str, Callable]) -> AggregatedResult:
         """
@@ -96,12 +92,12 @@ class TaskModel(NornFlowBaseModel):
             AggregatedResult: The results of the task execution
 
         Raises:
-            TaskNotFoundError: If the task name is not found in the tasks catalog
+            TaskError: If the task name is not found in the tasks catalog
         """
         # Get the task function from the catalog
         task_func = tasks_catalog.get(self.name)
         if not task_func:
-            raise TaskNotFoundError(f"Task function for '{self.name}' not found in tasks catalog")
+            raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")
 
         task_args = {} if self.args is None else dict(self.args)
 
@@ -118,6 +114,8 @@ class WorkflowModel(NornFlowBaseModel):
     inventory_filters: HashableDict[str, Any] | None = None
     processors: tuple[HashableDict[str, Any]] | None = None
     tasks: OneToMany[TaskModel, ...]
+    dry_run: bool = False
+    vars: HashableDict[str, Any] | None = None
 
     @classmethod
     def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "WorkflowModel":
@@ -144,29 +142,45 @@ class WorkflowModel(NornFlowBaseModel):
         cls, v: HashableDict[str, Any] | None  # noqa: N805
     ) -> HashableDict[str, Any] | None:
         """
-        Convert lists in inventory_filters to tuples for serialization.
+        Convert nested structures in inventory_filters to fully hashable equivalents.
 
         Args:
             v (HashableDict[str, Any] | None): The inventory_filters value to validate.
 
         Returns:
-            HashableDict[str, Any] | None: The inventory_filters with lists converted to tuples.
+            HashableDict[str, Any] | None: The inventory_filters with all nested
+                 structures converted to hashable equivalents.
         """
-        return convert_lists_to_tuples(v)
+        return convert_to_hashable(v)
 
     @field_validator("processors", mode="before")
     def validate_processors(
         cls, v: list[dict[str, Any]] | None  # noqa: N805
     ) -> tuple[HashableDict[str, Any], ...] | None:
         """
-        Convert processors list to tuple for serialization.
+        Convert processors list to tuple with fully hashable nested structures.
 
         Args:
             v (list[HashableDict[str, Any]] | None): The processors list to validate.
 
         Returns:
-            tuple[HashableDict[str, Any], ...] | None: The processors as a tuple.
+            tuple[HashableDict[str, Any], ...] | None: The processors as a tuple with
+                hashable nested structures.
         """
         if v is None:
             return None
-        return tuple(convert_dict_to_hashabledict(processor) for processor in v)
+        return tuple(convert_to_hashable(processor) for processor in v)
+
+    @field_validator("vars", mode="before")
+    def validate_vars(cls, v: dict[str, Any] | None) -> HashableDict[str, Any] | None:  # noqa: N805
+        """
+        Convert workflow variables to fully hashable structure.
+
+        Args:
+            v (dict[str, Any] | None): The vars dictionary to validate.
+
+        Returns:
+            HashableDict[str, Any] | None: The vars with all nested structures
+                converted to hashable equivalents.
+        """
+        return convert_to_hashable(v)
