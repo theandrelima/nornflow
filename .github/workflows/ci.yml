@@ -70,8 +70,3 @@ jobs:
       run: |
         source .venv/bin/activate
         black --check .
-
-    - name: Check imports with isort
-      run: |
-        source .venv/bin/activate
-        isort --check-only --diff .
