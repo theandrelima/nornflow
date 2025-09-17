@@ -1,12 +1,8 @@
-import inspect
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from nornflow.builtins import DefaultNornFlowProcessor
-from nornflow.builtins import filters as builtin_filters
-from nornflow.builtins import tasks as builtin_tasks
-from nornflow.catalogs import PythonEntityCatalog, FileCatalog
+from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
+from nornflow.catalogs import FileCatalog, PythonEntityCatalog
 from nornflow.constants import (
     NORNFLOW_INVALID_INIT_KWARGS,
 )
@@ -14,20 +10,20 @@ from nornflow.exceptions import (
     CatalogError,
     CoreError,
     InitializationError,
-    WorkflowError,
-    ProcessorError,
     NornirError,
+    ProcessorError,
     ResourceError,
     SettingsError,
+    WorkflowError,
 )
 from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import (
     is_nornir_filter,
-    process_filter,
     is_nornir_task,
     is_workflow_file,
     load_processor,
+    process_filter,
 )
 from nornflow.workflow import Workflow, WorkflowFactory
 
@@ -410,16 +406,28 @@ class NornFlow:
         self._tasks_catalog.register_from_module(builtin_tasks, predicate=is_nornir_task)
 
         # Phase 2: Load tasks from local directories
+        errors = []
         for task_dir in self.settings.local_tasks_dirs:
+            task_path = Path(task_dir)
+            if not task_path.exists():
+                errors.append(f"Tasks directory does not exist: {task_dir}")
+                continue
+
             try:
                 self._tasks_catalog.discover_items_in_dir(task_dir, predicate=is_nornir_task)
-            except ResourceError:
-                # Just continue if directory doesn't exist
-                pass
             except Exception as e:
                 raise ResourceError(
-                    f"Error loading tasks: {e!s}", resource_type="tasks", resource_name=task_dir
+                    f"Error loading tasks from {task_dir}: {e!s}",
+                    resource_type="tasks",
+                    resource_name=task_dir,
                 ) from e
+
+        if errors:
+            raise ResourceError(
+                f"Configuration errors found: {'; '.join(errors)}",
+                resource_type="tasks",
+                resource_name="directories",
+            )
 
         if self._tasks_catalog.is_empty:
             raise CatalogError("No tasks were found. The Tasks Catalog can't be empty.", catalog_name="tasks")
@@ -440,18 +448,30 @@ class NornFlow:
         )
 
         # Phase 2: Load filters from local directories
+        errors = []
         for filter_dir in self.settings.local_filters_dirs:
+            filter_path = Path(filter_dir)
+            if not filter_path.exists():
+                errors.append(f"Filters directory does not exist: {filter_dir}")
+                continue
+
             try:
                 self._filters_catalog.discover_items_in_dir(
                     filter_dir, predicate=is_nornir_filter, transform_item=process_filter
                 )
-            except ResourceError:
-                # Just continue if directory doesn't exist
-                pass
             except Exception as e:
                 raise ResourceError(
-                    f"Error loading filters: {e!s}", resource_type="filters", resource_name=filter_dir
+                    f"Error loading filters from {filter_dir}: {e!s}",
+                    resource_type="filters",
+                    resource_name=filter_dir,
                 ) from e
+
+        if errors:
+            raise ResourceError(
+                f"Configuration errors found: {'; '.join(errors)}",
+                resource_type="filters",
+                resource_name="directories",
+            )
 
     def _load_workflows_catalog(self) -> None:
         """
@@ -463,18 +483,30 @@ class NornFlow:
         self._workflows_catalog = FileCatalog(name="workflows")
 
         # Process each workflow directory using FileCatalog's discover_items_in_dir
+        errors = []
         for workflow_dir in self.settings.local_workflows_dirs:
+            workflow_path = Path(workflow_dir)
+            if not workflow_path.exists():
+                errors.append(f"Workflows directory does not exist: {workflow_dir}")
+                continue
+
             try:
                 self._workflows_catalog.discover_items_in_dir(
                     workflow_dir, predicate=is_workflow_file, recursive=True
                 )
-            except ResourceError:
-                # Just continue if directory doesn't exist
-                pass
             except Exception as e:
                 raise ResourceError(
-                    f"Error loading workflows: {e!s}", resource_type="workflows", resource_name=workflow_dir
+                    f"Error loading workflows from {workflow_dir}: {e!s}",
+                    resource_type="workflows",
+                    resource_name=workflow_dir,
                 ) from e
+
+        if errors:
+            raise ResourceError(
+                f"Configuration errors found: {'; '.join(errors)}",
+                resource_type="workflows",
+                resource_name="directories",
+            )
 
     def _check_invalid_kwargs(self, kwargs: dict[str, Any]) -> None:
         """

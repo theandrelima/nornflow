@@ -1,3 +1,4 @@
+# ruff: noqa: T201
 import importlib
 import inspect
 from collections.abc import Callable
@@ -40,7 +41,7 @@ def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
         spec.loader.exec_module(module)
     except Exception as e:
         raise CoreError(
-            f"Failed to import module '{module_name}' from '{module_path}': {str(e)}",
+            f"Failed to import module '{module_name}' from '{module_path}': {e!s}",
             component="ModuleLoader",
         ) from e
 

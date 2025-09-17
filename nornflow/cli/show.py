@@ -10,6 +10,7 @@ from tabulate import tabulate
 from termcolor import colored
 
 from nornflow import NornFlowBuilder
+from nornflow.catalogs import Catalog
 from nornflow.cli.constants import CWD, DESCRIPTION_FIRST_SENTENCE_LENGTH
 from nornflow.cli.exceptions import CLIShowError
 from nornflow.exceptions import NornFlowError
@@ -18,7 +19,7 @@ app = typer.Typer()
 
 
 @app.command()
-def show(
+def show(  # noqa: PLR0912
     ctx: typer.Context,
     catalog: bool = typer.Option(
         False,
@@ -89,7 +90,7 @@ def show(
             hint="Make sure you have the required Nornir plugin(s) installed in the environment.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2) from None
 
     except NornFlowError as e:
         CLIShowError(
@@ -97,7 +98,7 @@ def show(
             hint="Check your NornFlow configuration and verify that all required resources are available.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2) from None
 
     except yaml.YAMLError as e:
         CLIShowError(
@@ -105,7 +106,7 @@ def show(
             hint="Check your workflow files for YAML syntax errors.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2) from None
 
     except (FileNotFoundError, PermissionError) as e:
         CLIShowError(
@@ -113,7 +114,7 @@ def show(
             hint="Check file permissions and ensure all referenced files exist.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2) from None
 
     except Exception as e:
         CLIShowError(
@@ -121,7 +122,7 @@ def show(
             hint="Check your configuration and try again.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2) from None
 
 
 def show_catalog(nornflow: "NornFlow") -> None:
@@ -194,7 +195,7 @@ def show_formatted_table(
     typer.echo(table)
 
 
-def get_source_from_catalog(catalog, item_name):
+def get_source_from_catalog(catalog: Catalog, item_name: str) -> str:  # noqa: PLR0911
     """Get source information from catalog metadata.
 
     Args:
@@ -218,7 +219,7 @@ def get_source_from_catalog(catalog, item_name):
             relative_path = module_path.relative_to(CWD)
             parts = relative_path.parts
             if parts[-1].endswith(".py"):
-                parts = list(parts[:-1]) + [parts[-1][:-3]]
+                parts = [*list(parts[:-1]), parts[-1][:-3]]
             return ".".join(parts)
         except ValueError:
             return str(module_path)
@@ -249,7 +250,7 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     tasks_catalog = nornflow.tasks_catalog
     table_data = []
 
-    task_names = list(sorted(tasks_catalog.get_builtin_items()))
+    task_names = sorted(tasks_catalog.get_builtin_items())
     task_names.extend(sorted(tasks_catalog.get_custom_items()))
 
     for task_name in task_names:
@@ -313,7 +314,7 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     filters_catalog = nornflow.filters_catalog
     table_data = []
 
-    filter_names = list(sorted(filters_catalog.get_builtin_items()))
+    filter_names = sorted(filters_catalog.get_builtin_items())
     filter_names.extend(sorted(filters_catalog.get_custom_items()))
 
     for filter_name in filter_names:

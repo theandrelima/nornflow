@@ -1,11 +1,12 @@
-from abc import ABC, abstractmethod
-from datetime import datetime
 import inspect
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from nornflow.exceptions import CatalogError, ResourceError, CoreError
-from nornflow.utils import import_module_from_path, process_filter
+from nornflow.exceptions import CatalogError, CoreError, ResourceError
+from nornflow.utils import import_module_from_path
 
 
 class Catalog(ABC, dict[str, Any]):
@@ -163,7 +164,6 @@ class Catalog(ABC, dict[str, Any]):
         Returns:
             List of Path objects to process.
         """
-        pass
 
     @abstractmethod
     def _process_file(self, file_path: Path, **kwargs) -> int:
@@ -176,7 +176,6 @@ class Catalog(ABC, dict[str, Any]):
         Returns:
             Number of items registered from this file.
         """
-        pass
 
 
 class PythonEntityCatalog(Catalog):
@@ -245,7 +244,8 @@ class PythonEntityCatalog(Catalog):
         count = 0
 
         for name, obj in inspect.getmembers(module, predicate):
-            # Transform the item if needed (for example, for nornig filters catalog, we need to extract parameters)
+            # Transform the item if needed
+            # for example, for nornir filters catalog, we need to extract parameters
             if transform_item:
                 obj = transform_item(obj)
 
@@ -264,11 +264,7 @@ class PythonEntityCatalog(Catalog):
         Returns:
             List of Python files to process.
         """
-        py_files = []
-        for py_file in dir_path.rglob("*.py"):
-            if not py_file.name.startswith("__"):
-                py_files.append(py_file)
-        return py_files
+        return [py_file for py_file in dir_path.rglob("*.py") if not py_file.name.startswith("__")]
 
     def _process_file(self, file_path: Path, **kwargs) -> int:
         """Process a Python file by importing it and registering its items.
@@ -293,7 +289,7 @@ class PythonEntityCatalog(Catalog):
             return self.register_from_module(module, predicate, transform_item)
         except Exception as e:
             raise CoreError(
-                f"Failed to import module '{module_name}' from '{module_path}': {str(e)}",
+                f"Failed to import module '{module_name}' from '{module_path}': {e!s}",
                 component="ItemDiscovery",
             ) from e
 
