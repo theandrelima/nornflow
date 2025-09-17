@@ -9,13 +9,7 @@ This package provides the variable management functionality for NornFlow, includ
 """
 
 from nornflow.vars.context import NornFlowDeviceContext
-from nornflow.vars.exceptions import (
-    NornFlowVarsError,
-    VariableDirectoryError,
-    VariableLoadError,
-    VariableNotFoundError,
-    VariableResolutionError,
-)
+from nornflow.vars.exceptions import TemplateError, VariableError
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
 from nornflow.vars.proxy import NornirHostProxy
@@ -24,10 +18,7 @@ __all__ = [
     "NornFlowDeviceContext",
     "NornFlowVariableProcessor",
     "NornFlowVariablesManager",
-    "NornFlowVarsError",
     "NornirHostProxy",
-    "VariableDirectoryError",
-    "VariableLoadError",
-    "VariableNotFoundError",
-    "VariableResolutionError",
+    "TemplateError",
+    "VariableError",
 ]

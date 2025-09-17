@@ -1,6 +1,6 @@
 import pytest
 
-from nornflow.vars.exceptions import VariableResolutionError
+from nornflow.vars.exceptions import TemplateError
 
 
 class TestVariableResolution:
@@ -40,7 +40,7 @@ class TestVariableResolution:
 
     def test_resolve_string_undefined_var(self, setup_manager):
         """Test resolving a string with undefined variable raises error."""
-        with pytest.raises(VariableResolutionError):
+        with pytest.raises(TemplateError):
             setup_manager.resolve_string("{{ undefined_var }}", "test_device")
 
     def test_resolve_data_dict(self, setup_manager):

@@ -8,7 +8,6 @@ NONRFLOW_SETTINGS_MANDATORY = ("nornir_config_file",)
 
 # used to track the optional kwargs for a NornFlowSettings object
 NONRFLOW_SETTINGS_OPTIONAL = {
-    "dry_run": False,
     "local_tasks_dirs": [],
     "local_workflows_dirs": [],
     "local_filters_dirs": [],
@@ -28,6 +27,8 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "imported_packages",
 )
 
+# Supported extensions
 NORNFLOW_SUPPORTED_YAML_EXTENSIONS = (".yaml", ".yml")
 
+# Default inventory filter keys
 JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")
