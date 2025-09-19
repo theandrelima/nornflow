@@ -305,16 +305,13 @@ def site_filter(host: Host, region: str) -> bool:
 NornFlow performs recursive searches in all configured directories:
 
 - **Automatic discovery** happens during NornFlow initialization
-- **Name conflicts** - Later discoveries override earlier ones (built-ins can be overridden). 
-- **View catalogs** - Use `nornflow show --catalog` to see all discovered items
-
-**⚠️ WARNING:** While you can technically override built-in components, **be extremely careful** when doing so. Built-ins often have deep integration with NornFlow's core functionality. For example, the `set` task has special handling in the variable management system, and overriding it may break workflow execution. Instead of overriding built-ins, consider creating components with different names for custom behavior.
+- **Name conflicts** - NornFlow prevents custom or imported tasks/filters to override built-in ones. However later custom or imported discoveries will override earlier ones. 
+- **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters` and `--workflows` options.
 
 **Discovery order:**
 1. Built-in items are loaded first
 2. Local directories are processed in the order specified
 3. Each directory is searched recursively
-
 
 ## Domains
 

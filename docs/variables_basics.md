@@ -261,7 +261,7 @@ Each device maintains its own variable context during workflow execution:
 
 | Variable Type      | Location                        | Example                        | Usage                        |
 |--------------------|---------------------------------|--------------------------------|------------------------------|
-| Environment        | System env                      | `NORNFLOW_VAR_token=abc`       | `{{ token }}`                |
+| Environment        | System env                      | `token=abc`                    | `{{ token }}`                |
 | Global             | defaults.yaml                   | `timeout: 30`                  | `{{ timeout }}`              |
 | Domain             | vars/{domain}/defaults.yaml     | `retries: 3`                   | `{{ retries }}`              |
 | Workflow           | In workflow YAML                | `vars: {vlan: 100}`            | `{{ vlan }}`                 |

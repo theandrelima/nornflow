@@ -26,17 +26,6 @@ poetry add nornflow
 uv pip install nornflow
 ```
 
-### Optional Network Automation Plugins
-
-Optionally, you may want to install NonrFlow with the 'optional-plugins' tag, which will include `nornir-napalm` and `nornir-netmiko`.
-
-```bash
-# Install NornFlow with network automation plugins
-pip install "nornflow[optional-plugins]"
-```
-
-This will get all Nornir Napalm and Netmiko Tasks available in your Task Catalog.
-
 ## Your First NornFlow Project
 
 ### 1. Initialize NornFlow
@@ -61,7 +50,7 @@ This creates:
 ### 2. Check What's Available
 
 ```bash
-nornflow show --catalog
+nornflow show --catalogs
 ```
 
 You'll see three catalogs:
@@ -288,7 +277,12 @@ nornflow run service_check --inventory-filters "filter_by_service={'service': 'b
 
 ```bash
 # Show available tasks, workflows, and filters (catalog)
-nornflow show --catalog
+nornflow show --catalogs
+
+# Show specific catalogs
+nornflow show --tasks
+nornflow show --filters
+nornflow show --workflows
 
 # Show current NornFlow settings
 nornflow show --settings
@@ -296,7 +290,7 @@ nornflow show --settings
 # Show current Nornir configs
 nornflow show --nornir-configs
 
-# Show all information (catalog, settings, configs)
+# Show all information (catalogs, settings, configs)
 nornflow show --all
 
 # Dry run (see what would happen)
