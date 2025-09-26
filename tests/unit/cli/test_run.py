@@ -12,7 +12,7 @@ from nornflow.cli.run import (
     parse_task_args,
     run,
 )
-from tests.unit.test_processors_utils import TestProcessor, TestProcessor2
+from tests.unit.core.test_processors_utils import TestProcessor, TestProcessor2
 
 
 class TestCLIArgumentParsing:
@@ -55,31 +55,31 @@ class TestCLIProcessorParsing:
 
     def test_parse_processors_single(self):
         """Test parsing a single processor from CLI string."""
-        processor_str = "class='tests.unit.test_processors_utils.TestProcessor',args={'name':'CLIProcessor','verbose':True}"
+        processor_str = "class='tests.unit.core.test_processors_utils.TestProcessor',args={'name':'CLIProcessor','verbose':True}"
         result = parse_processors(processor_str)
 
         assert len(result) == 1
-        assert result[0]["class"] == "tests.unit.test_processors_utils.TestProcessor"
+        assert result[0]["class"] == "tests.unit.core.test_processors_utils.TestProcessor"
         assert result[0]["args"] == {"name": "CLIProcessor", "verbose": True}
 
     def test_parse_processors_multiple(self):
         """Test parsing multiple processors from CLI string."""
-        processor_str = "class='tests.unit.test_processors_utils.TestProcessor',args={'name':'Proc1'};class='tests.unit.test_processors_utils.TestProcessor2',args={'name':'Proc2'}"
+        processor_str = "class='tests.unit.core.test_processors_utils.TestProcessor',args={'name':'Proc1'};class='tests.unit.core.test_processors_utils.TestProcessor2',args={'name':'Proc2'}"
         result = parse_processors(processor_str)
 
         assert len(result) == 2
-        assert result[0]["class"] == "tests.unit.test_processors_utils.TestProcessor"
+        assert result[0]["class"] == "tests.unit.core.test_processors_utils.TestProcessor"
         assert result[0]["args"] == {"name": "Proc1"}
-        assert result[1]["class"] == "tests.unit.test_processors_utils.TestProcessor2"
+        assert result[1]["class"] == "tests.unit.core.test_processors_utils.TestProcessor2"
         assert result[1]["args"] == {"name": "Proc2"}
 
     def test_parse_processors_no_args(self):
         """Test parsing a processor with no args specified."""
-        processor_str = "class='tests.unit.test_processors_utils.TestProcessor'"
+        processor_str = "class='tests.unit.core.test_processors_utils.TestProcessor'"
         result = parse_processors(processor_str)
 
         assert len(result) == 1
-        assert result[0]["class"] == "tests.unit.test_processors_utils.TestProcessor"
+        assert result[0]["class"] == "tests.unit.core.test_processors_utils.TestProcessor"
         assert result[0]["args"] == {}
 
     def test_parse_processors_empty(self):
@@ -272,7 +272,7 @@ class TestProcessorIntegration:
 
         # Create test processor config
         processors = [
-            {"class": "tests.unit.test_processors_utils.TestProcessor", "args": {"name": "CLIProcessor"}}
+            {"class": "tests.unit.core.test_processors_utils.TestProcessor", "args": {"name": "CLIProcessor"}}
         ]
 
         # Call get_nornflow_builder with processors
@@ -292,8 +292,8 @@ class TestProcessorIntegration:
 
         # Create test processor configs
         processors = [
-            {"class": "tests.unit.test_processors_utils.TestProcessor", "args": {"name": "Processor1"}},
-            {"class": "tests.unit.test_processors_utils.TestProcessor2", "args": {"name": "Processor2"}},
+            {"class": "tests.unit.core.test_processors_utils.TestProcessor", "args": {"name": "Processor1"}},
+            {"class": "tests.unit.core.test_processors_utils.TestProcessor2", "args": {"name": "Processor2"}},
         ]
 
         # Call get_nornflow_builder with processors
@@ -442,7 +442,7 @@ class TestMainCLIFunctionality:
             hosts=None,
             groups=None,
             inventory_filters="platform=ios,vendor=cisco",
-            processors="class='tests.unit.test_processors_utils.TestProcessor',args={'name':'CLIProc'}",
+            processors="class='tests.unit.core.test_processors_utils.TestProcessor',args={'name':'CLIProc'}",
             vars=None,
             dry_run=False,
         )

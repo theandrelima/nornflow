@@ -7,7 +7,7 @@ from nornir.core.processor import Processor
 from nornflow.nornflow import NornFlow
 from nornflow.settings import NornFlowSettings
 from nornflow.workflow import Workflow
-from tests.unit.test_processors_utils import TestProcessor, TestProcessor2
+from tests.unit.core.test_processors_utils import TestProcessor
 
 
 @pytest.fixture
@@ -140,7 +140,7 @@ def test_processor():
 def test_processor_config():
     """Create a processor configuration dict for TestProcessor."""
     return {
-        "class": "tests.unit.test_processors_utils.TestProcessor",
+        "class": "tests.unit.core.test_processors_utils.TestProcessor",
         "args": {"name": "ConfiguredProcessor", "verbose": True},
     }
 
@@ -148,7 +148,7 @@ def test_processor_config():
 @pytest.fixture
 def test_processor2_config():
     """Create a processor configuration dict for TestProcessor2."""
-    return {"class": "tests.unit.test_processors_utils.TestProcessor2", "args": {"name": "Processor2"}}
+    return {"class": "tests.unit.core.test_processors_utils.TestProcessor2", "args": {"name": "Processor2"}}
 
 
 @pytest.fixture

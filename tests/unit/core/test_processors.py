@@ -6,7 +6,7 @@ from nornflow.exceptions import ProcessorError
 from nornflow.nornflow import NornFlow
 from nornflow.utils import load_processor
 from nornflow.workflow import WorkflowFactory
-from tests.unit.test_processors_utils import TestProcessor
+from tests.unit.core.test_processors_utils import TestProcessor
 
 
 class TestProcessorLoading:
@@ -21,14 +21,14 @@ class TestProcessorLoading:
 
     def test_load_processor_without_args(self):
         """Test loading a processor with no arguments."""
-        config = {"class": "tests.unit.test_processors_utils.TestProcessor"}
+        config = {"class": "tests.unit.core.test_processors_utils.TestProcessor"}
         processor = load_processor(config)
         assert isinstance(processor, TestProcessor)
         assert processor.name == "TestProcessor"  # Default value
 
     def test_load_processor_with_empty_args(self):
         """Test loading a processor with empty args dict."""
-        config = {"class": "tests.unit.test_processors_utils.TestProcessor", "args": {}}
+        config = {"class": "tests.unit.core.test_processors_utils.TestProcessor", "args": {}}
         processor = load_processor(config)
         assert isinstance(processor, TestProcessor)
         assert processor.name == "TestProcessor"  # Default value
@@ -60,7 +60,7 @@ class TestNornFlowProcessors:
         # Create kwargs with processors
         kwargs_processors = [
             {
-                "class": "tests.unit.test_processors_utils.TestProcessor",
+                "class": "tests.unit.core.test_processors_utils.TestProcessor",
                 "args": {"name": "KwargsProcessor", "priority": 1},
             }
         ]
@@ -98,7 +98,7 @@ class TestProcessorPrecedence:
                 "tasks": [{"name": "dummy_task", "args": {"arg1": "value1"}}],
                 "processors": [
                     {
-                        "class": "tests.unit.test_processors_utils.TestProcessor",
+                        "class": "tests.unit.core.test_processors_utils.TestProcessor",
                         "args": {"name": "WorkflowProc"},
                     }
                 ],
@@ -123,7 +123,7 @@ class TestProcessorPrecedence:
 
             # Create kwargs processors
             kwargs_processors = [
-                {"class": "tests.unit.test_processors_utils.TestProcessor2", "args": {"name": "KwargsProc"}}
+                {"class": "tests.unit.core.test_processors_utils.TestProcessor2", "args": {"name": "KwargsProc"}}
             ]
 
             # Create NornFlow with both
