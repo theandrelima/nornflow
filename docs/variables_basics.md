@@ -278,7 +278,7 @@ Each device maintains its own variable context during workflow execution:
 <table width="100%" border="0" style="border-collapse: collapse;">
 <tr>
 <td width="33%" align="left" style="border: none;">
-<a href="./core_concepts.md">← Previous: Core Concepts</a>
+<a href="./failure_strategies.md">← Previous: Failure Strategies</a>
 </td>
 <td width="33%" align="center" style="border: none;">
 </td>
