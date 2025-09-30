@@ -215,7 +215,7 @@ workflow:
 
     - name: echo
       args:
-        message: "Configuring {{ device_type }} in {{ config_mode }} mode for {{ host.name }}"
+        msg: "Configuring {{ device_type }} in {{ config_mode }} mode for {{ host.name }}"
 ```
 
 ### Override Variables from CLI
@@ -248,7 +248,7 @@ workflow:
   tasks:
     - name: echo
       args:
-        message: "Updating router: {{ host.name }}"
+        msg: "Updating router: {{ host.name }}"
 ```
 
 ### Quick Custom Filter

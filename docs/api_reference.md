@@ -535,7 +535,7 @@ Print a message to stdout with variable interpolation support.
 ```yaml
 - name: echo
   args:
-    message: "Processing {{ host.name }} with platform {{ host.platform }}"
+    msg: "Processing {{ host.name }} with platform {{ host.platform }}"
 ```
 
 ### set

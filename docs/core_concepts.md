@@ -418,7 +418,7 @@ tasks:
 
   - name: echo
     args:
-      message: "Device version is {{ version_info }}"
+      msg: "Device version is {{ version_info }}"
 ```
 
 ## Inventory Filtering

@@ -137,12 +137,8 @@ tasks:
   - name: echo
     args:
       # Get all interface names
-      names: "{{ interfaces | json_query('[*].name') }}"
+      msg: "{{ interfaces | json_query('[*].name') }}"
       # Result: ['Gi0/1', 'Gi0/2']
-      
-      # Get interfaces with specific VLAN
-      vlan_100: "{{ interfaces | json_query('[?vlan==`100`].name') }}"
-      # Result: ['Gi0/1']
 ```
 
 **`deep_merge`**
@@ -161,7 +157,7 @@ vars:
 tasks:
   - name: echo
     args:
-      config: "{{ defaults | deep_merge(custom) }}"
+      msg: "{{ defaults | deep_merge(custom) }}"
       # Result: {ntp: {server: "10.0.0.2", source: "Lo0"}, snmp: {community: "public"}}
 ```
 
@@ -254,7 +250,7 @@ vars:
 tasks:
   - name: echo
     args:
-      all_vlans: "{{ devices | json_query('[*].interfaces[*].vlan') | flatten_list | unique_list }}"
+      msg: "{{ devices | json_query('[*].interfaces[*].vlan') | flatten_list | unique_list }}"
       # Result: [100, 200]
 ```
 
