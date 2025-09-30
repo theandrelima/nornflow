@@ -5,6 +5,7 @@ from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filte
 from nornflow.catalogs import FileCatalog, PythonEntityCatalog
 from nornflow.constants import (
     NORNFLOW_INVALID_INIT_KWARGS,
+    FailureStrategy
 )
 from nornflow.exceptions import (
     CatalogError,
@@ -87,6 +88,7 @@ class NornFlow:
         processors: list[dict[str, Any]] | None = None,
         cli_vars: dict[str, Any] | None = None,
         cli_filters: dict[str, Any] | None = None,
+        cli_failure_strategy: FailureStrategy | None = None,
         **kwargs: Any,
     ):
         """
@@ -105,6 +107,8 @@ class NornFlow:
                 These variables always override any other variable source.
             cli_filters: Inventory filters with highest precedence. These completely override
                 any inventory filters defined in the workflow YAML.
+            cli_failure_strategy: Failure strategy with highest precedence. This overrides any failure
+                strategy defined in the workflow YAML.
             **kwargs: Additional keyword arguments passed to NornFlowSettings
 
         Raises:
@@ -120,6 +124,9 @@ class NornFlow:
 
             # Store CLI inventory filters - these override workflow inventory filters
             self._cli_filters = cli_filters or {}
+
+            # Store CLI failure strategy - this overrides workflow failure strategy
+            self._cli_failure_strategy = cli_failure_strategy
 
             # Some kwargs should only be set through the YAML settings file.
             self._check_invalid_kwargs(kwargs)
@@ -283,6 +290,34 @@ class NornFlow:
                 f"CLI filters must be a dictionary, got {type(value).__name__}", component="NornFlow"
             )
         self._cli_filters = value
+
+    @property
+    def cli_failure_strategy(self) -> FailureStrategy | None:
+        """
+        Get the CLI failure strategy with highest precedence.
+
+        This failure strategy overrides any failure strategy defined in the workflow YAML.
+
+        Returns:
+            FailureStrategy | None: The CLI failure strategy, or None if not set.
+        """
+        return self._cli_failure_strategy
+
+    @cli_failure_strategy.setter
+    def cli_failure_strategy(self, value: FailureStrategy | None) -> None:
+        """Update CLI failure strategy that overrides workflow-defined failure strategy.
+
+        Args:
+            value: FailureStrategy enum value or None.
+
+        Raises:
+            CoreError: If value is not an FailureStrategy or None.
+        """
+        if value is not None and not isinstance(value, FailureStrategy):
+            raise CoreError(
+                f"CLI failure strategy must be an FailureStrategy enum or None, got {type(value).__name__}", component="NornFlow"
+            )
+        self._cli_failure_strategy = value
 
     @property
     def tasks_catalog(self) -> PythonEntityCatalog:
@@ -553,6 +588,7 @@ class NornFlow:
                 settings=self.settings,
                 cli_vars=self.cli_vars,
                 cli_filters=self.cli_filters,
+                cli_failure_strategy=self.cli_failure_strategy,
             ).create()
 
     def run(self, dry_run: bool = False) -> None:
@@ -659,6 +695,7 @@ class NornFlowBuilder:
         self._processors: list[dict[str, Any]] | None = None
         self._cli_vars: dict[str, Any] | None = None
         self._cli_filters: dict[str, Any] | None = None
+        self._cli_failure_strategy: FailureStrategy | None = None
         self._kwargs: dict[str, Any] = {}
 
     def with_settings_object(self, settings_object: NornFlowSettings) -> "NornFlowBuilder":
@@ -803,6 +840,22 @@ class NornFlowBuilder:
         self._cli_filters = cli_filters
         return self
 
+    def with_cli_failure_strategy(self, cli_failure_strategy: FailureStrategy) -> "NornFlowBuilder":
+        """
+        Set CLI failure strategy for the NornFlow instance.
+
+        This strategy has the highest precedence and overrides any failure strategy
+        defined in the workflow YAML.
+
+        Args:
+            cli_failure_strategy: FailureStrategy enum value with highest precedence
+
+        Returns:
+            NornFlowBuilder: The builder instance.
+        """
+        self._cli_failure_strategy = cli_failure_strategy
+        return self
+
     def with_kwargs(self, **kwargs: Any) -> "NornFlowBuilder":
         """
         Set additional keyword arguments for the builder.
@@ -842,15 +895,16 @@ class NornFlowBuilder:
                     settings=self._settings,
                     cli_vars=self._cli_vars,
                     cli_filters=self._cli_filters,
+                    cli_failure_strategy=self._cli_failure_strategy,
                 )
                 workflow = workflow_factory.create()
 
-        kwargs = self._kwargs.copy()
-        if self._cli_vars is not None:
-            kwargs["cli_vars"] = self._cli_vars
-        if self._cli_filters is not None:
-            kwargs["cli_filters"] = self._cli_filters
-
         return NornFlow(
-            nornflow_settings=self._settings, workflow=workflow, processors=self._processors, **kwargs
+            nornflow_settings=self._settings,
+            workflow=workflow,
+            processors=self._processors,
+            cli_vars=self._cli_vars,
+            cli_filters=self._cli_filters,
+            cli_failure_strategy=self._cli_failure_strategy,
+            **self._kwargs
         )

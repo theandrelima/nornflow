@@ -22,7 +22,7 @@ nornir_config_file: "nornir_configs/config.yaml"
 local_tasks_dirs:
   - "tasks"
 
-# List of paths to directories containing the Nornir tasks to be included in NornFlow's task_catalog. It
+# List of paths to directories containing the Nornir workflows to be included in NornFlow's workflow_catalog. It
 # defaults to a 'workflows' directory in the root of the project. The search is recursive, meaning that 
 # all subdirectories will be searched as well. Be aware that all files with a .yaml or .yml extension will be
 # considered as workflows.
@@ -40,6 +40,22 @@ imported_packages: []
 
 # If set to True, NornFlow will invoke Nornir in dry-run mode
 dry_run: False
+
+# Sets NornFlow's behavior when a task fails for a host during the execution of workflows.
+# This setting can be overridden by CLI arguments (--failure-strategy) or workflow-specific definitions.
+#
+# FAILURE STRATEGY PRECEDENCE (highest to lowest priority):
+# 1. CLI arguments (via --failure-strategy option)
+# 2. Workflow-specific failure strategy defined in the workflow YAML file
+# 3. Global failure strategy defined in this nornflow.yaml settings file
+# 4. Default failure strategy ("skip-failed")
+#
+# Options:
+# - skip-failed (default): When a task fails for a host, skip that host in all subsequent tasks within the workflow.
+# - fail-fast: Halt workflow execution immediately upon detecting a task failure. Due to Nornir's multithreading nature,
+#   ongoing threads may complete before NornFlow fully stops execution.
+# - run-all: Execute all tasks for all hosts, including those that previously failed, until the entire workflow completes.
+failure_strategy: "skip-failed"
 
 # List of Nornir processors to be applied during task/workflow execution.
 # If not provided, NornFlow will default to using only the DefaultNornFlowProcessor
