@@ -89,6 +89,12 @@ nornflow.run()              # Run normally
 **Parameters:**
 - `dry_run`: Whether to run the workflow in dry-run mode
 
+**Return value:**
+- Returns an integer 0–100 representing the percentage of failed task executions (rounded down). 0 means no failures.
+
+**Exceptions:**
+- May raise NornFlowError, SettingsError, ResourceError, WorkflowError, or other exceptions. Catch them when calling from Python.
+
 ## NornFlowBuilder Class
 
 Builder pattern implementation for constructing NornFlow instances with a fluent interface.
@@ -195,6 +201,9 @@ from nornflow.workflow import Workflow
 
 #### `run(nornir_manager, tasks_catalog, filters_catalog, workflow_roots, processors, cli_vars, cli_filters, dry_run)`
 Execute the workflow with all necessary catalogs and configurations.
+
+**Return value:**
+- Returns integer 0–100 representing failure percentage.
 
 ## WorkflowFactory Class
 
@@ -644,7 +653,7 @@ Closely related to the Facade pattern, the `NornFlowBuilder` class implements th
 **Relationship to Facade:** The Builder creates the Facade object, providing a structured way to configure the complex subsystem that the Facade then manages.
 
 ### Factory Pattern (WorkflowFactory Class)
-The `WorkflowFactory` class implements the Factory pattern for creating `Workflow` instances from various sources (files, dictionaries, etc.). This pattern centralizes object creation logic and provides a consistent interface regardless of the input format.
+The `WorkflowFactory` class implements the Factory pattern for creating Workflow instances from various sources (files, dictionaries, etc.). This pattern centralizes object creation logic and provides a consistent interface regardless of the input format.
 
 **Key Benefits:**
 - Encapsulates object creation complexity
