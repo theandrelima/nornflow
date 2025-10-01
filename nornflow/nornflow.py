@@ -163,21 +163,14 @@ class NornFlow:
         The loaded processors are stored in self._processors for later use during
         workflow execution.
         """
-        # Check if processors were directly specified in constructor kwargs (CLI processors)
-        if self._kwargs_processors:
+        # Check if processors were wither passed directly, or set in NornFlow's settings
+        processors_list = self._kwargs_processors or self.settings.processors
+        if processors_list:
             self._processors = []
-            for processor_config in self._kwargs_processors:
+            for processor_config in processors_list:
                 processor = load_processor(processor_config)
                 self._processors.append(processor)
-
-        # Otherwise, check if processors are defined in settings
-        elif self.settings.processors:
-            self._processors = []
-
-            for processor_config in self.settings.processors:
-                processor = load_processor(processor_config)
-                self._processors.append(processor)
-
+        
         # If no processors are specified anywhere, use default
         else:
             self._processors = [DefaultNornFlowProcessor()]
