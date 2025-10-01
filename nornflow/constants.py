@@ -1,9 +1,9 @@
 import re
-from enum import Enum, auto
+from enum import Enum
 
 try:
     # Python 3.11+ provides StrEnum
-    from enum import StrEnum  # type: ignore
+    from enum import StrEnum
 except Exception:
 
     class StrEnum(str, Enum):

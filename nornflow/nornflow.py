@@ -3,7 +3,7 @@ from typing import Any
 
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
 from nornflow.catalogs import FileCatalog, PythonEntityCatalog
-from nornflow.constants import NORNFLOW_INVALID_INIT_KWARGS, FailureStrategy
+from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
 from nornflow.exceptions import (
     CatalogError,
     CoreError,

@@ -10,9 +10,9 @@ import typer
 from nornflow import NornFlowBuilder, WorkflowFactory
 from nornflow.cli.exceptions import CLIRunError
 from nornflow.constants import (
+    FailureStrategy,
     NORNFLOW_SPECIAL_FILTER_KEYS,
     NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
-    FailureStrategy,
 )
 from nornflow.exceptions import NornFlowError
 from nornflow.utils import normalize_failure_strategy
@@ -371,6 +371,7 @@ PROCESSORS_OPTION = typer.Option(
 FAILURE_STRATEGY_OPTION = typer.Option(
     None,
     "--failure-strategy",
+    "-f",
     help="Failure handling strategy. "
     "Options: 'skip-failed' (default, skip failed hosts), 'fail-fast' (stop on first error), "
     "'run-all' (run all tasks, report failures at end). "

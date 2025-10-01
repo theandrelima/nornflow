@@ -151,7 +151,7 @@ class NornirManager:
         self.nornir = self.nornir.with_processors(processors)
         return self.nornir
 
-    def apply_runner(self, runner) -> Nornir:
+    def apply_runner(self, runner: "RunnerPlugin") -> Nornir:
         """
         Apply a runner to the Nornir instance.
 

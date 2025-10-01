@@ -13,7 +13,7 @@ from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
 from tabulate import tabulate
 
-from nornflow.constants import JINJA_PATTERN, NORNFLOW_SUPPORTED_YAML_EXTENSIONS, FailureStrategy
+from nornflow.constants import FailureStrategy, JINJA_PATTERN, NORNFLOW_SUPPORTED_YAML_EXTENSIONS
 from nornflow.exceptions import (
     CoreError,
     ProcessorError,
@@ -46,11 +46,11 @@ def normalize_failure_strategy(
         # Try direct enum lookup (handles _missing_ method)
         try:
             return FailureStrategy(value)
-        except ValueError:
+        except ValueError as e:
             valid_options = [e.value for e in FailureStrategy]
             raise exception_class(
                 f"Invalid failure strategy '{value}'. Valid options: {', '.join(valid_options)}"
-            )
+            ) from e
     raise exception_class(
         f"Invalid failure strategy type '{type(value).__name__}'. Must be a string or FailureStrategy enum."
     )

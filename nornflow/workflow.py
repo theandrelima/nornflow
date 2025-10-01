@@ -726,7 +726,7 @@ class Workflow:
                     failure_percentage = int((failed_executions / task_executions) * 100)
                     return failure_percentage
 
-            except Exception:
+            except Exception:  # noqa: S112, PERF203
                 continue
 
         return exit_code

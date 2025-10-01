@@ -9,7 +9,6 @@ from nornir.core.inventory import Host
 from tabulate import tabulate
 
 from nornflow.constants import FailureStrategy
-from nornflow.exceptions import WorkflowError
 
 # Initialize colorama
 init(autoreset=True)
@@ -241,7 +240,8 @@ class NornFlowFailureStrategyProcessor(Processor):
         elif self.fail_fast_triggered:
             with output_lock:
                 print(
-                    f"{Fore.RED}{Style.BRIGHT}Execution is halting because a task failed and FAIL_FAST is enabled.{Style.RESET_ALL}"
+                    f"{Fore.RED}{Style.BRIGHT}Execution is halting because a task "
+                    f"failed and FAIL_FAST is enabled.{Style.RESET_ALL}"
                 )
 
     def task_instance_started(self, task: Task, host: Host) -> None:
@@ -260,14 +260,15 @@ class NornFlowFailureStrategyProcessor(Processor):
                 if self.nornir:
                     with output_lock:
                         print(
-                            f"\n{Fore.RED}{Style.BRIGHT}━━━ FAILURE DETECTED: HALTING WORKFLOW ━━━{Style.RESET_ALL}"
+                            f"\n{Fore.RED}{Style.BRIGHT}━━━ FAILURE DETECTED: HALTING WORKFLOW ━━━{Style.RESET_ALL}" #noqa: E501
                         )
                         print(f"{Fore.RED}Task '{task.name}' failed on host '{host.name}'")
                         if result.exception:
                             print(f"{Fore.RED}Error: {result.exception}")
                         print(f"{Fore.RED}Signaling all threads to stop...")
                         print(
-                            f"{Fore.RED}NOTE: Tasks already started will continue to completion.{Style.RESET_ALL}"
+                            f"{Fore.RED}NOTE: Tasks already started will continue "
+                            f"to completion.{Style.RESET_ALL}"
                         )
                         print()
 
