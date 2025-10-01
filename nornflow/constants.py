@@ -5,6 +5,7 @@ try:
     # Python 3.11+ provides StrEnum
     from enum import StrEnum  # type: ignore
 except Exception:
+
     class StrEnum(str, Enum):
         """Compatibility StrEnum for Python < 3.11"""
 
@@ -24,21 +25,21 @@ class FailureStrategy(StrEnum):
         SKIP_FAILED: When a task fails on a host, that host is removed from
             subsequent tasks in the workflow. Other hosts continue normally.
             This is the default strategy for most automation scenarios.
-        
+
         FAIL_FAST: When a failure is detected on any host, the workflow adds
-            adds all hosts to Nonir's failed_hosts, effectivelly signaling no 
+            adds all hosts to Nonir's failed_hosts, effectivelly signaling no
             more tasks should run. Already-running threads will complete
             their current task before stopping. No new tasks will start.
-        
+
         RUN_ALL: All tasks are executed on all hosts regardless of failures.
             Errors are collected and reported at the end. Useful for diagnostic
             or audit workflows where comprehensive results are needed.
     """
-    
+
     SKIP_FAILED = "skip-failed"
-    FAIL_FAST = "fail-fast"  
+    FAIL_FAST = "fail-fast"
     RUN_ALL = "run-all"
-    
+
     @classmethod
     def _missing_(cls, value: object) -> "FailureStrategy | None":
         """Handle underscore/hyphen variations for flexibility."""

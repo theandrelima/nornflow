@@ -247,7 +247,7 @@ class Workflow:
         """
         if self._cli_failure_strategy is not None:
             return self._cli_failure_strategy
-        
+
         return self.records["WorkflowModel"][0].failure_strategy
 
     @property
@@ -570,7 +570,7 @@ class Workflow:
 
         # Create processor with the active failure strategy
         self.failure_processor = NornFlowFailureStrategyProcessor(self.failure_strategy)
-        
+
         # Start with the variable processors
         all_processors = [self.var_processor]
 
@@ -589,7 +589,7 @@ class Workflow:
         # Otherwise use processors passed as parameter if provided
         elif processors:
             all_processors.extend(processors)
-        
+
         # we want the error processor to be the last one, so error summaries
         # appear last too
         all_processors.append(self.failure_processor)
@@ -617,11 +617,11 @@ class Workflow:
         5. Executes each task in the defined sequence
         6. If a task has the 'set_to' keyword, its result is saved as a runtime variable.
         7. Prints final workflow summary via processors
-        8. Returns an int representing the execution status, that can be 
+        8. Returns an int representing the execution status, that can be
         used as the POSIX exit code for this Workflow run
 
         Exit Codes: 0-100, indicates the percentage of failed task executions (rounded down)
-        
+
         Any exceptions that might happen in the encapsulated logic will just bubble-up
         back to the caller of Workflow.run(). This is to allow the caller the flexibility
         to process and handle it as fits.
@@ -676,7 +676,7 @@ class Workflow:
             inventory_filters=self.inventory_filters,
             workflow_vars=self.vars,
             cli_vars=self._cli_vars,
-            failure_strategy=self.failure_strategy
+            failure_strategy=self.failure_strategy,
         )
 
         # Set task count on processors that support it
@@ -715,17 +715,20 @@ class Workflow:
             try:
                 task_executions = getattr(processor, "task_executions", 0)
                 failed_executions = getattr(processor, "failed_executions", 0)
-                
+
                 # Ensure values are numeric and task_executions is not zero
-                if (isinstance(task_executions, int) and 
-                    isinstance(failed_executions, int) and 
-                    task_executions and failed_executions):
+                if (
+                    isinstance(task_executions, int)
+                    and isinstance(failed_executions, int)
+                    and task_executions
+                    and failed_executions
+                ):
                     failure_percentage = int((failed_executions / task_executions) * 100)
                     return failure_percentage
-                
+
             except Exception:
                 continue
-        
+
         return exit_code
 
 

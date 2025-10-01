@@ -3,10 +3,7 @@ from typing import Any
 
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
 from nornflow.catalogs import FileCatalog, PythonEntityCatalog
-from nornflow.constants import (
-    NORNFLOW_INVALID_INIT_KWARGS,
-    FailureStrategy
-)
+from nornflow.constants import NORNFLOW_INVALID_INIT_KWARGS, FailureStrategy
 from nornflow.exceptions import (
     CatalogError,
     CoreError,
@@ -170,7 +167,7 @@ class NornFlow:
             for processor_config in processors_list:
                 processor = load_processor(processor_config)
                 self._processors.append(processor)
-        
+
         # If no processors are specified anywhere, use default
         else:
             self._processors = [DefaultNornFlowProcessor()]
@@ -308,7 +305,8 @@ class NornFlow:
         """
         if value is not None and not isinstance(value, FailureStrategy):
             raise CoreError(
-                f"CLI failure strategy must be an FailureStrategy enum or None, got {type(value).__name__}", component="NornFlow"
+                f"CLI failure strategy must be an FailureStrategy enum or None, got {type(value).__name__}",
+                component="NornFlow",
             )
         self._cli_failure_strategy = value
 
@@ -902,5 +900,5 @@ class NornFlowBuilder:
             cli_vars=self._cli_vars,
             cli_filters=self._cli_filters,
             cli_failure_strategy=self._cli_failure_strategy,
-            **self._kwargs
+            **self._kwargs,
         )

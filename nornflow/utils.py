@@ -21,7 +21,9 @@ from nornflow.exceptions import (
 )
 
 
-def normalize_failure_strategy(value: str | FailureStrategy, exception_class: type[Exception]) -> FailureStrategy:
+def normalize_failure_strategy(
+    value: str | FailureStrategy, exception_class: type[Exception]
+) -> FailureStrategy:
     """
     Normalize and convert a failure strategy value to a FailureStrategy enum.
 
@@ -46,8 +48,12 @@ def normalize_failure_strategy(value: str | FailureStrategy, exception_class: ty
             return FailureStrategy(value)
         except ValueError:
             valid_options = [e.value for e in FailureStrategy]
-            raise exception_class(f"Invalid failure strategy '{value}'. Valid options: {', '.join(valid_options)}")
-    raise exception_class(f"Invalid failure strategy type '{type(value).__name__}'. Must be a string or FailureStrategy enum.")
+            raise exception_class(
+                f"Invalid failure strategy '{value}'. Valid options: {', '.join(valid_options)}"
+            )
+    raise exception_class(
+        f"Invalid failure strategy type '{type(value).__name__}'. Must be a string or FailureStrategy enum."
+    )
 
 
 def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
@@ -282,7 +288,7 @@ def print_workflow_overview(
     inventory_filters: dict[str, Any],
     workflow_vars: dict[str, Any],
     cli_vars: dict[str, Any],
-    failure_strategy: FailureStrategy | None
+    failure_strategy: FailureStrategy | None,
 ) -> None:
     """
     Print a comprehensive workflow overview before execution.
@@ -311,7 +317,7 @@ def print_workflow_overview(
     if inventory_filters:
         click.secho(" Inventory filters: ", bold=True, nl=False)
         print(inventory_filters)
-    
+
     if failure_strategy:
         click.secho(" Failure strategy: ", bold=True, nl=False)
         print(failure_strategy.value)

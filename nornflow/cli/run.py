@@ -289,7 +289,10 @@ def get_nornflow_builder(
         if target_path.exists():
             absolute_path = target_path.resolve()
             wf = WorkflowFactory.create_from_file(
-                absolute_path, cli_vars=cli_vars, cli_filters=inventory_filters, cli_failure_strategy=cli_failure_strategy
+                absolute_path,
+                cli_vars=cli_vars,
+                cli_filters=inventory_filters,
+                cli_failure_strategy=cli_failure_strategy,
             )
             builder.with_workflow_object(wf)
         else:
@@ -441,14 +444,20 @@ def run(
             )
 
         builder = get_nornflow_builder(
-            target, parsed_args, all_inventory_filters, settings, parsed_processors, parsed_vars, parsed_failure_strategy
+            target,
+            parsed_args,
+            all_inventory_filters,
+            settings,
+            parsed_processors,
+            parsed_vars,
+            parsed_failure_strategy,
         )
 
         nornflow = builder.build()
-        
+
         # Capture the exit code from nornflow.run()
         exit_code = nornflow.run(dry_run=dry_run)
-        
+
         # Exit with the workflow's exit code if non-zero, otherwise return normally
         if exit_code != 0:
             sys.exit(exit_code)
