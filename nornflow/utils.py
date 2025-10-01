@@ -13,12 +13,47 @@ from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
 from tabulate import tabulate
 
-from nornflow.constants import JINJA_PATTERN, NORNFLOW_SUPPORTED_YAML_EXTENSIONS
+from nornflow.constants import FailureStrategy, JINJA_PATTERN, NORNFLOW_SUPPORTED_YAML_EXTENSIONS
 from nornflow.exceptions import (
     CoreError,
     ProcessorError,
     WorkflowError,
 )
+
+
+def normalize_failure_strategy(
+    value: str | FailureStrategy, exception_class: type[Exception]
+) -> FailureStrategy:
+    """
+    Normalize and convert a failure strategy value to a FailureStrategy enum.
+
+    Performs case-insensitive conversion from string to enum, with support for
+    both underscore and hyphen variations.
+
+    Args:
+        value: The value to normalize (string or pre-validated enum).
+        exception_class: The exception class to raise on invalid input.
+
+    Returns:
+        The normalized FailureStrategy enum.
+
+    Raises:
+        exception_class: If the value is invalid or of unsupported type.
+    """
+    if isinstance(value, FailureStrategy):
+        return value
+    if isinstance(value, str):
+        # Try direct enum lookup (handles _missing_ method)
+        try:
+            return FailureStrategy(value)
+        except ValueError as e:
+            valid_options = [e.value for e in FailureStrategy]
+            raise exception_class(
+                f"Invalid failure strategy '{value}'. Valid options: {', '.join(valid_options)}"
+            ) from e
+    raise exception_class(
+        f"Invalid failure strategy type '{type(value).__name__}'. Must be a string or FailureStrategy enum."
+    )
 
 
 def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
@@ -246,16 +281,17 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
             check_for_jinja2_recursive(item, f"{path}[{idx}]")
 
 
-def print_workflow_summary(
+def print_workflow_overview(
     workflow_model: Any,
     effective_dry_run: bool,
     hosts_count: int,
     inventory_filters: dict[str, Any],
     workflow_vars: dict[str, Any],
     cli_vars: dict[str, Any],
+    failure_strategy: FailureStrategy | None,
 ) -> None:
     """
-    Print a comprehensive workflow summary before execution.
+    Print a comprehensive workflow overview before execution.
 
     Args:
         workflow_model: The workflow model containing name and description
@@ -264,6 +300,7 @@ def print_workflow_summary(
         inventory_filters: Dictionary of applied inventory filters
         workflow_vars: Workflow-defined variables
         cli_vars: CLI variables with highest precedence
+        failure_strategy: The active failure handling strategy
     """
     print("\n" + "━" * 80)
     click.secho(" Workflow: ", bold=True, nl=False)
@@ -281,7 +318,11 @@ def print_workflow_summary(
         click.secho(" Inventory filters: ", bold=True, nl=False)
         print(inventory_filters)
 
-    # Show filtered inventory summary
+    if failure_strategy:
+        click.secho(" Failure strategy: ", bold=True, nl=False)
+        print(failure_strategy.value)
+
+    # Show filtered inventory overview
     click.secho(" Total hosts: ", bold=True, nl=False)
     print(f"{hosts_count} host(s)")
 

@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import typer
 
+from nornflow.cli.exceptions import CLIRunError
 from nornflow.cli.run import (
     get_nornflow_builder,
     parse_inventory_filters,
@@ -93,7 +94,7 @@ class TestCLIProcessorParsing:
     def test_parse_processors_invalid_format(self):
         """Test parsing a processor string with invalid format."""
         processor_str = "invalid_format"
-        with pytest.raises(typer.BadParameter):
+        with pytest.raises(CLIRunError):
             parse_processors(processor_str)
 
 
@@ -400,6 +401,7 @@ class TestMainCLIFunctionality:
         """Test running a workflow end-to-end."""
         # Setup mocks
         mock_nornflow = MagicMock()
+        mock_nornflow.run.return_value = 0
         mock_get_builder.return_value.build.return_value = mock_nornflow
 
         # Create mock context and context object
@@ -409,13 +411,14 @@ class TestMainCLIFunctionality:
         # Call the actual CLI command function
         run(
             ctx=mock_ctx,
-            target="test_workflow.yaml",  # Note the .yaml extension indicating a workflow
+            target="test_workflow.yaml",
             args="arg1=value1",
             hosts=None,
             groups=None,
             inventory_filters="platform=ios",
             processors=None,
             vars=None,
+            failure_strategy=None,
             dry_run=True,
         )
 
@@ -428,6 +431,7 @@ class TestMainCLIFunctionality:
         """Test running a single task end-to-end."""
         # Setup mocks
         mock_nornflow = MagicMock()
+        mock_nornflow.run.return_value = 0
         mock_get_builder.return_value.build.return_value = mock_nornflow
 
         # Create mock context and context object
@@ -437,13 +441,14 @@ class TestMainCLIFunctionality:
         # Call the actual CLI command function
         run(
             ctx=mock_ctx,
-            target="test_task",  # No .yaml extension indicates a task
+            target="test_task",
             args="arg1=value1,arg2=value2",
             hosts=None,
             groups=None,
             inventory_filters="platform=ios,vendor=cisco",
             processors="class='tests.unit.core.test_processors_utils.TestProcessor',args={'name':'CLIProc'}",
             vars=None,
+            failure_strategy=None,
             dry_run=False,
         )
 

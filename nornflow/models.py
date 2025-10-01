@@ -7,8 +7,10 @@ from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.models import PydanticSerdesBaseModel
 from pydantic_serdes.utils import convert_to_hashable
 
-from nornflow.exceptions import TaskError
+from nornflow.constants import FailureStrategy
+from nornflow.exceptions import TaskError, WorkflowError
 from nornflow.nornir_manager import NornirManager
+from nornflow.utils import normalize_failure_strategy
 from nornflow.validators import (
     run_post_creation_task_validation,
     run_universal_field_validation,
@@ -84,15 +86,14 @@ class TaskModel(NornFlowBaseModel):
         Execute the task using the provided NornirManager and tasks catalog.
 
         Args:
-            nornir_manager (NornirManager): The NornirManager instance to use for execution
-            tasks_catalog (Dict[str, Callable]): Dictionary mapping task names to their function
-            implementations
+            nornir_manager: The NornirManager instance to use for execution.
+            tasks_catalog: Dictionary mapping task names to their function implementations.
 
         Returns:
-            AggregatedResult: The results of the task execution
+            The results of the task execution.
 
         Raises:
-            TaskError: If the task name is not found in the tasks catalog
+            TaskError: If the task name is not found in the tasks catalog.
         """
         # Get the task function from the catalog
         task_func = tasks_catalog.get(self.name)
@@ -100,9 +101,8 @@ class TaskModel(NornFlowBaseModel):
             raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")
 
         task_args = {} if self.args is None else dict(self.args)
-
-        # Execute the task on the Nornir instance
-        return nornir_manager.nornir.run(task=task_func, **task_args)
+        result = nornir_manager.nornir.run(task=task_func, **task_args)
+        return result
 
 
 class WorkflowModel(NornFlowBaseModel):
@@ -116,6 +116,7 @@ class WorkflowModel(NornFlowBaseModel):
     tasks: OneToMany[TaskModel, ...]
     dry_run: bool = False
     vars: HashableDict[str, Any] | None = None
+    failure_strategy: FailureStrategy = FailureStrategy.SKIP_FAILED
 
     @classmethod
     def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "WorkflowModel":
@@ -136,6 +137,25 @@ class WorkflowModel(NornFlowBaseModel):
         dict_args["tasks"] = tasks
 
         return super().create(dict_args, *args, **kwargs)
+
+    @field_validator("failure_strategy", mode="before")
+    @classmethod
+    def validate_failure_strategy(cls, v: Any) -> FailureStrategy:
+        """
+        Validate and convert failure_strategy string to enum, case-insensitively.
+
+        Delegates to shared utility for consistent validation and error handling.
+
+        Args:
+            v (Any): The failure_strategy value to validate.
+
+        Returns:
+            FailureStrategy: The validated FailureStrategy enum.
+
+        Raises:
+            WorkflowError: If the value is invalid.
+        """
+        return normalize_failure_strategy(v, WorkflowError)
 
     @field_validator("inventory_filters", mode="before")
     def validate_inventory_filters(

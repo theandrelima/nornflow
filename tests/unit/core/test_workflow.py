@@ -169,7 +169,7 @@ class TestWorkflowExecution:
 
             # Verify
             mock_apply_filters.assert_called_once_with(mock_nornir_manager, mock_filters_catalog)
-            mock_with_processors.assert_called_once_with(mock_nornir_manager, mock_processors, [])
+            mock_with_processors.assert_called_once_with(mock_nornir_manager, [])
             mock_run.assert_called_once()
             args, _ = mock_run.call_args
             assert args[0] == mock_nornir_manager

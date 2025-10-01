@@ -61,9 +61,9 @@ def echo(task: Task, msg: str) -> Result:
         Result object containing the echoed text
 
     Example:
-        echo:
-          args:
-            text: "Hello from {{ host.name }}, platform is {{ host.platform }}"
+        name: echo
+        args:
+            msg: "Hello from {{ host.name }}, platform is {{ host.platform }}"
     """
     return Result(host=task.host, result=msg)
 
