@@ -584,7 +584,7 @@ class NornFlow:
                 cli_failure_strategy=self.cli_failure_strategy,
             ).create()
 
-    def run(self, dry_run: bool = False) -> None:
+    def run(self, dry_run: bool = False) -> int:
         """
         Execute the configured workflow with the current NornFlow settings.
 
@@ -604,11 +604,14 @@ class NornFlow:
         and have the highest precedence in their respective systems. These can originate from
         actual CLI arguments or be set programmatically as overrides.
 
-        Args:
-            dry_run: Whether to run the workflow in dry-run mode
+        Any exceptions that might happen in the encapsulated logic will just bubble-up
+        back to the caller of NornFlow.run(). This is to allow the caller the flexibility
+        to process and handle it as fits.
 
-        Raises:
-            NornFlowRunError: If no workflow is configured or workflow execution fails
+        Returns:
+            int: Exit code representing the failure percentage (0-100), where 0 means no failures
+            or no execution statistics available, and higher values indicate the percentage of
+            failed task executions (rounded down).
         """
         self._ensure_workflow()
 
@@ -618,7 +621,7 @@ class NornFlow:
             self.workflow.processors_config = None
 
         with self.nornir_manager:
-            self.workflow.run(
+            return self.workflow.run(
                 self.nornir_manager,
                 self.tasks_catalog,
                 self.filters_catalog,

@@ -1,5 +1,6 @@
 import ast
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -444,14 +445,20 @@ def run(
         )
 
         nornflow = builder.build()
-        nornflow.run(dry_run=dry_run)
+        
+        # Capture the exit code from nornflow.run()
+        exit_code = nornflow.run(dry_run=dry_run)
+        
+        # Exit with the workflow's exit code if non-zero, otherwise return normally
+        if exit_code != 0:
+            sys.exit(exit_code)
 
     except NornFlowError as e:
         CLIRunError(
             message=f"NornFlow error while running {target}: {e}",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)  # noqa: B904
+        raise typer.Exit(code=101)  # noqa: B904
 
     except FileNotFoundError as e:
         CLIRunError(
@@ -459,7 +466,7 @@ def run(
             hint=f"Check that the file '{target}' exists and is accessible.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)  # noqa: B904
+        raise typer.Exit(code=101)  # noqa: B904
 
     except PermissionError as e:
         CLIRunError(
@@ -467,7 +474,7 @@ def run(
             hint="Check that you have sufficient permissions to access the required files.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)  # noqa: B904
+        raise typer.Exit(code=101)  # noqa: B904
 
     except Exception as e:
         CLIRunError(
@@ -475,4 +482,4 @@ def run(
             hint="This may be a bug. Please report it if the issue persists.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=2)  # noqa: B904
+        raise typer.Exit(code=101)  # noqa: B904
