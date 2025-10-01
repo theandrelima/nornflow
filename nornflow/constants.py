@@ -1,5 +1,19 @@
 import re
-from enum import StrEnum, auto
+from enum import Enum, auto
+
+try:
+    # Python 3.11+ provides StrEnum
+    from enum import StrEnum  # type: ignore
+except Exception:
+    class StrEnum(str, Enum):
+        """Compatibility StrEnum for Python < 3.11"""
+
+        @staticmethod
+        def _generate_next_value_(name: str, start: int, count: int, last_values: list) -> str:
+            return name
+
+        def __str__(self) -> str:
+            return str(self.value)
 
 
 class FailureStrategy(StrEnum):
@@ -35,6 +49,7 @@ class FailureStrategy(StrEnum):
                 if member.value == normalized:
                     return member
         return None
+
 
 # Special inventory filter keys that use NornFlow provided custom filter functions
 NORNFLOW_SPECIAL_FILTER_KEYS = ["hosts", "groups"]
