@@ -260,7 +260,7 @@ class NornFlowFailureStrategyProcessor(Processor):
                 if self.nornir:
                     with output_lock:
                         print(
-                            f"\n{Fore.RED}{Style.BRIGHT}━━━ FAILURE DETECTED: HALTING WORKFLOW ━━━{Style.RESET_ALL}" #noqa: E501
+                            f"\n{Fore.RED}{Style.BRIGHT}━━━ FAILURE DETECTED: HALTING WORKFLOW ━━━{Style.RESET_ALL}"  # noqa: E501
                         )
                         print(f"{Fore.RED}Task '{task.name}' failed on host '{host.name}'")
                         if result.exception:
