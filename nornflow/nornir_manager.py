@@ -151,6 +151,22 @@ class NornirManager:
         self.nornir = self.nornir.with_processors(processors)
         return self.nornir
 
+    def apply_runner(self, runner: "RunnerPlugin") -> Nornir:
+        """
+        Apply a runner to the Nornir instance.
+
+        This method sets the specified runner on the Nornir instance,
+        updates the internal instance, and returns it.
+
+        Args:
+            runner: The runner object to apply
+
+        Returns:
+            Nornir: Nornir instance with the runner applied
+        """
+        self.nornir = self.nornir.with_runner(runner)
+        return self.nornir
+
     def set_dry_run(self, value: bool = False) -> None:
         """
         Sets the dry_run flag in the Nornir instance's global data state.

@@ -1,5 +1,5 @@
 workflow: 
-  name: Hello World Playbook
+  name: Hello World Workflow
   description: "A simple workflow that just works"
   inventory_filters: 
     hosts:

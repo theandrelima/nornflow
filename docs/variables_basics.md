@@ -81,7 +81,7 @@ workflow:
     tasks:
     - name: echo
       args:
-        message: "Backing up to {{ backup_server }}"
+        msg: "Backing up to {{ backup_server }}"
 ```
 
 Global variables override `environment` variables with the same name.
@@ -143,7 +143,7 @@ Use in workflow:
 tasks:
   - name: echo
     args:
-      message: "Region: {{ region }}, Dry run: {{ dry_run }}"
+      msg: "Region: {{ region }}, Dry run: {{ dry_run }}"
 ```
 
 CLI variables override `workflow`, `domain`, `global`, and `environment` variables with the same name.
@@ -165,7 +165,7 @@ tasks:
       
   - name: echo
     args:
-      message: "Working on {{ device_type }} at {{ timestamp }}"
+      msg: "Working on {{ device_type }} at {{ timestamp }}"
 ```
 
 2. **Using the `set_to` attribute to capture a task's results:**
@@ -177,7 +177,7 @@ tasks:
 
   - name: echo
     args:
-      message: "Version: {{ version_output }}"
+      msg: "Version: {{ version_output }}"
 ```
 
 > **IMPORTANT:**
@@ -201,7 +201,7 @@ The most commonly used host attributes are directly accessible:
 tasks:
   - name: echo
     args:
-      message: |
+      msg: |
         Hostname: {{ host.name }}
         Platform: {{ host.platform }}
         Port: {{ host.port }}
@@ -226,7 +226,7 @@ Custom data defined in your inventory's `data` section is accessible via `host.d
 tasks:
   - name: echo
     args:
-      message: |
+      msg: |
         Site: {{ host.data.site_code }}
         Rack: {{ host.data.rack_number }}
         Model: {{ host.data.model }}
@@ -261,7 +261,7 @@ Each device maintains its own variable context during workflow execution:
 
 | Variable Type      | Location                        | Example                        | Usage                        |
 |--------------------|---------------------------------|--------------------------------|------------------------------|
-| Environment        | System env                      | `NORNFLOW_VAR_token=abc`       | `{{ token }}`                |
+| Environment        | System env                      | `token=abc`                    | `{{ token }}`                |
 | Global             | defaults.yaml                   | `timeout: 30`                  | `{{ timeout }}`              |
 | Domain             | vars/{domain}/defaults.yaml     | `retries: 3`                   | `{{ retries }}`              |
 | Workflow           | In workflow YAML                | `vars: {vlan: 100}`            | `{{ vlan }}`                 |
@@ -278,7 +278,7 @@ Each device maintains its own variable context during workflow execution:
 <table width="100%" border="0" style="border-collapse: collapse;">
 <tr>
 <td width="33%" align="left" style="border: none;">
-<a href="./core_concepts.md">← Previous: Core Concepts</a>
+<a href="./failure_strategies.md">← Previous: Failure Strategies</a>
 </td>
 <td width="33%" align="center" style="border: none;">
 </td>

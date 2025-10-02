@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import typer
 
+from nornflow.cli.exceptions import CLIRunError
 from nornflow.cli.run import (
     get_nornflow_builder,
     parse_inventory_filters,
@@ -12,7 +13,7 @@ from nornflow.cli.run import (
     parse_task_args,
     run,
 )
-from tests.unit.test_processors_utils import TestProcessor, TestProcessor2
+from tests.unit.core.test_processors_utils import TestProcessor, TestProcessor2
 
 
 class TestCLIArgumentParsing:
@@ -55,31 +56,31 @@ class TestCLIProcessorParsing:
 
     def test_parse_processors_single(self):
         """Test parsing a single processor from CLI string."""
-        processor_str = "class='tests.unit.test_processors_utils.TestProcessor',args={'name':'CLIProcessor','verbose':True}"
+        processor_str = "class='tests.unit.core.test_processors_utils.TestProcessor',args={'name':'CLIProcessor','verbose':True}"
         result = parse_processors(processor_str)
 
         assert len(result) == 1
-        assert result[0]["class"] == "tests.unit.test_processors_utils.TestProcessor"
+        assert result[0]["class"] == "tests.unit.core.test_processors_utils.TestProcessor"
         assert result[0]["args"] == {"name": "CLIProcessor", "verbose": True}
 
     def test_parse_processors_multiple(self):
         """Test parsing multiple processors from CLI string."""
-        processor_str = "class='tests.unit.test_processors_utils.TestProcessor',args={'name':'Proc1'};class='tests.unit.test_processors_utils.TestProcessor2',args={'name':'Proc2'}"
+        processor_str = "class='tests.unit.core.test_processors_utils.TestProcessor',args={'name':'Proc1'};class='tests.unit.core.test_processors_utils.TestProcessor2',args={'name':'Proc2'}"
         result = parse_processors(processor_str)
 
         assert len(result) == 2
-        assert result[0]["class"] == "tests.unit.test_processors_utils.TestProcessor"
+        assert result[0]["class"] == "tests.unit.core.test_processors_utils.TestProcessor"
         assert result[0]["args"] == {"name": "Proc1"}
-        assert result[1]["class"] == "tests.unit.test_processors_utils.TestProcessor2"
+        assert result[1]["class"] == "tests.unit.core.test_processors_utils.TestProcessor2"
         assert result[1]["args"] == {"name": "Proc2"}
 
     def test_parse_processors_no_args(self):
         """Test parsing a processor with no args specified."""
-        processor_str = "class='tests.unit.test_processors_utils.TestProcessor'"
+        processor_str = "class='tests.unit.core.test_processors_utils.TestProcessor'"
         result = parse_processors(processor_str)
 
         assert len(result) == 1
-        assert result[0]["class"] == "tests.unit.test_processors_utils.TestProcessor"
+        assert result[0]["class"] == "tests.unit.core.test_processors_utils.TestProcessor"
         assert result[0]["args"] == {}
 
     def test_parse_processors_empty(self):
@@ -93,7 +94,7 @@ class TestCLIProcessorParsing:
     def test_parse_processors_invalid_format(self):
         """Test parsing a processor string with invalid format."""
         processor_str = "invalid_format"
-        with pytest.raises(typer.BadParameter):
+        with pytest.raises(CLIRunError):
             parse_processors(processor_str)
 
 
@@ -272,7 +273,7 @@ class TestProcessorIntegration:
 
         # Create test processor config
         processors = [
-            {"class": "tests.unit.test_processors_utils.TestProcessor", "args": {"name": "CLIProcessor"}}
+            {"class": "tests.unit.core.test_processors_utils.TestProcessor", "args": {"name": "CLIProcessor"}}
         ]
 
         # Call get_nornflow_builder with processors
@@ -292,8 +293,8 @@ class TestProcessorIntegration:
 
         # Create test processor configs
         processors = [
-            {"class": "tests.unit.test_processors_utils.TestProcessor", "args": {"name": "Processor1"}},
-            {"class": "tests.unit.test_processors_utils.TestProcessor2", "args": {"name": "Processor2"}},
+            {"class": "tests.unit.core.test_processors_utils.TestProcessor", "args": {"name": "Processor1"}},
+            {"class": "tests.unit.core.test_processors_utils.TestProcessor2", "args": {"name": "Processor2"}},
         ]
 
         # Call get_nornflow_builder with processors
@@ -400,6 +401,7 @@ class TestMainCLIFunctionality:
         """Test running a workflow end-to-end."""
         # Setup mocks
         mock_nornflow = MagicMock()
+        mock_nornflow.run.return_value = 0
         mock_get_builder.return_value.build.return_value = mock_nornflow
 
         # Create mock context and context object
@@ -409,13 +411,14 @@ class TestMainCLIFunctionality:
         # Call the actual CLI command function
         run(
             ctx=mock_ctx,
-            target="test_workflow.yaml",  # Note the .yaml extension indicating a workflow
+            target="test_workflow.yaml",
             args="arg1=value1",
             hosts=None,
             groups=None,
             inventory_filters="platform=ios",
             processors=None,
             vars=None,
+            failure_strategy=None,
             dry_run=True,
         )
 
@@ -428,6 +431,7 @@ class TestMainCLIFunctionality:
         """Test running a single task end-to-end."""
         # Setup mocks
         mock_nornflow = MagicMock()
+        mock_nornflow.run.return_value = 0
         mock_get_builder.return_value.build.return_value = mock_nornflow
 
         # Create mock context and context object
@@ -437,13 +441,14 @@ class TestMainCLIFunctionality:
         # Call the actual CLI command function
         run(
             ctx=mock_ctx,
-            target="test_task",  # No .yaml extension indicates a task
+            target="test_task",
             args="arg1=value1,arg2=value2",
             hosts=None,
             groups=None,
             inventory_filters="platform=ios,vendor=cisco",
-            processors="class='tests.unit.test_processors_utils.TestProcessor',args={'name':'CLIProc'}",
+            processors="class='tests.unit.core.test_processors_utils.TestProcessor',args={'name':'CLIProc'}",
             vars=None,
+            failure_strategy=None,
             dry_run=False,
         )
 

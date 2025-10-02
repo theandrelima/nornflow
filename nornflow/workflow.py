@@ -7,6 +7,8 @@ from nornir.core.processor import Processor
 from pydantic_serdes.datastore import get_global_data_store
 from pydantic_serdes.utils import generate_from_dict, load_file_to_dict
 
+from nornflow.builtins.processors import NornFlowFailureStrategyProcessor
+from nornflow.constants import FailureStrategy
 from nornflow.exceptions import (
     ProcessorError,
     TaskError,
@@ -15,7 +17,7 @@ from nornflow.exceptions import (
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
-from nornflow.utils import load_processor, print_workflow_summary
+from nornflow.utils import load_processor, print_workflow_overview
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
 
@@ -86,6 +88,7 @@ class Workflow:
         settings: NornFlowSettings,
         cli_vars: dict[str, Any] | None = None,
         cli_filters: dict[str, Any] | None = None,
+        cli_failure_strategy: FailureStrategy | None = None,
         workflow_path: Path | None = None,
     ):
         """
@@ -94,7 +97,7 @@ class Workflow:
         Args:
             workflow_dict (dict[str, Any]): Dictionary representing the workflow configuration
             settings (NornFlowSettings): NornFlow settings object containing all configuration
-            cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
+            cli_vars (dict[str, Any] | None): Variables with highest precedence in the
                 variable resolution chain. While named "CLI variables" due to their primary
                 source being command-line arguments, these serve as a universal override
                 mechanism that can be:
@@ -102,9 +105,11 @@ class Workflow:
                 - Set programmatically for workflow customization
                 - Updated at runtime via the run() method for maximum flexibility
                 These variables always override any other variable source.
-            cli_filters (Optional[dict[str, Any]]): Inventory filters from CLI that override
+            cli_filters (dict[str, Any] | None): Inventory filters from CLI that override
                 workflow inventory filters. Like cli_vars, these have the highest precedence.
-            workflow_path (Optional[Path]): Path to the workflow file (for domain variables)
+            cli_failure_strategy (FailureStrategy | None): Failure strategy from CLI that overrides
+                the workflow's failure strategy. If not provided, the workflow's default is used.
+            workflow_path (Path | None): Path to the workflow file (for domain variables)
         """
         self.workflow_dict = workflow_dict
         generate_from_dict(self.workflow_dict)
@@ -113,9 +118,12 @@ class Workflow:
         self.settings = settings
         self._cli_vars = cli_vars or {}
         self._cli_filters = cli_filters or {}
+        self._cli_failure_strategy = cli_failure_strategy
         self.workflow_path = workflow_path
         self.vars = self.workflow_dict.get("workflow", {}).get("vars", {})
-        self.vars_manager = None
+        self._vars_manager = None
+        self._var_processor = None
+        self._failure_processor = None
 
     @property
     def cli_vars(self) -> dict[str, Any]:
@@ -225,6 +233,82 @@ class Workflow:
             return self.cli_filters
 
         return self.records["WorkflowModel"][0].inventory_filters or {}
+
+    @property
+    def failure_strategy(self) -> FailureStrategy:
+        """
+        Get the failure strategy for the workflow.
+
+        If a CLI failure strategy is provided, it overrides the workflow's failure strategy.
+        Otherwise, the workflow's default failure strategy is used.
+
+        Returns:
+            FailureStrategy: The active error handling strategy.
+        """
+        if self._cli_failure_strategy is not None:
+            return self._cli_failure_strategy
+
+        return self.records["WorkflowModel"][0].failure_strategy
+
+    @property
+    def vars_manager(self) -> NornFlowVariablesManager | None:
+        """
+        Get the variables manager instance.
+
+        Returns:
+            NornFlowVariablesManager | None: The variables manager, or None if not initialized.
+        """
+        return self._vars_manager
+
+    @vars_manager.setter
+    def vars_manager(self, value: NornFlowVariablesManager) -> None:
+        """
+        Set the variables manager instance.
+
+        Args:
+            value (NornFlowVariablesManager): The variables manager to set.
+        """
+        self._vars_manager = value
+
+    @property
+    def var_processor(self) -> NornFlowVariableProcessor | None:
+        """
+        Get the variable processor instance.
+
+        Returns:
+            NornFlowVariableProcessor | None: The variable processor, or None if not set.
+        """
+        return self._var_processor
+
+    @var_processor.setter
+    def var_processor(self, value: NornFlowVariableProcessor) -> None:
+        """
+        Set the variable processor instance.
+
+        Args:
+            value (NornFlowVariableProcessor): The variable processor to set.
+        """
+        self._var_processor = value
+
+    @property
+    def failure_processor(self) -> NornFlowFailureStrategyProcessor | None:
+        """
+        Get the failure strategy processor instance.
+
+        Returns:
+            NornFlowFailureStrategyProcessor | None: The failure processor, or None if not set.
+        """
+        return self._failure_processor
+
+    @failure_processor.setter
+    def failure_processor(self, value: NornFlowFailureStrategyProcessor) -> None:
+        """
+        Set the failure strategy processor instance.
+
+        Args:
+            value (NornFlowFailureStrategyProcessor): The failure processor to set.
+        """
+        self._failure_processor = value
 
     def _check_tasks(self, tasks_catalog: dict[str, Callable]) -> None:
         """
@@ -449,8 +533,8 @@ class Workflow:
         """
         if self.vars_manager is None:
             self.vars_manager = NornFlowVariablesManager(
-                vars_dir=self.settings.vars_dir,  # Use settings object!
-                cli_vars=self.cli_vars,  # Uses most recent CLI vars
+                vars_dir=self.settings.vars_dir,
+                cli_vars=self.cli_vars,
                 inline_workflow_vars=self.vars,
                 workflow_path=self.workflow_path,
                 workflow_roots=workflows_dirs,
@@ -459,7 +543,6 @@ class Workflow:
     def _with_processors(
         self,
         nornir_manager: NornirManager,
-        workflows_dirs: list[str],
         processors: list[Processor] | None = None,
     ) -> None:
         """
@@ -467,26 +550,29 @@ class Workflow:
 
         IMPORTANT: Always adds NornFlowVariableProcessor as the first processor
         to ensure host context is available for variable resolution.
+        Always adds NornFlowFailureStrategyProcessor as the second processor
+        to handle error policies during task execution.
 
         This method handles the processor selection logic:
         1. Always add NornFlowVariableProcessor first (for variable resolution)
-        2. Use workflow-specific processors from self.processors_config if defined
-        3. Otherwise use the passed processors parameter
-        4. If neither exists, do nothing (use NornFlow's global processors)
+        2. Always add NornFlowFailureStrategyProcessor second (for failure strategy handling)
+        3. Use workflow-specific processors from self.processors_config if defined
+        4. Otherwise use the passed processors parameter
+        5. If neither exists, do nothing (use NornFlow's global processors)
 
         Args:
             nornir_manager (NornirManager): The NornirManager instance to apply processors to
             processors (list[Processor] | None): List of processors to apply if no workflow-specific
                 processors defined
         """
-        # Ensure we have a variable manager
-        self._init_variable_manager(workflows_dirs=workflows_dirs)
-
         # Create our variable processor for host-specific variable resolution
-        var_processor = NornFlowVariableProcessor(self.vars_manager)
+        self.var_processor = NornFlowVariableProcessor(self.vars_manager)
 
-        # Start with the variable processor
-        all_processors = [var_processor]
+        # Create processor with the active failure strategy
+        self.failure_processor = NornFlowFailureStrategyProcessor(self.failure_strategy)
+
+        # Start with the variable processors
+        all_processors = [self.var_processor]
 
         # Apply workflow-specific processors if defined
         if self.processors_config:
@@ -504,6 +590,10 @@ class Workflow:
         elif processors:
             all_processors.extend(processors)
 
+        # we want the error processor to be the last one, so error summaries
+        # appear last too
+        all_processors.append(self.failure_processor)
+
         # Apply all processors
         nornir_manager.apply_processors(all_processors)
 
@@ -517,7 +607,7 @@ class Workflow:
         cli_vars: dict[str, Any] | None = None,
         cli_filters: dict[str, Any] | None = None,
         dry_run: bool = False,
-    ) -> None:
+    ) -> int:
         """
         This method orchestrates the complete workflow execution process:
         1. Updates CLI variables if provided (late binding support)
@@ -527,16 +617,14 @@ class Workflow:
         5. Executes each task in the defined sequence
         6. If a task has the 'set_to' keyword, its result is saved as a runtime variable.
         7. Prints final workflow summary via processors
+        8. Returns an int representing the execution status, that can be
+        used as the POSIX exit code for this Workflow run
 
-        Late Binding of CLI Variables:
-        The method supports late binding of CLI variables, allowing them to be provided
-        or updated at runtime even after the workflow is created. This design enables:
-        - NornFlow.run() to pass its CLI variables to workflows at execution time
-        - Programmatic systems to override variables based on runtime conditions
-        - The same workflow object to be reused with different variable sets
+        Exit Codes: 0-100, indicates the percentage of failed task executions (rounded down)
 
-        The late binding pattern ensures maximum flexibility while maintaining the
-        highest precedence for CLI variables in the variable resolution system.
+        Any exceptions that might happen in the encapsulated logic will just bubble-up
+        back to the caller of Workflow.run(). This is to allow the caller the flexibility
+        to process and handle it as fits.
 
         Args:
             nornir_manager: The NornirManager instance for task execution
@@ -549,6 +637,9 @@ class Workflow:
             cli_filters: Optional CLI inventory filters with highest precedence.
                 Can override those set during initialization, enabling late binding.
             dry_run: Whether to execute the workflow in dry-run mode
+
+        Returns:
+            int: Exit code representing the execution status
         """
         # Update CLI variables if provided (late binding)
         if cli_vars is not None:
@@ -574,17 +665,18 @@ class Workflow:
         self._apply_filters(nornir_manager, filters_catalog)
 
         # Apply processors (NornFlowVariableProcessor will be added first)
-        self._with_processors(nornir_manager, workflows_dirs, processors)
+        self._with_processors(nornir_manager, processors)
 
-        # Print comprehensive workflow summary after loading
+        # Print comprehensive workflow overview after loading
         hosts_count = len(nornir_manager.nornir.inventory.hosts)
-        print_workflow_summary(
+        print_workflow_overview(
             workflow_model=workflow_model,
             effective_dry_run=effective_dry_run,
             hosts_count=hosts_count,
             inventory_filters=self.inventory_filters,
             workflow_vars=self.vars,
             cli_vars=self._cli_vars,
+            failure_strategy=self.failure_strategy,
         )
 
         # Set task count on processors that support it
@@ -597,7 +689,6 @@ class Workflow:
             # Pass dry-run context to task execution
             nornir_manager.set_dry_run(effective_dry_run)
 
-            # Run the task and capture its result
             aggregated_result = task.run(nornir_manager, tasks_catalog)
 
             # After the task runs, check if its 'set_to' attribute is defined.
@@ -616,6 +707,29 @@ class Workflow:
         for processor in nornir_manager.nornir.processors:
             if hasattr(processor, "print_final_workflow_summary"):
                 processor.print_final_workflow_summary()
+
+        exit_code = 0
+
+        # Try to find a processor with task execution statistics
+        for processor in nornir_manager.nornir.processors:
+            try:
+                task_executions = getattr(processor, "task_executions", 0)
+                failed_executions = getattr(processor, "failed_executions", 0)
+
+                # Ensure values are numeric and task_executions is not zero
+                if (
+                    isinstance(task_executions, int)
+                    and isinstance(failed_executions, int)
+                    and task_executions
+                    and failed_executions
+                ):
+                    failure_percentage = int((failed_executions / task_executions) * 100)
+                    return failure_percentage
+
+            except Exception:  # noqa: S112, PERF203
+                continue
+
+        return exit_code
 
 
 class WorkflowFactory:
@@ -653,6 +767,7 @@ class WorkflowFactory:
         settings: NornFlowSettings | None = None,
         cli_vars: dict[str, Any] | None = None,
         cli_filters: dict[str, Any] | None = None,
+        cli_failure_strategy: FailureStrategy | None = None,
     ):
         """
         Initialize the WorkflowFactory.
@@ -660,21 +775,24 @@ class WorkflowFactory:
         Args:
             workflow_path (str | Path | None): Path to the workflow file
             workflow_dict (dict[str, Any] | None): Dictionary representing the workflow
-            settings (Optional[NornFlowSettings]): NornFlow settings object. If not provided,
+            settings (NornFlowSettings | None): NornFlow settings object. If not provided,
                 a default one will be created.
-            cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
+            cli_vars (dict[str, Any] | None): Variables with highest precedence in the
                 variable resolution chain. While named "CLI variables" due to their primary
                 source being command-line arguments, these serve as a universal override
                 mechanism. These variables can be overridden later during workflow execution
                 if new CLI variables are provided to workflow.run().
-            cli_filters (Optional[dict[str, Any]]): Inventory filters with highest precedence.
+            cli_filters (dict[str, Any] | None): Inventory filters with highest precedence.
                 These override any inventory filters defined in the workflow YAML.
+            cli_failure_strategy (FailureStrategy | None): Failure strategy with highest precedence.
+                Overrides the workflow's failure strategy if provided.
         """
         self.workflow_path = workflow_path
         self.workflow_dict = workflow_dict
         self.settings = settings or NornFlowSettings()
         self.cli_vars = cli_vars or {}
         self.cli_filters = cli_filters or {}
+        self.cli_failure_strategy = cli_failure_strategy
 
     def create(self) -> Workflow:
         """
@@ -692,6 +810,7 @@ class WorkflowFactory:
                 settings=self.settings,
                 cli_vars=self.cli_vars,
                 cli_filters=self.cli_filters,
+                cli_failure_strategy=self.cli_failure_strategy,
             )
         if self.workflow_dict:
             return self.create_from_dict(
@@ -699,6 +818,7 @@ class WorkflowFactory:
                 settings=self.settings,
                 cli_vars=self.cli_vars,
                 cli_filters=self.cli_filters,
+                cli_failure_strategy=self.cli_failure_strategy,
                 workflow_path=None,
             )
 
@@ -710,6 +830,7 @@ class WorkflowFactory:
         settings: NornFlowSettings | None = None,
         cli_vars: dict[str, Any] | None = None,
         cli_filters: dict[str, Any] | None = None,
+        cli_failure_strategy: FailureStrategy | None = None,
     ) -> Workflow:
         """
         Create a Workflow object from a file.
@@ -718,9 +839,10 @@ class WorkflowFactory:
             workflow_path (str | Path): Path to the workflow file
             settings (NornFlowSettings | None): NornFlow settings object. If not provided,
                 a default one will be created.
-            cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
+            cli_vars (dict[str, Any] | None): Variables with highest precedence in the
                 variable resolution chain
-            cli_filters (Optional[dict[str, Any]]): Inventory filters with highest precedence
+            cli_filters (dict[str, Any] | None): Inventory filters with highest precedence
+            cli_failure_strategy (FailureStrategy | None): Failure strategy with highest precedence
 
         Returns:
             Workflow: The created Workflow object.
@@ -729,7 +851,12 @@ class WorkflowFactory:
         path_obj = Path(workflow_path) if isinstance(workflow_path, str) else workflow_path
         settings = settings or NornFlowSettings()
         return Workflow(
-            loaded_dict, settings=settings, cli_vars=cli_vars, workflow_path=path_obj, cli_filters=cli_filters
+            loaded_dict,
+            settings=settings,
+            cli_vars=cli_vars,
+            cli_filters=cli_filters,
+            cli_failure_strategy=cli_failure_strategy,
+            workflow_path=path_obj,
         )
 
     @staticmethod
@@ -738,6 +865,7 @@ class WorkflowFactory:
         settings: NornFlowSettings | None = None,
         cli_vars: dict[str, Any] | None = None,
         cli_filters: dict[str, Any] | None = None,
+        cli_failure_strategy: FailureStrategy | None = None,
         workflow_path: Path | None = None,
     ) -> Workflow:
         """
@@ -747,10 +875,11 @@ class WorkflowFactory:
             workflow_dict (dict[str, Any]): Dictionary representing the workflow
             settings (NornFlowSettings | None): NornFlow settings object. If not provided,
                 a default one will be created.
-            cli_vars (Optional[dict[str, Any]]): Variables with highest precedence in the
+            cli_vars (dict[str, Any] | None): Variables with highest precedence in the
                 variable resolution chain
-            cli_filters (Optional[dict[str, Any]]): Inventory filters with highest precedence
-            workflow_path (Optional[Path]): Path to the workflow file (for domain variables)
+            cli_filters (dict[str, Any] | None): Inventory filters with highest precedence
+            cli_failure_strategy (FailureStrategy | None): Failure strategy with highest precedence
+            workflow_path (Path | None): Path to the workflow file (for domain variables)
 
         Returns:
             Workflow: The created Workflow object.
@@ -760,6 +889,7 @@ class WorkflowFactory:
             workflow_dict,
             settings=settings,
             cli_vars=cli_vars,
-            workflow_path=workflow_path,
             cli_filters=cli_filters,
+            cli_failure_strategy=cli_failure_strategy,
+            workflow_path=workflow_path,
         )

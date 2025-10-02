@@ -32,6 +32,7 @@
   - [Processor Configuration](#processor-configuration)
   - [Processor Precedence](#processor-precedence)
 - [Execution Model](#execution-model)
+- [Task Failure Strategies (Summary)](#failure-strategies-summary)
 - [Best Practices](#best-practices)
 
 ## Introduction
@@ -41,7 +42,6 @@ NornFlow is a workflow orchestration framework built on top of Nornir. It provid
 This guide covers the fundamental concepts you need to understand to effectively use NornFlow.
 
 ## Declarative vs. Imperative
-
 
 Before we go any further, there's an **important clarification** to be made about a rather 'hot topic' within the network-automation community:  
 When we say NornFlow provides a *"declarative way to define workflows"* we're referring to the workflow structure and orchestration itself, not the individual tasks within those workflows. The declarative vs. imperative nature of each task depends entirely on how the task developer chose to implement it. NornFlow simply provides the framework to organize and execute these tasks in a predictable, YAML-defined manner.
@@ -305,16 +305,13 @@ def site_filter(host: Host, region: str) -> bool:
 NornFlow performs recursive searches in all configured directories:
 
 - **Automatic discovery** happens during NornFlow initialization
-- **Name conflicts** - Later discoveries override earlier ones (built-ins can be overridden). 
-- **View catalogs** - Use `nornflow show --catalog` to see all discovered items
-
-**⚠️ WARNING:** While you can technically override built-in components, **be extremely careful** when doing so. Built-ins often have deep integration with NornFlow's core functionality. For example, the `set` task has special handling in the variable management system, and overriding it may break workflow execution. Instead of overriding built-ins, consider creating components with different names for custom behavior.
+- **Name conflicts** - NornFlow prevents custom or imported tasks/filters to override built-in ones. However later custom or imported discoveries will override earlier ones. 
+- **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters` and `--workflows` options.
 
 **Discovery order:**
 1. Built-in items are loaded first
 2. Local directories are processed in the order specified
 3. Each directory is searched recursively
-
 
 ## Domains
 
@@ -421,7 +418,7 @@ tasks:
 
   - name: echo
     args:
-      message: "Device version is {{ version_info }}"
+      msg: "Device version is {{ version_info }}"
 ```
 
 ## Inventory Filtering
@@ -562,6 +559,17 @@ Task 2 → [Host A, Host B, Host C] (parallel)
 Task 3 → [Host A, Host B, Host C] (parallel)
 ```
 
+## Task Failure Strategies (Summary)
+
+NornFlow supports three failure handling strategies that control workflow behavior when tasks fail:
+
+- **skip-failed (Default):** Hosts that fail a task are removed from subsequent tasks; other hosts continue. This is the default and most common strategy.
+- **fail-fast:** Workflow halts immediately when any host fails a task. Already-running threads finish their current task, but no new tasks start.
+- **run-all:** All tasks run on all hosts, regardless of failures. Errors are collected and reported at the end.
+
+You can configure the failure strategy globally, per workflow, or via CLI.  
+For a detailed explanation and configuration examples, see [Failure Strategies Deep Dive](failure_strategies.md).
+
 ## Best Practices
 
 1. **Keep Workflows Focused**: One workflow should accomplish one logical goal
@@ -585,7 +593,7 @@ Task 3 → [Host A, Host B, Host C] (parallel)
 <td width="33%" align="center" style="border: none;">
 </td>
 <td width="33%" align="right" style="border: none;">
-<a href="./variables_basics.md">Next: Variables Basics →</a>
+<a href="./failure_strategies.md">Next: Task Failure Strategies →</a>
 </td>
 </tr>
 </table>
