@@ -4,7 +4,7 @@ from nornir import InitNornir
 from nornir.core import Nornir
 from nornir.core.processor import Processor
 
-from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL
+from nornflow.constants import NORNFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import CoreError, ProcessorError
 
 
@@ -101,7 +101,7 @@ class NornirManager:
         Args:
             kwargs: The kwargs dictionary to modify in-place
         """
-        for key in NONRFLOW_SETTINGS_OPTIONAL:
+        for key in NORNFLOW_SETTINGS_OPTIONAL:
             kwargs.pop(key, None)
 
     def apply_filters(self, **kwargs) -> Nornir:

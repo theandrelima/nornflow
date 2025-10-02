@@ -1,5 +1,5 @@
 """
-NonrFlow provided filters for Nornir inventory.
+NornFlow provided filters for Nornir inventory.
 """
 
 from nornir.core.inventory import Host
