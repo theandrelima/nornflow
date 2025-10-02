@@ -3,23 +3,23 @@ from unittest.mock import patch
 import yaml
 import pytest
 
-from nornflow.settings import NornFlowSettings, NONRFLOW_SETTINGS_MANDATORY, NONRFLOW_SETTINGS_OPTIONAL
+from nornflow.settings import NornFlowSettings, NORNFLOW_SETTINGS_MANDATORY, NORNFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import ResourceError, SettingsError, NornFlowError
 
 
 def make_valid_settings_dict() -> dict[str, object]:
     """Build a minimal valid settings dict using the mandatory keys and optional defaults."""
     data: dict[str, object] = {}
-    for idx, key in enumerate(NONRFLOW_SETTINGS_MANDATORY):
+    for idx, key in enumerate(NORNFLOW_SETTINGS_MANDATORY):
         data[key] = f"value_{idx}"
-    for opt_key, opt_default in NONRFLOW_SETTINGS_OPTIONAL.items():
+    for opt_key, opt_default in NORNFLOW_SETTINGS_OPTIONAL.items():
         data[opt_key] = opt_default
     return data
 
 
 def test_successful_load_and_optional_override():
     settings_dict = make_valid_settings_dict()
-    opt_keys = list(NONRFLOW_SETTINGS_OPTIONAL.keys())
+    opt_keys = list(NORNFLOW_SETTINGS_OPTIONAL.keys())
     override_key = opt_keys[0] if opt_keys else None
 
     with patch("nornflow.settings.load_file_to_dict", return_value=settings_dict):
@@ -28,10 +28,10 @@ def test_successful_load_and_optional_override():
             assert s.as_dict[override_key] == "overridden"
         else:
             s = NornFlowSettings(settings_file="ignored")
-        for k in NONRFLOW_SETTINGS_MANDATORY:
+        for k in NORNFLOW_SETTINGS_MANDATORY:
             assert k in s.as_dict
             assert s.as_dict[k] is not None
-        sample_key = NONRFLOW_SETTINGS_MANDATORY[0] if NONRFLOW_SETTINGS_MANDATORY else next(iter(s.as_dict))
+        sample_key = NORNFLOW_SETTINGS_MANDATORY[0] if NORNFLOW_SETTINGS_MANDATORY else next(iter(s.as_dict))
         assert getattr(s, sample_key) == s.as_dict[sample_key]
         assert isinstance(str(s), str)
         assert sample_key in str(s)
@@ -69,10 +69,10 @@ def test_load_raises_type_error_is_wrapped_as_settings_error():
 
 
 def test_missing_mandatory_setting_raises_settings_error():
-    if len(NONRFLOW_SETTINGS_MANDATORY) < 1:
+    if len(NORNFLOW_SETTINGS_MANDATORY) < 1:
         pytest.skip("No mandatory settings defined")
     partial = make_valid_settings_dict()
-    missing_key = NONRFLOW_SETTINGS_MANDATORY[0]
+    missing_key = NORNFLOW_SETTINGS_MANDATORY[0]
     partial.pop(missing_key, None)
     with patch("nornflow.settings.load_file_to_dict", return_value=partial):
         with pytest.raises(SettingsError):
@@ -80,10 +80,10 @@ def test_missing_mandatory_setting_raises_settings_error():
 
 
 def test_empty_mandatory_setting_raises_settings_error():
-    if len(NONRFLOW_SETTINGS_MANDATORY) < 1:
+    if len(NORNFLOW_SETTINGS_MANDATORY) < 1:
         pytest.skip("No mandatory settings defined")
     data = make_valid_settings_dict()
-    empty_key = NONRFLOW_SETTINGS_MANDATORY[0]
+    empty_key = NORNFLOW_SETTINGS_MANDATORY[0]
     data[empty_key] = ""
     with patch("nornflow.settings.load_file_to_dict", return_value=data):
         with pytest.raises(SettingsError):

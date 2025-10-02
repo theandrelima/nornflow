@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL
+from nornflow.constants import NORNFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import ProcessorError
 from nornflow.nornir_manager import NornirManager
 
@@ -41,7 +41,7 @@ class TestNornirManager:
         }
 
         # Add all optional NornFlow settings to test they're filtered
-        for param in NONRFLOW_SETTINGS_OPTIONAL:
+        for param in NORNFLOW_SETTINGS_OPTIONAL:
             params[param] = f"value_{param}"
 
         manager = NornirManager(nornir_settings="dummy_config.yaml", **params)
@@ -50,7 +50,7 @@ class TestNornirManager:
         _, call_kwargs = mock_init_nornir.call_args
 
         # Check that all NornFlow params were removed
-        for param in NONRFLOW_SETTINGS_OPTIONAL:
+        for param in NORNFLOW_SETTINGS_OPTIONAL:
             assert param not in call_kwargs
 
         # Check that valid Nornir params remain

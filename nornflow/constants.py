@@ -56,10 +56,10 @@ class FailureStrategy(StrEnum):
 NORNFLOW_SPECIAL_FILTER_KEYS = ["hosts", "groups"]
 
 # used to track the mandatory kwargs for a NornFlowSettings object
-NONRFLOW_SETTINGS_MANDATORY = ("nornir_config_file",)
+NORNFLOW_SETTINGS_MANDATORY = ("nornir_config_file",)
 
 # used to track the optional kwargs for a NornFlowSettings object
-NONRFLOW_SETTINGS_OPTIONAL = {
+NORNFLOW_SETTINGS_OPTIONAL = {
     "local_tasks_dirs": [],
     "local_workflows_dirs": [],
     "local_filters_dirs": [],
