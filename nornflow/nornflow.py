@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Any
 
+from pydantic_serdes.utils import load_file_to_dict
+
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
+from nornflow.builtins.processors import NornFlowFailureStrategyProcessor
 from nornflow.catalogs import FileCatalog, PythonEntityCatalog
 from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
 from nornflow.exceptions import (
@@ -12,8 +15,10 @@ from nornflow.exceptions import (
     ProcessorError,
     ResourceError,
     SettingsError,
+    TaskError,
     WorkflowError,
 )
+from nornflow.models import WorkflowModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import (
@@ -22,8 +27,10 @@ from nornflow.utils import (
     is_workflow_file,
     load_processor,
     process_filter,
+    print_workflow_overview,
 )
-from nornflow.workflow import Workflow, WorkflowFactory
+from nornflow.vars.manager import NornFlowVariablesManager
+from nornflow.vars.processors import NornFlowVariableProcessor
 
 
 class NornFlow:
@@ -33,7 +40,7 @@ class NornFlow:
     jobs that follow a defined workflow pattern.
 
     Key features:
-    - Automated assets discovery from local directories
+    - Assets auto-discovery from local directories
     - Workflow management and execution
     - Consistent configuration handling
     - Advanced inventory filtering with custom filter functions
@@ -62,26 +69,12 @@ class NornFlow:
     2. Workflow variables (defined in workflow file)
     3. Environment variables
     4. Variables from external files
-
-    CLI Variables - Dual Nature:
-    CLI variables in NornFlow serve a dual purpose:
-    1. Traditional CLI usage: Variables parsed from command-line arguments (--vars)
-    2. Override mechanism: Programmatically set variables with highest precedence
-
-    This dual nature allows CLI variables to be:
-    - Set during NornFlow initialization for workflow creation
-    - Updated at runtime during workflow execution for maximum flexibility
-    - Used as a universal override mechanism in programmatic scenarios
-
-    The term "CLI variables" reflects their highest precedence nature and primary
-    source (command-line interface), while also serving as a flexible override
-    mechanism for any high-priority variable needs.
     """
 
     def __init__(
         self,
         nornflow_settings: NornFlowSettings | None = None,
-        workflow: Workflow | None = None,
+        workflow: WorkflowModel | str | None = None,
         processors: list[dict[str, Any]] | None = None,
         cli_vars: dict[str, Any] | None = None,
         cli_filters: dict[str, Any] | None = None,
@@ -93,7 +86,7 @@ class NornFlow:
 
         Args:
             nornflow_settings: NornFlow configuration settings object
-            workflow: Pre-configured workflow object (optional)
+            workflow: Pre-configured WorkflowModel instance or workflow name string (optional)
             processors: List of processor configurations to override default processors
             cli_vars: Variables with highest precedence in the resolution chain.
                 While named "CLI variables" due to their primary source being command-line
@@ -109,37 +102,49 @@ class NornFlow:
             **kwargs: Additional keyword arguments passed to NornFlowSettings
 
         Raises:
-            NornFlowInitializationError: If initialization fails due to invalid configuration
+            InitializationError: If initialization fails due to invalid configuration
         """
         try:
-            # Store processors from explicit parameter
-            self._kwargs_processors = processors
-
-            # Store CLI variables - these have highest precedence in variable resolution
-            # and serve as both CLI-sourced variables and programmatic overrides
-            self._cli_vars = cli_vars or {}
-
-            # Store CLI inventory filters - these override workflow inventory filters
-            self._cli_filters = cli_filters or {}
-
-            # Store CLI failure strategy - this overrides workflow failure strategy
-            self._cli_failure_strategy = cli_failure_strategy
-
-            # Some kwargs should only be set through the YAML settings file.
             self._check_invalid_kwargs(kwargs)
 
-            # a NornFlow object must have a NornFlowSettings object
-            self._settings = nornflow_settings or NornFlowSettings(**kwargs)
+            if nornflow_settings:
+                self._settings = nornflow_settings
+            else:
+                try:
+                    self._settings = NornFlowSettings(**kwargs)
+                except (SettingsError, ResourceError) as e:
+                    raise InitializationError(f"Failed to initialize NornFlow settings: {e}") from e
 
-            # a NornFlow object can exist without a Workflow object BEFORE the run() method is called
-            self._workflow = workflow
+            self._cli_vars = cli_vars or {}
+            self._cli_filters = cli_filters or {}
+            self._cli_failure_strategy = cli_failure_strategy
+            self._kwargs_processors = processors
+
+            self._tasks_catalog = PythonEntityCatalog("tasks")
+            self._filters_catalog = PythonEntityCatalog("filters")
+            self._workflows_catalog = FileCatalog("workflows")
 
             self._load_tasks_catalog()
-            self._load_workflows_catalog()
             self._load_filters_catalog()
+            self._load_workflows_catalog()
+
+            self._workflow = None
+            self._var_processor = None
+            self._failure_processor_instance = None
+
+            if workflow:
+                self.workflow = workflow
+
             self._load_processors()
 
-            # Create NornirManager instead of directly initializing Nornir
+            try:
+                self._nornir_configs = load_file_to_dict(self._settings.nornir_config_file)
+            except Exception as e:
+                raise CoreError(
+                    f"Failed to load Nornir config from '{self._settings.nornir_config_file}': {e}",
+                    component="NornFlow",
+                ) from e
+
             self.nornir_manager = NornirManager(
                 nornir_settings=self.settings.nornir_config_file,
                 **kwargs,
@@ -147,7 +152,6 @@ class NornFlow:
         except CoreError:
             raise
         except Exception as e:
-            # Wrap any other exception in InitializationError
             raise InitializationError(f"Failed to initialize NornFlow: {e!s}", component="NornFlow") from e
 
     def _load_processors(self) -> None:
@@ -160,15 +164,15 @@ class NornFlow:
         The loaded processors are stored in self._processors for later use during
         workflow execution.
         """
-        # Check if processors were wither passed directly, or set in NornFlow's settings
         processors_list = self._kwargs_processors or self.settings.processors
         if processors_list:
             self._processors = []
             for processor_config in processors_list:
-                processor = load_processor(processor_config)
-                self._processors.append(processor)
-
-        # If no processors are specified anywhere, use default
+                try:
+                    processor = load_processor(processor_config)
+                    self._processors.append(processor)
+                except ProcessorError as e:
+                    raise InitializationError(f"Failed to load processor: {e}") from e
         else:
             self._processors = [DefaultNornFlowProcessor()]
 
@@ -180,7 +184,6 @@ class NornFlow:
         Returns:
             dict[str, Any]: Dictionary containing the Nornir configurations.
         """
-        # Access nornir through nornir_manager
         return self.nornir_manager.nornir.config.dict()
 
     @nornir_configs.setter
@@ -209,7 +212,7 @@ class NornFlow:
             value (Any): Attempted value to set.
 
         Raises:
-            SettingsModificationError: Always raised to prevent direct setting of the settings.
+            SettingsError: Always raised to prevent direct setting of the settings.
         """
         raise SettingsError(
             "Cannot set settings directly. Settings must be either passed as a "
@@ -282,33 +285,56 @@ class NornFlow:
         self._cli_filters = value
 
     @property
-    def cli_failure_strategy(self) -> FailureStrategy | None:
+    def failure_strategy(self) -> FailureStrategy:
         """
-        Get the CLI failure strategy with highest precedence.
+        Get the effective failure strategy based on precedence chain.
 
-        This failure strategy overrides any failure strategy defined in the workflow YAML.
+        Precedence (highest to lowest):
+        1. CLI failure strategy
+        2. Workflow failure strategy
+        3. Settings failure strategy
+        4. Default (SKIP_FAILED)
 
         Returns:
-            FailureStrategy | None: The CLI failure strategy, or None if not set.
+            FailureStrategy: The effective failure strategy.
         """
-        return self._cli_failure_strategy
+        return (
+            self._cli_failure_strategy
+            or (self._workflow.failure_strategy if self._workflow else None)
+            or self._settings.failure_strategy
+            or FailureStrategy.SKIP_FAILED
+        )
 
-    @cli_failure_strategy.setter
-    def cli_failure_strategy(self, value: FailureStrategy | None) -> None:
-        """Update CLI failure strategy that overrides workflow-defined failure strategy.
+    @failure_strategy.setter
+    def failure_strategy(self, value: FailureStrategy) -> None:
+        """
+        Set the CLI failure strategy override.
 
         Args:
-            value: FailureStrategy enum value or None.
+            value: FailureStrategy enum value.
 
         Raises:
-            CoreError: If value is not an FailureStrategy or None.
+            CoreError: If value is not a FailureStrategy.
         """
-        if value is not None and not isinstance(value, FailureStrategy):
+        if not isinstance(value, FailureStrategy):
             raise CoreError(
-                f"CLI failure strategy must be an FailureStrategy enum or None, got {type(value).__name__}",
+                f"Failure strategy must be a FailureStrategy enum, got {type(value).__name__}",
                 component="NornFlow",
             )
         self._cli_failure_strategy = value
+        self._failure_processor_instance = None
+
+    @property
+    def failure_processor(self) -> NornFlowFailureStrategyProcessor:
+        """
+        Get the failure processor, creating it lazily if needed.
+
+        Returns:
+            NornFlowFailureStrategyProcessor: The failure processor instance.
+        """
+        if self._failure_processor_instance is None:
+            self._failure_processor_instance = NornFlowFailureStrategyProcessor(self.failure_strategy)
+        return self._failure_processor_instance
 
     @property
     def tasks_catalog(self) -> PythonEntityCatalog:
@@ -326,7 +352,7 @@ class NornFlow:
         Prevent setting the tasks catalog directly.
 
         Raises:
-            AttributeError: Always raised to prevent direct setting of the tasks catalog.
+            CatalogError: Always raised to prevent direct setting of the tasks catalog.
         """
         raise CatalogError("Cannot set tasks catalog directly.", catalog_name="tasks")
 
@@ -336,7 +362,7 @@ class NornFlow:
         Get the workflows catalog.
 
         Returns:
-            FileCatalog: Catalog of workflows names and the correspoding file Path to it.
+            FileCatalog: Catalog of workflows names and the corresponding file Path to it.
         """
         return self._workflows_catalog
 
@@ -346,7 +372,7 @@ class NornFlow:
         Prevent setting the workflows catalog directly.
 
         Raises:
-            AttributeError: Always raised to prevent direct setting of the tasks catalog.
+            CatalogError: Always raised to prevent direct setting of the workflows catalog.
         """
         raise CatalogError("Cannot set workflows catalog directly.", catalog_name="workflows")
 
@@ -366,34 +392,56 @@ class NornFlow:
         Prevent setting the filters catalog directly.
 
         Raises:
-            AttributeError: Always raised to prevent direct setting of the filters catalog.
+            CatalogError: Always raised to prevent direct setting of the filters catalog.
         """
         raise CatalogError("Cannot set filters catalog directly.", catalog_name="filters")
 
     @property
-    def workflow(self) -> Workflow | str:
+    def workflow(self) -> WorkflowModel | None:
         """
-        Get the workflow object.
+        Get the workflow model object.
 
         Returns:
-            Workflow | str: The workflow object.
+            WorkflowModel | None: The workflow model object or None if not set.
         """
         return self._workflow
 
     @workflow.setter
-    def workflow(self, value: Workflow) -> None:
+    def workflow(self, value: WorkflowModel | str) -> None:
         """
-        Set the workflow object.
+        Set the workflow either from a WorkflowModel instance or by name.
 
         Args:
-            value (Any): The workflow object to set.
+            value: Either a WorkflowModel instance or a string workflow name.
+        
+        Raises:
+            WorkflowError: If value is invalid or workflow cannot be loaded.
         """
-        if not isinstance(value, Workflow):
+        if isinstance(value, WorkflowModel):
+            self._workflow = value
+        elif isinstance(value, str):
+            if value not in self._workflows_catalog:
+                raise WorkflowError(
+                    f"Workflow '{value}' not found in workflows catalog. "
+                    f"Available workflows: {', '.join(sorted(self._workflows_catalog.keys()))}",
+                    component="NornFlow",
+                )
+            
+            workflow_path = self._workflows_catalog[value]
+            try:
+                self._workflow = WorkflowModel.create_from_file(str(workflow_path))
+            except Exception as e:
+                raise WorkflowError(
+                    f"Failed to load workflow '{value}' from path '{workflow_path}': {e}",
+                    component="NornFlow",
+                ) from e
+        else:
             raise WorkflowError(
-                f"NornFlow.workflow MUST be a Workflow object, but an object of {type(value)} was "
-                f"provided: {value}"
+                f"Workflow must be a WorkflowModel instance or string name, got {type(value).__name__}",
+                component="NornFlow",
             )
-        self._workflow = value
+        
+        self._failure_processor_instance = None
 
     @property
     def processors(self) -> list:
@@ -411,7 +459,7 @@ class NornFlow:
         Prevent setting the processors directly.
 
         Raises:
-            SettingsModificationError: Always raised to prevent direct setting of processors.
+            ProcessorError: Always raised to prevent direct setting of processors.
         """
         raise ProcessorError(
             message="Processors cannot be set directly, but must be loaded from nornflow settings file.",
@@ -428,10 +476,8 @@ class NornFlow:
         """
         self._tasks_catalog = PythonEntityCatalog(name="tasks")
 
-        # Phase 1: Load built-in tasks
         self._tasks_catalog.register_from_module(builtin_tasks, predicate=is_nornir_task)
 
-        # Phase 2: Load tasks from local directories
         errors = []
         for task_dir in self.settings.local_tasks_dirs:
             task_path = Path(task_dir)
@@ -468,12 +514,10 @@ class NornFlow:
         """
         self._filters_catalog = PythonEntityCatalog(name="filters")
 
-        # Phase 1: Load built-in filters
         self._filters_catalog.register_from_module(
             builtin_filters, predicate=is_nornir_filter, transform_item=process_filter
         )
 
-        # Phase 2: Load filters from local directories
         errors = []
         for filter_dir in self.settings.local_filters_dirs:
             filter_path = Path(filter_dir)
@@ -508,7 +552,6 @@ class NornFlow:
         """
         self._workflows_catalog = FileCatalog(name="workflows")
 
-        # Process each workflow directory using FileCatalog's discover_items_in_dir
         errors = []
         for workflow_dir in self.settings.local_workflows_dirs:
             workflow_path = Path(workflow_dir)
@@ -542,7 +585,7 @@ class NornFlow:
             kwargs (dict[str, Any]): The kwargs dictionary to check.
 
         Raises:
-            NornFlowInitializationError: If any invalid keys are found in kwargs.
+            InitializationError: If any invalid keys are found in kwargs.
         """
         invalid_keys = [key for key in kwargs if key in NORNFLOW_INVALID_INIT_KWARGS]
         if invalid_keys:
@@ -555,80 +598,265 @@ class NornFlow:
         """
         Ensure a valid workflow is available before execution.
 
-        If self.workflow is a string, resolve it to a Workflow object using
-        the workflows catalog. If the workflow is not found or not set,
-        raise an appropriate error.
+        Raises:
+            WorkflowError: If no workflow is configured.
+        """
+        if not self._workflow:
+            raise WorkflowError("No workflow configured. Set a workflow before calling run().", component="NornFlow")
+
+    def _check_tasks(self) -> None:
+        """
+        Check if the tasks in the workflow are present in the tasks catalog.
 
         Raises:
-            WorkflowError: If workflow is not set or not found in the catalog
+            TaskError: If any tasks in the workflow are not found in the tasks catalog.
         """
-        if not self.workflow:
-            raise WorkflowError("No Workflow object was provided.", component="NornFlow")
+        task_names = [task.name for task in self._workflow.tasks]
 
-        if isinstance(self.workflow, str):
-            workflow_name = self.workflow
-            workflow_path = self._workflows_catalog.get(workflow_name)
+        missing_tasks = [task_name for task_name in task_names if task_name not in self._tasks_catalog]
 
-            if not workflow_path:
-                raise WorkflowError(
-                    f"Workflow '{workflow_name}' not found in the workflows catalog.", component="NornFlow"
-                )
+        if missing_tasks:
+            available_tasks = ", ".join(sorted(self._tasks_catalog.keys()))
+            raise TaskError(
+                f"Task(s) not found in tasks catalog: {', '.join(missing_tasks)}. "
+                f"Available tasks: {available_tasks}"
+            )
 
-            self.workflow = WorkflowFactory(
-                workflow_path=workflow_path,
-                settings=self.settings,
-                cli_vars=self.cli_vars,
-                cli_filters=self.cli_filters,
-                cli_failure_strategy=self.cli_failure_strategy,
-            ).create()
+    def _get_filtering_kwargs(self) -> list[dict[str, Any]]:
+        """
+        Process and prepare inventory filters for application.
+        
+        Returns:
+            List of filter kwargs dictionaries ready to apply.
+        """
+        filters_to_apply = self._cli_filters or self._workflow.inventory_filters or {}
+        
+        if not filters_to_apply:
+            return []
+
+        filter_kwargs_list = []
+        for key, filter_values in filters_to_apply.items():
+            filter_kwargs = self._process_custom_filter(key, filter_values)
+            if filter_kwargs:
+                filter_kwargs_list.append(filter_kwargs)
+
+        return filter_kwargs_list
+
+    def _process_custom_filter(
+        self, key: str, filter_values: Any
+    ) -> dict[str, Any]:
+        """
+        Process a custom filter configuration.
+        
+        Args:
+            key: The filter name.
+            filter_values: The filter values.
+            
+        Returns:
+            Dictionary of filter kwargs.
+            
+        Raises:
+            WorkflowError: If the filter is not found or parameter count doesn't match.
+        """
+        if key not in self._filters_catalog:
+            raise WorkflowError(f"Filter '{key}' not found in filters catalog")
+
+        filter_func, param_names = self._filters_catalog[key]
+
+        if isinstance(filter_values, dict):
+            filter_kwargs = {"filter_func": filter_func}
+            filter_kwargs.update(filter_values)
+        elif isinstance(filter_values, list):
+            if len(param_names) == 1:
+                filter_kwargs = {"filter_func": filter_func, param_names[0]: filter_values}
+            else:
+                if len(filter_values) != len(param_names):
+                    raise WorkflowError(
+                        f"Filter '{key}' expects {len(param_names)} parameters, "
+                        f"got {len(filter_values)}"
+                    )
+                filter_kwargs = {"filter_func": filter_func}
+                for param_name, value in zip(param_names, filter_values):
+                    filter_kwargs[param_name] = value
+        else:
+            if len(param_names) != 1:
+                raise WorkflowError(f"Filter '{key}' expects {len(param_names)} parameters, got 1")
+            filter_kwargs = {"filter_func": filter_func, param_names[0]: filter_values}
+
+        return filter_kwargs
+
+    def _apply_filters(self, nornir_manager: NornirManager) -> None:
+        """
+        Apply inventory filters to the Nornir manager.
+        
+        Args:
+            nornir_manager: The Nornir manager to apply filters to.
+        """
+        filter_kwargs_list = self._get_filtering_kwargs()
+        
+        for filter_kwargs in filter_kwargs_list:
+            nornir_manager.apply_filters(**filter_kwargs)
+
+    def _init_variable_manager(self) -> NornFlowVariablesManager:
+        """
+        Initialize the variable manager with workflow context.
+        
+        Returns:
+            The initialized NornFlowVariablesManager.
+        """
+        workflow_path = getattr(self._workflow, '_source_path', None)
+        
+        return NornFlowVariablesManager(
+            vars_dir=self._settings.vars_dir,
+            cli_vars=self._cli_vars,
+            inline_workflow_vars=dict(self._workflow.vars) if self._workflow.vars else {},
+            workflow_path=workflow_path,
+            workflow_roots=self._settings.local_workflows_dirs,
+        )
+
+    def _with_processors(
+        self,
+        nornir_manager: NornirManager,
+        processors: list | None = None,
+    ) -> None:
+        """
+        Apply processors to the Nornir instance based on configuration.
+
+        IMPORTANT: Always adds NornFlowVariableProcessor as the first processor
+        to ensure host context is available for variable resolution.
+        Always adds NornFlowFailureStrategyProcessor as the second processor
+        to handle error policies during task execution.
+
+        This method handles the processor selection logic:
+        1. Always add NornFlowVariableProcessor first (for variable resolution)
+        2. Use workflow-specific processors from self._workflow.processors if defined
+        3. Otherwise use the passed processors parameter
+        4. If neither exists, use NornFlow's global processors (self._processors)
+        5. Always add NornFlowFailureStrategyProcessor last (for failure strategy handling)
+
+        Args:
+            nornir_manager: The NornirManager instance to apply processors to
+            processors: List of processors to apply if no workflow-specific processors defined
+        """
+        vars_manager = self._init_variable_manager()
+        self._var_processor = NornFlowVariableProcessor(vars_manager)
+        
+        all_processors = [self._var_processor]
+        
+        if self._workflow and self._workflow.processors:
+            try:
+                workflow_processors = []
+                for processor_config in self._workflow.processors:
+                    processor = load_processor(dict(processor_config))
+                    workflow_processors.append(processor)
+                
+                if workflow_processors:
+                    all_processors.extend(workflow_processors)
+            except ProcessorError as e:
+                raise WorkflowError(f"Failed to initialize workflow processors: {e}") from e
+        elif processors:
+            all_processors.extend(processors)
+        elif self._processors:
+            all_processors.extend(self._processors)
+        
+        all_processors.append(self.failure_processor)
+        
+        nornir_manager.apply_processors(all_processors)
 
     def run(self, dry_run: bool = False) -> int:
         """
         Execute the configured workflow with the current NornFlow settings.
-
+    
         This method orchestrates the complete workflow execution process:
         1. Ensures a workflow is configured and ready
-        2. Applies processor precedence rules
-        3. Passes all necessary catalogs, CLI variables, and CLI filters to the workflow
-        4. Executes the workflow tasks against the filtered inventory
-
-        Processor Precedence:
-        If processors were specified via constructor kwargs (typically from CLI), they take
-        precedence over workflow-specific processors, which in turn take precedence over
-        global processors from settings.
-
-        CLI Variables and CLI Filters:
-        The CLI variables and CLI filters stored in this NornFlow instance are passed to the workflow
-        and have the highest precedence in their respective systems. These can originate from
-        actual CLI arguments or be set programmatically as overrides.
-
+        2. Validates that all tasks exist in the catalog
+        3. Initializes the Nornir manager
+        4. Applies inventory filters
+        5. Sets up variable management
+        6. Configures processors
+        7. Executes tasks in sequence
+        8. Calls print_final_workflow_summary on processors that support it
+        9. Returns exit code based on execution results
+    
+        Exit Codes:
+        - 0: Success (all tasks passed)
+        - 1-100: Failure with percentage information (% of failed task executions, rounded down)
+        - 101: Failure without percentage information (no processor provided statistics)
+        - 102+: Reserved for exceptions/internal errors (this must be handled by the caller)
+    
         Any exceptions that might happen in the encapsulated logic will just bubble-up
         back to the caller of NornFlow.run(). This is to allow the caller the flexibility
         to process and handle it as fits.
-
+    
+        Args:
+            dry_run: Whether to execute in dry-run mode.
+    
         Returns:
-            int: Exit code representing the failure percentage (0-100), where 0 means no failures
-            or no execution statistics available, and higher values indicate the percentage of
-            failed task executions (rounded down).
+            int: Exit code representing execution status.
         """
         self._ensure_workflow()
+        self._check_tasks()
+        
+        nornir_manager = NornirManager(self.settings.nornir_config_file, **self._nornir_configs)
+        
+        self._apply_filters(nornir_manager)
+        self._with_processors(nornir_manager)
+    
+        effective_dry_run = dry_run or self._workflow.dry_run
+        
+        print_workflow_overview(
+            workflow_model=self._workflow,
+            effective_dry_run=effective_dry_run,
+            hosts_count=len(nornir_manager.nornir.inventory.hosts),
+            inventory_filters=self._cli_filters or self._workflow.inventory_filters or {},
+            workflow_vars=dict(self._workflow.vars) if self._workflow.vars else {},
+            cli_vars=self._cli_vars,
+            failure_strategy=self.failure_strategy,
+        )
+    
+        for processor in nornir_manager.nornir.processors:
+            if hasattr(processor, "total_workflow_tasks"):
+                processor.total_workflow_tasks = len(self._workflow.tasks)
+    
+        with nornir_manager:
+            for task in self._workflow.tasks:
+                nornir_manager.set_dry_run(effective_dry_run)
+                
+                task.run(
+                    nornir_manager=nornir_manager,
+                    vars_manager=self._var_processor.vars_manager,
+                    tasks_catalog=dict(self._tasks_catalog),
+                )
+    
+        for processor in nornir_manager.nornir.processors:
+            if hasattr(processor, "print_final_workflow_summary"):
+                processor.print_final_workflow_summary()
+    
+        for processor in nornir_manager.nornir.processors:
+            try:
+                task_executions = getattr(processor, "task_executions", 0)
+                failed_executions = getattr(processor, "failed_executions", 0)
 
-        # If kwargs processors specified, disable workflow-specific processors
-        if self._kwargs_processors and self.workflow.processors_config:
-            # Simply disable workflow processors to enforce kwargs precedence
-            self.workflow.processors_config = None
-
-        with self.nornir_manager:
-            return self.workflow.run(
-                self.nornir_manager,
-                self.tasks_catalog,
-                self.filters_catalog,
-                self.settings.local_workflows_dirs,
-                self.processors,
-                cli_vars=self.cli_vars,
-                cli_filters=self.cli_filters,
-                dry_run=dry_run,
-            )
+                # some tasks failed and we want the return code to report 
+                # the % of failed tasks
+                if (
+                    isinstance(task_executions, int)
+                    and isinstance(failed_executions, int)
+                    and task_executions
+                    and failed_executions
+                ):
+                    failure_percentage = int((failed_executions / task_executions) * 100)
+                    return failure_percentage
+    
+            except Exception:
+                continue
+        
+        # if we got here, none of the applied processors support executions stats
+        if nornir_manager.nornir.data.failed_hosts:
+            return 101
+        
+        # success: all tasks ran without any failured for any hosts
+        return 0
 
 
 class NornFlowBuilder:
@@ -637,7 +865,7 @@ class NornFlowBuilder:
 
     The builder provides a structured way to configure all aspects of a NornFlow instance:
     - Settings configuration (via object or file path)
-    - Workflow configuration (via object, name, path or dictionary)
+    - Workflow configuration (via WorkflowModel object, file path, or dictionary)
     - Processor registration
     - CLI variables (with highest precedence in variable resolution)
     - CLI inventory filters (with highest precedence for inventory filtering)
@@ -657,7 +885,7 @@ class NornFlowBuilder:
         # Basic usage
         builder = NornFlowBuilder()
         nornflow = builder.with_settings_path('settings.yaml')
-                          .with_workflow_name('deploy')
+                          .with_workflow_path('deploy.yaml')
                           .with_cli_vars({'env': 'prod', 'debug': True})
                           .with_cli_filters({'hosts': ['router1', 'router2']})
                           .build()
@@ -666,15 +894,11 @@ class NornFlowBuilder:
       1. with_settings_object()
       2. with_settings_path()
 
-    Order of preference for building a Workflow object:
-      1. with_workflow_object()
-      2. with_workflow_name()
-      3. with_workflow_path()
-      4. with_workflow_dict()
-
-    NOTE: In this NornFlowBuilder class, we actually enforce only the order of items 1 and 2.
-    It's only if neither are provided that NornFlowBuilder avails of the WorkflowFactory class
-    which will enforce the preference order of items 3 and 4.
+    Order of preference for building a WorkflowModel object:
+      1. with_workflow_model()
+      2. with_workflow_path()
+      3. with_workflow_dict()
+      4. with_workflow_name() (resolved during execution)
     """
 
     def __init__(self):
@@ -682,10 +906,7 @@ class NornFlowBuilder:
         Initialize the NornFlowBuilder with default values.
         """
         self._settings: NornFlowSettings | None = None
-        self._workflow_path: str | Path | None = None
-        self._workflow_dict: dict[str, Any] | None = None
-        self._workflow_object: Workflow | None = None
-        self._workflow_name: str | None = None
+        self._workflow: WorkflowModel | str | None = None
         self._processors: list[dict[str, Any]] | None = None
         self._cli_vars: dict[str, Any] | None = None
         self._cli_filters: dict[str, Any] | None = None
@@ -697,10 +918,10 @@ class NornFlowBuilder:
         Set the NornFlowSettings object for the builder.
 
         Args:
-            settings_object (NornFlowSettings): The NornFlowSettings object.
+            settings_object: The NornFlowSettings object.
 
         Returns:
-            NornFlowBuilder: The builder instance.
+            The builder instance for method chaining.
         """
         self._settings = settings_object
         return self
@@ -709,17 +930,20 @@ class NornFlowBuilder:
         """
         Creates a NornFlowSettings for the builder, based on a file path.
         This only takes effect if the settings object has not been set yet.
-        Initializing NorFlow with a fully formed NornFlowSettings object is preferred.
+        Initializing NornFlow with a fully formed NornFlowSettings object is preferred.
 
         Args:
-            settings_path (str | Path): The path to a YAML file to be used by NornFlowSettings object.
+            settings_path: The path to a YAML file to be used by NornFlowSettings object.
 
         Returns:
-            NornFlowBuilder: The builder instance.
+            The builder instance for method chaining.
         """
         if not self._settings:
-            settings_object = NornFlowSettings(settings_file=settings_path)
-            self.with_settings_object(settings_object)
+            try:
+                settings_object = NornFlowSettings(settings_file=settings_path)
+                self._settings = settings_object
+            except (SettingsError, ResourceError) as e:
+                raise InitializationError(f"Failed to load settings from '{settings_path}': {e}") from e
         return self
 
     def with_workflow_path(self, workflow_path: str | Path) -> "NornFlowBuilder":
@@ -727,12 +951,15 @@ class NornFlowBuilder:
         Set the workflow path for the builder.
 
         Args:
-            workflow_path (str | Path): Path to the workflow file.
+            workflow_path: Path to the workflow file.
 
         Returns:
-            NornFlowBuilder: The builder instance.
+            The builder instance for method chaining.
         """
-        self._workflow_path = workflow_path
+        try:
+            self._workflow = WorkflowModel.create_from_file(str(workflow_path))
+        except Exception as e:
+            raise InitializationError(f"Failed to load workflow from '{workflow_path}': {e}") from e
         return self
 
     def with_workflow_dict(self, workflow_dict: dict[str, Any]) -> "NornFlowBuilder":
@@ -740,38 +967,45 @@ class NornFlowBuilder:
         Set the workflow dictionary for the builder.
 
         Args:
-            workflow_dict (dict[str, Any]): Dictionary representing the workflow.
+            workflow_dict: Dictionary representing the workflow.
 
         Returns:
-            NornFlowBuilder: The builder instance.
+            The builder instance for method chaining.
         """
-        self._workflow_dict = workflow_dict
+        try:
+            self._workflow = WorkflowModel.create(workflow_dict)
+        except Exception as e:
+            raise InitializationError(f"Failed to create workflow from dict: {e}") from e
         return self
 
-    def with_workflow_object(self, workflow_object: Workflow) -> "NornFlowBuilder":
+    def with_workflow_model(self, workflow_model: WorkflowModel) -> "NornFlowBuilder":
         """
-        Set the workflow object for the builder.
+        Set the workflow model for the builder.
 
         Args:
-            workflow_object (Workflow): A fully formed Workflow object.
+            workflow_model: A fully formed WorkflowModel object.
 
         Returns:
-            NornFlowBuilder: The builder instance.
+            The builder instance for method chaining.
         """
-        self._workflow_object = workflow_object
+        self._workflow = workflow_model
         return self
 
     def with_workflow_name(self, workflow_name: str) -> "NornFlowBuilder":
         """
         Set the workflow name for the builder.
+        
+        The workflow will be resolved from the workflows catalog during NornFlow execution.
+        This allows using workflow names instead of paths, which is particularly useful
+        for CLI commands like `nornflow run some_workflow_name`.
 
         Args:
-            workflow_name (str): The name of the workflow to set.
+            workflow_name: The name of the workflow to set.
 
         Returns:
-            NornFlowBuilder: The builder instance.
+            The builder instance for method chaining.
         """
-        self._workflow_name = workflow_name
+        self._workflow = workflow_name
         return self
 
     def with_processors(self, processors: list[dict[str, Any]]) -> "NornFlowBuilder":
@@ -779,11 +1013,11 @@ class NornFlowBuilder:
         Set the processor configurations for the builder.
 
         Args:
-            processors (list[dict[str, Any]]): List of processor configurations.
+            processors: List of processor configurations.
                 Each must be a dict with 'class' and optional 'args' keys.
 
         Returns:
-            NornFlowBuilder: The builder instance.
+            The builder instance for method chaining.
         """
         self._processors = processors
         return self
@@ -813,7 +1047,7 @@ class NornFlowBuilder:
             cli_vars: Dictionary of variables with highest precedence
 
         Returns:
-            NornFlowBuilder: The builder instance.
+            The builder instance for method chaining.
         """
         self._cli_vars = cli_vars
         return self
@@ -829,7 +1063,7 @@ class NornFlowBuilder:
             cli_filters: Dictionary of inventory filters with highest precedence
 
         Returns:
-            NornFlowBuilder: The builder instance.
+            The builder instance for method chaining.
         """
         self._cli_filters = cli_filters
         return self
@@ -845,7 +1079,7 @@ class NornFlowBuilder:
             cli_failure_strategy: FailureStrategy enum value with highest precedence
 
         Returns:
-            NornFlowBuilder: The builder instance.
+            The builder instance for method chaining.
         """
         self._cli_failure_strategy = cli_failure_strategy
         return self
@@ -855,10 +1089,10 @@ class NornFlowBuilder:
         Set additional keyword arguments for the builder.
 
         Args:
-            **kwargs (Any): Additional keyword arguments.
+            **kwargs: Additional keyword arguments.
 
         Returns:
-            NornFlowBuilder: The builder instance.
+            The builder instance for method chaining.
         """
         self._kwargs.update(kwargs)
         return self
@@ -869,33 +1103,17 @@ class NornFlowBuilder:
 
         The built NornFlow instance will include all configured components:
         - Settings (from object or file path)
-        - Workflow (from various sources based on precedence)
+        - Workflow model (from model, path, dictionary, or name)
         - Processors (if specified)
         - CLI variables (with highest precedence in variable resolution)
         - CLI inventory filters (with highest precedence for inventory filtering)
 
         Returns:
-            NornFlow: The constructed NornFlow object with all configurations applied.
+            The constructed NornFlow object with all configurations applied.
         """
-        workflow = self._workflow_object or self._workflow_name
-
-        if not workflow:
-            # we pass both workflow_path and workflow_dict to WorkflowFactory
-            # and leave it to the factory to decide which one to use
-            if self._workflow_path or self._workflow_dict:
-                workflow_factory = WorkflowFactory(
-                    workflow_path=self._workflow_path,
-                    workflow_dict=self._workflow_dict,
-                    settings=self._settings,
-                    cli_vars=self._cli_vars,
-                    cli_filters=self._cli_filters,
-                    cli_failure_strategy=self._cli_failure_strategy,
-                )
-                workflow = workflow_factory.create()
-
         return NornFlow(
             nornflow_settings=self._settings,
-            workflow=workflow,
+            workflow=self._workflow,
             processors=self._processors,
             cli_vars=self._cli_vars,
             cli_filters=self._cli_filters,
