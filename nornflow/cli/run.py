@@ -7,7 +7,7 @@ from typing import Any
 
 import typer
 
-from nornflow import NornFlowBuilder, WorkflowFactory
+from nornflow import NornFlowBuilder
 from nornflow.cli.exceptions import CLIRunError
 from nornflow.constants import (
     FailureStrategy,
@@ -288,13 +288,7 @@ def get_nornflow_builder(
         target_path = Path(target)
         if target_path.exists():
             absolute_path = target_path.resolve()
-            wf = WorkflowFactory.create_from_file(
-                absolute_path,
-                cli_vars=cli_vars,
-                cli_filters=inventory_filters,
-                cli_failure_strategy=cli_failure_strategy,
-            )
-            builder.with_workflow_object(wf)
+            builder.with_workflow_path(str(absolute_path))
         else:
             builder.with_workflow_name(target)
     else:
@@ -468,7 +462,7 @@ def run(
             message=f"NornFlow error while running {target}: {e}",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=101)  # noqa: B904
+        raise typer.Exit(code=102)  # noqa: B904
 
     except FileNotFoundError as e:
         CLIRunError(
@@ -476,7 +470,7 @@ def run(
             hint=f"Check that the file '{target}' exists and is accessible.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=101)  # noqa: B904
+        raise typer.Exit(code=103)  # noqa: B904
 
     except PermissionError as e:
         CLIRunError(
@@ -484,7 +478,7 @@ def run(
             hint="Check that you have sufficient permissions to access the required files.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=101)  # noqa: B904
+        raise typer.Exit(code=104)  # noqa: B904
 
     except Exception as e:
         CLIRunError(
@@ -492,4 +486,4 @@ def run(
             hint="This may be a bug. Please report it if the issue persists.",
             original_exception=e,
         ).show()
-        raise typer.Exit(code=101)  # noqa: B904
+        raise typer.Exit(code=105)  # noqa: B904
