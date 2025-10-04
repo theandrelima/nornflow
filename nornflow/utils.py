@@ -287,7 +287,7 @@ def print_workflow_overview(
     hosts_count: int,
     inventory_filters: dict[str, Any],
     workflow_vars: dict[str, Any],
-    cli_vars: dict[str, Any],
+    vars: dict[str, Any],
     failure_strategy: FailureStrategy | None,
 ) -> None:
     """
@@ -299,7 +299,7 @@ def print_workflow_overview(
         hosts_count: Number of hosts in the filtered inventory
         inventory_filters: Dictionary of applied inventory filters
         workflow_vars: Workflow-defined variables
-        cli_vars: CLI variables with highest precedence
+        vars: Vars with highest precedence
         failure_strategy: The active failure handling strategy
     """
     print("\n" + "━" * 80)
@@ -330,8 +330,8 @@ def print_workflow_overview(
     all_vars = {}
     if workflow_vars:
         all_vars.update({"Workflow Variables": workflow_vars})
-    if cli_vars:
-        all_vars.update({"CLI Variables (highest precedence)": cli_vars})
+    if vars:
+        all_vars.update({"Variables (highest precedence)": vars})
 
     if all_vars:
         vars_table = []
