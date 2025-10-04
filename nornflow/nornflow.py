@@ -146,9 +146,9 @@ class NornFlow:
                     component="NornFlow",
                 ) from e
 
-            self.nornir_manager = NornirManager(
+            self._nornir_manager = NornirManager(
                 nornir_settings=self.settings.nornir_config_file,
-                **kwargs,
+                **self._nornir_configs,
             )
         except CoreError:
             raise
@@ -192,6 +192,20 @@ class NornFlow:
         raise NornirError(
             "Nornir configurations cannot be modified directly. Use NornFlowSettings to configure Nornir."
         )
+
+    @property
+    def nornir_manager(self) -> NornirManager:
+        """
+        Get the Nornir manager instance.
+
+        Returns:
+            NornirManager: The Nornir manager instance.
+        """
+        return self._nornir_manager
+
+    @nornir_manager.setter
+    def nornir_manager(self, value: Any) -> None:
+        raise CoreError("Nornir manager cannot be set directly.")
 
     @property
     def settings(self) -> NornFlowSettings:
@@ -761,6 +775,87 @@ class NornFlow:
         
         nornir_manager.apply_processors(all_processors)
 
+    def _orchestrate_execution(self, effective_dry_run: bool) -> None:
+        """
+        Orchestrate the execution of workflow tasks in sequence.
+
+        This method handles the core workflow execution logic, including setting
+        the dry-run mode and running each task with the necessary context.
+
+        Args:
+            effective_dry_run: Whether to execute in dry-run mode.
+        """
+        with self.nornir_manager:
+            for task in self.workflow.tasks:
+                self.nornir_manager.set_dry_run(effective_dry_run)
+                
+                task.run(
+                    nornir_manager=self.nornir_manager,
+                    vars_manager=self._var_processor.vars_manager,
+                    tasks_catalog=dict(self.tasks_catalog),
+                )
+
+    def _print_workflow_overview(self, effective_dry_run: bool) -> None:
+        """
+        Print the workflow overview before execution.
+
+        Args:
+            effective_dry_run: Whether to execute in dry-run mode.
+        """
+        print_workflow_overview(
+            workflow_model=self.workflow,
+            effective_dry_run=effective_dry_run,
+            hosts_count=len(self.nornir_manager.nornir.inventory.hosts),
+            inventory_filters=self.filters or self.workflow.inventory_filters or {},
+            workflow_vars=dict(self.workflow.vars) if self.workflow.vars else {},
+            vars=self.vars,
+            failure_strategy=self.failure_strategy,
+        )
+
+    def _print_workflow_summary(self) -> None:
+        """
+        Print the final workflow summary by invoking summary methods on processors.
+
+        Iterates through all processors and calls print_final_workflow_summary
+        on those that support it, allowing for post-execution reporting.
+        """
+        for processor in self.nornir_manager.nornir.processors:
+            if hasattr(processor, "print_final_workflow_summary"):
+                processor.print_final_workflow_summary()
+
+    def _get_return_code(self) -> int:
+        """
+        Calculate the return code based on processor execution statistics and failed hosts.
+
+        Iterates through processors to find execution stats (task_executions and failed_executions).
+        If stats are available and failures occurred, returns the failure percentage (0-100).
+        If no stats but failed hosts exist, returns 101. Otherwise, returns 0 for success.
+
+        Returns:
+            int: Exit code (0 for success, 1-100 for failure percentage, 101 for failures without stats).
+        """
+        for processor in self.nornir_manager.nornir.processors:
+            try:
+                task_executions = getattr(processor, "task_executions", 0)
+                failed_executions = getattr(processor, "failed_executions", 0)
+
+                if (
+                    isinstance(task_executions, int)
+                    and isinstance(failed_executions, int)
+                    and task_executions
+                    and failed_executions
+                ):
+                    failure_percentage = int((failed_executions / task_executions) * 100)
+                    return failure_percentage
+
+            except Exception:
+                continue
+
+        if self.nornir_manager.nornir.data.failed_hosts:
+            return 101
+
+        return 0
+
     def run(self, dry_run: bool = False) -> int:
         """
         Execute the configured workflow with the current NornFlow settings.
@@ -792,69 +887,15 @@ class NornFlow:
         Returns:
             int: Exit code representing execution status.
         """
+        effective_dry_run = dry_run or self.workflow.dry_run
         self._ensure_workflow()
         self._check_tasks()
-        
-        nornir_manager = NornirManager(self.settings.nornir_config_file, **self._nornir_configs)
-        
-        self._apply_filters(nornir_manager)
-        self._with_processors(nornir_manager)
-    
-        effective_dry_run = dry_run or self.workflow.dry_run
-        
-        print_workflow_overview(
-            workflow_model=self.workflow,
-            effective_dry_run=effective_dry_run,
-            hosts_count=len(nornir_manager.nornir.inventory.hosts),
-            inventory_filters=self.filters or self.workflow.inventory_filters or {},
-            workflow_vars=dict(self.workflow.vars) if self.workflow.vars else {},
-            vars=self.vars,
-            failure_strategy=self.failure_strategy,
-        )
-    
-        for processor in nornir_manager.nornir.processors:
-            if hasattr(processor, "total_workflow_tasks"):
-                processor.total_workflow_tasks = len(self.workflow.tasks)
-    
-        with nornir_manager:
-            for task in self.workflow.tasks:
-                nornir_manager.set_dry_run(effective_dry_run)
-                
-                task.run(
-                    nornir_manager=nornir_manager,
-                    vars_manager=self._var_processor.vars_manager,
-                    tasks_catalog=dict(self.tasks_catalog),
-                )
-    
-        for processor in nornir_manager.nornir.processors:
-            if hasattr(processor, "print_final_workflow_summary"):
-                processor.print_final_workflow_summary()
-    
-        for processor in nornir_manager.nornir.processors:
-            try:
-                task_executions = getattr(processor, "task_executions", 0)
-                failed_executions = getattr(processor, "failed_executions", 0)
-
-                # some tasks failed and we want the return code to report 
-                # the % of failed tasks
-                if (
-                    isinstance(task_executions, int)
-                    and isinstance(failed_executions, int)
-                    and task_executions
-                    and failed_executions
-                ):
-                    failure_percentage = int((failed_executions / task_executions) * 100)
-                    return failure_percentage
-    
-            except Exception:
-                continue
-        
-        # if we got here, none of the applied processors support executions stats
-        if nornir_manager.nornir.data.failed_hosts:
-            return 101
-        
-        # success: all tasks ran without any failured for any hosts
-        return 0
+        self._apply_filters(self.nornir_manager)
+        self._with_processors(self.nornir_manager)
+        self._print_workflow_overview(effective_dry_run)
+        self._orchestrate_execution(effective_dry_run)
+        self._print_workflow_summary()
+        return self._get_return_code()
 
 
 class NornFlowBuilder:
