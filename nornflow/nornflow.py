@@ -129,6 +129,7 @@ class NornFlow:
             self._load_workflows_catalog()
 
             self._workflow = None
+            self.workflow_path = None
             self._var_processor = None
             self._failure_processor_instance = None
 
@@ -429,7 +430,9 @@ class NornFlow:
             
             workflow_path = self._workflows_catalog[value]
             try:
-                self._workflow = WorkflowModel.create_from_file(str(workflow_path))
+                workflow_dict = load_file_to_dict(workflow_path)
+                self._workflow = WorkflowModel.create(workflow_dict)
+                self.workflow_path = workflow_path
             except Exception as e:
                 raise WorkflowError(
                     f"Failed to load workflow '{value}' from path '{workflow_path}': {e}",
@@ -704,13 +707,11 @@ class NornFlow:
         Returns:
             The initialized NornFlowVariablesManager.
         """
-        workflow_path = getattr(self._workflow, '_source_path', None)
-        
         return NornFlowVariablesManager(
             vars_dir=self._settings.vars_dir,
             cli_vars=self._cli_vars,
             inline_workflow_vars=dict(self._workflow.vars) if self._workflow.vars else {},
-            workflow_path=workflow_path,
+            workflow_path=self.workflow_path,
             workflow_roots=self._settings.local_workflows_dirs,
         )
 
@@ -957,7 +958,8 @@ class NornFlowBuilder:
             The builder instance for method chaining.
         """
         try:
-            self._workflow = WorkflowModel.create_from_file(str(workflow_path))
+            workflow_dict = load_file_to_dict(workflow_path)
+            self._workflow = WorkflowModel.create(workflow_dict)
         except Exception as e:
             raise InitializationError(f"Failed to load workflow from '{workflow_path}': {e}") from e
         return self
