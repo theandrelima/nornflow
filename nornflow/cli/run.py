@@ -158,9 +158,9 @@ def parse_inventory_filters(value: str | None) -> dict[str, Any]:
     return parse_key_value_pairs(value, "inventory filters")
 
 
-def parse_variables(value: str | None) -> dict[str, Any]:
+def parse_vars(value: str | None) -> dict[str, Any]:
     """
-    Convert a string of key=value pairs into a dictionary for CLI variables.
+    Convert a string of key=value pairs into a dictionary for vars.
 
     Args:
         value: String in one of these formats:
@@ -168,9 +168,9 @@ def parse_variables(value: str | None) -> dict[str, Any]:
             - "server=10.0.0.1, debug=true, ports=22,80"
 
     Returns:
-        Dictionary of variables
+        Dictionary of vars
     """
-    return parse_key_value_pairs(value, "variables")
+    return parse_key_value_pairs(value, "vars")
 
 
 def parse_processors(value: str | None) -> list[dict[str, Any]]:
@@ -243,8 +243,8 @@ def get_nornflow_builder(
     inventory_filters: dict[str, Any],
     settings_file: str = "",
     processors: list[dict[str, Any]] | None = None,
-    cli_vars: dict[str, Any] | None = None,
-    cli_failure_strategy: FailureStrategy | None = None,
+    vars: dict[str, Any] | None = None,
+    failure_strategy: FailureStrategy | None = None,
 ) -> NornFlowBuilder:
     """
     Build the workflow using the provided target, arguments, inventory filters, and dry-run option.
@@ -255,8 +255,8 @@ def get_nornflow_builder(
         inventory_filters (dict): The inventory filters.
         settings_file (str): The path to a YAML settings file for NornFlowSettings.
         processors (list): The processor configurations.
-        cli_vars (dict): CLI variables with highest precedence.
-        cli_failure_strategy (FailureStrategy): CLI failure strategy with highest precedence.
+        vars (dict): Vars with highest precedence.
+        failure_strategy (FailureStrategy): Failure strategy with highest precedence.
 
     Returns:
         NornFlowBuilder: The builder instance with the configured workflow.
@@ -272,17 +272,17 @@ def get_nornflow_builder(
     if processors:
         builder.with_processors(processors)
 
-    # Add CLI variables if specified
-    if cli_vars:
-        builder.with_cli_vars(cli_vars)
+    # Add vars if specified
+    if vars:
+        builder.with_vars(vars)
 
-    # Add CLI filters if specified
+    # Add filters if specified
     if inventory_filters:
-        builder.with_cli_filters(inventory_filters)
+        builder.with_filters(inventory_filters)
 
-    # Add CLI failure strategy if specified
-    if cli_failure_strategy:
-        builder.with_cli_failure_strategy(cli_failure_strategy)
+    # Add failure strategy if specified
+    if failure_strategy:
+        builder.with_failure_strategy(failure_strategy)
 
     if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_YAML_EXTENSIONS):
         target_path = Path(target)
@@ -343,7 +343,7 @@ VARS_OPTION = typer.Option(
     None,
     "--vars",
     "-v",
-    help="Variables in flexible format, with highest precedence in the variables system."
+    help="Vars in flexible format, with highest precedence in the variables system."
     "\nExamples:\n- \"server='10.0.0.1', debug=True\"\n- \"domain='example.com', ports=[80,443]\"",
 )
 
@@ -399,8 +399,8 @@ def run(
         # Parse inventory filters if provided
         parsed_inventory_filters = parse_inventory_filters(inventory_filters) if inventory_filters else {}
 
-        # Parse CLI variables if provided
-        parsed_vars = parse_variables(vars) if vars else {}
+        # Parse vars if provided
+        parsed_vars = parse_vars(vars) if vars else {}
 
         # Parse processors if provided
         parsed_processors = parse_processors(processors) if processors else []

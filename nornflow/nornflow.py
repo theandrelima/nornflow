@@ -65,7 +65,7 @@ class NornFlow:
     4. Default processor if none of the above are specified
 
     Variable precedence follows this order (highest to lowest priority):
-    1. CLI variables (passed via command line or set programmatically as overrides)
+    1. Vars (passed via command line or set programmatically as overrides)
     2. Workflow variables (defined in workflow file)
     3. Environment variables
     4. Variables from external files
@@ -76,9 +76,9 @@ class NornFlow:
         nornflow_settings: NornFlowSettings | None = None,
         workflow: WorkflowModel | str | None = None,
         processors: list[dict[str, Any]] | None = None,
-        cli_vars: dict[str, Any] | None = None,
-        cli_filters: dict[str, Any] | None = None,
-        cli_failure_strategy: FailureStrategy | None = None,
+        vars: dict[str, Any] | None = None,
+        filters: dict[str, Any] | None = None,
+        failure_strategy: FailureStrategy | None = None,
         **kwargs: Any,
     ):
         """
@@ -88,16 +88,16 @@ class NornFlow:
             nornflow_settings: NornFlow configuration settings object
             workflow: Pre-configured WorkflowModel instance or workflow name string (optional)
             processors: List of processor configurations to override default processors
-            cli_vars: Variables with highest precedence in the resolution chain.
-                While named "CLI variables" due to their primary source being command-line
+            vars: Variables with highest precedence in the resolution chain.
+                While named "vars" due to their primary source being command-line
                 arguments, these serve as a universal override mechanism that can be:
                 - Parsed from actual CLI arguments (--vars)
                 - Set programmatically for workflow customization
                 - Updated at runtime for dynamic behavior
                 These variables always override any other variable source.
-            cli_filters: Inventory filters with highest precedence. These completely override
+            filters: Inventory filters with highest precedence. These completely override
                 any inventory filters defined in the workflow YAML.
-            cli_failure_strategy: Failure strategy with highest precedence. This overrides any failure
+            failure_strategy: Failure strategy with highest precedence. This overrides any failure
                 strategy defined in the workflow YAML.
             **kwargs: Additional keyword arguments passed to NornFlowSettings
 
@@ -115,10 +115,10 @@ class NornFlow:
                 except (SettingsError, ResourceError) as e:
                     raise InitializationError(f"Failed to initialize NornFlow settings: {e}") from e
 
-            self._cli_vars = cli_vars or {}
-            self._cli_filters = cli_filters or {}
-            self._cli_failure_strategy = cli_failure_strategy
-            self._kwargs_processors = processors
+            self._vars = vars or {}
+            self._filters = filters or {}
+            self._failure_strategy = failure_strategy
+            self._processors = processors
 
             self._tasks_catalog = PythonEntityCatalog("tasks")
             self._filters_catalog = PythonEntityCatalog("filters")
@@ -131,7 +131,7 @@ class NornFlow:
             self._workflow = None
             self.workflow_path = None
             self._var_processor = None
-            self._failure_processor_instance = None
+            self._failure_processor = None
 
             if workflow:
                 self.workflow = workflow
@@ -139,10 +139,10 @@ class NornFlow:
             self._load_processors()
 
             try:
-                self._nornir_configs = load_file_to_dict(self._settings.nornir_config_file)
+                self._nornir_configs = load_file_to_dict(self.settings.nornir_config_file)
             except Exception as e:
                 raise CoreError(
-                    f"Failed to load Nornir config from '{self._settings.nornir_config_file}': {e}",
+                    f"Failed to load Nornir config from '{self.settings.nornir_config_file}': {e}",
                     component="NornFlow",
                 ) from e
 
@@ -165,7 +165,7 @@ class NornFlow:
         The loaded processors are stored in self._processors for later use during
         workflow execution.
         """
-        processors_list = self._kwargs_processors or self.settings.processors
+        processors_list = self.processors or self.settings.processors
         if processors_list:
             self._processors = []
             for processor_config in processors_list:
@@ -221,26 +221,23 @@ class NornFlow:
         )
 
     @property
-    def cli_vars(self) -> dict[str, Any]:
+    def vars(self) -> dict[str, Any]:
         """
-        Get the CLI variables with highest precedence in the variable resolution chain.
+        Get the vars with highest precedence in the variable resolution chain.
 
-        While named "CLI variables" due to their primary source being command-line arguments,
-        these variables serve a dual purpose:
-        1. Storage for variables parsed from CLI arguments (--vars)
-        2. Universal override mechanism for programmatic variable setting
-
-        These variables always have the highest precedence, overriding any other variable
+        The primary source for this is the command-line arguments (--vars), although
+        it might as well come from programmatic variable setting. In either case, these
+        variables always have the highest precedence, overriding any other variable
         source including workflow variables, environment variables, and defaults.
 
         Returns:
-            dict[str, Any]: Dictionary containing the CLI variables.
+            dict[str, Any]: Dictionary containing the vars.
         """
-        return self._cli_vars
+        return self._vars
 
-    @cli_vars.setter
-    def cli_vars(self, value: dict[str, Any]) -> None:
-        """Update CLI variables that override workflow-defined variables.
+    @vars.setter
+    def vars(self, value: dict[str, Any]) -> None:
+        """Update vars that override workflow-defined variables.
 
         Args:
             value: Dictionary of variable names and values.
@@ -250,28 +247,28 @@ class NornFlow:
         """
         if not isinstance(value, dict):
             raise CoreError(
-                f"CLI variables must be a dictionary, got {type(value).__name__}", component="NornFlow"
+                f"Vars must be a dictionary, got {type(value).__name__}", component="NornFlow"
             )
-        self._cli_vars = value
+        self._vars = value
 
     @property
-    def cli_filters(self) -> dict[str, Any]:
+    def filters(self) -> dict[str, Any]:
         """
-        Get the CLI inventory filters with highest precedence.
+        Get the inventory filters passed to the NornFlow constructor with highest precedence.
 
         These inventory filters completely override any filters defined in the workflow YAML.
-        Like CLI variables, they serve a dual purpose:
+        Like vars, they serve a dual purpose:
         1. Storage for inventory filters parsed from CLI arguments (--inventory-filters)
         2. Universal override mechanism for programmatic inventory filtering
 
         Returns:
-            dict[str, Any]: Dictionary containing the CLI inventory filters.
+            dict[str, Any]: Dictionary containing the inventory filters.
         """
-        return self._cli_filters
+        return self._filters
 
-    @cli_filters.setter
-    def cli_filters(self, value: dict[str, Any]) -> None:
-        """Update CLI inventory filters that override workflow-defined filters.
+    @filters.setter
+    def filters(self, value: dict[str, Any]) -> None:
+        """Update inventory filters that override workflow-defined filters.
 
         Args:
             value: Dictionary of filter names and arguments.
@@ -281,9 +278,9 @@ class NornFlow:
         """
         if not isinstance(value, dict):
             raise CoreError(
-                f"CLI filters must be a dictionary, got {type(value).__name__}", component="NornFlow"
+                f"Filters must be a dictionary, got {type(value).__name__}", component="NornFlow"
             )
-        self._cli_filters = value
+        self._filters = value
 
     @property
     def failure_strategy(self) -> FailureStrategy:
@@ -291,7 +288,7 @@ class NornFlow:
         Get the effective failure strategy based on precedence chain.
 
         Precedence (highest to lowest):
-        1. CLI failure strategy
+        1. Failure strategy passed to the NornFlow constructor
         2. Workflow failure strategy
         3. Settings failure strategy
         4. Default (SKIP_FAILED)
@@ -300,16 +297,16 @@ class NornFlow:
             FailureStrategy: The effective failure strategy.
         """
         return (
-            self._cli_failure_strategy
-            or (self._workflow.failure_strategy if self._workflow else None)
-            or self._settings.failure_strategy
+            self._failure_strategy
+            or (self.workflow.failure_strategy if self.workflow else None)
+            or self.settings.failure_strategy
             or FailureStrategy.SKIP_FAILED
         )
 
     @failure_strategy.setter
     def failure_strategy(self, value: FailureStrategy) -> None:
         """
-        Set the CLI failure strategy override.
+        Set the failure strategy override.
 
         Args:
             value: FailureStrategy enum value.
@@ -322,8 +319,8 @@ class NornFlow:
                 f"Failure strategy must be a FailureStrategy enum, got {type(value).__name__}",
                 component="NornFlow",
             )
-        self._cli_failure_strategy = value
-        self._failure_processor_instance = None
+        self._failure_strategy = value
+        self._failure_processor = None
 
     @property
     def failure_processor(self) -> NornFlowFailureStrategyProcessor:
@@ -333,9 +330,9 @@ class NornFlow:
         Returns:
             NornFlowFailureStrategyProcessor: The failure processor instance.
         """
-        if self._failure_processor_instance is None:
-            self._failure_processor_instance = NornFlowFailureStrategyProcessor(self.failure_strategy)
-        return self._failure_processor_instance
+        if self._failure_processor is None:
+            self._failure_processor = NornFlowFailureStrategyProcessor(self.failure_strategy)
+        return self._failure_processor
 
     @property
     def tasks_catalog(self) -> PythonEntityCatalog:
@@ -421,14 +418,14 @@ class NornFlow:
         if isinstance(value, WorkflowModel):
             self._workflow = value
         elif isinstance(value, str):
-            if value not in self._workflows_catalog:
+            if value not in self.workflows_catalog:
                 raise WorkflowError(
                     f"Workflow '{value}' not found in workflows catalog. "
-                    f"Available workflows: {', '.join(sorted(self._workflows_catalog.keys()))}",
+                    f"Available workflows: {', '.join(sorted(self.workflows_catalog.keys()))}",
                     component="NornFlow",
                 )
             
-            workflow_path = self._workflows_catalog[value]
+            workflow_path = self.workflows_catalog[value]
             try:
                 workflow_dict = load_file_to_dict(workflow_path)
                 self._workflow = WorkflowModel.create(workflow_dict)
@@ -444,7 +441,7 @@ class NornFlow:
                 component="NornFlow",
             )
         
-        self._failure_processor_instance = None
+        self._failure_processor = None
 
     @property
     def processors(self) -> list:
@@ -479,7 +476,7 @@ class NornFlow:
         """
         self._tasks_catalog = PythonEntityCatalog(name="tasks")
 
-        self._tasks_catalog.register_from_module(builtin_tasks, predicate=is_nornir_task)
+        self.tasks_catalog.register_from_module(builtin_tasks, predicate=is_nornir_task)
 
         errors = []
         for task_dir in self.settings.local_tasks_dirs:
@@ -489,7 +486,7 @@ class NornFlow:
                 continue
 
             try:
-                self._tasks_catalog.discover_items_in_dir(task_dir, predicate=is_nornir_task)
+                self.tasks_catalog.discover_items_in_dir(task_dir, predicate=is_nornir_task)
             except Exception as e:
                 raise ResourceError(
                     f"Error loading tasks from {task_dir}: {e!s}",
@@ -504,7 +501,7 @@ class NornFlow:
                 resource_name="directories",
             )
 
-        if self._tasks_catalog.is_empty:
+        if self.tasks_catalog.is_empty:
             raise CatalogError("No tasks were found. The Tasks Catalog can't be empty.", catalog_name="tasks")
 
     def _load_filters_catalog(self) -> None:
@@ -517,7 +514,7 @@ class NornFlow:
         """
         self._filters_catalog = PythonEntityCatalog(name="filters")
 
-        self._filters_catalog.register_from_module(
+        self.filters_catalog.register_from_module(
             builtin_filters, predicate=is_nornir_filter, transform_item=process_filter
         )
 
@@ -529,7 +526,7 @@ class NornFlow:
                 continue
 
             try:
-                self._filters_catalog.discover_items_in_dir(
+                self.filters_catalog.discover_items_in_dir(
                     filter_dir, predicate=is_nornir_filter, transform_item=process_filter
                 )
             except Exception as e:
@@ -563,7 +560,7 @@ class NornFlow:
                 continue
 
             try:
-                self._workflows_catalog.discover_items_in_dir(
+                self.workflows_catalog.discover_items_in_dir(
                     workflow_dir, predicate=is_workflow_file, recursive=True
                 )
             except Exception as e:
@@ -604,7 +601,7 @@ class NornFlow:
         Raises:
             WorkflowError: If no workflow is configured.
         """
-        if not self._workflow:
+        if not self.workflow:
             raise WorkflowError("No workflow configured. Set a workflow before calling run().", component="NornFlow")
 
     def _check_tasks(self) -> None:
@@ -614,12 +611,12 @@ class NornFlow:
         Raises:
             TaskError: If any tasks in the workflow are not found in the tasks catalog.
         """
-        task_names = [task.name for task in self._workflow.tasks]
+        task_names = [task.name for task in self.workflow.tasks]
 
-        missing_tasks = [task_name for task_name in task_names if task_name not in self._tasks_catalog]
+        missing_tasks = [task_name for task_name in task_names if task_name not in self.tasks_catalog]
 
         if missing_tasks:
-            available_tasks = ", ".join(sorted(self._tasks_catalog.keys()))
+            available_tasks = ", ".join(sorted(self.tasks_catalog.keys()))
             raise TaskError(
                 f"Task(s) not found in tasks catalog: {', '.join(missing_tasks)}. "
                 f"Available tasks: {available_tasks}"
@@ -632,7 +629,7 @@ class NornFlow:
         Returns:
             List of filter kwargs dictionaries ready to apply.
         """
-        filters_to_apply = self._cli_filters or self._workflow.inventory_filters or {}
+        filters_to_apply = self.filters or self.workflow.inventory_filters or {}
         
         if not filters_to_apply:
             return []
@@ -661,10 +658,10 @@ class NornFlow:
         Raises:
             WorkflowError: If the filter is not found or parameter count doesn't match.
         """
-        if key not in self._filters_catalog:
+        if key not in self.filters_catalog:
             raise WorkflowError(f"Filter '{key}' not found in filters catalog")
 
-        filter_func, param_names = self._filters_catalog[key]
+        filter_func, param_names = self.filters_catalog[key]
 
         if isinstance(filter_values, dict):
             filter_kwargs = {"filter_func": filter_func}
@@ -708,11 +705,11 @@ class NornFlow:
             The initialized NornFlowVariablesManager.
         """
         return NornFlowVariablesManager(
-            vars_dir=self._settings.vars_dir,
-            cli_vars=self._cli_vars,
-            inline_workflow_vars=dict(self._workflow.vars) if self._workflow.vars else {},
+            vars_dir=self.settings.vars_dir,
+            cli_vars=self.vars,
+            inline_workflow_vars=dict(self.workflow.vars) if self.workflow.vars else {},
             workflow_path=self.workflow_path,
-            workflow_roots=self._settings.local_workflows_dirs,
+            workflow_roots=self.settings.local_workflows_dirs,
         )
 
     def _with_processors(
@@ -744,10 +741,10 @@ class NornFlow:
         
         all_processors = [self._var_processor]
         
-        if self._workflow and self._workflow.processors:
+        if self.workflow and self.workflow.processors:
             try:
                 workflow_processors = []
-                for processor_config in self._workflow.processors:
+                for processor_config in self.workflow.processors:
                     processor = load_processor(dict(processor_config))
                     workflow_processors.append(processor)
                 
@@ -757,8 +754,8 @@ class NornFlow:
                 raise WorkflowError(f"Failed to initialize workflow processors: {e}") from e
         elif processors:
             all_processors.extend(processors)
-        elif self._processors:
-            all_processors.extend(self._processors)
+        elif self.processors:
+            all_processors.extend(self.processors)
         
         all_processors.append(self.failure_processor)
         
@@ -803,30 +800,30 @@ class NornFlow:
         self._apply_filters(nornir_manager)
         self._with_processors(nornir_manager)
     
-        effective_dry_run = dry_run or self._workflow.dry_run
+        effective_dry_run = dry_run or self.workflow.dry_run
         
         print_workflow_overview(
-            workflow_model=self._workflow,
+            workflow_model=self.workflow,
             effective_dry_run=effective_dry_run,
             hosts_count=len(nornir_manager.nornir.inventory.hosts),
-            inventory_filters=self._cli_filters or self._workflow.inventory_filters or {},
-            workflow_vars=dict(self._workflow.vars) if self._workflow.vars else {},
-            cli_vars=self._cli_vars,
+            inventory_filters=self.filters or self.workflow.inventory_filters or {},
+            workflow_vars=dict(self.workflow.vars) if self.workflow.vars else {},
+            vars=self.vars,
             failure_strategy=self.failure_strategy,
         )
     
         for processor in nornir_manager.nornir.processors:
             if hasattr(processor, "total_workflow_tasks"):
-                processor.total_workflow_tasks = len(self._workflow.tasks)
+                processor.total_workflow_tasks = len(self.workflow.tasks)
     
         with nornir_manager:
-            for task in self._workflow.tasks:
+            for task in self.workflow.tasks:
                 nornir_manager.set_dry_run(effective_dry_run)
                 
                 task.run(
                     nornir_manager=nornir_manager,
                     vars_manager=self._var_processor.vars_manager,
-                    tasks_catalog=dict(self._tasks_catalog),
+                    tasks_catalog=dict(self.tasks_catalog),
                 )
     
         for processor in nornir_manager.nornir.processors:
@@ -868,18 +865,18 @@ class NornFlowBuilder:
     - Settings configuration (via object or file path)
     - Workflow configuration (via WorkflowModel object, file path, or dictionary)
     - Processor registration
-    - CLI variables (with highest precedence in variable resolution)
-    - CLI inventory filters (with highest precedence for inventory filtering)
+    - Vars
+    - Inventory filters
     - Additional keyword arguments
 
-    CLI Variables in Builder Context:
-    The builder's `with_cli_vars()` method sets variables that will have the highest
-    precedence in the variable resolution system. While termed "CLI variables" due to
+    Vars in Builder Context:
+    The builder's `with_vars()` method sets variables that will have the highest
+    precedence in the variable resolution system. While termed "vars" due to
     their primary use case (command-line arguments), these serve as a universal
     override mechanism in the builder pattern.
 
-    CLI Inventory Filters in Builder Context:
-    The builder's `with_cli_filters()` method sets inventory filters that will completely
+    Inventory Filters in Builder Context:
+    The builder's `with_filters()` method sets inventory filters that will completely
     override any inventory filters defined in the workflow YAML.
 
     Usage Examples:
@@ -887,8 +884,8 @@ class NornFlowBuilder:
         builder = NornFlowBuilder()
         nornflow = builder.with_settings_path('settings.yaml')
                           .with_workflow_path('deploy.yaml')
-                          .with_cli_vars({'env': 'prod', 'debug': True})
-                          .with_cli_filters({'hosts': ['router1', 'router2']})
+                          .with_vars({'env': 'prod', 'debug': True})
+                          .with_filters({'hosts': ['router1', 'router2']})
                           .build()
 
     Order of preference for building a NornFlowSettings object:
@@ -909,9 +906,9 @@ class NornFlowBuilder:
         self._settings: NornFlowSettings | None = None
         self._workflow: WorkflowModel | str | None = None
         self._processors: list[dict[str, Any]] | None = None
-        self._cli_vars: dict[str, Any] | None = None
-        self._cli_filters: dict[str, Any] | None = None
-        self._cli_failure_strategy: FailureStrategy | None = None
+        self._vars: dict[str, Any] | None = None
+        self._filters: dict[str, Any] | None = None
+        self._failure_strategy: FailureStrategy | None = None
         self._kwargs: dict[str, Any] = {}
 
     def with_settings_object(self, settings_object: NornFlowSettings) -> "NornFlowBuilder":
@@ -1024,9 +1021,9 @@ class NornFlowBuilder:
         self._processors = processors
         return self
 
-    def with_cli_vars(self, cli_vars: dict[str, Any]) -> "NornFlowBuilder":
+    def with_vars(self, vars: dict[str, Any]) -> "NornFlowBuilder":
         """
-        Set CLI variables for the NornFlow instance.
+        Set vars for the NornFlow instance.
 
         These variables have the highest precedence in the variable resolution order
         and serve a dual purpose:
@@ -1039,51 +1036,51 @@ class NornFlowBuilder:
 
         Usage Examples:
             # Traditional CLI argument representation
-            builder.with_cli_vars({'env': 'prod', 'debug': True})
+            builder.with_vars({'env': 'prod', 'debug': True})
 
             # Programmatic override usage
             emergency_vars = {'skip_validation': True, 'fast_mode': True}
-            builder.with_cli_vars(emergency_vars)
+            builder.with_vars(emergency_vars)
 
         Args:
-            cli_vars: Dictionary of variables with highest precedence
+            vars: Dictionary of variables with highest precedence
 
         Returns:
             The builder instance for method chaining.
         """
-        self._cli_vars = cli_vars
+        self._vars = vars
         return self
 
-    def with_cli_filters(self, cli_filters: dict[str, Any]) -> "NornFlowBuilder":
+    def with_filters(self, filters: dict[str, Any]) -> "NornFlowBuilder":
         """
-        Set CLI inventory filters for the NornFlow instance.
+        Set inventory filters for the NornFlow instance.
 
         These filters have the highest precedence and completely override
         any inventory filters defined in the workflow YAML.
 
         Args:
-            cli_filters: Dictionary of inventory filters with highest precedence
+            filters: Dictionary of inventory filters with highest precedence
 
         Returns:
             The builder instance for method chaining.
         """
-        self._cli_filters = cli_filters
+        self._filters = filters
         return self
 
-    def with_cli_failure_strategy(self, cli_failure_strategy: FailureStrategy) -> "NornFlowBuilder":
+    def with_failure_strategy(self, failure_strategy: FailureStrategy) -> "NornFlowBuilder":
         """
-        Set CLI failure strategy for the NornFlow instance.
+        Set failure strategy for the NornFlow instance.
 
         This strategy has the highest precedence and overrides any failure strategy
         defined in the workflow YAML.
 
         Args:
-            cli_failure_strategy: FailureStrategy enum value with highest precedence
+            failure_strategy: FailureStrategy enum value with highest precedence
 
         Returns:
             The builder instance for method chaining.
         """
-        self._cli_failure_strategy = cli_failure_strategy
+        self._failure_strategy = failure_strategy
         return self
 
     def with_kwargs(self, **kwargs: Any) -> "NornFlowBuilder":
@@ -1107,8 +1104,8 @@ class NornFlowBuilder:
         - Settings (from object or file path)
         - Workflow model (from model, path, dictionary, or name)
         - Processors (if specified)
-        - CLI variables (with highest precedence in variable resolution)
-        - CLI inventory filters (with highest precedence for inventory filtering)
+        - Vars
+        - Inventory filters
 
         Returns:
             The constructed NornFlow object with all configurations applied.
@@ -1117,8 +1114,8 @@ class NornFlowBuilder:
             nornflow_settings=self._settings,
             workflow=self._workflow,
             processors=self._processors,
-            cli_vars=self._cli_vars,
-            cli_filters=self._cli_filters,
-            cli_failure_strategy=self._cli_failure_strategy,
+            vars=self._vars,
+            filters=self._filters,
+            failure_strategy=self._failure_strategy,
             **self._kwargs,
         )
