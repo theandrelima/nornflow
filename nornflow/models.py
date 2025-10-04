@@ -15,6 +15,7 @@ from nornflow.validators import (
     run_post_creation_task_validation,
     run_universal_field_validation,
 )
+from nornflow.vars.manager import NornFlowVariablesManager
 
 
 class NornFlowBaseModel(PydanticSerdesBaseModel):
@@ -81,12 +82,20 @@ class TaskModel(NornFlowBaseModel):
         """
         return convert_to_hashable(v)
 
-    def run(self, nornir_manager: NornirManager, tasks_catalog: dict[str, Callable]) -> AggregatedResult:
+    def run(
+        self,
+        nornir_manager: NornirManager,
+        vars_manager: NornFlowVariablesManager,
+        tasks_catalog: dict[str, Callable],
+    ) -> AggregatedResult:
         """
         Execute the task using the provided NornirManager and tasks catalog.
 
+        This method handles task execution and the set_to hook for result storage.
+
         Args:
             nornir_manager: The NornirManager instance to use for execution.
+            vars_manager: The NornFlowVariablesManager for variable management.
             tasks_catalog: Dictionary mapping task names to their function implementations.
 
         Returns:
@@ -100,8 +109,21 @@ class TaskModel(NornFlowBaseModel):
         if not task_func:
             raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")
 
+        # Prepare task arguments
         task_args = {} if self.args is None else dict(self.args)
+
+        # Execute the task
         result = nornir_manager.nornir.run(task=task_func, **task_args)
+
+        # Process set_to hook for result storage
+        if self.set_to is not None:
+            for host_name, host_result in result.items():
+                vars_manager.set_runtime_variable(
+                    name=self.set_to,
+                    value=host_result,
+                    host_name=host_name,
+                )
+
         return result
 
 
