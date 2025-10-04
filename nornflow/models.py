@@ -142,7 +142,27 @@ class WorkflowModel(NornFlowBaseModel):
 
     @classmethod
     def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "WorkflowModel":
-        """Create a new WorkflowModel."""
+        """
+        Create a new WorkflowModel from a workflow dictionary.
+
+        Extracts the 'workflow' key from the input dict and processes tasks into TaskModel instances.
+
+        Args:
+            dict_args: Dictionary containing the full workflow data, must include 'workflow' key.
+            *args: Additional positional arguments passed to parent create method.
+            **kwargs: Additional keyword arguments passed to parent create method.
+
+        Returns:
+            The created WorkflowModel instance.
+
+        Raises:
+            WorkflowError: If 'workflow' key is not present in dict_args.
+        """
+        try:
+            dict_args = dict_args.pop("workflow")
+        except KeyError:
+            raise WorkflowError("Workflow file must have 'workflow' as a root-level key.")
+        
         # Tasks should already be in dict_args from the workflow definition
         if "tasks" not in dict_args:
             dict_args["tasks"] = []  # Default to empty list if no tasks defined
