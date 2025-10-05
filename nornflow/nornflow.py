@@ -353,7 +353,7 @@ class NornFlow:
         Get the tasks catalog.
 
         Returns:
-            PythonEntityCatalog: Catalog containing task names and their corresponding functions.
+            CallableCatalog: Catalog containing task names and their corresponding functions.
         """
         return self._tasks_catalog
 
@@ -393,7 +393,7 @@ class NornFlow:
         Get the filters catalog.
 
         Returns:
-            PythonEntityCatalog: Catalog of filter names and their corresponding functions.
+            CallableCatalog: Catalog of filter names and their corresponding functions.
         """
         return self._filters_catalog
 
@@ -498,6 +498,73 @@ class NornFlow:
             "Processors cannot be set directly, but must be loaded from nornflow settings file."
         )
 
+    def _load_catalog(
+        self,
+        catalog_type: type,
+        name: str,
+        builtin_module: Any = None,
+        predicate: Any = None,
+        transform_item: Any = None,
+        directories: list[str] | None = None,
+        recursive: bool = False,
+        check_empty: bool = False,
+    ) -> Any:
+        """
+        Generic method to load a catalog with common logic for discovery and error handling.
+
+        Args:
+            catalog_type: The catalog class to instantiate (e.g., CallableCatalog, FileCatalog).
+            name: Name of the catalog for error messages.
+            builtin_module: Optional module to register builtins from (for CallableCatalog).
+            predicate: Predicate function for filtering items during discovery.
+            transform_item: Optional transform function for items (for CallableCatalog).
+            directories: List of directories to scan for items.
+            recursive: Whether to scan directories recursively (for FileCatalog).
+            check_empty: Whether to raise an error if the catalog ends up empty.
+
+        Returns:
+            The loaded catalog instance.
+
+        Raises:
+            ResourceError: If directories don't exist or discovery fails.
+            CatalogError: If check_empty is True and catalog is empty.
+        """
+        catalog = catalog_type(name)
+
+        if builtin_module and predicate:
+            catalog.register_from_module(builtin_module, predicate=predicate, transform_item=transform_item)
+
+        errors = []
+        for dir_path in directories or []:
+            path = Path(dir_path)
+            if not path.exists():
+                errors.append(f"{name.capitalize()} directory does not exist: {dir_path}")
+                continue
+
+            try:
+                if catalog_type == FileCatalog:
+                    catalog.discover_items_in_dir(dir_path, predicate=predicate, recursive=recursive)
+                else:
+                    catalog.discover_items_in_dir(dir_path, predicate=predicate, transform_item=transform_item)
+            except Exception as e:
+                raise ResourceError(
+                    f"Error loading {name} from {dir_path}: {e!s}",
+                    resource_type=name,
+                    resource_name=dir_path,
+                ) from e
+
+        if errors:
+            raise ResourceError(
+                f"Configuration errors found: {'; '.join(errors)}",
+                resource_type=name,
+                resource_name="directories",
+            )
+
+        if check_empty and catalog.is_empty:
+            raise CatalogError(f"No {name} were found. The {name.capitalize()} Catalog can't be empty.", catalog_name=name)
+
+        return catalog
+
     def _load_tasks_catalog(self) -> None:
         """
         Load all Nornir tasks from built-ins and from directories specified in settings.
@@ -506,35 +573,14 @@ class NornFlow:
         1. Built-in tasks from nornflow.builtins.tasks module
         2. User-defined tasks from local_tasks_dirs
         """
-        self._tasks_catalog = CallableCatalog(name="tasks")
-
-        self.tasks_catalog.register_from_module(builtin_tasks, predicate=is_nornir_task)
-
-        errors = []
-        for task_dir in self.settings.local_tasks_dirs:
-            task_path = Path(task_dir)
-            if not task_path.exists():
-                errors.append(f"Tasks directory does not exist: {task_dir}")
-                continue
-
-            try:
-                self.tasks_catalog.discover_items_in_dir(task_dir, predicate=is_nornir_task)
-            except Exception as e:
-                raise ResourceError(
-                    f"Error loading tasks from {task_dir}: {e!s}",
-                    resource_type="tasks",
-                    resource_name=task_dir,
-                ) from e
-
-        if errors:
-            raise ResourceError(
-                f"Configuration errors found: {'; '.join(errors)}",
-                resource_type="tasks",
-                resource_name="directories",
-            )
-
-        if self.tasks_catalog.is_empty:
-            raise CatalogError("No tasks were found. The Tasks Catalog can't be empty.", catalog_name="tasks")
+        self._tasks_catalog = self._load_catalog(
+            CallableCatalog,
+            "tasks",
+            builtin_module=builtin_tasks,
+            predicate=is_nornir_task,
+            directories=self.settings.local_tasks_dirs,
+            check_empty=True,
+        )
 
     def _load_filters_catalog(self) -> None:
         """
@@ -544,36 +590,14 @@ class NornFlow:
         1. Built-in filters from nornflow.builtins.filters module
         2. User-defined filters from configured local_filters_dirs
         """
-        self._filters_catalog = CallableCatalog(name="filters")
-
-        self.filters_catalog.register_from_module(
-            builtin_filters, predicate=is_nornir_filter, transform_item=process_filter
+        self._filters_catalog = self._load_catalog(
+            CallableCatalog,
+            "filters",
+            builtin_module=builtin_filters,
+            predicate=is_nornir_filter,
+            transform_item=process_filter,
+            directories=self.settings.local_filters_dirs,
         )
-
-        errors = []
-        for filter_dir in self.settings.local_filters_dirs:
-            filter_path = Path(filter_dir)
-            if not filter_path.exists():
-                errors.append(f"Filters directory does not exist: {filter_dir}")
-                continue
-
-            try:
-                self.filters_catalog.discover_items_in_dir(
-                    filter_dir, predicate=is_nornir_filter, transform_item=process_filter
-                )
-            except Exception as e:
-                raise ResourceError(
-                    f"Error loading filters from {filter_dir}: {e!s}",
-                    resource_type="filters",
-                    resource_name=filter_dir,
-                ) from e
-
-        if errors:
-            raise ResourceError(
-                f"Configuration errors found: {'; '.join(errors)}",
-                resource_type="filters",
-                resource_name="directories",
-            )
 
     def _load_workflows_catalog(self) -> None:
         """
@@ -582,32 +606,13 @@ class NornFlow:
         This catalogs the available workflow files for later use when a workflow
         is requested by name.
         """
-        self._workflows_catalog = FileCatalog(name="workflows")
-
-        errors = []
-        for workflow_dir in self.settings.local_workflows_dirs:
-            workflow_path = Path(workflow_dir)
-            if not workflow_path.exists():
-                errors.append(f"Workflows directory does not exist: {workflow_dir}")
-                continue
-
-            try:
-                self.workflows_catalog.discover_items_in_dir(
-                    workflow_dir, predicate=is_workflow_file, recursive=True
-                )
-            except Exception as e:
-                raise ResourceError(
-                    f"Error loading workflows from {workflow_dir}: {e!s}",
-                    resource_type="workflows",
-                    resource_name=workflow_dir,
-                ) from e
-
-        if errors:
-            raise ResourceError(
-                f"Configuration errors found: {'; '.join(errors)}",
-                resource_type="workflows",
-                resource_name="directories",
-            )
+        self._workflows_catalog = self._load_catalog(
+            FileCatalog,
+            "workflows",
+            predicate=is_workflow_file,
+            directories=self.settings.local_workflows_dirs,
+            recursive=True,
+        )
 
     def _check_invalid_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
@@ -654,6 +659,18 @@ class NornFlow:
                 f"Available tasks: {available_tasks}"
             )
 
+    def _apply_filters(self, nornir_manager: NornirManager) -> None:
+        """
+        Apply inventory filters to the Nornir manager.
+        
+        Args:
+            nornir_manager: The Nornir manager to apply filters to.
+        """
+        filter_kwargs_list = self._get_filtering_kwargs()
+        
+        for filter_kwargs in filter_kwargs_list:
+            nornir_manager.apply_filters(**filter_kwargs)
+
     def _get_filtering_kwargs(self) -> list[dict[str, Any]]:
         """
         Process and prepare inventory filters for application.
@@ -673,7 +690,7 @@ class NornFlow:
                 filter_kwargs_list.append(filter_kwargs)
 
         return filter_kwargs_list
-
+    
     def _process_custom_filter(
         self, key: str, filter_values: Any
     ) -> dict[str, Any]:
@@ -696,38 +713,36 @@ class NornFlow:
         filter_func, param_names = self.filters_catalog[key]
 
         if isinstance(filter_values, dict):
-            filter_kwargs = {"filter_func": filter_func}
-            filter_kwargs.update(filter_values)
+            return self._build_filter_kwargs_for_dict(filter_func, filter_values)
         elif isinstance(filter_values, list):
-            if len(param_names) == 1:
-                filter_kwargs = {"filter_func": filter_func, param_names[0]: filter_values}
-            else:
-                if len(filter_values) != len(param_names):
-                    raise WorkflowError(
-                        f"Filter '{key}' expects {len(param_names)} parameters, "
-                        f"got {len(filter_values)}"
-                    )
-                filter_kwargs = {"filter_func": filter_func}
-                for param_name, value in zip(param_names, filter_values):
-                    filter_kwargs[param_name] = value
+            return self._build_filter_kwargs_for_list(filter_func, param_names, filter_values)
         else:
-            if len(param_names) != 1:
-                raise WorkflowError(f"Filter '{key}' expects {len(param_names)} parameters, got 1")
-            filter_kwargs = {"filter_func": filter_func, param_names[0]: filter_values}
+            return self._build_filter_kwargs_for_single(filter_func, param_names, filter_values)
 
+    def _build_filter_kwargs_for_dict(self, filter_func: Any, filter_values: dict[str, Any]) -> dict[str, Any]:
+        """Build filter kwargs when filter_values is a dict."""
+        filter_kwargs = {"filter_func": filter_func}
+        filter_kwargs.update(filter_values)
         return filter_kwargs
 
-    def _apply_filters(self, nornir_manager: NornirManager) -> None:
-        """
-        Apply inventory filters to the Nornir manager.
-        
-        Args:
-            nornir_manager: The Nornir manager to apply filters to.
-        """
-        filter_kwargs_list = self._get_filtering_kwargs()
-        
-        for filter_kwargs in filter_kwargs_list:
-            nornir_manager.apply_filters(**filter_kwargs)
+    def _build_filter_kwargs_for_list(self, filter_func: Any, param_names: list[str], filter_values: list) -> dict[str, Any]:
+        """Build filter kwargs when filter_values is a list."""
+        if len(param_names) == 1:
+            return {"filter_func": filter_func, param_names[0]: filter_values}
+        if len(filter_values) != len(param_names):
+            raise WorkflowError(
+                f"Filter expects {len(param_names)} parameters, got {len(filter_values)}"
+            )
+        filter_kwargs = {"filter_func": filter_func}
+        for param_name, value in zip(param_names, filter_values):
+            filter_kwargs[param_name] = value
+        return filter_kwargs
+
+    def _build_filter_kwargs_for_single(self, filter_func: Any, param_names: list[str], filter_values: Any) -> dict[str, Any]:
+        """Build filter kwargs when filter_values is a single value."""
+        if len(param_names) != 1:
+            raise WorkflowError(f"Filter expects {len(param_names)} parameters, got 1")
+        return {"filter_func": filter_func, param_names[0]: filter_values}
 
     def _init_variable_manager(self) -> NornFlowVariablesManager:
         """
