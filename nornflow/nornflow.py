@@ -10,8 +10,8 @@ from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
 from nornflow.exceptions import (
     CatalogError,
     CoreError,
+    ImmutableAttributeError,
     InitializationError,
-    NornirError,
     ProcessorError,
     ResourceError,
     SettingsError,
@@ -188,7 +188,7 @@ class NornFlow:
 
     @nornir_configs.setter
     def nornir_configs(self, value: Any) -> None:
-        raise NornirError(
+        raise ImmutableAttributeError(
             "Nornir configurations cannot be modified directly. Use NornFlowSettings to configure Nornir."
         )
 
@@ -204,7 +204,7 @@ class NornFlow:
 
     @nornir_manager.setter
     def nornir_manager(self, value: Any) -> None:
-        raise CoreError("Nornir manager cannot be set directly.")
+        raise ImmutableAttributeError("Nornir manager cannot be set directly.")
 
     @property
     def settings(self) -> NornFlowSettings:
@@ -226,10 +226,10 @@ class NornFlow:
             value (Any): Attempted value to set.
 
         Raises:
-            SettingsError: Always raised to prevent direct setting of the settings.
+            ImmutableAttributeError: Always raised to prevent direct setting of the settings.
         """
-        raise SettingsError(
-            "Cannot set settings directly. Settings must be either passed as a "
+        raise ImmutableAttributeError(
+            "Cannot set NornFlow settings directly. They must be either passed as a "
             "NornFlowSettings object or as keyword arguments to the NornFlow initializer."
         )
 
@@ -363,9 +363,9 @@ class NornFlow:
         Prevent setting the tasks catalog directly.
 
         Raises:
-            CatalogError: Always raised to prevent direct setting of the tasks catalog.
+            ImmutableAttributeError: Always raised to prevent direct setting of the tasks catalog.
         """
-        raise CatalogError("Cannot set tasks catalog directly.", catalog_name="tasks")
+        raise ImmutableAttributeError("Cannot set tasks catalog directly.")
 
     @property
     def workflows_catalog(self) -> FileCatalog:
@@ -383,9 +383,9 @@ class NornFlow:
         Prevent setting the workflows catalog directly.
 
         Raises:
-            CatalogError: Always raised to prevent direct setting of the workflows catalog.
+            ImmutableAttributeError: Always raised to prevent direct setting of the workflows catalog.
         """
-        raise CatalogError("Cannot set workflows catalog directly.", catalog_name="workflows")
+        raise ImmutableAttributeError("Cannot set workflows catalog directly.")
 
     @property
     def filters_catalog(self) -> PythonEntityCatalog:
@@ -403,9 +403,9 @@ class NornFlow:
         Prevent setting the filters catalog directly.
 
         Raises:
-            CatalogError: Always raised to prevent direct setting of the filters catalog.
+            ImmutableAttributeError: Always raised to prevent direct setting of the filters catalog.
         """
-        raise CatalogError("Cannot set filters catalog directly.", catalog_name="filters")
+        raise ImmutableAttributeError("Cannot set filters catalog directly.")
 
     @property
     def workflow(self) -> WorkflowModel | None:
@@ -472,9 +472,9 @@ class NornFlow:
         Prevent setting the workflow path directly.
 
         Raises:
-            CoreError: Always raised to prevent direct setting of the workflow path.
+            ImmutableAttributeError: Always raised to prevent direct setting of the workflow path.
         """
-        raise CoreError("Workflow path cannot be set directly.", component="NornFlow")
+        raise ImmutableAttributeError("Workflow path cannot be set directly.")
 
     @property
     def processors(self) -> list:
@@ -492,11 +492,10 @@ class NornFlow:
         Prevent setting the processors directly.
 
         Raises:
-            ProcessorError: Always raised to prevent direct setting of processors.
+            ImmutableAttributeError: Always raised to prevent direct setting of processors.
         """
-        raise ProcessorError(
-            message="Processors cannot be set directly, but must be loaded from nornflow settings file.",
-            component="NornFlow",
+        raise ImmutableAttributeError(
+            "Processors cannot be set directly, but must be loaded from nornflow settings file."
         )
 
     def _load_tasks_catalog(self) -> None:
