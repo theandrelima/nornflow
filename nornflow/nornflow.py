@@ -127,16 +127,15 @@ class NornFlow:
             self._load_tasks_catalog()
             self._load_filters_catalog()
             self._load_workflows_catalog()
+            self._load_processors()
 
             self._workflow = None
-            self.workflow_path = None
+            self._workflow_path = None
             self._var_processor = None
             self._failure_processor = None
 
             if workflow:
                 self.workflow = workflow
-
-            self._load_processors()
 
             try:
                 self._nornir_configs = load_file_to_dict(self.settings.nornir_config_file)
@@ -443,7 +442,7 @@ class NornFlow:
             try:
                 workflow_dict = load_file_to_dict(workflow_path)
                 self._workflow = WorkflowModel.create(workflow_dict)
-                self.workflow_path = workflow_path
+                self._workflow_path = workflow_path
             except Exception as e:
                 raise WorkflowError(
                     f"Failed to load workflow '{value}' from path '{workflow_path}': {e}",
@@ -456,6 +455,26 @@ class NornFlow:
             )
         
         self._failure_processor = None
+
+    @property
+    def workflow_path(self) -> Path | None:
+        """
+        Get the path to the workflow file, if loaded from a file.
+
+        Returns:
+            Path | None: The workflow file path or None if not set.
+        """
+        return self._workflow_path
+
+    @workflow_path.setter
+    def workflow_path(self, value: Any) -> None:
+        """
+        Prevent setting the workflow path directly.
+
+        Raises:
+            CoreError: Always raised to prevent direct setting of the workflow path.
+        """
+        raise CoreError("Workflow path cannot be set directly.", component="NornFlow")
 
     @property
     def processors(self) -> list:
