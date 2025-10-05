@@ -48,7 +48,15 @@ class CatalogError(CoreError):
 
 class InitializationError(CoreError):
     """Base for all initialization-related errors."""
+    
 
+class ImmutableAttributeError(CoreError):
+    """
+    Exception raised when attempting to set a read-only or immutable attribute.
+
+    This is used for properties that should never be modified directly,
+    ensuring API integrity and guiding users to proper configuration methods.
+    """
 
 ###############################################################################
 # WORKFLOW EXCEPTIONS
