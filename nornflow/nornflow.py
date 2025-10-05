@@ -5,7 +5,7 @@ from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
 from nornflow.builtins.processors import NornFlowFailureStrategyProcessor
-from nornflow.catalogs import FileCatalog, PythonEntityCatalog
+from nornflow.catalogs import FileCatalog, CallableCatalog
 from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
 from nornflow.exceptions import (
     CatalogError,
@@ -120,8 +120,8 @@ class NornFlow:
             self._failure_strategy = failure_strategy
             self._processors = processors
 
-            self._tasks_catalog = PythonEntityCatalog("tasks")
-            self._filters_catalog = PythonEntityCatalog("filters")
+            self._tasks_catalog = CallableCatalog("tasks")
+            self._filters_catalog = CallableCatalog("filters")
             self._workflows_catalog = FileCatalog("workflows")
 
             self._load_tasks_catalog()
@@ -348,7 +348,7 @@ class NornFlow:
         return self._failure_processor
 
     @property
-    def tasks_catalog(self) -> PythonEntityCatalog:
+    def tasks_catalog(self) -> CallableCatalog:
         """
         Get the tasks catalog.
 
@@ -388,7 +388,7 @@ class NornFlow:
         raise ImmutableAttributeError("Cannot set workflows catalog directly.")
 
     @property
-    def filters_catalog(self) -> PythonEntityCatalog:
+    def filters_catalog(self) -> CallableCatalog:
         """
         Get the filters catalog.
 
@@ -506,7 +506,7 @@ class NornFlow:
         1. Built-in tasks from nornflow.builtins.tasks module
         2. User-defined tasks from local_tasks_dirs
         """
-        self._tasks_catalog = PythonEntityCatalog(name="tasks")
+        self._tasks_catalog = CallableCatalog(name="tasks")
 
         self.tasks_catalog.register_from_module(builtin_tasks, predicate=is_nornir_task)
 
@@ -544,7 +544,7 @@ class NornFlow:
         1. Built-in filters from nornflow.builtins.filters module
         2. User-defined filters from configured local_filters_dirs
         """
-        self._filters_catalog = PythonEntityCatalog(name="filters")
+        self._filters_catalog = CallableCatalog(name="filters")
 
         self.filters_catalog.register_from_module(
             builtin_filters, predicate=is_nornir_filter, transform_item=process_filter
