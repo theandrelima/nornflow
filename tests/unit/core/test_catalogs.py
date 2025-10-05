@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from nornflow.catalogs import PythonEntityCatalog, CatalogError, FileCatalog
+from nornflow.catalogs import CallableCatalog, CatalogError, FileCatalog
 from nornflow.builtins.tasks import set as builtin_set_task
 from nornflow.builtins.filters import hosts as builtin_hosts_filter
 
@@ -14,7 +14,7 @@ class TestPythonEntityCatalog:
 
     def test_register_builtin_task_success(self):
         """Test that built-in tasks can be registered without issues."""
-        catalog = PythonEntityCatalog(name="tasks")
+        catalog = CallableCatalog(name="tasks")
         # Register a built-in task (simulating internal loading)
         catalog.register("set", builtin_set_task, module_name="nornflow.builtins.tasks")
         assert "set" in catalog
@@ -22,7 +22,7 @@ class TestPythonEntityCatalog:
 
     def test_register_custom_task_with_builtin_name_fails(self):
         """Test that registering a custom task with a built-in name raises CatalogError."""
-        catalog = PythonEntityCatalog(name="tasks")
+        catalog = CallableCatalog(name="tasks")
         # First, register the built-in
         catalog.register("set", builtin_set_task, module_name="nornflow.builtins.tasks")
         
@@ -35,7 +35,7 @@ class TestPythonEntityCatalog:
 
     def test_register_builtin_filter_success(self):
         """Test that built-in filters can be registered without issues."""
-        catalog = PythonEntityCatalog(name="filters")
+        catalog = CallableCatalog(name="filters")
         # Register a built-in filter (simulating internal loading)
         catalog.register("hosts", builtin_hosts_filter, module_name="nornflow.builtins.filters")
         assert "hosts" in catalog
@@ -43,7 +43,7 @@ class TestPythonEntityCatalog:
 
     def test_register_custom_filter_with_builtin_name_fails(self):
         """Test that registering a custom filter with a built-in name raises CatalogError."""
-        catalog = PythonEntityCatalog(name="filters")
+        catalog = CallableCatalog(name="filters")
         # First, register the built-in
         catalog.register("hosts", builtin_hosts_filter, module_name="nornflow.builtins.filters")
         
@@ -56,7 +56,7 @@ class TestPythonEntityCatalog:
 
     def test_register_custom_task_with_non_builtin_name_success(self):
         """Test that custom tasks can be registered with non-built-in names."""
-        catalog = PythonEntityCatalog(name="tasks")
+        catalog = CallableCatalog(name="tasks")
         def custom_task(task):
             return "ok"
         
@@ -66,7 +66,7 @@ class TestPythonEntityCatalog:
 
     def test_register_custom_filter_with_non_builtin_name_success(self):
         """Test that custom filters can be registered with non-built-in names."""
-        catalog = PythonEntityCatalog(name="filters")
+        catalog = CallableCatalog(name="filters")
         def custom_filter(host):
             return host.name.startswith("test")
         
@@ -76,7 +76,7 @@ class TestPythonEntityCatalog:
 
     def test_override_non_builtin_task_success(self):
         """Test that non-built-in tasks can be overridden by later registrations."""
-        catalog = PythonEntityCatalog(name="tasks")
+        catalog = CallableCatalog(name="tasks")
         
         # Register a custom task first
         def first_custom(task):
@@ -95,7 +95,7 @@ class TestPythonEntityCatalog:
 
     def test_override_non_builtin_filter_success(self):
         """Test that non-built-in filters can be overridden by later registrations."""
-        catalog = PythonEntityCatalog(name="filters")
+        catalog = CallableCatalog(name="filters")
         
         # Register a custom filter first
         def first_custom(host):
@@ -114,7 +114,7 @@ class TestPythonEntityCatalog:
 
     def test_register_with_module_path_and_name(self):
         """Test registration with explicit module path and name."""
-        catalog = PythonEntityCatalog(name="tasks")
+        catalog = CallableCatalog(name="tasks")
         def sample_task(task):
             pass
         
@@ -125,7 +125,7 @@ class TestPythonEntityCatalog:
 
     def test_get_builtin_items(self):
         """Test retrieving only built-in items."""
-        catalog = PythonEntityCatalog(name="tasks")
+        catalog = CallableCatalog(name="tasks")
         catalog.register("set", builtin_set_task, module_name="nornflow.builtins.tasks")
         catalog.register("custom", lambda x: x, module_name="custom.module")
         
@@ -135,7 +135,7 @@ class TestPythonEntityCatalog:
 
     def test_get_custom_items(self):
         """Test retrieving only custom (non-builtin) items."""
-        catalog = PythonEntityCatalog(name="tasks")
+        catalog = CallableCatalog(name="tasks")
         catalog.register("set", builtin_set_task, module_name="nornflow.builtins.tasks")
         catalog.register("custom", lambda x: x, module_name="custom.module")
         
@@ -145,7 +145,7 @@ class TestPythonEntityCatalog:
 
     def test_get_sources_by_module(self):
         """Test grouping items by their source modules."""
-        catalog = PythonEntityCatalog(name="tasks")
+        catalog = CallableCatalog(name="tasks")
         catalog.register("set", builtin_set_task, module_name="nornflow.builtins.tasks")
         catalog.register("custom1", lambda x: x, module_name="custom.module")
         catalog.register("custom2", lambda x: x, module_name="custom.module")
@@ -161,7 +161,7 @@ class TestPythonEntityCatalog:
         mock_module = type("MockModule", (), {"task1": lambda: None, "task2": lambda: None})()
         mock_import.return_value = mock_module
         
-        catalog = PythonEntityCatalog(name="tasks")
+        catalog = CallableCatalog(name="tasks")
         with patch("pathlib.Path.is_dir", return_value=True), \
              patch("pathlib.Path.rglob", return_value=[Path("test.py")]):
             count = catalog.discover_items_in_dir("dummy_dir")
@@ -173,7 +173,7 @@ class TestPythonEntityCatalog:
         from nornflow.exceptions import CoreError
         mock_import.side_effect = Exception("Import error")
         
-        catalog = PythonEntityCatalog(name="tasks")
+        catalog = CallableCatalog(name="tasks")
         with patch("pathlib.Path.is_dir", return_value=True), \
              patch("pathlib.Path.rglob", return_value=[Path("test.py")]):
             with pytest.raises(CoreError, match="Failed to import module"):
