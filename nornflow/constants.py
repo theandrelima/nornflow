@@ -69,9 +69,8 @@ NORNFLOW_SETTINGS_OPTIONAL = {
     "failure_strategy": FailureStrategy.SKIP_FAILED,
 }
 
-# Used to check if the kwargs passed to a NornFlow initializer are valid.
-# The args listed here are can only be passed through a nornflow settings YAML file
-# that will be used to initialize a NornFlowSettings object
+# Kwargs that cannot be passed to NornFlow.__init__; they must be set via the settings YAML file.
+# These are optional settings (see NORNFLOW_SETTINGS_OPTIONAL), but if customized, use YAML.
 NORNFLOW_INVALID_INIT_KWARGS = (
     "nornir_config_file",
     "local_tasks_dirs",
