@@ -10,6 +10,7 @@
   - [`local_filters_dirs`](#local_filters_dirs)
   - [`vars_dir`](#vars_dir)
   - [`dry_run`](#dry_run)
+  - [`failure_strategy`](#failure_strategy)
   - [`processors`](#processors)
   - [`imported_packages`](#imported_packages)
 - [NornFlow Settings vs Nornir Configs](#nornflow-settings-vs-nornir-configs)
@@ -95,8 +96,19 @@ NornFlow will try to find a settings YAML file in the following order:
   dry_run: True
   ```  
 
+### `failure_strategy`
+
+- **Description**: Sets NornFlow's behavior when a task fails for a host during the execution of workflows. This setting controls whether NornFlow will skip failed hosts from subsequent tasks, stop execution as soon as possible, or continue running all tasks regardless of failures.
+- **Type**: `str` (one of: "skip-failed", "fail-fast", "run-all")
+- **Default**: "skip-failed"
+- **Example**:
+  ```yaml
+  failure_strategy: "run-all"  # Run all tasks regardless of failures
+  ```
+- **Note**: For details on how failure strategies work, see the [Failure Strategies](./failure_strategies.md) documentation.
+
 ### `processors`
-- **Description**: List of Nornir processor configurations to be applied during task/workflow execution. If not provided, NornFlow will default to using only its default processor: `nornflow.builtins.processors.DefaultNornFlowProcessor`.
+- **Description**: List of Nornir processor configurations to be applied during task/workflow execution. If not provided, NornFlow will default to using only its default processor: `nornflow.builtins.DefaultNornFlowProcessor`.
 - **Type**: `list[dict]`
 - **Default**: Uses `DefaultNornFlowProcessor` if not specified
 - **Example**:

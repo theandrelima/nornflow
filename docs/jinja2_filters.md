@@ -1,7 +1,5 @@
 # Jinja2 Filters Reference
 
-**File path:** `docs/jinja2_filters.md`
-
 ## Table of Contents
 - [Introduction](#introduction)
 - [Built-in Jinja2 Filters](#built-in-jinja2-filters)
