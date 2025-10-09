@@ -31,10 +31,9 @@ When a task fails on a host, NornFlow removes that host from the inventory for s
 When a failure is detected on any host, NornFlow immediately signals all threads to stop execution. This strategy focuses on preventing further changes when any failure is detected.
 
 **Behavior:**
-- When a failure is detected, NornFlow adds all hosts to Nornir's failed_hosts collection
+- When a failure is detected, NornFlow adds all hosts to Nornir's `failed_hosts` list
 - This effectively signals that no more tasks should run
 - 🚨 Already-running threads **will complete** their current task before stopping
-- No new tasks will start after the failure is detected
 - Clear messaging indicates which task triggered the workflow halt
 
 **Best for:** Critical workflows where any failure indicates an issue that should prevent further changes to maintain system consistency.
@@ -45,6 +44,7 @@ The workflow runs all tasks on all hosts regardless of failures. Each task is at
 
 **Behavior:**
 - Failures are collected but don't affect execution flow
+- NornFlow clears Nornir's `failed_hosts` list before each task execution
 - At completion, a detailed failure summary is provided
 
 **Best for:** Diagnostic, audit, or reporting workflows where you need comprehensive results from all systems regardless of individual failures.
@@ -95,6 +95,8 @@ nornflow run my_workflow.yaml --failure-strategy fail-fast
 # Using underscores (also supported)
 nornflow run my_workflow.yaml --failure-strategy fail_fast
 ```
+
+NornFlow supports both hyphen and underscore formats for failure strategy names, automatically normalizing them internally.
 
 ## Behavior Examples
 
@@ -194,7 +196,7 @@ This threading model explains why, even with `fail-fast`, some tasks might compl
 ## Best Practices
 
 1. **Use `skip-failed` (default)** for most automation tasks where partial success is valuable
-2. **Use `fail-fast`** for more strict changes where consistency must be maximized. Again, *bear in mind that it NornFlow won't be able to stop ongoing threads, so some diff migh still happen by the time the workflow halts completely.*
+2. **Use `fail-fast`** for more strict changes where consistency must be maximized. Again, *bear in mind that NornFlow won't be able to stop ongoing threads, so some changes might still happen by the time the workflow halts completely.*
 3. **Use `run-all`** for audits, reports, and diagnostics where you need complete information
 4. **Always test** your failure strategy choice in a non-production environment first
 5. **Monitor the output** - NornFlow provides clear messaging about what's happening during execution
