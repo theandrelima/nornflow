@@ -24,7 +24,7 @@ class NornFlowBaseModel(PydanticSerdesBaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
-    _exclude_from_global_validators: ClassVar[tuple[str, ...]] = ()
+    _exclude_from_universal_validations: ClassVar[tuple[str, ...]] = ()
 
     @classmethod
     def create(cls, model_dict: dict[str, Any], *args: Any, **kwargs: Any) -> "NornFlowBaseModel":
@@ -45,7 +45,7 @@ class TaskModel(NornFlowBaseModel):
     _err_on_duplicate = False
 
     # Exclude 'args' from universal Jinja2 validation since it's allowed there
-    _exclude_from_global_validators: ClassVar[tuple[str, ...]] = ("args", "set_to")
+    _exclude_from_universal_validations: ClassVar[tuple[str, ...]] = ("args", "set_to")
 
     id: int | None = None
     name: str
