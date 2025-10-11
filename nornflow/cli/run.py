@@ -81,25 +81,70 @@ def parse_key_value_pairs(value: str | None, error_context: str) -> dict[str, An
     """
     Parse a string of key=value pairs into a dictionary with intelligent value parsing.
 
-    Handles multiple formats for values:
-    - Python literals via ast.literal_eval
-    - Simple strings
-    - Comma-separated values (auto-converted to lists)
+    This function splits the input string on commas, but only those not inside quotes
+    or brackets, using a regex lookahead to avoid breaking nested structures. Each
+    key=value pair is then processed: keys have quotes stripped if present, and values
+    are handled based on quoting—quoted values become strings (with quotes removed),
+    while unquoted values are evaluated as Python literals (e.g., lists, dicts) via
+    ast.literal_eval, falling back to strings if evaluation fails. Special keys like
+    'hosts' and 'groups' auto-convert unquoted comma-separated strings to lists.
+
+    Parsing steps:
+    1. If input is empty, return empty dict.
+    2. Use regex to split on commas outside quotes/brackets.
+    3. For each pair, split on '=' and strip whitespace.
+    4. Strip quotes from keys if present.
+    5. For values: If quoted (single/double), treat as string (unquote). If unquoted,
+       attempt literal evaluation; fallback to string.
+    6. Handle special keys for list conversion.
+    7. Raise error with examples on failure.
 
     Args:
-        value: String containing key=value pairs
-        error_context: Context for error messages
+        value: String containing key=value pairs, e.g., "a=1,b='hello',c=[1,2]".
+        error_context: Context for error messages, e.g., "vars" or "inventory filters".
 
     Returns:
-        Dictionary of parsed key-value pairs
+        Dictionary of parsed key-value pairs.
+
+    Raises:
+        CLIRunError: If parsing fails, with examples.
+
+    Examples:
+        - Simple unquoted: "a=1,b=hello" -> {"a": 1, "b": "hello"}
+        - Quoted strings: "a='hello',b=\"world\"" -> {"a": "hello", "b": "world"}
+        - Lists: "a=[1,2,3],b=['x','y']" -> {"a": [1, 2, 3], "b": ["x", "y"]}
+        - Dicts: "a={'key': 'val'},b={\"k\": 1}" -> {"a": {"key": "val"}, "b": {"k": 1}}
+        - Special keys: "hosts=host1,host2" -> {"hosts": ["host1", "host2"]}
+        - Nested/complex: "a=[1,{'b': 2}],c='not,eval'" -> {"a": [1, {"b": 2}], "c": "not,eval"}
+        - Invalid: "a=1,b" -> Raises CLIRunError with examples.
     """
     if not value:
         return {}
 
     try:
         parsed_dict = {}
-        # Split on commas that are not within brackets, quotes, curly brackets, or parentheses
-        pairs = re.split(r",(?=(?:[^{}()[\]]*[{([][^{}()[\]]*[})\]])*[^{}()[\]]*$)", value)
+        # This pattern splits on commas that are NOT inside any type of quotes or brackets
+        pairs = re.split(
+            r'''
+            ,                           # Match a comma
+            (?=                         # Followed by (positive lookahead)
+                (?:                     # Non-capturing group
+                    [^"'{}()[\]]*       # Any chars except quotes/brackets
+                    (?:                 # Non-capturing group
+                        "[^"]*"         # Double quoted content
+                        |'[^']*'        # OR single quoted content
+                        |{[^}]*}        # OR curly bracket content
+                        |\([^)]*\)      # OR parentheses content
+                        |\[[^\]]*\]     # OR square bracket content
+                    )
+                )*                      # Zero or more times
+                [^"'{}()[\]]*           # Any chars except quotes/brackets
+                $                       # Until end of string
+            )
+            ''',
+            value,
+            flags=re.VERBOSE
+        )
 
         for pair in pairs:
             if "=" not in pair:
@@ -113,8 +158,14 @@ def parse_key_value_pairs(value: str | None, error_context: str) -> dict[str, An
             if (k.startswith('"') and k.endswith('"')) or (k.startswith("'") and k.endswith("'")):
                 k = k[1:-1]
 
-            # Process the value
-            parsed_dict[k] = process_value(k, v)
+            # Check if value is quoted
+            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                # Treat as string, remove quotes
+                v = v[1:-1]
+                parsed_dict[k] = v
+            else:
+                # Attempt literal evaluation for unquoted values
+                parsed_dict[k] = process_value(k, v)
 
     except Exception as e:
         raise CLIRunError(
