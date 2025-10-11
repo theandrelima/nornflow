@@ -146,7 +146,7 @@ class NornFlowBuilder:
     def with_workflow_name(self, workflow_name: str) -> "NornFlowBuilder":
         """
         Set the workflow name for the builder.
-        
+
         The workflow will be resolved from the workflows catalog during NornFlow execution.
         This allows using workflow names instead of paths, which is particularly useful
         for CLI commands like `nornflow run some_workflow_name`.

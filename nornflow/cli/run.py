@@ -125,7 +125,7 @@ def parse_key_value_pairs(value: str | None, error_context: str) -> dict[str, An
         parsed_dict = {}
         # This pattern splits on commas that are NOT inside any type of quotes or brackets
         pairs = re.split(
-            r'''
+            r"""
             ,                           # Match a comma
             (?=                         # Followed by (positive lookahead)
                 (?:                     # Non-capturing group
@@ -141,9 +141,9 @@ def parse_key_value_pairs(value: str | None, error_context: str) -> dict[str, An
                 [^"'{}()[\]]*           # Any chars except quotes/brackets
                 $                       # Until end of string
             )
-            ''',
+            """,
             value,
-            flags=re.VERBOSE
+            flags=re.VERBOSE,
         )
 
         for pair in pairs:

@@ -326,7 +326,9 @@ def print_workflow_overview(
         table.add_row("Inventory Filters", filters_str)
     table.add_row("Dry Run", "Yes" if effective_dry_run else "No")
     table.add_row("Hosts Count", str(hosts_count))
-    table.add_row("Failure Strategy", failure_strategy.value.replace("_", "-") if failure_strategy else "None")
+    table.add_row(
+        "Failure Strategy", failure_strategy.value.replace("_", "-") if failure_strategy else "None"
+    )
 
     # Prepare vars table if any vars exist
     elements = [table]
@@ -355,6 +357,11 @@ def print_workflow_overview(
         elements.append(Padding.indent(Columns([vars_table, Align.right(legend_text)], expand=True), 2))
 
     # Create a panel with the grouped elements
-    panel = Panel(Group(*elements), title=Text("Workflow Execution Overview", style="bold"), border_style="green", width=100)
+    panel = Panel(
+        Group(*elements),
+        title=Text("Workflow Execution Overview", style="bold"),
+        border_style="green",
+        width=100,
+    )
 
     console.print(panel)
