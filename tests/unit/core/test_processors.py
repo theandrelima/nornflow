@@ -3,10 +3,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from nornflow.exceptions import ProcessorError
-from nornflow.nornflow import NornFlow
+from nornflow.models import WorkflowModel
+from nornflow import NornFlow
 from nornflow.utils import load_processor
-from nornflow.workflow import WorkflowFactory
-from tests.unit.core.test_processors_utils import TestProcessor
+from tests.unit.core.test_processors_utils import TestProcessor, TestProcessor2
 
 
 class TestProcessorLoading:
@@ -47,15 +47,18 @@ class TestNornFlowProcessors:
     @patch("nornflow.nornflow.NornFlow._load_workflows_catalog")
     @patch("nornflow.nornflow.NornFlow._load_filters_catalog")
     @patch("nornflow.nornir_manager.InitNornir")
-    def test_load_kwargs_processors(self, mock_init, mock_filters, mock_workflows, mock_tasks):
+    def test_load_kwargs_processors(self, mock_init_nornir, mock_filters, mock_workflows, mock_tasks):
         """Test loading processors from kwargs."""
         # Setup
         mock_nornir = MagicMock()
-        mock_init.return_value = mock_nornir
+        mock_init_nornir.return_value = mock_nornir
 
         # Create settings with no processors
         settings = MagicMock()
         settings.processors = None
+        
+        # Mock the nornir config file check to avoid file not found errors
+        settings.nornir_config_file = None
 
         # Create kwargs with processors
         kwargs_processors = [
@@ -65,30 +68,31 @@ class TestNornFlowProcessors:
             }
         ]
 
-        # Create NornFlow with kwargs processors
-        nornflow = NornFlow(nornflow_settings=settings, processors=kwargs_processors)
+        # Create NornFlow with kwargs processors and bypass initialization
+        with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
+            nornflow = NornFlow(nornflow_settings=settings, processors=kwargs_processors)
 
-        # Verify processors were loaded correctly
-        assert len(nornflow.processors) == 1
-        assert isinstance(nornflow.processors[0], TestProcessor)
-        assert nornflow.processors[0].name == "KwargsProcessor"
-        assert nornflow.processors[0].priority == 1
+            # Verify processors were loaded correctly
+            assert len(nornflow.processors) == 1
+            assert isinstance(nornflow.processors[0], TestProcessor)
+            assert nornflow.processors[0].name == "KwargsProcessor"
+            assert nornflow.processors[0].priority == 1
 
 
 class TestProcessorPrecedence:
     """Test processor precedence rules."""
 
     @patch("nornflow.nornir_manager.InitNornir")
-    def test_kwargs_override_workflow_processors(self, mock_init):
-        """Test that kwargs processors override workflow processors."""
+    def test_kwargs_override_workflow_processors(self, mock_init_nornir):
+        """Test that kwargs processors override workflow model processors."""
         # Setup
         mock_nornir = MagicMock()
-        mock_init.return_value = mock_nornir
+        mock_init_nornir.return_value = mock_nornir
 
         # Create settings
         settings = MagicMock()
         settings.processors = None
-        settings.nornir_config_file = "dummy_config.yaml"
+        settings.nornir_config_file = None  # Avoid file not found errors
         settings.dry_run = False
 
         # Create workflow with processors - must include at least one task
@@ -105,37 +109,47 @@ class TestProcessorPrecedence:
             }
         }
 
-        # Mock the WorkflowFactory and Workflow to avoid validation errors
-        with (
-            patch("nornflow.workflow.Workflow") as mock_workflow,
-            patch("nornflow.nornflow.NornFlow._load_tasks_catalog"),
-            patch("nornflow.nornflow.NornFlow._load_workflows_catalog"),
-            patch("nornflow.nornflow.NornFlow._load_filters_catalog"),
-        ):
-
+        # Create the workflow model
+        with patch("nornflow.models.WorkflowModel.create") as mock_create:
             # Configure the mock workflow
-            workflow_instance = MagicMock()
-            workflow_instance.processors_config = workflow_dict["workflow"]["processors"]
-            mock_workflow.return_value = workflow_instance
-
-            # Create the workflow through the factory
-            workflow = WorkflowFactory.create_from_dict(workflow_dict)
+            workflow_model = MagicMock(spec=WorkflowModel)
+            workflow_model.processors = [
+                {"class": "tests.unit.core.test_processors_utils.TestProcessor", "args": {"name": "WorkflowProc"}}
+            ]
+            workflow_model.dry_run = False
+            mock_create.return_value = workflow_model
 
             # Create kwargs processors
             kwargs_processors = [
                 {"class": "tests.unit.core.test_processors_utils.TestProcessor2", "args": {"name": "KwargsProc"}}
             ]
 
-            # Create NornFlow with both
-            nornflow = NornFlow(nornflow_settings=settings, workflow=workflow, processors=kwargs_processors)
+            # Create NornFlow with both workflow and processors
+            with patch("nornflow.nornflow.NornFlow._load_tasks_catalog"), \
+                 patch("nornflow.nornflow.NornFlow._load_workflows_catalog"), \
+                 patch("nornflow.nornflow.NornFlow._load_filters_catalog"), \
+                 patch("nornflow.nornflow.NornFlow._initialize_nornir"):
+                
+                nornflow = NornFlow(
+                    nornflow_settings=settings, 
+                    workflow=workflow_model, 
+                    processors=kwargs_processors
+                )
 
-            # Set up missing attributes that would normally be created by the mocked methods
-            nornflow._tasks_catalog = {"dummy_task": MagicMock()}
-            nornflow._workflows_catalog = {}
-            nornflow._filters_catalog = {}
-
-            # Run NornFlow
-            nornflow.run()
-
-            # Verify workflow processors were disabled
-            assert workflow.processors_config is None
+                # Set up missing attributes that would normally be created by the mocked methods
+                nornflow._tasks_catalog = {"dummy_task": MagicMock()}
+                nornflow._workflows_catalog = {}
+                nornflow._filters_catalog = {}
+                
+                # Mock necessary components for running
+                mock_runner = MagicMock()
+                nornflow._runner = mock_runner
+                
+                # Mock _vars_manager which is now needed
+                mock_vars_manager = MagicMock()
+                nornflow._vars_manager = mock_vars_manager
+                
+                # Verify that kwargs processors took precedence over workflow processors
+                assert len(nornflow.processors) == 1
+                assert isinstance(nornflow.processors[0], TestProcessor2)
+                assert nornflow.processors[0].name == "KwargsProc"

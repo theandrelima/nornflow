@@ -1,18 +1,16 @@
 """Tests for failure handling strategies (skip-failed, fail-fast, run-all)."""
 
-from unittest.mock import MagicMock, Mock, patch, call
+from unittest.mock import MagicMock, patch, call
 
 import pytest
-from nornir.core.task import AggregatedResult, MultiResult, Result
 
+from nornflow import NornFlow, NornFlowBuilder
 from nornflow.builtins.processors import (
     DefaultNornFlowProcessor,
     NornFlowFailureStrategyProcessor,
 )
 from nornflow.constants import FailureStrategy
-from nornflow.exceptions import WorkflowError
-from nornflow.nornflow import NornFlowBuilder
-from nornflow.workflow import Workflow, WorkflowFactory
+from nornflow.models import WorkflowModel
 
 
 class TestFailureStrategyConstants:
@@ -420,89 +418,60 @@ class TestCLIFailureStrategyIntegration:
             parse_failure_strategy("invalid-strategy")
 
 
-class TestWorkflowFactoryWithFailureStrategy:
-    """Test WorkflowFactory with failure strategy configuration."""
-
-    def test_workflow_factory_cli_failure_strategy_overrides(self):
-        """Test WorkflowFactory CLI failure strategy overrides workflow strategy."""
-        workflow_dict = {
-            "workflow": {
-                "name": "Test",
-                "failure_strategy": "skip-failed",
-                "tasks": [{"name": "task1"}],
-            }
+class TestNornFlowFailureStrategy:
+    """Test NornFlow's failure strategy handling."""
+    
+    def test_nornflow_with_explicit_failure_strategy(self):
+        """Test NornFlow initialized with explicit failure strategy."""
+        # Create workflow model with one strategy
+        workflow_model = MagicMock(spec=WorkflowModel)
+        workflow_model.failure_strategy = FailureStrategy.SKIP_FAILED
+        
+        # Create NornFlow with different strategy
+        nornflow = NornFlow(
+            workflow=workflow_model,
+            failure_strategy=FailureStrategy.FAIL_FAST
+        )
+        
+        # Explicit failure strategy should override workflow's strategy
+        assert nornflow.failure_strategy == FailureStrategy.FAIL_FAST
+        
+    def test_nornflow_defaults_to_workflow_strategy(self):
+        """Test NornFlow uses workflow's strategy when not explicitly set."""
+        # Create workflow model with strategy
+        workflow_model = MagicMock(spec=WorkflowModel)
+        workflow_model.failure_strategy = FailureStrategy.RUN_ALL
+        
+        # Create NornFlow without explicit strategy
+        nornflow = NornFlow(workflow=workflow_model)
+        
+        # Should use workflow's strategy
+        assert nornflow.failure_strategy == FailureStrategy.RUN_ALL
+        
+    @patch('nornflow.nornir_manager.InitNornir')
+    @patch('nornflow.nornflow.load_file_to_dict')
+    def test_nornflow_defaults_to_settings_strategy(self, mock_load_file, mock_init_nornir):
+        """Test NornFlow uses settings' strategy when workflow doesn't specify one."""
+        # Setup mock Nornir instance
+        mock_nornir_instance = MagicMock()
+        mock_nornir_instance.inventory.hosts = {}
+        mock_init_nornir.return_value = mock_nornir_instance
+        
+        # Mock load_file_to_dict to return a valid config dict
+        mock_load_file.return_value = {
+            'core': {'num_workers': 1},
+            'inventory': {'plugin': 'SimpleInventory', 'options': {}}
         }
         
-        with patch("nornflow.workflow.generate_from_dict"):
-            with patch("nornflow.workflow.get_global_data_store") as mock_store:
-                mock_workflow_model = MagicMock()
-                mock_workflow_model.failure_strategy = FailureStrategy.SKIP_FAILED
-                mock_workflow_model.dry_run = False
-                
-                mock_store.return_value.records = {
-                    "WorkflowModel": [mock_workflow_model],
-                    "TaskModel": [MagicMock()],
-                }
-                
-                factory = WorkflowFactory(
-                    workflow_dict=workflow_dict,
-                    cli_failure_strategy=FailureStrategy.FAIL_FAST,
-                )
-                
-                workflow = factory.create()
-                
-                assert workflow.failure_strategy == FailureStrategy.FAIL_FAST
+        # Create NornFlow with settings that specify a strategy
+        settings = MagicMock()
+        settings.failure_strategy = FailureStrategy.FAIL_FAST
+        settings.nornir_config_file = 'mock_config.yaml'
 
-    def test_workflow_factory_defaults_to_workflow_strategy(self):
-        """Test WorkflowFactory uses workflow's strategy when no CLI override."""
-        workflow_dict = {
-            "workflow": {
-                "name": "Test",
-                "failure_strategy": "run-all",
-                "tasks": [{"name": "task1"}],
-            }
-        }
+        nornflow = NornFlow(nornflow_settings=settings)
         
-        with patch("nornflow.workflow.generate_from_dict"):
-            with patch("nornflow.workflow.get_global_data_store") as mock_store:
-                mock_workflow_model = MagicMock()
-                mock_workflow_model.failure_strategy = FailureStrategy.RUN_ALL
-                mock_workflow_model.dry_run = False
-                
-                mock_store.return_value.records = {
-                    "WorkflowModel": [mock_workflow_model],
-                    "TaskModel": [MagicMock()],
-                }
-                
-                factory = WorkflowFactory(workflow_dict=workflow_dict)
-                workflow = factory.create()
-                
-                assert workflow.failure_strategy == FailureStrategy.RUN_ALL
-
-    def test_workflow_factory_defaults_to_skip_failed(self):
-        """Test WorkflowFactory defaults to SKIP_FAILED when not specified."""
-        workflow_dict = {
-            "workflow": {
-                "name": "Test",
-                "tasks": [{"name": "task1"}],
-            }
-        }
-        
-        with patch("nornflow.workflow.generate_from_dict"):
-            with patch("nornflow.workflow.get_global_data_store") as mock_store:
-                mock_workflow_model = MagicMock()
-                mock_workflow_model.failure_strategy = FailureStrategy.SKIP_FAILED
-                mock_workflow_model.dry_run = False
-                
-                mock_store.return_value.records = {
-                    "WorkflowModel": [mock_workflow_model],
-                    "TaskModel": [MagicMock()],
-                }
-                
-                factory = WorkflowFactory(workflow_dict=workflow_dict)
-                workflow = factory.create()
-                
-                assert workflow.failure_strategy == FailureStrategy.SKIP_FAILED
+        # Should use settings' strategy
+        assert nornflow.failure_strategy == FailureStrategy.FAIL_FAST
 
 
 class TestNornFlowBuilderWithFailureStrategy:
@@ -510,20 +479,33 @@ class TestNornFlowBuilderWithFailureStrategy:
 
     def test_builder_with_cli_failure_strategy(self):
         """Test builder accepts and passes CLI failure strategy."""
-        from nornflow.nornflow import NornFlowBuilder
-        
         builder = NornFlowBuilder()
-        builder.with_cli_failure_strategy(FailureStrategy.FAIL_FAST)
+        builder.with_failure_strategy(FailureStrategy.FAIL_FAST)
         
-        assert builder._cli_failure_strategy == FailureStrategy.FAIL_FAST
+        assert builder._failure_strategy == FailureStrategy.FAIL_FAST
+        
+        # Create mock workflow
+        mock_workflow = MagicMock(spec=WorkflowModel)
+        mock_workflow.failure_strategy = FailureStrategy.SKIP_FAILED
+        
+        # With mocked dependencies
+        with patch.object(builder, '_settings', new=MagicMock()):
+            # Add mock workflow to builder
+            builder._workflow = mock_workflow
+            
+            # Build with patched NornFlow constructor
+            with patch('nornflow.builder.NornFlow') as mock_nornflow:
+                builder.build()
+                
+                # Verify failure strategy was passed to NornFlow
+                call_kwargs = mock_nornflow.call_args.kwargs
+                assert call_kwargs['failure_strategy'] == FailureStrategy.FAIL_FAST
 
     def test_builder_without_cli_failure_strategy(self):
         """Test builder without CLI failure strategy defaults to None."""
-        from nornflow.nornflow import NornFlowBuilder
-        
         builder = NornFlowBuilder()
         
-        assert builder._cli_failure_strategy is None
+        assert builder._failure_strategy is None
 
 
 class TestFailFastBehavior:

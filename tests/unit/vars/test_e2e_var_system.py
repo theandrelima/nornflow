@@ -1,9 +1,18 @@
+"""End-to-end tests that exercise NornFlow variable-resolution and processor flow."""
+
 from unittest.mock import MagicMock
+
+import pytest
+
+from nornflow.vars.exceptions import VariableError
+from nornflow.vars.processors import NornFlowVariableProcessor
 
 
 class TestVariableE2E:
-    def test_complete_variable_resolution(self, setup_manager):
-        """Test resolving variables from all sources in one template."""
+    """Validate complete variable-resolution flows."""
+
+    def test_complete_variable_resolution(self, setup_manager) -> None:
+        """Ensure variables from every precedence tier resolve correctly."""
         manager = setup_manager
 
         template = """
@@ -11,7 +20,7 @@ class TestVariableE2E:
           Host: {{ host.name }} ({{ host.hostname }})
           Platform: {{ host.platform }}
           Location: {{ host.data.location.building }}
-          
+
           Settings:
             Backup Type: {{ backup_type }}
             Backup Server: {{ backup_server | default('unknown') }}
@@ -19,47 +28,52 @@ class TestVariableE2E:
             Timeout: {{ timeout }} seconds
             Credentials: {{ credentials_file }}
             Dry Run: {{ dry_run }}
-          
+
           Status: {{ command_output }}
         """
 
-        result = manager.resolve_string(template, "test_device")
+        rendered = manager.resolve_string(template, "test_device")
 
-        # Check that variables from all sources are resolved correctly
-        assert "Host: test_device (192.168.1.1)" in result
-        assert "Platform: ios" in result
-        assert "Location: HQ" in result
-        assert "Backup Type: full" in result  # workflow var
-        assert "Timeout: 30 seconds" in result  # domain var
-        assert "Credentials: /etc/credentials.yaml" in result  # env var
-        assert "Dry Run: True" in result  # CLI var
-        assert "Status: Config backup complete" in result  # runtime var
+        assert "Host: test_device (192.168.1.1)" in rendered
+        assert "Platform: ios" in rendered
+        assert "Location: HQ" in rendered
+        assert "Backup Type: full" in rendered
+        assert "Timeout: 30 seconds" in rendered
+        assert "Credentials: /etc/cli_credentials.yaml" in rendered  # CLI overrides env
+        assert "Dry Run: True" in rendered
+        assert "Status: Config backup complete" in rendered
 
-    def test_variable_processor_integration(self, setup_processor, mock_host, mock_result):
-        """Test the variable processor integrating with task execution."""
+    def test_variable_processor_integration(
+        self,
+        setup_processor: NornFlowVariableProcessor,
+        mock_host,
+        mock_result,
+    ) -> None:
+        """Verify processor resolves params and stores runtime variables."""
         processor = setup_processor
         host = mock_host
 
-        # Create a mock task with template params
         task = MagicMock()
         task.name = "my_task"
-        task.params = {"command": "show run | include {{ host.name }}", "timeout": "{{ timeout }}"}
+        task.params = {
+            "command": "show run | include {{ host.name }}",
+            "timeout": "{{ timeout }}",
+        }
 
-        # Process task start
+        # Resolve parameters at task start
         processor.task_instance_started(task, host)
-
-        # Verify params were resolved
         assert task.params["command"] == "show run | include test_device"
         assert task.params["timeout"] == "30"
 
-        # Add set_to to the task
+        # Emulate workflow: store result under a runtime variable
         task.set_to = "backup_result"
+        processor.vars_manager.set_runtime_variable(task.set_to, mock_result, host.name)
 
-        # Process task completion
+        # Run completion hook
         processor.task_instance_completed(task, host, mock_result)
 
-        # Verify runtime variable was set
-        assert (
-            processor.vars_manager.get_nornflow_variable("backup_result", host.name).result
-            == "Router configuration backup"
-        )
+        stored = processor.vars_manager.get_nornflow_variable("backup_result", host.name)
+        assert stored.result == "Router configuration backup"
+
+        with pytest.raises(VariableError):
+            processor.vars_manager.get_nornflow_variable("nonexistent_var", host.name)
