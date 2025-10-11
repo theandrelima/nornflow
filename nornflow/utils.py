@@ -334,21 +334,22 @@ def print_workflow_overview(
         elements.append(Text("\n"))  # Blank space before variables
         elements.append(Padding.indent(Text("Variables", style="bold cyan"), 1))
         vars_table = Table(show_header=True, box=None)
-        vars_table.add_column("Type", style="bold magenta", no_wrap=True)
+        vars_table.add_column("Source", style="bold magenta", no_wrap=True)
         vars_table.add_column("Name", style="cyan")
         vars_table.add_column("Value", style="yellow")
+        vars_table.add_column("Type", style="blue", no_wrap=True)
 
         if workflow_vars:
             for k, v in workflow_vars.items():
                 display_v = "********" if "password" in k.lower() or "secret" in k.lower() else str(v)
-                vars_table.add_row("w", k, display_v)
+                vars_table.add_row("w", k, display_v, type(v).__name__)
         if vars:
             for k, v in vars.items():
                 display_v = "********" if "password" in k.lower() or "secret" in k.lower() else str(v)
-                vars_table.add_row("c*", k, display_v)
+                vars_table.add_row("c*", k, display_v, type(v).__name__)
 
         legend_text = Text()
-        legend_text.append("Types", style="bold dim")
+        legend_text.append("Sources", style="bold dim")
         legend_text.append("\nw: defined in workflow", style="dim")
         legend_text.append("\nc*: CLI/programmatic override", style="dim")
         elements.append(Padding.indent(Columns([vars_table, Align.right(legend_text)], expand=True), 2))
