@@ -48,7 +48,7 @@ class CatalogError(CoreError):
 
 class InitializationError(CoreError):
     """Base for all initialization-related errors."""
-    
+
 
 class ImmutableAttributeError(CoreError):
     """
@@ -57,6 +57,7 @@ class ImmutableAttributeError(CoreError):
     This is used for properties that should never be modified directly,
     ensuring API integrity and guiding users to proper configuration methods.
     """
+
 
 ###############################################################################
 # WORKFLOW EXCEPTIONS
@@ -73,13 +74,13 @@ class WorkflowError(NornFlowError):
     def __init__(self, message: str = "", task_name: str = "", filter_name: str = "", **kwargs):
         self.task_name = task_name
         self.filter_name = filter_name
-        
+
         prefix = ""
         if task_name:
             prefix = f"Task '{task_name}': "
         elif filter_name:
             prefix = f"Filter '{filter_name}': "
-        
+
         super().__init__(f"{prefix}{message}")
 
 

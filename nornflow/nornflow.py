@@ -120,7 +120,9 @@ class NornFlow:
         except Exception as e:
             raise InitializationError(f"Failed to initialize NornFlow: {e!s}", component="NornFlow") from e
 
-    def _initialize_settings(self, nornflow_settings: NornFlowSettings | None, kwargs: dict[str, Any]) -> None:
+    def _initialize_settings(
+        self, nornflow_settings: NornFlowSettings | None, kwargs: dict[str, Any]
+    ) -> None:
         """Initialize NornFlow settings from provided object or kwargs."""
         if nornflow_settings:
             self._settings = nornflow_settings
@@ -276,9 +278,7 @@ class NornFlow:
             CoreError: If value is not a dictionary.
         """
         if not isinstance(value, dict):
-            raise CoreError(
-                f"Vars must be a dictionary, got {type(value).__name__}", component="NornFlow"
-            )
+            raise CoreError(f"Vars must be a dictionary, got {type(value).__name__}", component="NornFlow")
         self._vars = value
 
     @property
@@ -307,9 +307,7 @@ class NornFlow:
             CoreError: If value is not a dictionary.
         """
         if not isinstance(value, dict):
-            raise CoreError(
-                f"Filters must be a dictionary, got {type(value).__name__}", component="NornFlow"
-            )
+            raise CoreError(f"Filters must be a dictionary, got {type(value).__name__}", component="NornFlow")
         self._filters = value
 
     @property
@@ -441,7 +439,7 @@ class NornFlow:
 
         Args:
             value: Either a WorkflowModel instance, a string workflow name, or None to unset.
-        
+
         Raises:
             WorkflowError: If value is invalid or workflow cannot be loaded.
         """
@@ -458,7 +456,7 @@ class NornFlow:
                 f"Workflow must be a WorkflowModel instance, string name, or None, got {type(value).__name__}",
                 component="NornFlow",
             )
-        
+
         self._failure_processor = None
 
     @property
@@ -550,7 +548,9 @@ class NornFlow:
                 if catalog_type == FileCatalog:
                     catalog.discover_items_in_dir(dir_path, predicate=predicate, recursive=recursive)
                 else:
-                    catalog.discover_items_in_dir(dir_path, predicate=predicate, transform_item=transform_item)
+                    catalog.discover_items_in_dir(
+                        dir_path, predicate=predicate, transform_item=transform_item
+                    )
             except Exception as e:
                 raise ResourceError(
                     f"Error loading {name} from {dir_path}: {e!s}",
@@ -566,7 +566,9 @@ class NornFlow:
             )
 
         if check_empty and catalog.is_empty:
-            raise CatalogError(f"No {name} were found. The {name.capitalize()} Catalog can't be empty.", catalog_name=name)
+            raise CatalogError(
+                f"No {name} were found. The {name.capitalize()} Catalog can't be empty.", catalog_name=name
+            )
 
         return catalog
 
@@ -657,24 +659,24 @@ class NornFlow:
     def _apply_filters(self, nornir_manager: NornirManager) -> None:
         """
         Apply inventory filters to the Nornir manager.
-        
+
         Args:
             nornir_manager: The Nornir manager to apply filters to.
         """
         filter_kwargs_list = self._get_filtering_kwargs()
-        
+
         for filter_kwargs in filter_kwargs_list:
             nornir_manager.apply_filters(**filter_kwargs)
 
     def _get_filtering_kwargs(self) -> list[dict[str, Any]]:
         """
         Process and prepare inventory filters for application.
-        
+
         Returns:
             List of filter kwargs dictionaries ready to apply.
         """
         filters_to_apply = self.filters or self.workflow.inventory_filters or {}
-        
+
         if not filters_to_apply:
             return []
 
@@ -685,20 +687,18 @@ class NornFlow:
                 filter_kwargs_list.append(filter_kwargs)
 
         return filter_kwargs_list
-    
-    def _process_custom_filter(
-        self, key: str, filter_values: Any
-    ) -> dict[str, Any]:
+
+    def _process_custom_filter(self, key: str, filter_values: Any) -> dict[str, Any]:
         """
         Process a custom filter configuration.
-        
+
         Args:
             key: The filter name.
             filter_values: The filter values.
-            
+
         Returns:
             Dictionary of filter kwargs.
-            
+
         Raises:
             WorkflowError: If the filter is not found or parameter count doesn't match.
         """
@@ -714,26 +714,30 @@ class NornFlow:
         else:
             return self._build_filter_kwargs_for_single(filter_func, param_names, filter_values)
 
-    def _build_filter_kwargs_for_dict(self, filter_func: Any, filter_values: dict[str, Any]) -> dict[str, Any]:
+    def _build_filter_kwargs_for_dict(
+        self, filter_func: Any, filter_values: dict[str, Any]
+    ) -> dict[str, Any]:
         """Build filter kwargs when filter_values is a dict."""
         filter_kwargs = {"filter_func": filter_func}
         filter_kwargs.update(filter_values)
         return filter_kwargs
 
-    def _build_filter_kwargs_for_list(self, filter_func: Any, param_names: list[str], filter_values: list) -> dict[str, Any]:
+    def _build_filter_kwargs_for_list(
+        self, filter_func: Any, param_names: list[str], filter_values: list
+    ) -> dict[str, Any]:
         """Build filter kwargs when filter_values is a list."""
         if len(param_names) == 1:
             return {"filter_func": filter_func, param_names[0]: filter_values}
         if len(filter_values) != len(param_names):
-            raise WorkflowError(
-                f"Filter expects {len(param_names)} parameters, got {len(filter_values)}"
-            )
+            raise WorkflowError(f"Filter expects {len(param_names)} parameters, got {len(filter_values)}")
         filter_kwargs = {"filter_func": filter_func}
         for param_name, value in zip(param_names, filter_values):
             filter_kwargs[param_name] = value
         return filter_kwargs
 
-    def _build_filter_kwargs_for_single(self, filter_func: Any, param_names: list[str], filter_values: Any) -> dict[str, Any]:
+    def _build_filter_kwargs_for_single(
+        self, filter_func: Any, param_names: list[str], filter_values: Any
+    ) -> dict[str, Any]:
         """Build filter kwargs when filter_values is a single value."""
         if len(param_names) != 1:
             raise WorkflowError(f"Filter expects {len(param_names)} parameters, got 1")
@@ -758,7 +762,7 @@ class NornFlow:
                 f"Available workflows: {', '.join(sorted(self.workflows_catalog.keys()))}",
                 component="NornFlow",
             )
-        
+
         workflow_path = self.workflows_catalog[name]
         try:
             workflow_dict = load_file_to_dict(workflow_path)
@@ -773,7 +777,7 @@ class NornFlow:
     def _init_variable_manager(self) -> NornFlowVariablesManager:
         """
         Initialize the variable manager with workflow context.
-        
+
         Returns:
             The initialized NornFlowVariablesManager.
         """
@@ -811,16 +815,16 @@ class NornFlow:
         """
         vars_manager = self._init_variable_manager()
         self._var_processor = NornFlowVariableProcessor(vars_manager)
-        
+
         all_processors = [self._var_processor]
-        
+
         if self.workflow and self.workflow.processors:
             try:
                 workflow_processors = []
                 for processor_config in self.workflow.processors:
                     processor = load_processor(dict(processor_config))
                     workflow_processors.append(processor)
-                
+
                 if workflow_processors:
                     all_processors.extend(workflow_processors)
             except ProcessorError as e:
@@ -829,9 +833,9 @@ class NornFlow:
             all_processors.extend(processors)
         elif self.processors:
             all_processors.extend(self.processors)
-        
+
         all_processors.append(self.failure_processor)
-        
+
         nornir_manager.apply_processors(all_processors)
 
     def _orchestrate_execution(self, effective_dry_run: bool) -> None:
@@ -847,7 +851,7 @@ class NornFlow:
         with self.nornir_manager:
             for task in self.workflow.tasks:
                 self.nornir_manager.set_dry_run(effective_dry_run)
-                
+
                 task.run(
                     nornir_manager=self.nornir_manager,
                     vars_manager=self._var_processor.vars_manager,
@@ -920,7 +924,7 @@ class NornFlow:
     def run(self, dry_run: bool = False) -> int:
         """
         Execute the configured workflow with the current NornFlow settings.
-    
+
         This method orchestrates the complete workflow execution process:
         1. Ensures a workflow is configured and ready
         2. Validates that all tasks exist in the catalog
@@ -931,26 +935,28 @@ class NornFlow:
         7. Executes tasks in sequence
         8. Calls print_final_workflow_summary on processors that support it
         9. Returns exit code based on execution results
-    
+
         Exit Codes:
         - 0: Success (all tasks passed)
         - 1-100: Failure with percentage information (% of failed task executions, rounded down)
         - 101: Failure without percentage information (no processor provided statistics)
         - 102+: Reserved for exceptions/internal errors (this must be handled by the caller)
-    
+
         Any exceptions that might happen in the encapsulated logic will just bubble-up
         back to the caller of NornFlow.run(). This is to allow the caller the flexibility
         to process and handle it as fits.
-    
+
         Args:
             dry_run: Whether to execute in dry-run mode.
-    
+
         Returns:
             int: Exit code representing execution status.
         """
         effective_dry_run = dry_run or self.workflow.dry_run
         if not self.workflow:
-            raise WorkflowError("No workflow configured. Set a workflow before calling run().", component="NornFlow")
+            raise WorkflowError(
+                "No workflow configured. Set a workflow before calling run().", component="NornFlow"
+            )
         self._check_tasks()
         self._apply_filters(self.nornir_manager)
         self._with_processors(self.nornir_manager)
