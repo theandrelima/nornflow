@@ -160,8 +160,8 @@ class WorkflowModel(NornFlowBaseModel):
         """
         try:
             dict_args = dict_args.pop("workflow")
-        except KeyError:
-            raise WorkflowError("Workflow file must have 'workflow' as a root-level key.")
+        except KeyError as e:
+            raise WorkflowError("Workflow file must have 'workflow' as a root-level key.") from e
 
         # Tasks should already be in dict_args from the workflow definition
         if "tasks" not in dict_args:

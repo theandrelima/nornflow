@@ -1,4 +1,3 @@
-# ruff: noqa: T201
 import importlib
 import inspect
 from collections.abc import Callable
@@ -6,7 +5,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Literal
 
-import click
 from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
@@ -18,7 +16,6 @@ from rich.padding import Padding
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from tabulate import tabulate
 
 from nornflow.constants import FailureStrategy, JINJA_PATTERN, NORNFLOW_SUPPORTED_YAML_EXTENSIONS
 from nornflow.exceptions import (

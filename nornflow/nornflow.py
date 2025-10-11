@@ -5,7 +5,7 @@ from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
 from nornflow.builtins.processors import NornFlowFailureStrategyProcessor
-from nornflow.catalogs import FileCatalog, CallableCatalog
+from nornflow.catalogs import CallableCatalog, FileCatalog
 from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
 from nornflow.exceptions import (
     CatalogError,
@@ -26,8 +26,8 @@ from nornflow.utils import (
     is_nornir_task,
     is_workflow_file,
     load_processor,
-    process_filter,
     print_workflow_overview,
+    process_filter,
 )
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
@@ -175,25 +175,24 @@ class NornFlow:
 
     def _initialize_processors(self) -> None:
         """
-        Load processors from various sources by precedence:
-        1. Processors passed through kwargs - Likely coming from CLI
-        2. Settings file processors (settings.processors)
-        3. Default processor (DefaultNornFlowProcessor)
-
-        The loaded processors are stored in self._processors for later use during
-        workflow execution.
+        Load processors with proper precedence and store them in ``self._processors``.
+        Precedence:
+        1. Processors passed through kwargs (likely from CLI)
+        2. Processors from settings
+        3. DefaultNornFlowProcessor
         """
         processors_list = self.processors or self.settings.processors
-        if processors_list:
-            self._processors = []
-            for processor_config in processors_list:
-                try:
-                    processor = load_processor(processor_config)
-                    self._processors.append(processor)
-                except ProcessorError as e:
-                    raise InitializationError(f"Failed to load processor: {e}") from e
-        else:
+        if not processors_list:
             self._processors = [DefaultNornFlowProcessor()]
+            return
+
+        self._processors = []
+        try:
+            for processor_config in processors_list:
+                processor = load_processor(processor_config)
+                self._processors.append(processor)
+        except ProcessorError as err:
+            raise InitializationError(f"Failed to load processor: {err}") from err
 
     @property
     def nornir_configs(self) -> dict[str, Any]:
@@ -453,7 +452,8 @@ class NornFlow:
             self._workflow, self._workflow_path = self._load_workflow_from_name(value)
         else:
             raise WorkflowError(
-                f"Workflow must be a WorkflowModel instance, string name, or None, got {type(value).__name__}",
+                "Workflow must be a WorkflowModel instance, string name, or None, "
+                f"got {type(value).__name__}",
                 component="NornFlow",
             )
 
@@ -709,10 +709,9 @@ class NornFlow:
 
         if isinstance(filter_values, dict):
             return self._build_filter_kwargs_for_dict(filter_func, filter_values)
-        elif isinstance(filter_values, list):
+        if isinstance(filter_values, list):
             return self._build_filter_kwargs_for_list(filter_func, param_names, filter_values)
-        else:
-            return self._build_filter_kwargs_for_single(filter_func, param_names, filter_values)
+        return self._build_filter_kwargs_for_single(filter_func, param_names, filter_values)
 
     def _build_filter_kwargs_for_dict(
         self, filter_func: Any, filter_values: dict[str, Any]
@@ -730,9 +729,10 @@ class NornFlow:
             return {"filter_func": filter_func, param_names[0]: filter_values}
         if len(filter_values) != len(param_names):
             raise WorkflowError(f"Filter expects {len(param_names)} parameters, got {len(filter_values)}")
-        filter_kwargs = {"filter_func": filter_func}
-        for param_name, value in zip(param_names, filter_values):
-            filter_kwargs[param_name] = value
+
+        # Dict built in one shot – satisfies PERF403/416.
+        filter_kwargs: dict[str, Any] = dict(zip(param_names, filter_values, strict=False))
+        filter_kwargs["filter_func"] = filter_func
         return filter_kwargs
 
     def _build_filter_kwargs_for_single(
@@ -900,21 +900,17 @@ class NornFlow:
             int: Exit code (0 for success, 1-100 for failure percentage, 101 for failures without stats).
         """
         for processor in self.nornir_manager.nornir.processors:
-            try:
-                task_executions = getattr(processor, "task_executions", 0)
-                failed_executions = getattr(processor, "failed_executions", 0)
+            task_executions: int = getattr(processor, "task_executions", 0)
+            failed_executions: int = getattr(processor, "failed_executions", 0)
 
-                if (
-                    isinstance(task_executions, int)
-                    and isinstance(failed_executions, int)
-                    and task_executions
-                    and failed_executions
-                ):
-                    failure_percentage = int((failed_executions / task_executions) * 100)
-                    return failure_percentage
-
-            except Exception:
-                continue
+            if (
+                isinstance(task_executions, int)
+                and isinstance(failed_executions, int)
+                and task_executions
+                and failed_executions
+            ):
+                failure_percentage = int(failed_executions * 100 / task_executions)
+                return failure_percentage
 
         if self.nornir_manager.nornir.data.failed_hosts:
             return 101
