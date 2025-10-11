@@ -4,9 +4,9 @@ import pytest
 from nornir.core import Nornir
 from nornir.core.processor import Processor
 
+from nornflow.models import WorkflowModel
 from nornflow.nornflow import NornFlow
 from nornflow.settings import NornFlowSettings
-from nornflow.workflow import Workflow
 from tests.unit.core.test_processors_utils import TestProcessor
 
 
@@ -76,9 +76,8 @@ workflow:
 @pytest.fixture
 def valid_workflow(valid_workflow_dict):
     """Create a valid workflow object."""
-    from nornflow.settings import NornFlowSettings
-    settings = NornFlowSettings()
-    return Workflow(valid_workflow_dict, settings)
+    # Use WorkflowModel.create instead of Workflow constructor
+    return WorkflowModel.create(valid_workflow_dict)
 
 
 @pytest.fixture
@@ -118,8 +117,10 @@ def mock_processor():
 def mock_nornir():
     """Create a mock Nornir instance for testing."""
     mock = Mock(spec=Nornir)
-    mock.filter.return_value = mock  # Make filter() return itself
-    mock.with_processors.return_value = mock  # Make with_processors() return itself
+    mock.data = Mock()
+    mock.data.failed_hosts = set()
+    mock.filter.return_value = mock  # Allow chaining
+    mock.with_processors.return_value = mock  # Allow chaining
     return mock
 
 
