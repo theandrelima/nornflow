@@ -8,7 +8,6 @@ manipulation.
 """
 
 import logging
-from typing import Any
 
 from nornir.core.inventory import Host
 from nornir.core.processor import Processor
