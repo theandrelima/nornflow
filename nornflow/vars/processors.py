@@ -60,7 +60,7 @@ class NornFlowVariableProcessor(Processor):
         """
         This method sets the current host context for variable resolution
         and processes Jinja2 templates in task parameters.
-    
+
         Raises:
             Exception: Propagates exceptions from variable processing or resolution.
         """
@@ -68,13 +68,13 @@ class NornFlowVariableProcessor(Processor):
             # Set the current host name in the proxy to enable {{ host. }} variable access
             self.vars_manager.nornir_host_proxy.current_host_name = host.name
             logger.debug(f"Set current_host_name to '{host.name}' for task '{task.name}'.")
-    
+
             # Process task parameters for all tasks uniformly
             if task.params:  # Ensure params exist
                 processed_params = self.vars_manager.resolve_data(task.params, host.name)
                 task.params = processed_params
                 logger.debug(f"Processed task.params for task '{task.name}' on host '{host.name}'")
-    
+
         except Exception:
             logger.exception(f"Error processing variables for task '{task.name}' on host '{host.name}'")
             raise
