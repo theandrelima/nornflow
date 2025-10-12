@@ -2,7 +2,7 @@ from pathlib import Path
 
 from nornir.core.task import Result, Task
 
-from nornflow.builtins.utils import build_set_task_report
+from nornflow.builtins.utils import build_set_task_report, get_task_vars_manager
 
 
 def set(task: Task, **kwargs) -> Result:
@@ -10,9 +10,8 @@ def set(task: Task, **kwargs) -> Result:
     NornFlow built-in task to set runtime variables for the current device.
 
     This task allows you to define new NornFlow runtime variables or update existing ones
-    for the specific device the task is currently operating on. The actual variable
-    setting logic, including Jinja2 template resolution for values, is handled by
-    the `NornFlowVariableProcessor` before this Python function is called.
+    for the specific device the task is currently operating on. The variable setting logic,
+    including Jinja2 template resolution for values, is handled directly by this task function.
 
     Variables set using this task become "Runtime Variables" (precedence #2)
     in the NornFlow variable system for the current device. These variables are
@@ -31,6 +30,9 @@ def set(task: Task, **kwargs) -> Result:
                 The `result` attribute contains a detailed report of what
                 variables were set and their resolved values.
 
+    Raises:
+        ProcessorError: If the NornFlowVariableProcessor cannot be found in the processor chain.
+
     Example in workflow YAML:
         ```yaml
         - name: set_device_specific_info
@@ -44,11 +46,16 @@ def set(task: Task, **kwargs) -> Result:
               interfaces: ["{{ host.data.mgmt_if }}", "lo0"]
         ```
     """
-    # By the time this function is called, the NornFlowVariableProcessor has already
-    # resolved the Jinja2 templates and set the variables. We need to retrieve the
-    # resolved values from the variable manager to show what was actually set. This
-    # task function merely handles reporting.
+    vars_manager = get_task_vars_manager(task)
+    
+    # Process and set each variable
+    for key, value in kwargs.items():
+        # Resolve templates in the value (if any)
+        resolved_value = vars_manager.resolve_data(value, task.host.name)
+        # Store the variable in the runtime namespace for the current host
+        vars_manager.set_runtime_variable(key, resolved_value, task.host.name)
 
+    # Generate the detailed report
     report = build_set_task_report(task, kwargs)
     return Result(host=task.host, result=report)
 
