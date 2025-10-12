@@ -47,7 +47,7 @@ def set(task: Task, **kwargs) -> Result:
         ```
     """
     vars_manager = get_task_vars_manager(task)
-    
+
     # Process and set each variable
     for key, value in kwargs.items():
         # Resolve templates in the value (if any)

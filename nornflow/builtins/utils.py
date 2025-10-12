@@ -22,7 +22,7 @@ def get_task_vars_manager(task: Task) -> NornFlowVariablesManager:
     for processor in task.nornir.processors:
         if hasattr(processor, "vars_manager"):
             return processor.vars_manager
-    
+
     raise ProcessorError(
         "Could not find NornFlowVariableProcessor in the processor chain. "
         "NornFlow variable processing is not available for this task."
