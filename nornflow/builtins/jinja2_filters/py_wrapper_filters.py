@@ -29,6 +29,11 @@ def filter_split(string: str, sep: str = None, maxsplit: int = -1) -> list[str]:
     return string.split(sep, maxsplit)
 
 
+def filter_type(value: Any) -> str:
+    """Get the type name of the value."""
+    return type(value).__name__
+
+
 # Registry of builtin filters
 PY_WRAPPER_FILTERS = {
     "enumerate": filter_enumerate,
@@ -36,4 +41,5 @@ PY_WRAPPER_FILTERS = {
     "range": filter_range,
     "divmod": filter_divmod,
     "splitx": filter_split,
+    "type": filter_type,
 }
