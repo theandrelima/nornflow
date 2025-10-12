@@ -2,9 +2,11 @@ import json
 from typing import Any
 
 from nornir.core.task import Task
+from nornflow.vars import NornFlowVariablesManager
+from nornflow.exceptions import ProcessorError
 
 
-def get_task_vars_manager(task: Task) -> Any:
+def get_task_vars_manager(task: Task) -> NornFlowVariablesManager:
     """
     Find the NornFlowVariableProcessor in the task's processor chain and return its vars_manager.
 
@@ -12,12 +14,19 @@ def get_task_vars_manager(task: Task) -> Any:
         task: The Nornir Task object.
 
     Returns:
-        The vars_manager instance if found, None otherwise.
+        The vars_manager instance.
+
+    Raises:
+        VarsManagerNotFoundError: If no vars_manager is found in any processor.
     """
     for processor in task.nornir.processors:
         if hasattr(processor, "vars_manager"):
             return processor.vars_manager
-    return None
+    
+    raise ProcessorError(
+        "Could not find NornFlowVariableProcessor in the processor chain. "
+        "NornFlow variable processing is not available for this task."
+    )
 
 
 def format_value_for_display(value: Any) -> str:

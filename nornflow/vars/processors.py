@@ -58,65 +58,26 @@ class NornFlowVariableProcessor(Processor):
 
     def task_instance_started(self, task: Task, host: Host) -> None:
         """
-        This method sets the current host context for variable resolution,
-        handles the 'set' task specifically, and processes Jinja2 templates
-        in the parameters of other tasks.
-
+        This method sets the current host context for variable resolution
+        and processes Jinja2 templates in task parameters.
+    
         Raises:
             Exception: Propagates exceptions from variable processing or resolution.
         """
         try:
-            # Set the current host name in the proxy to enable {{ host. }} variable access.
+            # Set the current host name in the proxy to enable {{ host. }} variable access
             self.vars_manager.nornir_host_proxy.current_host_name = host.name
             logger.debug(f"Set current_host_name to '{host.name}' for task '{task.name}'.")
-
-            if task.name == "set":
-                # The 'set' task's parameters are instructions for what variables to set.
-                # _handle_set_task will resolve the *values* of these parameters internally.
-                # The 'set' task itself doesn't need its params processed further by this
-                # processor, as its action is entirely handled by _handle_set_task.
-                if task.params:  # Ensure params exist to avoid errors if 'set' is called with no args
-                    self._handle_set_task(task.params, host.name)
-                else:
-                    logger.warning(
-                        f"Task 'set' for host '{host.name}' called with no arguments. "
-                        "No variables will be set."
-                    )
-            # For all other tasks, resolve Jinja2 templates in their parameters.
-            elif task.params:  # Ensure params exist
-                # task.params is a dict; resolve_data will handle nested structures.
+    
+            # Process task parameters for all tasks uniformly
+            if task.params:  # Ensure params exist
                 processed_params = self.vars_manager.resolve_data(task.params, host.name)
-                # Nornir tasks expect their params to be updated in place or reassigned.
-                # Reassigning is generally safer and cleaner.
                 task.params = processed_params
-                logger.debug(f"Processed task.params for task '{task.name}' on host '{host.name}'.")
-
+                logger.debug(f"Processed task.params for task '{task.name}' on host '{host.name}'")
+    
         except Exception:
             logger.exception(f"Error processing variables for task '{task.name}' on host '{host.name}'")
-            # Re-raise the exception to allow Nornir or higher-level handlers to manage it.
             raise
-
-    def _handle_set_task(self, task_args: dict[str, Any], host_name: str) -> None:
-        """
-        This method iterates through the arguments provided to the 'set' task.
-        Each key-value pair is treated as a NornFlow Runtime Variable to be set
-        for the current host. The values are resolved using Jinja2 templating
-        before being stored.
-
-        Args:
-            task_args: The arguments (parameters) of the 'set' task.
-            host_name: The name of the host for which variables are being set.
-        """
-        logger.debug(f"Handling 'set' task for host '{host_name}' with args: {task_args}")
-        for key, value in task_args.items():
-            # The value itself might be a Jinja2 template or a structure containing them.
-            # Resolve it using the full variable context available to the host.
-            resolved_value = self.vars_manager.resolve_data(value, host_name)
-
-            # Set the variable as a NornFlow Runtime Variable (precedence #2)
-            # for the current host.
-            self.vars_manager.set_runtime_variable(key, resolved_value, host_name)
-            logger.info(f"NornFlow variable '{key}' set for host '{host_name}' via 'set' task.")
 
     def task_instance_completed(self, task: Task, host: Host, result: MultiResult) -> None:
         """
