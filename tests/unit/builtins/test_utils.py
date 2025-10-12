@@ -1,3 +1,4 @@
+# filepath: test_utils.py
 """Tests for nornflow.builtins.utils module."""
 
 import json
@@ -11,6 +12,7 @@ from nornflow.builtins.utils import (
     get_resolved_runtime_values,
     get_task_vars_manager,
 )
+from nornflow.exceptions import ProcessorError
 
 
 class TestGetTaskVarsManager:
@@ -43,26 +45,24 @@ class TestGetTaskVarsManager:
 
         assert result is mock_vars_manager
 
-    def test_returns_none_when_no_vars_manager_found(self):
-        """Test returns None when no processor has vars_manager."""
+    def test_raises_exception_when_no_vars_manager_found(self):
+        """Test raises ProcessorError when no processor has vars_manager."""
         mock_processor1 = MagicMock(spec=[])
         mock_processor2 = MagicMock(spec=[])
 
         mock_task = MagicMock()
         mock_task.nornir.processors = [mock_processor1, mock_processor2]
 
-        result = get_task_vars_manager(mock_task)
+        with pytest.raises(ProcessorError, match="Could not find NornFlowVariableProcessor"):
+            get_task_vars_manager(mock_task)
 
-        assert result is None
-
-    def test_returns_none_when_processors_list_empty(self):
-        """Test returns None when processors list is empty."""
+    def test_raises_exception_when_processors_list_empty(self):
+        """Test raises ProcessorError when processors list is empty."""
         mock_task = MagicMock()
         mock_task.nornir.processors = []
 
-        result = get_task_vars_manager(mock_task)
-
-        assert result is None
+        with pytest.raises(ProcessorError, match="Could not find NornFlowVariableProcessor"):
+            get_task_vars_manager(mock_task)
 
 
 class TestFormatValueForDisplay:
@@ -227,16 +227,15 @@ class TestGetResolvedRuntimeValues:
         }
 
     def test_get_values_without_vars_manager(self):
-        """Test returns empty dict when no vars_manager is found."""
+        """Test raises ProcessorError when no vars_manager is found."""
         mock_processor = MagicMock(spec=[])
 
         mock_task = MagicMock()
         mock_task.host.name = "test_host"
         mock_task.nornir.processors = [mock_processor]
 
-        result = get_resolved_runtime_values(mock_task, ["var1", "var2"])
-
-        assert result == {}
+        with pytest.raises(ProcessorError, match="Could not find NornFlowVariableProcessor"):
+            get_resolved_runtime_values(mock_task, ["var1", "var2"])
 
     def test_get_values_with_empty_var_names_list(self):
         """Test with empty list of variable names."""
@@ -261,6 +260,9 @@ class TestGetResolvedRuntimeValues:
         """Test when all requested variables are missing from runtime_vars."""
         mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {}
+
+        mock_vars_manager = MagicMock()
+        mock_vars_manager.get_device_context.return_value = mock_device_context
 
         mock_vars_manager = MagicMock()
         mock_vars_manager.get_device_context.return_value = mock_device_context
@@ -362,7 +364,7 @@ class TestBuildSetTaskReport:
         assert '"eth1"' in result
 
     def test_build_report_without_vars_manager(self):
-        """Test building report when vars_manager is not available (shows unresolved)."""
+        """Test raises ProcessorError when vars_manager is not available."""
         mock_processor = MagicMock(spec=[])
 
         mock_task = MagicMock()
@@ -374,12 +376,8 @@ class TestBuildSetTaskReport:
             "var2": {"key": "value"}
         }
 
-        result = build_set_task_report(mock_task, kwargs)
-
-        assert "Set 2 variable(s) for host 'test_host' (showing unresolved templates):" in result
-        assert '• var1 = "{{ template1 }}"' in result
-        assert "• var2 =" in result
-        assert '"key": "value"' in result
+        with pytest.raises(ProcessorError, match="Could not find NornFlowVariableProcessor"):
+            build_set_task_report(mock_task, kwargs)
 
     def test_build_report_with_empty_kwargs(self):
         """Test building report with no variables to set."""
