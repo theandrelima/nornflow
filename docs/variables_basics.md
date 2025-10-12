@@ -4,12 +4,12 @@
 - [Quick Overview](#quick-overview)
 - [Variable Sources](#variable-sources-top-down-priority-order)
 - [Basic Usage](#basic-usage)
-  - [Environment Variables](#1-environment-variables)
-  - [Global Variables](#2-global-variables)
-  - [Domain Variables](#3-domain-variables)
-  - [Workflow Variables](#4-workflow-variables)
-  - [CLI Variables](#5-cli-variables)
-  - [Runtime Variables](#6-runtime-variables)
+  - [1. Environment Variables](#1-environment-variables)
+  - [2. Global Variables](#2-global-variables)
+  - [3. Domain Variables](#3-domain-variables)
+  - [4. Workflow Variables](#4-workflow-variables)
+  - [5. CLI Variables](#5-cli-variables)
+  - [6. Runtime Variables](#6-runtime-variables)
 - [Accessing Nornir's Inventory Variables](#accessing-nornirs-inventory-variables)
   - [Basic Host Attributes](#basic-host-attributes)
   - [Accessing Host Data](#accessing-host-data)
@@ -55,7 +55,7 @@ Access it in your workflow without the 'NORNFLOW_VAR_' prefix:
 tasks:
   - name: api_call
     args:
-      token: "{{ api_token }}"  # Note: no prefix needed
+      token: "{{ api_token }}"
 ```
 
 Environment variables are the lowest priority and can be overridden by any other variable source.
@@ -135,7 +135,7 @@ Workflow variables override `domain`, `global`, and `environment` variables with
 Pass variables from command line:
 
 ```bash
-nornflow run backup.yaml --vars "dry_run=true,region=west"
+nornflow run backup.yaml --vars "region=west"
 ```
 
 Use in workflow:
@@ -143,7 +143,7 @@ Use in workflow:
 tasks:
   - name: echo
     args:
-      msg: "Region: {{ region }}, Dry run: {{ dry_run }}"
+      msg: "Region: {{ region }}"
 ```
 
 CLI variables override `workflow`, `domain`, `global`, and `environment` variables with the same name.
@@ -168,7 +168,7 @@ tasks:
       msg: "Working on {{ device_type }} at {{ timestamp }}"
 ```
 
-2. **Using the `set_to` attribute to capture a task's results:**
+2. **Using the `set_to` hook to capture a task's results:**
 
 ```yaml
 tasks:
@@ -177,12 +177,12 @@ tasks:
 
   - name: echo
     args:
-      msg: "Version: {{ version_output }}"
+      msg: "Version: {{ version_output.result }}"
 ```
 
 > **IMPORTANT:**
 > - When you use the `set` task, NornFlow creates or updates variables with the names and values you specify in `args`.
-> - When you use `set_to`, NornFlow creates or updates a variable with the given name and stores the entire result object returned by the task (including fields like `result`, `changed`, `failed`, etc.).
+> - When you use the `set_to` hook in a task, NornFlow creates or updates a variable with the given name and stores the entire `Result` object returned by the task (including fields like `result`, `changed`, `failed`, etc.).
 > - In both cases, if the variable does not exist, it will be created; if it already exists, it will be updated with the new value.
 
 Runtime variables override `CLI`, `workflow`, `domain`, `global`, and `environment` variables with the same name.
@@ -234,7 +234,7 @@ tasks:
 
 ### Important Notes
 
-- **Read-only access**: The `host.` namespace provides read-only access. You cannot modify inventory data during workflow execution.
+- **Read-only access**: The `host.` namespace provides read-only access. You cannot modify Nornir's inventory data during a NornFlow's Workflow execution.
 - **Nested data**: Access nested inventory data using dot notation: `{{ host.data.location.building }}`
 - **Missing attributes**: If an attribute doesn't exist, Jinja2 will raise an error. Use the `default` filter to handle optional attributes:
   ```yaml
@@ -249,13 +249,17 @@ Each device maintains its own variable context during workflow execution:
 - Safe for parallel execution
 - No cross-contamination between devices
 
+This isolation is managed by NornFlow's `NornFlowDeviceContext` class, which creates separate variable contexts for each device. This ensures that tasks running in parallel don't interfere with each other's variables, even when they're modifying variables with the same names.
+
 ## Best Practices
 
 1. **Use descriptive names**: *`backup_retention_days`* is a lot better than just *`days`*
 2. **Set defaults**: Use `| default()` filter for optional variables
-3. **Group related variables**: Use domain variables for workflow-specific settings
+3. **Group related variables**: Use domain variables for domain-specific settings
 4. **Document variables**: Add comments in your variable files (`<vars_dir>/defaults.yaml` and `<vars_dir>/<domain>/default.yaml`)
 5. **Avoid name conflicts**: Don't start variable names with *`host`* to avoid confusion with the `host.` namespace
+6. **Use set_to sparingly**: Remember that `set_to` captures the entire result object, which might be larger than needed
+7. **Leverage Jinja2 filters**: Use filters to transform data, especially when working with complex structures
 
 ## Quick Reference
 

@@ -72,7 +72,7 @@ def run_universal_field_validation(instance: "NornFlowBaseModel") -> None:
 
     Uses dynamic discovery to find and call functions with naming pattern
     'universal_{whatever}_validator' in this module. These validators run on all
-    fields except those listed in the model's _exclude_from_global_validators.
+    fields except those listed in the model's _exclude_from_universal_validations.
 
     Universal validator functions must return a tuple: (bool, str)
     - If first element is True, validation passes (second element ignored)
@@ -88,7 +88,7 @@ def run_universal_field_validation(instance: "NornFlowBaseModel") -> None:
     all_fields = set(instance.model_fields.keys())
 
     # Get excluded fields for this specific model class
-    excluded_fields = set(getattr(instance.__class__, "_exclude_from_global_validators", set()))
+    excluded_fields = set(getattr(instance.__class__, "_exclude_from_universal_validations", set()))
 
     # Fields to validate = all fields - excluded fields
     fields_to_validate = all_fields - excluded_fields
@@ -178,7 +178,7 @@ def universal_jinja2_validator(
     Universal validator to prevent Jinja2 code in fields.
 
     This validator is automatically discovered and applied to all fields
-    unless excluded via _exclude_from_global_validators.
+    unless excluded via _exclude_from_universal_validations.
 
     Args:
         instance: The model instance being validated

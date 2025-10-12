@@ -6,6 +6,7 @@ from nornir.core.task import AggregatedResult
 from nornflow.exceptions import TaskError
 from nornflow.models import TaskModel
 from nornflow.nornir_manager import NornirManager
+from nornflow.vars.manager import NornFlowVariablesManager
 
 
 class TestTaskModel:
@@ -18,6 +19,9 @@ class TestTaskModel:
         mock_nornir_manager = MagicMock(spec=NornirManager)
         mock_nornir_manager.nornir = MagicMock()  # Add nornir attribute to mock
 
+        # Create mock vars_manager
+        mock_vars_manager = MagicMock(spec=NornFlowVariablesManager)
+        
         mock_result = MagicMock(spec=AggregatedResult)
         mock_nornir_manager.nornir.run.return_value = mock_result
 
@@ -26,7 +30,7 @@ class TestTaskModel:
         tasks_catalog = {"test_task": mock_task_func}
 
         # Execute
-        result = task_model.run(mock_nornir_manager, tasks_catalog)
+        result = task_model.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
 
         # Verify
         assert result == mock_result
@@ -38,13 +42,14 @@ class TestTaskModel:
         task_model = TaskModel(name="missing_task")
         mock_nornir_manager = MagicMock(spec=NornirManager)
         # No need to add nornir attribute here as we won't get that far
+        mock_vars_manager = MagicMock(spec=NornFlowVariablesManager)
         empty_catalog = {}
 
         # Verify the correct exception is raised
         with pytest.raises(
             TaskError, match="Task function for 'missing_task' not found in tasks catalog"
         ):
-            task_model.run(mock_nornir_manager, empty_catalog)
+            task_model.run(mock_nornir_manager, mock_vars_manager, empty_catalog)
 
     def test_task_model_run_with_no_args(self):
         """Test that TaskModel.run works correctly with no args."""
@@ -55,6 +60,9 @@ class TestTaskModel:
         mock_nornir_manager = MagicMock(spec=NornirManager)
         mock_nornir_manager.nornir = MagicMock()  # Add nornir attribute to mock
 
+        # Create mock vars_manager
+        mock_vars_manager = MagicMock(spec=NornFlowVariablesManager)
+        
         mock_result = MagicMock(spec=AggregatedResult)
         mock_nornir_manager.nornir.run.return_value = mock_result
 
@@ -63,7 +71,7 @@ class TestTaskModel:
         tasks_catalog = {"test_task": mock_task_func}
 
         # Execute
-        result = task_model.run(mock_nornir_manager, tasks_catalog)
+        result = task_model.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
 
         # Verify
         assert result == mock_result
@@ -78,6 +86,9 @@ class TestTaskModel:
         mock_nornir_manager = MagicMock(spec=NornirManager)
         mock_nornir_manager.nornir = MagicMock()  # Add nornir attribute to mock
 
+        # Create mock vars_manager
+        mock_vars_manager = MagicMock(spec=NornFlowVariablesManager)
+        
         mock_result = MagicMock(spec=AggregatedResult)
         mock_nornir_manager.nornir.run.return_value = mock_result
 
@@ -86,7 +97,7 @@ class TestTaskModel:
         tasks_catalog = {"test_task": mock_task_func}
 
         # Execute
-        result = task_model.run(mock_nornir_manager, tasks_catalog)
+        result = task_model.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
 
         # Verify
         assert result == mock_result

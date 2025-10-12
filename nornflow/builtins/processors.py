@@ -35,7 +35,6 @@ class DefaultNornFlowProcessor(Processor):
         self.tasks_completed = 0  # Count of unique tasks completed
         self.successful_executions = 0  # Count of successfully completed task executions
         self.failed_executions = 0  # Count of failed task executions
-        self.total_workflow_tasks = 0  # Total number of workflow tasks (set externally)
         self.print_summary_after_each_task = False  # Default to only print at end
 
     def task_started(self, task: Task) -> None:

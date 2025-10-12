@@ -1,4 +1,3 @@
-# ruff: noqa: T201
 import importlib
 import inspect
 from collections.abc import Callable
@@ -6,12 +5,17 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Literal
 
-import click
 from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
-from tabulate import tabulate
+from rich.align import Align
+from rich.columns import Columns
+from rich.console import Console, Group
+from rich.padding import Padding
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
 from nornflow.constants import FailureStrategy, JINJA_PATTERN, NORNFLOW_SUPPORTED_YAML_EXTENSIONS
 from nornflow.exceptions import (
@@ -287,64 +291,74 @@ def print_workflow_overview(
     hosts_count: int,
     inventory_filters: dict[str, Any],
     workflow_vars: dict[str, Any],
-    cli_vars: dict[str, Any],
+    vars: dict[str, Any],
     failure_strategy: FailureStrategy | None,
 ) -> None:
     """
-    Print a comprehensive workflow overview before execution.
+    Print a comprehensive workflow overview before execution using Rich for enhanced formatting.
 
     Args:
-        workflow_model: The workflow model containing name and description
-        effective_dry_run: Whether dry-run mode is enabled
-        hosts_count: Number of hosts in the filtered inventory
-        inventory_filters: Dictionary of applied inventory filters
-        workflow_vars: Workflow-defined variables
-        cli_vars: CLI variables with highest precedence
-        failure_strategy: The active failure handling strategy
+        workflow_model: The workflow model containing name and description.
+        effective_dry_run: Whether dry-run mode is enabled.
+        hosts_count: Number of hosts in the filtered inventory.
+        inventory_filters: Dictionary of applied inventory filters.
+        workflow_vars: Workflow-defined variables.
+        vars: Vars with highest precedence.
+        failure_strategy: The active failure handling strategy.
     """
-    print("\n" + "━" * 80)
-    click.secho(" Workflow: ", bold=True, nl=False)
-    print(workflow_model.name)
+    console = Console()
 
+    # Create a table for workflow details
+    table = Table(show_header=False, box=None)
+    table.add_column("Property", style="bold cyan", no_wrap=True)
+    table.add_column("Value", style="yellow")
+
+    # Add rows in the specified order, conditionally
+    if workflow_model.name:
+        table.add_row("Workflow Name", workflow_model.name)
     if workflow_model.description:
-        click.secho(" Description: ", bold=True, nl=False)
-        print(workflow_model.description)
-
-    click.secho(" Dry-run mode: ", bold=True, nl=False)
-    print("Enabled" if effective_dry_run else "Disabled")
-
-    # Show inventory filters if any
+        table.add_row("Description", workflow_model.description)
     if inventory_filters:
-        click.secho(" Inventory filters: ", bold=True, nl=False)
-        print(inventory_filters)
+        filters_str = ", ".join(f"{k}={v}" for k, v in inventory_filters.items())
+        table.add_row("Inventory Filters", filters_str)
+    table.add_row("Dry Run", "Yes" if effective_dry_run else "No")
+    table.add_row("Hosts Count", str(hosts_count))
+    table.add_row(
+        "Failure Strategy", failure_strategy.value.replace("_", "-") if failure_strategy else "None"
+    )
 
-    if failure_strategy:
-        click.secho(" Failure strategy: ", bold=True, nl=False)
-        print(failure_strategy.value)
+    # Prepare vars table if any vars exist
+    elements = [table]
+    if vars or workflow_vars:
+        elements.append(Text("\n"))  # Blank space before variables
+        elements.append(Padding.indent(Text("Variables", style="bold cyan"), 1))
+        vars_table = Table(show_header=True, box=None)
+        vars_table.add_column("Source", style="bold magenta", no_wrap=True)
+        vars_table.add_column("Name", style="cyan")
+        vars_table.add_column("Value", style="yellow")
+        vars_table.add_column("Type", style="blue", no_wrap=True)
 
-    # Show filtered inventory overview
-    click.secho(" Total hosts: ", bold=True, nl=False)
-    print(f"{hosts_count} host(s)")
-
-    # Show variables (excluding sensitive ones)
-    all_vars = {}
-    if workflow_vars:
-        all_vars.update({"Workflow Variables": workflow_vars})
-    if cli_vars:
-        all_vars.update({"CLI Variables (highest precedence)": cli_vars})
-
-    if all_vars:
-        vars_table = []
-        for var_type, var_dict in all_vars.items():
-            vars_table.append([var_type, ""])
-            for k, v in var_dict.items():
-                # Mask passwords/secrets
+        if workflow_vars:
+            for k, v in workflow_vars.items():
                 display_v = "********" if "password" in k.lower() or "secret" in k.lower() else str(v)
-                vars_table.append([f"  {k}", display_v])
+                vars_table.add_row("w", k, display_v, type(v).__name__)
+        if vars:
+            for k, v in vars.items():
+                display_v = "********" if "password" in k.lower() or "secret" in k.lower() else str(v)
+                vars_table.add_row("c*", k, display_v, type(v).__name__)
 
-        if vars_table:
-            print()
-            click.secho(" Variables:", bold=True)
-            print(tabulate(vars_table, tablefmt="simple"))
+        legend_text = Text()
+        legend_text.append("Sources", style="bold dim")
+        legend_text.append("\nw: defined in workflow", style="dim")
+        legend_text.append("\nc*: CLI/programmatic override", style="dim")
+        elements.append(Padding.indent(Columns([vars_table, Align.right(legend_text)], expand=True), 2))
 
-    print("━" * 80 + "\n")
+    # Create a panel with the grouped elements
+    panel = Panel(
+        Group(*elements),
+        title=Text("Workflow Execution Overview", style="bold"),
+        border_style="green",
+        width=100,
+    )
+
+    console.print(panel)

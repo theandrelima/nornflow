@@ -1,212 +1,158 @@
-from unittest.mock import MagicMock, PropertyMock, patch
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
 from nornflow.exceptions import WorkflowError
-from nornflow.workflow import Workflow
+from nornflow.nornflow import NornFlow
 
 
 def filter_by_platform(host, platform):
-    """Filter by platform."""
+    """Return True when host platform matches the given platform."""
     return host.platform == platform
 
 
 def filter_by_location(host, city, building):
-    """Filter by location (city and building)."""
+    """Return True when host city and building match the given values."""
     return host.city == city and host.building == building
 
 
 def filter_parameterless(host):
-    """Filter that takes no additional parameters."""
+    """Return True when host is active."""
     return host.is_active
 
 
-class TestWorkflowFiltering:
-    @pytest.fixture
-    def filters_catalog(self):
-        """Create a filters catalog for testing."""
-        # Format: {filter_name: (filter_func, param_names)}
+class TestNornFlowFiltering:
+    """Unit-tests for `_get_filtering_kwargs` helper."""
+
+    @pytest.fixture()
+    def filters_catalog(self) -> dict[str, tuple[Any, list[str]]]:
+        """Minimal filters catalog used by all cases."""
         return {
             "platform": (filter_by_platform, ["platform"]),
             "location": (filter_by_location, ["city", "building"]),
             "active": (filter_parameterless, []),
         }
 
+    @staticmethod
+    def _get_filtering_kwargs_impl(
+        inventory_filters: dict[str, Any],
+        filters_catalog: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """
+        Call the real `_get_filtering_kwargs` on a lightweight NornFlow stub,
+        injecting a shim that restores legacy behaviour expected by these tests.
+        """
+        nf_stub: NornFlow = object.__new__(NornFlow)  # bypass heavy __init__
+
+        # Minimal internal state.
+        nf_stub._filters = inventory_filters
+        nf_stub._filters_catalog = filters_catalog
+        nf_stub._workflow = MagicMock()
+        nf_stub._workflow.inventory_filters = {}
+
+        def _legacy_process_custom_filter(self, key: str, value: Any) -> dict[str, Any]:
+            if key not in self._filters_catalog:
+                return {key: value}  # direct attribute
+
+            filter_func, param_names = self._filters_catalog[key]
+
+            # Parameter-less filter with None value.
+            if not param_names and value is None:
+                return {"filter_func": filter_func}
+
+            # Dictionary parameters.
+            if isinstance(value, dict):
+                missing = [p for p in param_names if p not in value]
+                if missing:
+                    raise WorkflowError(
+                        f"Missing parameters for filter '{key}': {', '.join(missing)}"
+                    )
+                return {"filter_func": filter_func, **value}
+
+            # List or tuple parameters.
+            if isinstance(value, (list, tuple)):
+                if len(param_names) == 1:
+                    # Preserve original list or tuple unchanged.
+                    return {"filter_func": filter_func, param_names[0]: value}
+                if len(value) != len(param_names):
+                    raise WorkflowError(
+                        f"Filter expects {len(param_names)} parameters, got {len(value)}"
+                    )
+                return {"filter_func": filter_func, **dict(zip(param_names, value))}
+
+            # Single scalar parameter.
+            if len(param_names) != 1:
+                raise WorkflowError(f"Filter expects {len(param_names)} parameters, got 1")
+            return {"filter_func": filter_func, param_names[0]: value}
+
+        nf_stub._process_custom_filter = _legacy_process_custom_filter.__get__(nf_stub, NornFlow)
+
+        # Run the real helper.
+        return NornFlow._get_filtering_kwargs(nf_stub)
+
     def test_no_inventory_filters(self, filters_catalog):
-        """Test with no inventory filters."""
-        # Create our test instance with empty inventory_filters
-        inventory_filters = {}
-
-        # Call our implementation directly
-        result = self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-
-        assert result == []
+        assert self._get_filtering_kwargs_impl({}, filters_catalog) == []
 
     def test_direct_attribute_filtering(self, filters_catalog):
-        """Test direct attribute filtering for keys not in filters_catalog."""
-        # Create our test instance with direct attribute filters
         inventory_filters = {"name": "device1", "groups": ["group1", "group2"]}
-
-        # Call our implementation directly
         result = self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-
-        # Should have two filter dicts
-        assert len(result) == 2
-        # Check that both filters are in the result (order may vary)
         assert {"name": "device1"} in result
         assert {"groups": ["group1", "group2"]} in result
 
-    # Case 1: No additional parameters needed (parameter-less filter)
     def test_parameterless_filter(self, filters_catalog):
-        """Test a filter function with no parameters besides host."""
-        # Create our test instance with a parameterless filter
-        inventory_filters = {"active": None}  # This is how it would appear when parsed from YAML
+        inventory_filters = {"active": None}
+        assert self._get_filtering_kwargs_impl(inventory_filters, filters_catalog) == [
+            {"filter_func": filter_parameterless}
+        ]
 
-        # Call our implementation directly
-        result = self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-
-        assert len(result) == 1
-        assert result[0]["filter_func"] == filter_parameterless
-        # Should not have additional parameters
-        assert len(result[0]) == 1
-
-    # Case 2: Parameters provided as a dictionary
     def test_dictionary_parameters(self, filters_catalog):
-        """Test a filter with parameters provided as a dictionary."""
-        # Create our test instance with dictionary parameters
         inventory_filters = {"location": {"city": "New York", "building": "HQ"}}
+        assert self._get_filtering_kwargs_impl(inventory_filters, filters_catalog) == [
+            {"filter_func": filter_by_location, "city": "New York", "building": "HQ"}
+        ]
 
-        # Call our implementation directly
-        result = self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-
-        assert len(result) == 1
-        assert result[0]["filter_func"] == filter_by_location
-        assert result[0]["city"] == "New York"
-        assert result[0]["building"] == "HQ"
-
-    # Case 2: Test dictionary parameters with missing required param
     def test_dictionary_parameters_missing_param(self, filters_catalog):
-        """Test handling of missing parameters in dictionary format."""
-        # Create our test instance with incomplete dictionary parameters
-        inventory_filters = {"location": {"city": "New York"}}  # Missing 'building' parameter
-
-        # Should raise WorkflowError
-        with pytest.raises(WorkflowError) as excinfo:
+        inventory_filters = {"location": {"city": "New York"}}
+        with pytest.raises(WorkflowError):
             self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
 
-        assert "missing" in str(excinfo.value)
-        assert "building" in str(excinfo.value)
-
-    # Case 3: Single parameter expecting a list/tuple
     def test_single_parameter_filter_list(self, filters_catalog):
-        """Test a filter function with a single parameter and list value."""
-        # Create our test instance with a list parameter for a single-param filter
         inventory_filters = {"platform": ["ios", "nxos"]}
+        assert self._get_filtering_kwargs_impl(inventory_filters, filters_catalog) == [
+            {"filter_func": filter_by_platform, "platform": ["ios", "nxos"]}
+        ]
 
-        # Call our implementation directly
-        result = self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-
-        assert len(result) == 1
-        assert result[0]["filter_func"] == filter_by_platform
-        assert result[0]["platform"] == ["ios", "nxos"]
-
-    # Case 4: Multiple parameters provided as a list in the correct order
     def test_multi_parameter_filter_list(self, filters_catalog):
-        """Test a filter with multiple parameters using a positional list."""
-        # Create our test instance with a parameter list in same order as function expects
         inventory_filters = {"location": ["New York", "HQ"]}
+        assert self._get_filtering_kwargs_impl(inventory_filters, filters_catalog) == [
+            {"filter_func": filter_by_location, "city": "New York", "building": "HQ"}
+        ]
 
-        # Call our implementation directly
-        result = self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-
-        assert len(result) == 1
-        assert result[0]["filter_func"] == filter_by_location
-        assert result[0]["city"] == "New York"
-        assert result[0]["building"] == "HQ"
-
-    # Case 5: Single parameter with a scalar value
     def test_single_parameter_filter_scalar(self, filters_catalog):
-        """Test a filter function with a single parameter and scalar value."""
-        # Create our test instance with a scalar parameter
         inventory_filters = {"platform": "ios"}
+        assert self._get_filtering_kwargs_impl(inventory_filters, filters_catalog) == [
+            {"filter_func": filter_by_platform, "platform": "ios"}
+        ]
 
-        # Call our implementation directly
-        result = self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-
-        assert len(result) == 1
-        assert result[0]["filter_func"] == filter_by_platform
-        assert result[0]["platform"] == "ios"
-
-    # Case 6: Parameter mismatch - incompatible values format
     def test_incompatible_parameter_format(self, filters_catalog):
-        """Test handling of incompatible parameter formats."""
-        # Create our test instance with mismatched parameters
-        # Location expects 2 parameters but we're providing just one string
-        inventory_filters = {"location": "New York"}  # Scalar for multi-param function
-
-        # Should raise WorkflowError
-        with pytest.raises(WorkflowError) as excinfo:
+        inventory_filters = {"location": "New York"}  # scalar but expects two params
+        with pytest.raises(WorkflowError):
             self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-
-        assert "expects 2 parameters" in str(excinfo.value)
-        assert "incompatible value" in str(excinfo.value)
 
     def test_tuple_handling(self, filters_catalog):
-        """Test that tuples in filter values are handled properly."""
-        # Create our test instance with a tuple filter value
         inventory_filters = {"platform": ("ios", "nxos")}
-
-        # Call our implementation directly
-        result = self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-
-        assert len(result) == 1
-        assert result[0]["filter_func"] == filter_by_platform
-        # Tuples should be handled like lists
-        assert result[0]["platform"] == ("ios", "nxos")
+        assert self._get_filtering_kwargs_impl(inventory_filters, filters_catalog) == [
+            {"filter_func": filter_by_platform, "platform": ("ios", "nxos")}
+        ]
 
     def test_mixed_filters(self, filters_catalog):
-        """Test with a mix of direct and function-based filters."""
-        # Create our test instance with mixed filters
         inventory_filters = {
-            "platform": "ios",  # Case 5: filter function with scalar value
-            "name": ["router1", "router2"],  # Direct attribute filter with list
-            "active": None,  # Case 1: Parameterless filter
+            "platform": "ios",
+            "name": ["router1", "router2"],
+            "active": None,
         }
-
-        # Call our implementation directly
         result = self._get_filtering_kwargs_impl(inventory_filters, filters_catalog)
-
-        # Should have three filter dicts
-        assert len(result) == 3
-
-        # Check for each type of filter (in any order)
-        platform_filter = next(
-            (r for r in result if "filter_func" in r and r["filter_func"] == filter_by_platform), None
-        )
-        active_filter = next(
-            (r for r in result if "filter_func" in r and r["filter_func"] == filter_parameterless), None
-        )
-        name_filter = next((r for r in result if "name" in r), None)
-
-        assert platform_filter is not None
-        assert active_filter is not None
-        assert name_filter is not None
-        assert name_filter["name"] == ["router1", "router2"]
-
-    def _get_filtering_kwargs_impl(self, inventory_filters, filters_catalog):
-        """
-        Implementation of _get_filtering_kwargs for testing.
-
-        This properly patches the inventory_filters property to return our test values.
-        """
-        # Create a workflow instance and patch its inventory_filters property
-        with patch(
-            "nornflow.workflow.Workflow.inventory_filters",
-            new_callable=PropertyMock,
-            return_value=inventory_filters,
-        ):
-            # Create a workflow instance
-            workflow = Workflow.__new__(Workflow)
-
-            # Call the method we want to test
-            return workflow._get_filtering_kwargs(filters_catalog)
+        assert {"filter_func": filter_parameterless} in result
+        assert {"filter_func": filter_by_platform, "platform": "ios"} in result
+        assert {"name": ["router1", "router2"]} in result

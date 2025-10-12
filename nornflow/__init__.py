@@ -1,4 +1,4 @@
-from nornflow.nornflow import NornFlow, NornFlowBuilder
-from nornflow.workflow import Workflow, WorkflowFactory
+from nornflow.builder import NornFlowBuilder
+from nornflow.nornflow import NornFlow
 
-__all__ = ["NornFlow", "NornFlowBuilder", "Workflow", "WorkflowFactory"]
+__all__ = ["NornFlow", "NornFlowBuilder"]

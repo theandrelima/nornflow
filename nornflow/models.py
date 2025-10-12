@@ -15,6 +15,7 @@ from nornflow.validators import (
     run_post_creation_task_validation,
     run_universal_field_validation,
 )
+from nornflow.vars.manager import NornFlowVariablesManager
 
 
 class NornFlowBaseModel(PydanticSerdesBaseModel):
@@ -23,7 +24,7 @@ class NornFlowBaseModel(PydanticSerdesBaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
-    _exclude_from_global_validators: ClassVar[tuple[str, ...]] = ()
+    _exclude_from_universal_validations: ClassVar[tuple[str, ...]] = ()
 
     @classmethod
     def create(cls, model_dict: dict[str, Any], *args: Any, **kwargs: Any) -> "NornFlowBaseModel":
@@ -44,7 +45,7 @@ class TaskModel(NornFlowBaseModel):
     _err_on_duplicate = False
 
     # Exclude 'args' from universal Jinja2 validation since it's allowed there
-    _exclude_from_global_validators: ClassVar[tuple[str, ...]] = ("args", "set_to")
+    _exclude_from_universal_validations: ClassVar[tuple[str, ...]] = ("args", "set_to")
 
     id: int | None = None
     name: str
@@ -81,12 +82,20 @@ class TaskModel(NornFlowBaseModel):
         """
         return convert_to_hashable(v)
 
-    def run(self, nornir_manager: NornirManager, tasks_catalog: dict[str, Callable]) -> AggregatedResult:
+    def run(
+        self,
+        nornir_manager: NornirManager,
+        vars_manager: NornFlowVariablesManager,
+        tasks_catalog: dict[str, Callable],
+    ) -> AggregatedResult:
         """
         Execute the task using the provided NornirManager and tasks catalog.
 
+        This method handles task execution and the set_to hook for result storage.
+
         Args:
             nornir_manager: The NornirManager instance to use for execution.
+            vars_manager: The NornFlowVariablesManager for variable management.
             tasks_catalog: Dictionary mapping task names to their function implementations.
 
         Returns:
@@ -100,8 +109,21 @@ class TaskModel(NornFlowBaseModel):
         if not task_func:
             raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")
 
+        # Prepare task arguments
         task_args = {} if self.args is None else dict(self.args)
+
+        # Execute the task
         result = nornir_manager.nornir.run(task=task_func, **task_args)
+
+        # Process set_to hook for result storage
+        if self.set_to is not None:
+            for host_name, host_result in result.items():
+                vars_manager.set_runtime_variable(
+                    name=self.set_to,
+                    value=host_result,
+                    host_name=host_name,
+                )
+
         return result
 
 
@@ -120,7 +142,27 @@ class WorkflowModel(NornFlowBaseModel):
 
     @classmethod
     def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "WorkflowModel":
-        """Create a new WorkflowModel."""
+        """
+        Create a new WorkflowModel from a workflow dictionary.
+
+        Extracts the 'workflow' key from the input dict and processes tasks into TaskModel instances.
+
+        Args:
+            dict_args: Dictionary containing the full workflow data, must include 'workflow' key.
+            *args: Additional positional arguments passed to parent create method.
+            **kwargs: Additional keyword arguments passed to parent create method.
+
+        Returns:
+            The created WorkflowModel instance.
+
+        Raises:
+            WorkflowError: If 'workflow' key is not present in dict_args.
+        """
+        try:
+            dict_args = dict_args.pop("workflow")
+        except KeyError as e:
+            raise WorkflowError("Workflow file must have 'workflow' as a root-level key.") from e
+
         # Tasks should already be in dict_args from the workflow definition
         if "tasks" not in dict_args:
             dict_args["tasks"] = []  # Default to empty list if no tasks defined
