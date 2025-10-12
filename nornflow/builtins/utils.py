@@ -2,8 +2,9 @@ import json
 from typing import Any
 
 from nornir.core.task import Task
-from nornflow.vars import NornFlowVariablesManager
+
 from nornflow.exceptions import ProcessorError
+from nornflow.vars import NornFlowVariablesManager
 
 
 def get_task_vars_manager(task: Task) -> NornFlowVariablesManager:
