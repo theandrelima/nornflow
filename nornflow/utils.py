@@ -17,7 +17,12 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from nornflow.constants import FailureStrategy, JINJA_PATTERN, NORNFLOW_SUPPORTED_YAML_EXTENSIONS
+from nornflow.constants import (
+    FailureStrategy,
+    JINJA_PATTERN,
+    NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
+    PROTECTED_KEYWORDS,
+)
 from nornflow.exceptions import (
     CoreError,
     ProcessorError,
@@ -285,6 +290,25 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
             check_for_jinja2_recursive(item, f"{path}[{idx}]")
 
 
+def _format_variable_value(key: str, value: Any) -> str:
+    """
+    Format a variable value for display, masking protected keywords and adjusting tuple brackets.
+
+    Args:
+        key: The variable name.
+        value: The variable value.
+
+    Returns:
+        The formatted display string.
+    """
+    if any(keyword in key.lower() for keyword in PROTECTED_KEYWORDS):
+        return "********"
+    display_value = str(value)
+    if isinstance(value, tuple):
+        display_value = display_value.replace("(", "[").replace(")", "]")
+    return display_value
+
+
 def print_workflow_overview(
     workflow_model: Any,
     effective_dry_run: bool,
@@ -306,6 +330,14 @@ def print_workflow_overview(
         vars: Vars with highest precedence.
         failure_strategy: The active failure handling strategy.
     """
+    type_mapping = {
+        'HashableDict': 'map',
+        'dict': 'map',
+        'list': 'seq',
+        'tuple': 'seq',
+        'NoneType': 'none'
+        }
+
     console = Console()
 
     # Create a table for workflow details
@@ -339,13 +371,13 @@ def print_workflow_overview(
         vars_table.add_column("Type", style="blue", no_wrap=True)
 
         if workflow_vars:
-            for k, v in workflow_vars.items():
-                display_v = "********" if "password" in k.lower() or "secret" in k.lower() else str(v)
-                vars_table.add_row("w", k, display_v, type(v).__name__)
+            # Sort workflow variables by name lexicographically
+            for k, v in sorted(workflow_vars.items(), key=lambda item: item[0]):
+                vars_table.add_row("w", k, _format_variable_value(k, v), type_mapping.get(type(v).__name__, type(v).__name__))
         if vars:
-            for k, v in vars.items():
-                display_v = "********" if "password" in k.lower() or "secret" in k.lower() else str(v)
-                vars_table.add_row("c*", k, display_v, type(v).__name__)
+            # Sort CLI/programmatic variables by name lexicographically
+            for k, v in sorted(vars.items(), key=lambda item: item[0]):
+                vars_table.add_row("c*", k, _format_variable_value(k, v), type_mapping.get(type(v).__name__, type(v).__name__))
 
         legend_text = Text()
         legend_text.append("Sources", style="bold dim")
