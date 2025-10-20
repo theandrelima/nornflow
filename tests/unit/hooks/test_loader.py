@@ -9,7 +9,7 @@ from nornflow.builtins import SetToHook
 class TestHookLoader:
     """Test suite for hook loading operations."""
 
-    @patch("nornflow.hooks.loader.HOOK_REGISTRY", {"set_to": SetToHook})
+    @patch("nornflow.hooks.registry.HOOK_REGISTRY", {"set_to": SetToHook})
     def test_load_hooks_with_pre_and_post(self):
         """Test loading hooks from a task model with both pre and post hooks."""
         # Create a mock task model with hooks
