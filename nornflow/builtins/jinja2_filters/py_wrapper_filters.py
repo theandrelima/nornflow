@@ -59,7 +59,7 @@ def filter_reversed(iterable: Iterable[Any]) -> list[Any]:
     return list(reversed(iterable))
 
 
-def filter_strip(string: str, chars: str = None) -> str:
+def filter_strip(string: str, chars: str | None = None) -> str:
     """Remove leading and trailing whitespace or specified characters."""
     return string.strip(chars)
 
