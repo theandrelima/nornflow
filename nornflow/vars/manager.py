@@ -467,14 +467,12 @@ class NornFlowVariablesManager:
             # Check if the string contains Jinja2 markers
             if any(marker in data for marker in JINJA2_MARKERS):
                 return self.resolve_string(data, host_name, additional_vars)
-            else:
-                return data
-        elif isinstance(data, dict):
+            return data
+        if isinstance(data, dict):
             return {k: self.resolve_data(v, host_name, additional_vars) for k, v in data.items()}
-        elif isinstance(data, (list, tuple)):
+        if isinstance(data, (list, tuple)):
             # Convert both lists and tuples to lists after resolving items
             # This ensures YAML-defined lists remain lists, even if converted to tuples for hashability
             return [self.resolve_data(item, host_name, additional_vars) for item in data]
-        else:
-            # Return other types as-is
-            return data
+        # Return other types as-is
+        return data

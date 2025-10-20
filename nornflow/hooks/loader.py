@@ -1,7 +1,6 @@
 from typing import TYPE_CHECKING
 
 from nornflow.hooks.base import PostRunHook, PreRunHook
-from nornflow.hooks.registry import HOOK_REGISTRY
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel

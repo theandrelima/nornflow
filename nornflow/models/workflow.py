@@ -8,9 +8,8 @@ from pydantic_serdes.utils import convert_to_hashable
 
 from nornflow.constants import FailureStrategy
 from nornflow.exceptions import WorkflowError
-from nornflow.utils import normalize_failure_strategy
-
 from nornflow.models import NornFlowBaseModel, TaskModel
+from nornflow.utils import normalize_failure_strategy
 
 
 class WorkflowModel(NornFlowBaseModel):

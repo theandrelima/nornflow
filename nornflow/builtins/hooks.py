@@ -2,20 +2,20 @@ import logging
 from typing import TYPE_CHECKING
 
 from nornir.core.inventory import Host
-from nornir.core.task import MultiResult, AggregatedResult
+from nornir.core.task import AggregatedResult, MultiResult
 
 from nornflow.hooks import (
-    PreRunHook,
-    PostRunHook,
     ConfigureTaskMixin,
+    PostRunHook,
+    PreRunHook,
     RunOncePerTaskMixin,
     RunPerHostMixin,
 )
 from nornflow.hooks.registry import register_hook
 
 if TYPE_CHECKING:
-    from nornflow.models import TaskModel
     from nornflow.hooks import HookContext
+    from nornflow.models import TaskModel
 
 logger = logging.getLogger(__name__)
 
