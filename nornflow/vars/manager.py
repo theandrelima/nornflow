@@ -454,12 +454,12 @@ class NornFlowVariablesManager:
     def resolve_data(self, data: Any, host_name: str, additional_vars: dict[str, Any] | None = None) -> Any:
         """
         Recursively resolve Jinja2 templates in nested data structures.
-    
+
         Args:
             data: The data structure to resolve (dict, list, string, etc.).
             host_name: The name of the host for which to resolve variables.
             additional_vars: Additional variables to include in the context.
-    
+
         Returns:
             The data structure with all templates resolved.
         """

@@ -15,10 +15,10 @@ class HookConfigurationError(HookError):
 
 class HookValidationError(HookError):
     """Exception raised when hook validation fails."""
-    
+
     def __init__(self, hook_class: str, errors: list[tuple[str, str]]):
         """Initialize the validation error with hook details and error list.
-        
+
         Args:
             hook_class: The name of the hook class that failed validation.
             errors: List of (method_name, error_message) tuples.
