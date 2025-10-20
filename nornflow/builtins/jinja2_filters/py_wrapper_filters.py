@@ -49,7 +49,7 @@ def filter_len(value: Any) -> int:
     return len(value)
 
 
-def filter_sorted(iterable: Iterable[Any], key=None, reverse: bool = False) -> list[Any]:
+def filter_sorted(iterable: Iterable[Any], key: Any = None, reverse: bool = False) -> list[Any]:
     """Return a new sorted list from the iterable."""
     return sorted(iterable, key=key, reverse=reverse)
 

@@ -1,11 +1,9 @@
-from typing import Type
-
 from nornflow.hooks.exceptions import HookRegistrationError
 
-HOOK_REGISTRY: dict[str, Type[object]] = {}
+HOOK_REGISTRY: dict[str, type[object]] = {}
 
 
-def register_hook(hook_class: Type[object]) -> Type[object]:
+def register_hook(hook_class: type[object]) -> type[object]:
     """
     Register a hook class in the global registry.
 

@@ -4,25 +4,25 @@ This package provides a structured system for extending task behavior through ho
 """
 
 from nornflow.hooks.base import (
+    ConfigureTaskMixin,
+    FilterHostsMixin,
     Hook,
     PostRunHook,
     PreRunHook,
-    RunPerHostMixin,
-    FilterHostsMixin,
-    ConfigureTaskMixin,
     RunOncePerTaskMixin,
+    RunPerHostMixin,
 )
 from nornflow.hooks.loader import load_hooks
 from nornflow.hooks.registry import register_hook
 
 __all__ = [
+    "ConfigureTaskMixin",
+    "FilterHostsMixin",
     "Hook",
     "PostRunHook",
     "PreRunHook",
+    "RunOncePerTaskMixin",
+    "RunPerHostMixin",
     "load_hooks",
     "register_hook",
-    "RunPerHostMixin",
-    "FilterHostsMixin",
-    "ConfigureTaskMixin",
-    "RunOncePerTaskMixin",
 ]

@@ -5,7 +5,7 @@ from nornir.core.task import Result, Task
 from nornflow.builtins.utils import build_set_task_report, get_task_vars_manager
 
 
-def set(task: Task, print_output=True, **kwargs) -> Result:
+def set(task: Task, print_output: bool = True, **kwargs) -> Result:
     """
     NornFlow built-in task to set runtime variables for the current device.
 

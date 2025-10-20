@@ -10,7 +10,7 @@ class NornFlowBaseModel(PydanticSerdesBaseModel):
     Base model for all NornFlow models with strict field validation and universal field validation.
     """
 
-    model_config = {"extra": "forbid"}
+    model_config: ClassVar[dict[str, str]] = {"extra": "forbid"}
     _exclude_from_universal_validations: ClassVar[tuple[str, ...]] = ()
 
     @classmethod

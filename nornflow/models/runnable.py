@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any
 
-from pydantic import field_validator
 from nornir.core.task import AggregatedResult
+from pydantic import field_validator
 from pydantic_serdes.custom_collections import HashableDict
 from pydantic_serdes.utils import convert_to_hashable
 
@@ -13,7 +13,6 @@ from nornflow.hooks import PostRunHook, PreRunHook
 from nornflow.hooks.registry import HOOK_REGISTRY
 from nornflow.nornir_manager import NornirManager
 from nornflow.vars.manager import NornFlowVariablesManager
-
 from .base import NornFlowBaseModel
 
 logger = logging.getLogger(__name__)
@@ -42,7 +41,7 @@ class RunnableModel(NornFlowBaseModel, ABC):
     - Hook instances are created ONCE per unique (hook_class, value) combination
     - Instances are cached globally and shared across all tasks and hosts
     - Thread-safe instance creation using locks
-    - For 100k hosts × 10 tasks × 3 hooks = only 3 hook instances created
+    - For 100k hosts x 10 tasks x 3 hooks = only 3 hook instances created
 
     VALIDATION STRATEGY:
     ===================
@@ -55,7 +54,7 @@ class RunnableModel(NornFlowBaseModel, ABC):
     ===========================
     - Hook instantiation: O(1) amortized - cached after first creation
     - Validation: O(1) per task - happens once and cached
-    - Memory usage: O(unique_hooks) instead of O(tasks × hosts × hooks)
+    - Memory usage: O(unique_hooks) instead of O(tasks x hosts x hooks)
     - Thread overhead: Minimal - only during first instance creation
 
     Example with 100k hosts, 10 tasks, 3 hooks per task:
@@ -221,11 +220,11 @@ class RunnableModel(NornFlowBaseModel, ABC):
 
         # Validate pre-run hooks
         for hook in self.get_pre_hooks():
-            hook._validate_hook(self)
+            hook.execute_hook_validations(self)
 
         # Validate post-run hooks
         for hook in self.get_post_hooks():
-            hook._validate_hook(self)
+            hook.execute_hook_validations(self)
 
         # Mark validation as completed
         self._validation_completed = True
@@ -349,4 +348,3 @@ class RunnableModel(NornFlowBaseModel, ABC):
         hosts_to_run: list[str],
     ) -> AggregatedResult:
         """Execute the actual task logic. Must be implemented by subclasses."""
-        pass

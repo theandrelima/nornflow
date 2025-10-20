@@ -1,4 +1,5 @@
-from typing import Any, ClassVar, Callable
+from collections.abc import Callable
+from typing import Any, ClassVar
 
 from nornir.core.task import AggregatedResult
 from pydantic import field_validator
@@ -6,10 +7,10 @@ from pydantic_serdes.custom_collections import HashableDict
 from pydantic_serdes.utils import convert_to_hashable
 
 from nornflow.exceptions import TaskError
-from nornflow.nornir_manager import NornirManager
-from nornflow.models.validators import run_post_creation_task_validation
-from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.models import RunnableModel
+from nornflow.models.validators import run_post_creation_task_validation
+from nornflow.nornir_manager import NornirManager
+from nornflow.vars.manager import NornFlowVariablesManager
 
 
 class TaskModel(RunnableModel):
