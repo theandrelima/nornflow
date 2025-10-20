@@ -330,13 +330,7 @@ def print_workflow_overview(
         vars: Vars with highest precedence.
         failure_strategy: The active failure handling strategy.
     """
-    type_mapping = {
-        'HashableDict': 'map',
-        'dict': 'map',
-        'list': 'seq',
-        'tuple': 'seq',
-        'NoneType': 'none'
-        }
+    type_mapping = {"HashableDict": "map", "dict": "map", "list": "seq", "tuple": "seq", "NoneType": "none"}
 
     console = Console()
 
@@ -373,11 +367,18 @@ def print_workflow_overview(
         if workflow_vars:
             # Sort workflow variables by name lexicographically
             for k, v in sorted(workflow_vars.items(), key=lambda item: item[0]):
-                vars_table.add_row("w", k, _format_variable_value(k, v), type_mapping.get(type(v).__name__, type(v).__name__))
+                vars_table.add_row(
+                    "w", k, _format_variable_value(k, v), type_mapping.get(type(v).__name__, type(v).__name__)
+                )
         if vars:
             # Sort CLI/programmatic variables by name lexicographically
             for k, v in sorted(vars.items(), key=lambda item: item[0]):
-                vars_table.add_row("c*", k, _format_variable_value(k, v), type_mapping.get(type(v).__name__, type(v).__name__))
+                vars_table.add_row(
+                    "c*",
+                    k,
+                    _format_variable_value(k, v),
+                    type_mapping.get(type(v).__name__, type(v).__name__),
+                )
 
         legend_text = Text()
         legend_text.append("Sources", style="bold dim")

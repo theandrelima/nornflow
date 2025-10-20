@@ -25,7 +25,7 @@ class TaskModel(RunnableModel):
 
     id: int | None = None
     name: str
-    args: HashableDict[str, Any| None] | None = None
+    args: HashableDict[str, Any | None] | None = None
 
     @classmethod
     def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "TaskModel":
@@ -63,16 +63,16 @@ class TaskModel(RunnableModel):
         hosts_to_run: list[str],
     ) -> AggregatedResult:
         """Execute the task logic.
-        
+
         Args:
             nornir_manager: The NornirManager instance.
             vars_manager: The variables manager.
             tasks_catalog: Task catalog.
             hosts_to_run: Filtered list of host names.
-            
+
         Returns:
             The aggregated result.
-            
+
         Raises:
             TaskError: If task not found.
         """

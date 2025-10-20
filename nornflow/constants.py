@@ -88,35 +88,85 @@ JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")
 # Keywords in variable names that should be masked in display
 PROTECTED_KEYWORDS = [
     # Authentication
-    "password", "passwd", "pwd", "secret", "token", "apikey", "api_key", "access_token",
-    "auth_token", "authorization", "jwt", "bearer", "sessionid", "session_id",
-
+    "password",
+    "passwd",
+    "pwd",
+    "secret",
+    "token",
+    "apikey",
+    "api_key",
+    "access_token",
+    "auth_token",
+    "authorization",
+    "jwt",
+    "bearer",
+    "sessionid",
+    "session_id",
     # Cloud credentials
-    "aws_access_key_id", "aws_secret_access_key", "azure_client_secret", "gcp_credentials",
-    "gcp_private_key", "gcp_client_secret", "gcp_token",
-
+    "aws_access_key_id",
+    "aws_secret_access_key",
+    "azure_client_secret",
+    "gcp_credentials",
+    "gcp_private_key",
+    "gcp_client_secret",
+    "gcp_token",
     # Database
-    "db_password", "db_pass", "db_user", "db_username", "db_token", "db_connection_string",
-
+    "db_password",
+    "db_pass",
+    "db_user",
+    "db_username",
+    "db_token",
+    "db_connection_string",
     # SSH / TLS / Certificates
-    "ssh_key", "private_key", "tls_key", "certificate", "cert", "pem", "pfx", "keystore",
-
+    "ssh_key",
+    "private_key",
+    "tls_key",
+    "certificate",
+    "cert",
+    "pem",
+    "pfx",
+    "keystore",
     # Environment variables
-    "env_secret", "env_token", "env_password", "env_key",
-
+    "env_secret",
+    "env_token",
+    "env_password",
+    "env_key",
     # 2FA / MFA / OTP
-    "2fa_code", "mfa_code", "otp", "one_time_password", "verification_code",
-    "authenticator_code", "totp", "hotp", "backup_code", "recovery_code",
-    "sms_code", "email_code", "push_token", "push_auth", "security_code",
-
+    "2fa_code",
+    "mfa_code",
+    "otp",
+    "one_time_password",
+    "verification_code",
+    "authenticator_code",
+    "totp",
+    "hotp",
+    "backup_code",
+    "recovery_code",
+    "sms_code",
+    "email_code",
+    "push_token",
+    "push_auth",
+    "security_code",
     # Custom patterns
-    "client_secret", "consumer_secret", "app_secret", "webhook_secret", "signing_key",
-    "encryption_key", "master_key", "recovery_key", "reset_token", "magic_link",
-
+    "client_secret",
+    "consumer_secret",
+    "app_secret",
+    "webhook_secret",
+    "signing_key",
+    "encryption_key",
+    "master_key",
+    "recovery_key",
+    "reset_token",
+    "magic_link",
     # Config file keys
-    "config_secret", "config_token", "config_password", "config_key",
-
+    "config_secret",
+    "config_token",
+    "config_password",
+    "config_key",
     # Generic
-    "key", "secret", "credentials", "identity", "login"
+    "key",
+    "secret",
+    "credentials",
+    "identity",
+    "login",
 ]
-

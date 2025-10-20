@@ -95,12 +95,9 @@ logger = logging.getLogger(__name__)
 
 class HookContext:
     """Context object passed to hooks containing all necessary dependencies."""
-    
+
     def __init__(
-        self,
-        nornir_manager: "NornirManager",
-        vars_manager: "NornFlowVariablesManager",
-        **kwargs: Any
+        self, nornir_manager: "NornirManager", vars_manager: "NornFlowVariablesManager", **kwargs: Any
     ):
         self.nornir_manager = nornir_manager
         self.vars_manager = vars_manager
@@ -111,13 +108,16 @@ class HookContext:
 # EXECUTION SCOPE MIXINS
 # ============================================================================
 
+
 class RunOncePerTaskMixin:
     """Hook executes once for the entire task across all hosts."""
+
     run_once_per_task: ClassVar[bool] = True
 
 
 class RunPerHostMixin:
     """Hook executes individually for each host."""
+
     run_once_per_task: ClassVar[bool] = False
 
 
@@ -125,21 +125,22 @@ class RunPerHostMixin:
 # PRE-RUN BEHAVIOR MIXINS
 # ============================================================================
 
+
 class FilterHostsMixin:
     """Mixin for hooks that filter which hosts execute a task at the task level."""
-    
+
     _filters_hosts: ClassVar[bool] = True
-    
+
     def filter_hosts(self, task_model: "TaskModel", hosts: list[str], context: HookContext) -> list[str]:
         """Filter the list of hosts that should execute this task.
-        
+
         Called once per task when using RunOncePerTaskMixin.
-        
+
         Args:
             task_model: The task about to be executed
             hosts: Current list of host names
             context: Hook execution context
-            
+
         Returns:
             Filtered list of host names
         """
@@ -148,12 +149,12 @@ class FilterHostsMixin:
 
 class ConfigureTaskMixin:
     """Mixin for hooks that modify task configuration."""
-    
+
     _modifies_task: ClassVar[bool] = True
-    
+
     def configure_task(self, task_model: "TaskModel", context: HookContext) -> None:
         """Modify task configuration before execution.
-        
+
         Args:
             task_model: The task to configure (can be modified)
             context: Hook execution context
@@ -165,113 +166,117 @@ class ConfigureTaskMixin:
 # BASE HOOK CLASS
 # ============================================================================
 
+
 class Hook:
     """Base class for all hook types implementing the Flyweight pattern.
-    
+
     Hooks must be composed with:
     1. An execution phase (PreRunHook or PostRunHook)
     2. An execution scope (RunOncePerTaskMixin or RunPerHostMixin)
     3. For PreRunHook: One or more behavior mixins
-    
+
     The hook_name attribute must be defined by all subclasses.
     """
-    
+
     hook_name: str
-    
+
     def __init__(self, value: str | None = None):
         """Initialize a hook with an optional immutable configuration value."""
         self.value = value
         self._executed_tasks = WeakKeyDictionary()
         self._task_lock = threading.RLock()
-        
+
         self._validate_mixin_compatibility()
         self._validate_method_implementation()
-    
+
     def _validate_mixin_compatibility(self) -> None:
         """Validate that the hook's mixin combination is valid.
-        
+
         Subclasses override this in PreRunHook and PostRunHook.
         """
         pass
-    
+
     def _validate_method_implementation(self) -> None:
         """Validate that mixins requiring methods have those methods implemented."""
         # Check FilterHostsMixin requirement
-        if self._has_capability('_filters_hosts'):
-            if not any(hasattr(cls, 'filter_hosts') for cls in self.__class__.__mro__):
+        if self._has_capability("_filters_hosts"):
+            if not any(hasattr(cls, "filter_hosts") for cls in self.__class__.__mro__):
                 raise HookConfigurationError(
                     f"Hook '{self.__class__.__name__}' uses FilterHostsMixin but doesn't implement filter_hosts()"
                 )
-        
+
         # Check ConfigureTaskMixin requirement
-        if self._has_capability('_modifies_task'):
-            if not any(hasattr(cls, 'configure_task') for cls in self.__class__.__mro__):
+        if self._has_capability("_modifies_task"):
+            if not any(hasattr(cls, "configure_task") for cls in self.__class__.__mro__):
                 raise HookConfigurationError(
                     f"Hook '{self.__class__.__name__}' uses ConfigureTaskMixin but doesn't implement configure_task()"
                 )
-    
+
     def _has_capability(self, capability: str) -> bool:
         """Check if this hook has a specific capability through mixins.
-        
+
         Args:
             capability: The capability flag name (e.g., '_filters_hosts')
-            
+
         Returns:
             True if the hook has this capability, False otherwise
         """
         return getattr(self.__class__, capability, False)
-    
+
     def _get_execution_scope(self) -> bool:
         """Get the execution scope from mixin.
-        
+
         Returns:
             True if run_once_per_task, False otherwise
         """
-        return getattr(self.__class__, 'run_once_per_task', False)
-    
+        return getattr(self.__class__, "run_once_per_task", False)
+
     def _is_first_execution(self, task_model: "TaskModel") -> bool:
         """Check if this is the first execution of the hook for this task."""
         if not self._get_execution_scope():
             return True
-        
+
         with self._task_lock:
             if task_model not in self._executed_tasks:
                 self._executed_tasks[task_model] = True
                 return True
             return False
-    
+
     def _validate_hook(self, task_model: "TaskModel") -> None:
         """Run all validate_* methods for this hook against the given task model."""
         errors = []
-        
+
         validate_methods = [
-            (name, method) for name, method in inspect.getmembers(self, predicate=inspect.ismethod)
-            if name.startswith('validate_')
+            (name, method)
+            for name, method in inspect.getmembers(self, predicate=inspect.ismethod)
+            if name.startswith("validate_")
         ]
-        
+
         for method_name, method in validate_methods:
             try:
                 result = method(task_model)
                 if not isinstance(result, tuple) or len(result) != 2:
-                    errors.append((method_name, f"Must return tuple (bool, str), got {type(result).__name__}"))
+                    errors.append(
+                        (method_name, f"Must return tuple (bool, str), got {type(result).__name__}")
+                    )
                     continue
-                
+
                 is_valid, error_msg = result
                 if not is_valid:
                     errors.append((method_name, error_msg))
-                    
+
             except Exception as e:
                 errors.append((method_name, f"Exception during validation: {e!s}"))
-        
+
         if errors:
             raise HookValidationError(self.__class__.__name__, errors)
-    
+
     def __str__(self) -> str:
         return str(self.value)
-    
+
     def __hash__(self) -> int:
         return hash((self.__class__, self.value))
-    
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Hook):
             return False
@@ -282,40 +287,38 @@ class Hook:
 # PRE-RUN HOOK
 # ============================================================================
 
+
 class PreRunHook(Hook):
     """Base class for hooks that run before task execution.
-    
+
     PreRunHooks must use one or more of:
     - FilterHostsMixin: Filter hosts at the task level
     - ConfigureTaskMixin: Modify task configuration
-    
+
     They must also use either RunOncePerTaskMixin or RunPerHostMixin.
     """
-    
+
     def _validate_mixin_compatibility(self) -> None:
         """Validate that PreRunHook uses valid mixins."""
-        if not any([
-            self._has_capability('_filters_hosts'),
-            self._has_capability('_modifies_task')
-        ]):
+        if not any([self._has_capability("_filters_hosts"), self._has_capability("_modifies_task")]):
             raise HookConfigurationError(
                 f"PreRunHook '{self.__class__.__name__}' must use at least one behavior mixin "
                 "(FilterHostsMixin or ConfigureTaskMixin)"
             )
-        
-        if not hasattr(self.__class__, 'run_once_per_task'):
+
+        if not hasattr(self.__class__, "run_once_per_task"):
             raise HookConfigurationError(
                 f"PreRunHook '{self.__class__.__name__}' must use either "
                 "RunOncePerTaskMixin or RunPerHostMixin"
             )
-        
+
         # FilterHostsMixin requires RunOncePerTaskMixin
-        if self._has_capability('_filters_hosts') and not self._get_execution_scope():
+        if self._has_capability("_filters_hosts") and not self._get_execution_scope():
             raise HookConfigurationError(
                 f"PreRunHook '{self.__class__.__name__}' cannot use FilterHostsMixin with RunPerHostMixin. "
                 "Task-level filtering requires RunOncePerTaskMixin"
             )
-    
+
     @classmethod
     def execute_all_hooks(
         cls,
@@ -328,24 +331,24 @@ class PreRunHook(Hook):
         """Execute all pre-run hooks efficiently, respecting their capabilities."""
         if not hooks:
             return hosts
-        
+
         context = HookContext(nornir_manager=nornir_manager, vars_manager=vars_manager)
         filtered_hosts = hosts.copy()
-        
+
         for hook in hooks:
             scope_once = hook._get_execution_scope()
-            
+
             if scope_once and hook._is_first_execution(task_model):
-                if hook._has_capability('_modifies_task'):
+                if hook._has_capability("_modifies_task"):
                     hook.configure_task(task_model, context)
-                
-                if hook._has_capability('_filters_hosts'):
+
+                if hook._has_capability("_filters_hosts"):
                     filtered_hosts = hook.filter_hosts(task_model, filtered_hosts, context)
-            
+
             elif not scope_once:
-                if hook._has_capability('_modifies_task') and hook._is_first_execution(task_model):
+                if hook._has_capability("_modifies_task") and hook._is_first_execution(task_model):
                     hook.configure_task(task_model, context)
-        
+
         return filtered_hosts
 
 
@@ -353,43 +356,44 @@ class PreRunHook(Hook):
 # POST-RUN HOOK
 # ============================================================================
 
+
 class PostRunHook(Hook):
     """Base class for hooks that run after task execution.
-    
+
     PostRunHooks process task execution results. The format of results
     depends on the execution scope:
     - With RunOncePerTaskMixin: receives AggregatedResult (all hosts)
     - With RunPerHostMixin: receives tuple of (Host, MultiResult) per host
-    
+
     Subclasses must use either RunOncePerTaskMixin or RunPerHostMixin.
     """
-    
+
     def _validate_mixin_compatibility(self) -> None:
         """Validate that PostRunHook uses valid mixins."""
-        if not hasattr(self.__class__, 'run_once_per_task'):
+        if not hasattr(self.__class__, "run_once_per_task"):
             raise HookConfigurationError(
                 f"PostRunHook '{self.__class__.__name__}' must use either "
                 "RunOncePerTaskMixin or RunPerHostMixin"
             )
-    
+
     def process_results(
-        self, 
+        self,
         task_model: "TaskModel",
         results: Union["AggregatedResult", tuple["Host", "MultiResult"]],
-        context: "HookContext"
+        context: "HookContext",
     ) -> None:
         """Process task results.
-        
+
         Override this method to implement result processing logic.
-        
+
         Args:
             task_model: The task that was executed
-            results: Either AggregatedResult (with RunOncePerTaskMixin) 
+            results: Either AggregatedResult (with RunOncePerTaskMixin)
                     or tuple of (Host, MultiResult) (with RunPerHostMixin)
             context: Hook execution context
         """
         pass
-    
+
     @classmethod
     def execute_all_hooks(
         cls,
@@ -402,15 +406,15 @@ class PostRunHook(Hook):
         """Execute all post-run hooks efficiently."""
         if not hooks or not result:
             return
-        
+
         context = HookContext(nornir_manager=nornir_manager, vars_manager=vars_manager)
-        
+
         for hook in hooks:
             scope_once = hook._get_execution_scope()
-            
+
             if scope_once and hook._is_first_execution(task_model):
                 hook.process_results(task_model, result, context)
-            
+
             elif not scope_once:
                 for host_name, host_result in result.items():
                     host = nornir_manager.nornir.inventory.hosts[host_name]
