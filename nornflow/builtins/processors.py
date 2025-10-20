@@ -96,7 +96,8 @@ class DefaultNornFlowProcessor(Processor):
                 f"{Fore.WHITE}| {status_color}Status: {status}"
             )
             print(f"{Fore.BLUE}{start_str} - {finish_str} ({duration_ms:.0f}ms)")
-            print(f"\n{Fore.WHITE}Output:\n{result.result}")
+            if result.result:
+                print(f"\n{Fore.WHITE}Output:\n{result.result}")
             print(f"{Fore.WHITE}{'-' * 80}")
 
             # Clean up our dictionary

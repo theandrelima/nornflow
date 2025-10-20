@@ -453,20 +453,26 @@ class NornFlowVariablesManager:
 
     def resolve_data(self, data: Any, host_name: str, additional_vars: dict[str, Any] | None = None) -> Any:
         """
-        Recursively resolves Jinja2 templates within a data structure.
+        Recursively resolve Jinja2 templates in nested data structures.
 
         Args:
-            data: The data structure (str, list, dict) to process.
-            host_name: The name of the host for template resolution.
-            additional_vars: Optional variables for the Jinja2 context.
+            data: The data structure to resolve (dict, list, string, etc.).
+            host_name: The name of the host for which to resolve variables.
+            additional_vars: Additional variables to include in the context.
 
         Returns:
-            A new data structure with Jinja2 templates resolved.
+            The data structure with all templates resolved.
         """
         if isinstance(data, str):
-            return self.resolve_string(data, host_name, additional_vars)
-        if isinstance(data, list):
-            return [self.resolve_data(item, host_name, additional_vars) for item in data]
+            # Check if the string contains Jinja2 markers
+            if any(marker in data for marker in JINJA2_MARKERS):
+                return self.resolve_string(data, host_name, additional_vars)
+            return data
         if isinstance(data, dict):
             return {k: self.resolve_data(v, host_name, additional_vars) for k, v in data.items()}
+        if isinstance(data, (list, tuple)):
+            # Convert both lists and tuples to lists after resolving items
+            # This ensures YAML-defined lists remain lists, even if converted to tuples for hashability
+            return [self.resolve_data(item, host_name, additional_vars) for item in data]
+        # Return other types as-is
         return data
