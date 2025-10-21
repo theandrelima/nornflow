@@ -117,8 +117,8 @@ class DefaultNornFlowProcessor(Processor):
 
     def subtask_instance_failed(self, task: Task, host: Host, result: Result) -> None:
         # Print failed subtasks for debugging purposes
-        finish_time = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-
+        pass
+    
         with output_lock:
             print(f"{Fore.RED}{'-' * 80}")
             print(f"{Style.BRIGHT}{Fore.RED}SUBTASK FAILED: {task.name} on {host} at {finish_time}")
