@@ -49,8 +49,6 @@ Hooks validate at instantiation and execution:
 - Task Compatibility: validate_* methods can be used to sanitize parameters passed to hooks
 - Execution Scope: Enforced via `run_once_per_task` flag
 """
-
-import inspect
 from abc import ABC
 from typing import Any, TYPE_CHECKING
 from nornir.core.task import Task, AggregatedResult, MultiResult
@@ -106,6 +104,7 @@ class Hook(ABC):
         """
         self.value = value
         self._execution_count = {}  # Track executions per task
+        self._current_context: dict[str, Any] | None = None
     
     # Processor Protocol Methods (all optional to implement)
     
@@ -144,9 +143,7 @@ class Hook(ABC):
         Returns:
             Context dict with task_model, vars_manager, etc.
         """
-        if hasattr(task, 'params') and task.params:
-            return task.params.get('_nornflow_context', {})
-        return {}
+        return self._current_context or {}
     
     def should_execute(self, task: Task) -> bool:
         """Check if this hook should execute for given task.
@@ -162,34 +159,19 @@ class Hook(ABC):
             if task_id in self._execution_count:
                 return False
             self._execution_count[task_id] = 1
+            return True
         return True
     
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
-        """Run all validate_* methods for this hook against the given task model.
+        """Execute validation logic specific to this hook.
         
-        This method abstracts the validation logic within the Hook class itself,
-        allowing RunnableModel to simply invoke this method without knowing
-        the internal validation mechanics.
+        This method is called during task preparation to allow hooks to validate
+        their configuration and compatibility with the task.
         
         Args:
-            task_model: The TaskModel to validate against
+            task_model: The task model being validated
             
         Raises:
-            HookValidationError: If any validate_* method fails
-        """        
-        errors = []
-        
-        validate_methods = [
-            (name, method)
-            for name, method in inspect.getmembers(self, predicate=inspect.ismethod)
-            if name.startswith("validate_")
-        ]
-        
-        for method_name, method in validate_methods:
-            try:
-                method(task_model)
-            except Exception as e:
-                errors.append((method_name, str(e)))
-        
-        if errors:
-            raise HookValidationError(self.__class__.__name__, errors)
+            HookValidationError: If validation fails
+        """
+        pass

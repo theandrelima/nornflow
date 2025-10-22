@@ -23,6 +23,7 @@ def hook_delegator(func: Callable) -> Callable:
             return func(self, *args, **kwargs)
         
         hooks = self._get_hooks_for_task(task)
+        context = self._get_context_for_task(task)
         
         for hook in hooks:
             if hasattr(hook, method_name):
@@ -32,6 +33,9 @@ def hook_delegator(func: Callable) -> Callable:
                 if not hook.should_execute(task):
                     continue
                     
+                # Set the context on the hook
+                hook._current_context = context
+                
                 try:
                     hook_method(*args, **kwargs)
                 except Exception as e:
