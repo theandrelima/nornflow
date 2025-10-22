@@ -4,7 +4,7 @@ from typing import Any
 from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
-from nornflow.builtins.processors import NornFlowFailureStrategyProcessor
+from nornflow.builtins.processors import NornFlowFailureStrategyProcessor, NornFlowHookProcessor
 from nornflow.catalogs import CallableCatalog, FileCatalog
 from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
 from nornflow.exceptions import (
@@ -147,7 +147,8 @@ class NornFlow:
         self._workflow = None
         self._workflow_path = None
         self._var_processor = None
-        self._failure_processor = None
+        self._failure_strategy_processor = None
+        self._hook_processor = None
 
     def _initialize_catalogs(self) -> None:
         """Initialize and load catalogs."""
@@ -347,19 +348,31 @@ class NornFlow:
                 component="NornFlow",
             )
         self._failure_strategy = value
-        self._failure_processor = None
+        self._failure_strategy_processor = None
 
     @property
-    def failure_processor(self) -> NornFlowFailureStrategyProcessor:
+    def failure_strategy_processor(self) -> NornFlowFailureStrategyProcessor:
         """
-        Get the failure processor, creating it lazily if needed.
+        Get the failure strategy processor, creating it lazily if needed.
 
         Returns:
-            NornFlowFailureStrategyProcessor: The failure processor instance.
+            NornFlowFailureStrategyProcessor: The failure strategy processor instance.
         """
-        if self._failure_processor is None:
-            self._failure_processor = NornFlowFailureStrategyProcessor(self.failure_strategy)
-        return self._failure_processor
+        if self._failure_strategy_processor is None:
+            self._failure_strategy_processor = NornFlowFailureStrategyProcessor(self.failure_strategy)
+        return self._failure_strategy_processor
+
+    @property
+    def hook_processor(self) -> NornFlowHookProcessor:
+        """
+        Get the hook processor, creating it lazily if needed.
+
+        Returns:
+            NornFlowHookProcessor: The hook processor instance.
+        """
+        if self._hook_processor is None:
+            self._hook_processor = NornFlowHookProcessor()
+        return self._hook_processor
 
     @property
     def tasks_catalog(self) -> CallableCatalog:
@@ -457,7 +470,8 @@ class NornFlow:
                 component="NornFlow",
             )
 
-        self._failure_processor = None
+        self._failure_strategy_processor = None
+        self._hook_processor = None
 
     @property
     def workflow_path(self) -> Path | None:
@@ -799,15 +813,18 @@ class NornFlow:
 
         IMPORTANT: Always adds NornFlowVariableProcessor as the first processor
         to ensure host context is available for variable resolution.
-        Always adds NornFlowFailureStrategyProcessor as the second processor
+        Always adds NornFlowHookProcessor as the second processor
+        to handle hook execution during task lifecycle.
+        Always adds NornFlowFailureStrategyProcessor as the last processor
         to handle error policies during task execution.
 
         This method handles the processor selection logic:
         1. Always add NornFlowVariableProcessor first (for variable resolution)
-        2. Use workflow-specific processors from self._workflow.processors if defined
-        3. Otherwise use the passed processors parameter
-        4. If neither exists, use NornFlow's global processors (self._processors)
-        5. Always add NornFlowFailureStrategyProcessor last (for failure strategy handling)
+        2. Always add NornFlowHookProcessor second (for hook execution)
+        3. Use workflow-specific processors from self._workflow.processors if defined
+        4. Otherwise use the passed processors parameter
+        5. If neither exists, use NornFlow's global processors (self._processors)
+        6. Always add NornFlowFailureStrategyProcessor last (for failure strategy handling)
 
         Args:
             nornir_manager: The NornirManager instance to apply processors to
@@ -816,7 +833,11 @@ class NornFlow:
         vars_manager = self._init_variable_manager()
         self._var_processor = NornFlowVariableProcessor(vars_manager)
 
+        # Always add variable processor first
         all_processors = [self._var_processor]
+        
+        # Always add hook processor second
+        all_processors.append(self.hook_processor)
 
         if self.workflow and self.workflow.processors:
             try:
@@ -834,7 +855,7 @@ class NornFlow:
         elif self.processors:
             all_processors.extend(self.processors)
 
-        all_processors.append(self.failure_processor)
+        all_processors.append(self.failure_strategy_processor)
 
         nornir_manager.apply_processors(all_processors)
 

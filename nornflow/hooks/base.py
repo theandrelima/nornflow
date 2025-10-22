@@ -60,8 +60,6 @@ from nornflow.hooks.exceptions import HookValidationError
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
-    from nornflow.nornir_manager import NornirManager
-    from nornflow.vars.manager import NornFlowVariablesManager
 
 
 class Hook(ABC):
