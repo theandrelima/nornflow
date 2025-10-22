@@ -72,6 +72,9 @@ class TaskModel(RunnableModel):
     ) -> AggregatedResult:
         """Execute the task using the provided managers and tasks catalog.
 
+        This method is hook-agnostic. All hook handling is delegated to
+        parent methods in RunnableModel.
+
         Args:
             nornir_manager: The NornirManager instance to use for execution.
             vars_manager: The variables manager instance.
@@ -88,9 +91,12 @@ class TaskModel(RunnableModel):
         if not task_func:
             raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")
 
-        # Prepare and validate task context via parent method
-        task_args = self.prepare_and_validate_task_context(vars_manager, nornir_manager)
+        # Get clean task arguments from parent
+        task_args = self.get_task_args()
+        
+        # Register hook context and validate (parent handles all hook logic)
+        self.register_hook_context_and_validate(nornir_manager, vars_manager, task_func)
 
-        # Execute the task
+        # Execute the task with clean args
         result = nornir_manager.nornir.run(task=task_func, **task_args)
         return result

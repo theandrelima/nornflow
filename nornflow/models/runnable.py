@@ -1,5 +1,4 @@
 import logging
-import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any
@@ -10,19 +9,13 @@ from pydantic_serdes.custom_collections import HashableDict
 from pydantic_serdes.utils import convert_to_hashable
 
 from nornflow.hooks import Hook
+from nornflow.hooks.loader import load_hooks
 from nornflow.hooks.registry import HOOK_REGISTRY
 from nornflow.nornir_manager import NornirManager
 from nornflow.vars.manager import NornFlowVariablesManager
 from .base import NornFlowBaseModel
 
 logger = logging.getLogger(__name__)
-
-# Global hook instance cache shared across all RunnableModel instances
-# Key: (hook_class, value) tuple
-# Value: Hook instance
-# This cache ensures we create only one instance per unique hook configuration
-_HOOK_INSTANCE_CACHE: dict[tuple[type, Any], Hook] = {}
-_HOOK_CACHE_LOCK = threading.Lock()
 
 
 class RunnableModel(NornFlowBaseModel, ABC):
@@ -90,35 +83,13 @@ class RunnableModel(NornFlowBaseModel, ABC):
         # Proceed with standard Pydantic creation
         return super().create(model_dict, *args, **kwargs)
 
-    def _get_or_create_hook_instance(self, hook_class: type[Hook], hook_value: Any) -> Hook:
-        """Get or create a cached hook instance using the Flyweight pattern."""
-        cache_key = (hook_class, hook_value)
-
-        if cache_key in _HOOK_INSTANCE_CACHE:
-            return _HOOK_INSTANCE_CACHE[cache_key]
-
-        with _HOOK_CACHE_LOCK:
-            if cache_key not in _HOOK_INSTANCE_CACHE:
-                _HOOK_INSTANCE_CACHE[cache_key] = hook_class(hook_value)
-            return _HOOK_INSTANCE_CACHE[cache_key]
-
     def get_hooks(self) -> list[Hook]:
         """Get all hooks for this runnable."""
         if self._hooks_cache is not None:
             return self._hooks_cache
 
-        hooks = []
-        if self.hooks:
-            for hook_name, hook_value in self.hooks.items():
-                hook_class = HOOK_REGISTRY.get(hook_name)
-                if hook_class:
-                    hook = self._get_or_create_hook_instance(hook_class, hook_value)
-                    hooks.append(hook)
-                else:
-                    logger.warning(f"Unknown hook '{hook_name}' in task configuration")
-
-        self._hooks_cache = hooks
-        return hooks
+        self._hooks_cache = load_hooks(self.hooks or {})
+        return self._hooks_cache
 
     def run_hook_validations(self) -> None:
         """Run hook validations for this runnable.
@@ -130,58 +101,54 @@ class RunnableModel(NornFlowBaseModel, ABC):
         for hook in hooks:
             hook.execute_hook_validations(self)
 
-    def prepare_task_context(
-        self, vars_manager: NornFlowVariablesManager, nornir_manager: NornirManager
-    ) -> dict[str, Any]:
-        """Prepare task arguments with hook context for execution.
-
-        This method assembles the task arguments, collects hooks, and injects
-        the NornFlow context for processor-based hook execution.
-
-        Args:
-            vars_manager: The variables manager instance.
-            nornir_manager: The Nornir manager instance.
+    def get_task_args(self) -> dict[str, Any]:
+        """Get clean task arguments without any NornFlow context.
 
         Returns:
-            Dictionary of task arguments with injected context.
+            Dictionary of task arguments for the task function.
         """
-        # Get hooks for this task
-        hooks = self.get_hooks()
+        return {} if self.args is None else dict(self.args)
 
-        # Create context for the processor
-        nornflow_context = {
-            "task_model": self,
-            "hooks": hooks,
-            "vars_manager": vars_manager,
-            "nornir_manager": nornir_manager,
-        }
+    def register_hook_context_and_validate(
+        self,
+        nornir_manager: NornirManager,
+        vars_manager: NornFlowVariablesManager,
+        task_func: Callable
+    ) -> None:
+        """Register hook context with the processor and validate hooks.
 
-        # Assemble task args
-        task_args = {} if self.args is None else dict(self.args)
-
-        # Inject context into task params
-        task_args["_nornflow_context"] = nornflow_context
-
-        return task_args
-
-    def prepare_and_validate_task_context(
-        self, vars_manager: NornFlowVariablesManager, nornir_manager: NornirManager
-    ) -> dict[str, Any]:
-        """Prepare and validate task context, returning ready-to-use task arguments.
-
-        This method combines hook validation and task context preparation into a single
-        operation, ensuring hooks are validated before execution and returning the
-        fully prepared task arguments with injected context.
+        This method encapsulates all hook-related setup:
+        1. Validates hooks
+        2. Finds the NornFlowHookProcessor
+        3. Registers context for the upcoming task
 
         Args:
-            vars_manager: The variables manager instance.
             nornir_manager: The Nornir manager instance.
-
-        Returns:
-            Dictionary of task arguments with injected context, ready for execution.
+            vars_manager: The variables manager instance.
+            task_func: The task function that will be executed.
         """
+        # Validate hooks first
         self.run_hook_validations()
-        return self.prepare_task_context(vars_manager, nornir_manager)
+        
+        # Try to get the NornFlowHookProcessor from the Nornir instance
+        try:
+            from nornflow.builtins.processors import NornFlowHookProcessor
+            hook_processor = nornir_manager.get_processor_by_type(NornFlowHookProcessor)
+            
+            # Prepare the context for this task
+            nornflow_context = {
+                "task_model": self,
+                "hooks": self.get_hooks(),
+                "vars_manager": vars_manager,
+                "nornir_manager": nornir_manager,
+            }
+            
+            # Register the context with the processor
+            hook_processor.register_task_context(task_func, nornflow_context)
+            
+        except Exception as e:
+            # If no hook processor found, hooks won't work but execution continues
+            logger.debug(f"Could not register hook context: {e}")
 
     @abstractmethod
     def run(
