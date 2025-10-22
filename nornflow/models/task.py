@@ -14,83 +14,83 @@ from nornflow.vars.manager import NornFlowVariablesManager
 
 
 class TaskModel(RunnableModel):
-    _key = (
-        "id",
-        "name",
-    )
+    """Task model with processor-based hook support.
+
+    CRITICAL - Model Immutability:
+    ==============================
+    TaskModel instances are PydanticSerdes models and are hashable by design.
+    NEVER modify TaskModel attributes within Hook classes!
+
+    Why This Matters:
+    - Hashability: Changing attributes after initialization breaks the hash contract
+    - Cache Corruption: Modified models could corrupt internal caches using models as keys
+    - Thread Safety: Mutable models in concurrent execution could cause race conditions
+
+    Correct Approach:
+    Modify Nornir task parameters instead of the model:
+        task.params["new_key"] = "value"  # Safe
+    NOT:
+        task_model.args["new_key"] = "value"  # BREAKS HASHABILITY!
+
+    Hook Agnosticism:
+    =================
+    TaskModel is mostly agnostic to hooks. Hook validation is delegated to the parent
+    via run_hook_validations(), so TaskModel focuses solely on task execution logic.
+    """
+
+    _key = ("id", "name")
     _directive = "tasks"
     _err_on_duplicate = False
-
-    # Exclude 'args' from universal Jinja2 validation since it's allowed there
     _exclude_from_universal_validations: ClassVar[tuple[str, ...]] = ("args",)
 
     id: int | None = None
     name: str
     args: HashableDict[str, Any | None] | None = None
 
+    @field_validator("args", mode="before")
+    @classmethod
+    def validate_args(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:
+        """Validate and convert args to hashable structure."""
+        return convert_to_hashable(v)
+
     @classmethod
     def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "TaskModel":
-        """Create a new TaskModel with auto-incrementing id and hook discovery."""
-        # Get current tasks and calculate next id
+        """Create a new TaskModel with auto-incrementing id."""
         current_tasks = cls.get_all()
         next_id = len(current_tasks) + 1 if current_tasks else 1
-
-        # Set the id in dict_args
         dict_args["id"] = next_id
 
-        # Call parent's create method (handles hook discovery and runs universal validation)
         new_task = super().create(dict_args, *args, **kwargs)
         run_post_creation_task_validation(new_task)
         return new_task
 
-    @field_validator("args", mode="before")
-    @classmethod
-    def validate_args(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:
-        """Validate the args dictionary and convert to fully hashable structure.
-
-        Args:
-            v: The args dictionary to validate.
-
-        Returns:
-            The validated args with all nested structures converted to hashable equivalents.
-        """
-        return convert_to_hashable(v)
-
-    def _run(
+    def run(
         self,
         nornir_manager: NornirManager,
         vars_manager: NornFlowVariablesManager,
         tasks_catalog: dict[str, Callable],
-        hosts_to_run: list[str],
     ) -> AggregatedResult:
-        """Execute the task logic.
+        """Execute the task using the provided managers and tasks catalog.
 
         Args:
-            nornir_manager: The NornirManager instance.
-            vars_manager: The variables manager.
-            tasks_catalog: Task catalog.
-            hosts_to_run: Filtered list of host names.
+            nornir_manager: The NornirManager instance to use for execution.
+            vars_manager: The variables manager instance.
+            tasks_catalog: Dictionary mapping task names to their function implementations.
 
         Returns:
-            The aggregated result.
+            The results of the task execution.
 
         Raises:
-            TaskError: If task not found.
+            TaskError: If the task name is not found in the tasks catalog.
         """
         # Get the task function from the catalog
         task_func = tasks_catalog.get(self.name)
         if not task_func:
             raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")
 
-        # Prepare task arguments
-        task_args = {} if self.args is None else dict(self.args)
+        # Prepare and validate task context via parent method
+        task_args = self.prepare_and_validate_task_context(vars_manager, nornir_manager)
 
-        # Filter the nornir object to only run on specified hosts
-        if hosts_to_run:
-            filtered_nornir = nornir_manager.nornir.filter(filter_func=lambda host: host.name in hosts_to_run)
-        else:
-            # If no hosts to run, return empty result
-            return AggregatedResult(name=self.name)
-
-        # Execute the task on the filtered nornir instance
-        return filtered_nornir.run(task=task_func, **task_args)
+        # Execute the task
+        result = nornir_manager.nornir.run(task=task_func, **task_args)
+        return result
