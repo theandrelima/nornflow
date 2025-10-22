@@ -14,6 +14,25 @@ enabling full lifecycle access. Hooks are selective, activating only when
 their `hook_name` is present in a NornFLow task config. From an SW Eng. perspective
 they follow the Flyweight pattern for memory efficiency.
 
+Exception Handling
+==================
+
+Hooks can define custom exception handling for specific exceptions they raise.
+This allows hooks to signal special conditions without breaking workflow execution. 
+Each hook subclass can optionally define an `exception_handlers` class attribute 
+as a dict mapping exception classes to handler method names (strings). When the 
+NornFlowHookProcessor catches such an exception from a hook method, it calls the 
+handler on the hook instance with (exception, task, args). Handlers perform custom
+logic and do not re-raise. Uncaught exceptions bubble up to break execution.
+
+Example:
+    class MyHook(Hook):
+        hook_name = "my_hook"
+        exception_handlers = {MyCustomError: "_handle_my_error"}
+
+        def _handle_my_error(self, exception, task, args):
+            # Custom handling logic here
+            pass
 
 EXECUTION SCOPES
 ================
@@ -29,14 +48,6 @@ Hooks validate at instantiation and execution:
 - Method Implementation: Lifecycle methods are optional but must be callable
 - Task Compatibility: validate_* methods can be used to sanitize parameters passed to hooks
 - Execution Scope: Enforced via `run_once_per_task` flag
-
-PERFORMANCE
-===========
-
-- Flyweight Pattern: Shared hook instances across tasks/hosts
-- Lazy Execution: Per-task hooks run only once per task (instead of once per host in that task)
-- Processor Delegation: Minimal overhead via NornFlowHookProcessor
-- Thread-Safe: Concurrent execution support via caching locks
 """
 
 import inspect
@@ -63,8 +74,21 @@ class Hook(ABC):
     Subclasses must define `hook_name` and can override only the lifecycle methods
     that are relevant to their use cases.
     
-    Validation is handled via `execute_hook_validations()`, which calls any
-    `validate_*` methods defined in the subclass.
+    Exception Handling:
+    ====================
+    Hooks can define custom exception handling via the `exception_handlers` class
+    attribute (dict mapping exception classes to handler method names). When the
+    NornFlowHookProcessor catches a hook-raised exception in this dict, it calls
+    the handler method on the hook instance with (exception, task, args). Handlers
+    perform custom logic (e.g., skips) without re-raising. Uncaught exceptions
+    bubble up.
+    
+    Example:
+        exception_handlers = {SkipHostError: "_handle_skip"}
+        
+        def _handle_skip(self, exception, task, args):
+            # Mark host as skipped
+            pass
     """
     
     # Required: Identifies this hook in task configuration
@@ -72,6 +96,9 @@ class Hook(ABC):
     
     # Public: Control execution scope (True = once per task, False = per host)
     run_once_per_task: bool = False
+    
+    # Optional: Dict of exception classes to handler method names for custom handling
+    exception_handlers: dict[type[Exception], str] = {}
     
     def __init__(self, value: Any = None):
         """Initialize hook with configuration value.
