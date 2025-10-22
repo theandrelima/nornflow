@@ -50,14 +50,29 @@ def hook_delegator(func: Callable) -> Callable:
             if hasattr(hook, method_name):
                 hook_method = getattr(hook, method_name)
                 
-                # Check execution scope for instance methods
-                if method_name.startswith('subtask_instance_') and hook.run_once_per_task:
+                # Check if the hook should execute for this task (enforces run_once_per_task)
+                if not hook.should_execute(task):
                     continue
                     
                 try:
                     hook_method(*args, **kwargs)
                 except Exception as e:
-                    raise
+                    # Check for hook-specific exception handlers
+                    if hasattr(hook, 'exception_handlers') and hook.exception_handlers:
+                        for exc_class, handler_name in hook.exception_handlers.items():
+                            if isinstance(e, exc_class):
+                                # Call the handler method on the hook instance
+                                if hasattr(hook, handler_name):
+                                    handler = getattr(hook, handler_name)
+                                    handler(e, task, args)
+                                    # Handled, do not re-raise
+                                    break
+                        else:
+                            # Exception not handled by hook, re-raise
+                            raise
+                    else:
+                        # No exception handlers defined, re-raise
+                        raise
         
         # Call the original method
         return func(self, *args, **kwargs)
