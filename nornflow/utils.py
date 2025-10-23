@@ -290,7 +290,7 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
             check_for_jinja2_recursive(item, f"{path}[{idx}]")
 
 
-def _format_variable_value(key: str, value: Any) -> str:
+def format_variable_value(key: str, value: Any) -> str:
     """
     Format a variable value for display, masking protected keywords and adjusting tuple brackets.
 
@@ -368,7 +368,7 @@ def print_workflow_overview(
             # Sort workflow variables by name lexicographically
             for k, v in sorted(workflow_vars.items(), key=lambda item: item[0]):
                 vars_table.add_row(
-                    "w", k, _format_variable_value(k, v), type_mapping.get(type(v).__name__, type(v).__name__)
+                    "w", k, format_variable_value(k, v), type_mapping.get(type(v).__name__, type(v).__name__)
                 )
         if vars:
             # Sort CLI/programmatic variables by name lexicographically
@@ -376,7 +376,7 @@ def print_workflow_overview(
                 vars_table.add_row(
                     "c*",
                     k,
-                    _format_variable_value(k, v),
+                    format_variable_value(k, v),
                     type_mapping.get(type(v).__name__, type(v).__name__),
                 )
 
