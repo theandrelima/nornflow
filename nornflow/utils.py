@@ -1,5 +1,6 @@
 import importlib
 import inspect
+import logging
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -28,6 +29,8 @@ from nornflow.exceptions import (
     ProcessorError,
     WorkflowError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_failure_strategy(
@@ -90,6 +93,75 @@ def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
         ) from e
 
     return module
+
+
+def import_modules_recursively(dir_path: Path) -> list[str]:
+    """
+    Recursively import all Python modules under a directory.
+
+    Finds all .py files in the directory and subdirectories, converts them to
+    module names, and imports them. Skips __init__.py files. Logs errors for
+    failed imports but continues with others.
+
+    Args:
+        dir_path: The root directory to search for modules.
+
+    Returns:
+        List of successfully imported module names.
+    """
+    imported_modules = []
+    
+    # Get the current working directory to calculate relative paths
+    cwd = Path.cwd()
+    
+    for py_file in dir_path.rglob("*.py"):
+        if py_file.name == "__init__.py":
+            continue
+        try:
+            # Calculate relative path from CWD
+            try:
+                relative_path = py_file.relative_to(cwd)
+            except ValueError:
+                # If the path is not relative to CWD, skip it
+                logger.warning(f"Skipping {py_file}: not relative to current directory")
+                continue
+                
+            module_name = path_to_module_name(relative_path)
+            
+            # Try direct import first (if module is in sys.path)
+            try:
+                importlib.import_module(module_name)
+                imported_modules.append(module_name)
+                logger.debug(f"Imported module: {module_name}")
+            except ImportError:
+                # If direct import fails, try importing from file path
+                import_module_from_path(module_name, str(py_file))
+                imported_modules.append(module_name)
+                logger.debug(f"Imported module from path: {module_name}")
+                
+        except Exception as e:
+            logger.error(f"Failed to import module {py_file}: {e}")
+    
+    return imported_modules
+
+
+def path_to_module_name(py_file: Path) -> str:
+    """
+    Convert a Python file path to a module name.
+
+    Assumes the file is importable from the project root.
+
+    Args:
+        py_file: The Python file path.
+
+    Returns:
+        The module name as a dotted string.
+    """
+    # Remove .py extension and convert path parts to module name
+    parts = py_file.with_suffix("").parts
+    # Filter out any empty parts
+    parts = [p for p in parts if p]
+    return ".".join(parts)
 
 
 def is_nornir_task(attr: Callable) -> bool:
