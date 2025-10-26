@@ -13,16 +13,14 @@ from nornflow.vars.manager import NornFlowVariablesManager
 
 
 class TestTaskModel:
-    @patch("nornflow.hooks.loader.load_hooks", return_value=([], []))
+    @patch("nornflow.hooks.loader.load_hooks", return_value=[])
     def test_run_success(self, mock_load_hooks, mock_nornir_manager, mock_vars_manager):
         """Test successful task execution."""
         task = TaskModel(name="test_task", args={"arg1": "value1"})
         
-        # Setup the mock properly with filter and run methods
-        mock_filtered_nornir = MagicMock()
+        # Setup the mock for nornir.run
         mock_result = MagicMock(spec=AggregatedResult)
-        mock_filtered_nornir.run.return_value = mock_result
-        mock_nornir_manager.nornir.filter.return_value = mock_filtered_nornir
+        mock_nornir_manager.nornir.run.return_value = mock_result
         mock_nornir_manager.nornir.inventory.hosts = {"host1": MagicMock()}
         
         tasks_catalog = {"test_task": MagicMock()}
@@ -30,9 +28,9 @@ class TestTaskModel:
         result = task.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
 
         assert result == mock_result
-        mock_filtered_nornir.run.assert_called_once_with(task=tasks_catalog["test_task"], arg1="value1")
+        mock_nornir_manager.nornir.run.assert_called_once_with(task=tasks_catalog["test_task"], arg1="value1")
 
-    @patch("nornflow.hooks.loader.load_hooks", return_value=([], []))
+    @patch("nornflow.hooks.loader.load_hooks", return_value=[])
     def test_run_task_not_found(self, mock_load_hooks, mock_nornir_manager, mock_vars_manager):
         """Test error when task not in catalog."""
         task = TaskModel(name="missing_task")
@@ -41,16 +39,14 @@ class TestTaskModel:
         with pytest.raises(TaskError, match="Task function for 'missing_task' not found"):
             task.run(mock_nornir_manager, mock_vars_manager, {})
 
-    @patch("nornflow.hooks.loader.load_hooks", return_value=([], []))
+    @patch("nornflow.hooks.loader.load_hooks", return_value=[])
     def test_run_with_no_args(self, mock_load_hooks, mock_nornir_manager, mock_vars_manager):
         """Test execution with no args."""
         task = TaskModel(name="test_task", args=None)
         
-        # Setup the mock properly
-        mock_filtered_nornir = MagicMock()
+        # Setup the mock for nornir.run
         mock_result = MagicMock(spec=AggregatedResult)
-        mock_filtered_nornir.run.return_value = mock_result
-        mock_nornir_manager.nornir.filter.return_value = mock_filtered_nornir
+        mock_nornir_manager.nornir.run.return_value = mock_result
         mock_nornir_manager.nornir.inventory.hosts = {"host1": MagicMock()}
         
         tasks_catalog = {"test_task": MagicMock()}
@@ -58,18 +54,16 @@ class TestTaskModel:
         result = task.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
 
         assert result == mock_result
-        mock_filtered_nornir.run.assert_called_once_with(task=tasks_catalog["test_task"])
+        mock_nornir_manager.nornir.run.assert_called_once_with(task=tasks_catalog["test_task"])
 
-    @patch("nornflow.hooks.loader.load_hooks", return_value=([], []))
+    @patch("nornflow.hooks.loader.load_hooks", return_value=[])
     def test_run_with_empty_args(self, mock_load_hooks, mock_nornir_manager, mock_vars_manager):
         """Test execution with empty args."""
         task = TaskModel(name="test_task", args={})
         
-        # Setup the mock properly
-        mock_filtered_nornir = MagicMock()
+        # Setup the mock for nornir.run
         mock_result = MagicMock(spec=AggregatedResult)
-        mock_filtered_nornir.run.return_value = mock_result
-        mock_nornir_manager.nornir.filter.return_value = mock_filtered_nornir
+        mock_nornir_manager.nornir.run.return_value = mock_result
         mock_nornir_manager.nornir.inventory.hosts = {"host1": MagicMock()}
         
         tasks_catalog = {"test_task": MagicMock()}
@@ -77,7 +71,7 @@ class TestTaskModel:
         result = task.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
 
         assert result == mock_result
-        mock_filtered_nornir.run.assert_called_once_with(task=tasks_catalog["test_task"])
+        mock_nornir_manager.nornir.run.assert_called_once_with(task=tasks_catalog["test_task"])
 
     def test_validate_args(self):
         """Test args validation converts to hashable."""
@@ -93,8 +87,8 @@ class TestTaskModel:
         # where keys are hook names and values are the hook parameter values
         task = TaskModel(name="test_task", hooks=HashableDict({"set_to": "var_name"}))
         
-        # The task's get_post_hooks method should return the hook instances
-        hooks = task.get_post_hooks()
+        # The task's get_hooks method should return the hook instances
+        hooks = task.get_hooks()
         
         # Check that a SetToHook was created and is in the hooks
         set_to_hooks = [hook for hook in hooks if isinstance(hook, SetToHook)]
@@ -110,11 +104,16 @@ class TestTaskModel:
         assert task1.id is not None
         assert task2.id is not None
 
-    @patch("nornflow.hooks.loader.load_hooks", return_value=([], []))
+    @patch("nornflow.hooks.loader.load_hooks", return_value=[])
     def test_run_with_no_hosts(self, mock_load_hooks, mock_nornir_manager, mock_vars_manager):
         """Test execution when no hosts are available."""
         task = TaskModel(name="test_task")
         mock_nornir_manager.nornir.inventory.hosts = {}
+        
+        # Setup the mock for nornir.run to return an empty AggregatedResult
+        empty_result = AggregatedResult(name="test_task")
+        mock_nornir_manager.nornir.run.return_value = empty_result
+        
         tasks_catalog = {"test_task": MagicMock()}
 
         result = task.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)

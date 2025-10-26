@@ -307,7 +307,7 @@ class TestFailureStrategyProcessor:
         
         mock_nornir.data.reset_failed_hosts.assert_not_called()
 
-    @patch("nornflow.builtins.processors.tabulate")
+    @patch("nornflow.builtins.processors.failure_strategy_processor.tabulate")
     @patch("builtins.print")
     def test_print_final_workflow_summary_with_errors(self, mock_print, mock_tabulate):
         """Test print_final_workflow_summary prints error table."""

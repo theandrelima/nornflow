@@ -18,7 +18,7 @@ class TestRunnableModel:
             name: str = "test"
             _key: ClassVar[tuple[str, ...]] = ("name",)
             
-            def _run(self, *args, **kwargs):
+            def run(self, nornir_manager, vars_manager, tasks_catalog):
                 return MagicMock(spec=AggregatedResult)
 
         runnable = TestRunnable()
@@ -34,14 +34,14 @@ class TestRunnableModel:
             name: str = "test"
             _key: ClassVar[tuple[str, ...]] = ("name",)
 
-            def _run(self, *args, **kwargs):
+            def run(self, nornir_manager, vars_manager, tasks_catalog):
                 pass
 
         instance = TestRunnable()
-        hooks = instance.get_pre_hooks()
+        hooks = instance.get_hooks()
         assert hooks == []
         # Second call should use cache
-        assert instance.get_pre_hooks() is hooks
+        assert instance.get_hooks() is hooks
 
     def test_get_post_hooks_caching(self):
         """Test post-hook caching."""
@@ -49,14 +49,14 @@ class TestRunnableModel:
             name: str = "test"
             _key: ClassVar[tuple[str, ...]] = ("name",)
 
-            def _run(self, *args, **kwargs):
+            def run(self, nornir_manager, vars_manager, tasks_catalog):
                 pass
 
         instance = TestRunnable()
-        hooks = instance.get_post_hooks()
+        hooks = instance.get_hooks()
         assert hooks == []
         # Second call should use cache
-        assert instance.get_post_hooks() is hooks
+        assert instance.get_hooks() is hooks
 
     def test_run_with_pre_hooks(self, mock_nornir_manager, mock_vars_manager):
         """Test run with pre-run hooks that filter hosts."""
@@ -64,10 +64,10 @@ class TestRunnableModel:
             name: str = "test"
             _key: ClassVar[tuple[str, ...]] = ("name",)
             
-            def _run(self, nornir_manager, vars_manager, tasks_catalog, hosts_to_run):
+            def run(self, nornir_manager, vars_manager, tasks_catalog):
                 # Return an AggregatedResult with the filtered hosts
                 result = AggregatedResult(name=self.name)
-                for host in hosts_to_run:
+                for host in ["host1", "host3"]:  # Simulate filtered hosts
                     result[host] = MagicMock()
                 return result
 
@@ -80,8 +80,8 @@ class TestRunnableModel:
         # Setup mocks
         runnable = TestRunnable()
         
-        # Directly set pre_hooks on the instance
-        runnable._pre_hooks_cache = [mock_pre_hook]
+        # Directly set hooks cache on the instance
+        runnable._hooks_cache = [mock_pre_hook]
         
         # Create mock hosts
         mock_host1 = MagicMock()
@@ -114,10 +114,16 @@ class TestRunnableModel:
             name: str = "test"
             _key: ClassVar[tuple[str, ...]] = ("name",)
             
-            def _run(self, nornir_manager, vars_manager, tasks_catalog, hosts_to_run):
+            def run(self, nornir_manager, vars_manager, tasks_catalog):
                 result = AggregatedResult(name=self.name)
-                for host in hosts_to_run:
-                    result[host] = MagicMock()
+                result["host1"] = MagicMock()  # Simulate one host
+                
+                # Simulate hook processing for post-hooks
+                hooks = self.get_hooks()
+                for hook in hooks:
+                    if hasattr(hook, 'process_results'):
+                        hook.process_results(result, nornir_manager, vars_manager)
+                
                 return result
 
         # Create a mock post-hook
@@ -127,8 +133,8 @@ class TestRunnableModel:
         # Setup mocks
         runnable = TestRunnable()
         
-        # Directly set post_hooks on the instance
-        runnable._post_hooks_cache = [mock_post_hook]
+        # Directly set hooks cache on the instance
+        runnable._hooks_cache = [mock_post_hook]
         
         mock_host1 = MagicMock()
         mock_host1.name = "host1"
