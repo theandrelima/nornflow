@@ -287,7 +287,7 @@ class TestNornFlowExecution:
         wf.description = None
 
         with patch("nornflow.nornflow.NornFlow._initialize_nornir"), patch.object(
-            NornFlow, "_init_variable_manager", return_value=MagicMock()
+            NornFlow, "_get_variable_manager", return_value=MagicMock()
         ):
             nf = NornFlow(workflow=wf)
             mgr = MagicMock()
