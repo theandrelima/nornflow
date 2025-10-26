@@ -63,6 +63,7 @@ NORNFLOW_SETTINGS_OPTIONAL = {
     "local_tasks_dirs": [],
     "local_workflows_dirs": [],
     "local_filters_dirs": [],
+    "local_hooks_dirs": [],
     "imported_packages": [],
     "processors": [],
     "vars_dir": "vars",
@@ -76,6 +77,7 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "local_tasks_dirs",
     "local_workflows_dirs",
     "local_filters_dirs",
+    "local_hooks_dirs",
     "imported_packages",
 )
 

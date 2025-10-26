@@ -22,6 +22,7 @@ from nornflow.models import WorkflowModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import (
+    import_modules_recursively,
     is_nornir_filter,
     is_nornir_task,
     is_workflow_file,
@@ -65,10 +66,15 @@ class NornFlow:
     4. Default processor if none of the above are specified
 
     Variable precedence follows this order (highest to lowest priority):
-    1. Vars (passed via command line or set programmatically as overrides)
-    2. Workflow variables (defined in workflow file)
-    3. Environment variables
-    4. Variables from external files
+    1. Runtime Variables (dynamically set by the 'set' task or 'set_to' hook)
+    2. CLI Variables (passed via --vars option or set programmatically)
+    3. Inline Workflow Variables (defined in workflow YAML under vars: section)
+    4. Domain-specific Default Variables (from vars_dir/<domain>/defaults.yaml)
+    5. Default Variables (from vars_dir/defaults.yaml)
+    6. Environment Variables (prefixed with NORNFLOW_VAR_)
+
+    The 'host.' namespace provides read-only access to Nornir inventory data
+    (e.g., {{ host.name }}, {{ host.platform }}).
     """
 
     def __init__(
@@ -88,7 +94,7 @@ class NornFlow:
             nornflow_settings: NornFlow configuration settings object
             workflow: Pre-configured WorkflowModel instance or workflow name string (optional)
             processors: List of processor configurations to override default processors
-            vars: Variables with highest precedence in the resolution chain.
+            vars: Variables with highest precedence in the variable resolution chain.
                 While named "vars" due to their primary source being command-line
                 arguments, these serve as a universal override mechanism that can be:
                 - Parsed from actual CLI arguments (--vars)
@@ -111,6 +117,7 @@ class NornFlow:
             self._initialize_instance_vars(vars, filters, failure_strategy, processors)
             self._initialize_catalogs()
             self._initialize_processors()
+            self._initialize_hooks()
             # Workflow is optional; not always do we want a NornFlow instance with
             # an executable workflow (e.g., for informational commands like 'show')
             if workflow is not None:
@@ -146,6 +153,8 @@ class NornFlow:
         self._processors = processors
         self._workflow = None
         self._workflow_path = None
+        # System processors are initialized lazily in their property getters
+        # when needed during workflow execution, not during __init__
         self._var_processor = None
         self._failure_strategy_processor = None
         self._hook_processor = None
@@ -158,6 +167,13 @@ class NornFlow:
         self._load_tasks_catalog()
         self._load_filters_catalog()
         self._load_workflows_catalog()
+
+    def _initialize_hooks(self) -> None:
+        """Initialize hooks by importing modules from configured directories."""
+        for dir_path in self.settings.local_hooks_dirs:
+            dir_path_obj = Path(dir_path)
+            if dir_path_obj.exists():
+                import_modules_recursively(dir_path_obj)
 
     def _initialize_nornir(self) -> None:
         """Initialize Nornir configurations and manager."""
@@ -176,8 +192,23 @@ class NornFlow:
 
     def _initialize_processors(self) -> None:
         """
-        Load processors with proper precedence and store them in ``self._processors``.
-        Precedence:
+        Load USER-CONFIGURABLE processors with proper precedence and store them in `self._processors`.
+        
+        This method ONLY handles processors that users can configure via:
+        - CLI arguments (--processors)
+        - Settings file (processors: section)
+        - Default processor (if none specified)
+        
+        System processors (NornFlowVariableProcessor, NornFlowHookProcessor, 
+        NornFlowFailureStrategyProcessor) are NOT initialized here because:
+        1. They require workflow context that may not be available during __init__
+        2. They have fixed positions in the processor chain (first, second, last)
+        3. They are always present and cannot be overridden by users
+        
+        System processors are added later in _with_processors() when a workflow
+        is being executed and all necessary context is available.
+        
+        Precedence for user-configurable processors:
         1. Processors passed through kwargs (likely from CLI)
         2. Processors from settings
         3. DefaultNornFlowProcessor
@@ -280,6 +311,8 @@ class NornFlow:
         if not isinstance(value, dict):
             raise CoreError(f"Vars must be a dictionary, got {type(value).__name__}", component="NornFlow")
         self._vars = value
+        # Reset var processor since it depends on vars
+        self._var_processor = None
 
     @property
     def filters(self) -> dict[str, Any]:
@@ -349,6 +382,22 @@ class NornFlow:
             )
         self._failure_strategy = value
         self._failure_strategy_processor = None
+
+    @property
+    def var_processor(self) -> NornFlowVariableProcessor | None:
+        """
+        Get the variable processor, creating it lazily if needed.
+        
+        This processor requires workflow context to initialize the variable manager.
+        Returns None if no workflow is set, otherwise creates and caches the processor.
+
+        Returns:
+            NornFlowVariableProcessor | None: The variable processor instance or None if no workflow.
+        """
+        if self._var_processor is None and self.workflow is not None:
+            vars_manager = self._get_variable_manager()
+            self._var_processor = NornFlowVariableProcessor(vars_manager)
+        return self._var_processor
 
     @property
     def failure_strategy_processor(self) -> NornFlowFailureStrategyProcessor:
@@ -470,6 +519,8 @@ class NornFlow:
                 component="NornFlow",
             )
 
+        # Reset system processors when workflow changes as they depend on workflow context
+        self._var_processor = None
         self._failure_strategy_processor = None
         self._hook_processor = None
 
@@ -744,7 +795,6 @@ class NornFlow:
         if len(filter_values) != len(param_names):
             raise WorkflowError(f"Filter expects {len(param_names)} parameters, got {len(filter_values)}")
 
-        # Dict built in one shot – satisfies PERF403/416.
         filter_kwargs: dict[str, Any] = dict(zip(param_names, filter_values, strict=False))
         filter_kwargs["filter_func"] = filter_func
         return filter_kwargs
@@ -788,7 +838,7 @@ class NornFlow:
                 component="NornFlow",
             ) from e
 
-    def _init_variable_manager(self) -> NornFlowVariablesManager:
+    def _get_variable_manager(self) -> NornFlowVariablesManager:
         """
         Initialize the variable manager with workflow context.
 
@@ -810,35 +860,40 @@ class NornFlow:
     ) -> None:
         """
         Apply processors to the Nornir instance based on configuration.
-
-        IMPORTANT: Always adds NornFlowVariableProcessor as the first processor
-        to ensure host context is available for variable resolution.
-        Always adds NornFlowHookProcessor as the second processor
-        to handle hook execution during task lifecycle.
-        Always adds NornFlowFailureStrategyProcessor as the last processor
-        to handle error policies during task execution.
-
-        This method handles the processor selection logic:
-        1. Always add NornFlowVariableProcessor first (for variable resolution)
-        2. Always add NornFlowHookProcessor second (for hook execution)
-        3. Use workflow-specific processors from self._workflow.processors if defined
-        4. Otherwise use the passed processors parameter
-        5. If neither exists, use NornFlow's global processors (self._processors)
-        6. Always add NornFlowFailureStrategyProcessor last (for failure strategy handling)
+        
+        This method handles TWO distinct types of processors:
+        
+        1. SYSTEM PROCESSORS (always present, fixed positions):
+           - NornFlowVariableProcessor: ALWAYS first (provides variable resolution)
+           - NornFlowHookProcessor: ALWAYS second (handles hook execution)
+           - NornFlowFailureStrategyProcessor: ALWAYS last (handles error policies)
+        
+        2. USER-CONFIGURABLE PROCESSORS (optional, middle position):
+           - From workflow definition (self._workflow.processors)
+           - From passed parameter (processors)
+           - From NornFlow settings (self._processors initialized in _initialize_processors)
+        
+        System processors are initialized lazily via their properties when first accessed.
+        The var_processor is special as it requires workflow context to be available.
+        
+        Processor chain order:
+        1. NornFlowVariableProcessor (system - variable resolution)
+        2. NornFlowHookProcessor (system - hook execution)
+        3. User-configurable processors (custom business logic)
+        4. NornFlowFailureStrategyProcessor (system - error handling)
 
         Args:
             nornir_manager: The NornirManager instance to apply processors to
             processors: List of processors to apply if no workflow-specific processors defined
         """
-        vars_manager = self._init_variable_manager()
-        self._var_processor = NornFlowVariableProcessor(vars_manager)
+        # Build processor chain with system processors at fixed positions
+        # The var_processor property will handle lazy initialization if needed
+        all_processors = [
+            self.var_processor,
+            self.hook_processor,
+        ]
 
-        # Always add variable processor first
-        all_processors = [self._var_processor]
-        
-        # Always add hook processor second
-        all_processors.append(self.hook_processor)
-
+        # Add user-configurable processors in the middle
         if self.workflow and self.workflow.processors:
             try:
                 workflow_processors = []
@@ -855,7 +910,8 @@ class NornFlow:
         elif self.processors:
             all_processors.extend(self.processors)
 
-        all_processors.append(self.failure_strategy_processor)
+        # Add failure strategy processor last
+        all_processors.append(self.failure_strategy_processor)  # Always last for error handling
 
         nornir_manager.apply_processors(all_processors)
 
@@ -875,7 +931,7 @@ class NornFlow:
 
                 task.run(
                     nornir_manager=self.nornir_manager,
-                    vars_manager=self._var_processor.vars_manager,
+                    vars_manager=self.var_processor.vars_manager,
                     tasks_catalog=dict(self.tasks_catalog),
                 )
 
