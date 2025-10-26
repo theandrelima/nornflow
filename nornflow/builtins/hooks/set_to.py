@@ -33,10 +33,8 @@ class SetToHook(Hook):
         """Validate that set_to is not used with incompatible tasks."""
         invalid_tasks = {"set", "echo", "set_to"}
         if task_model.name in invalid_tasks:
-            raise HookValidationError(
-                f"Hook '{self.__class__.__name__}' cannot be used with task '{task_model.name}'. "
-                f"Incompatible tasks: {invalid_tasks}"
-            )
+            errors = [("task_compatibility", f"Hook '{self.__class__.__name__}' cannot be used with task '{task_model.name}'. Incompatible tasks: {invalid_tasks}")]
+            raise HookValidationError("SetToHook", errors)
 
     def task_instance_completed(self, task: Task, host: Host, result: MultiResult) -> None:
         """Store the task result in a runtime variable for this host."""
