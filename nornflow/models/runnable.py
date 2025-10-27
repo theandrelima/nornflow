@@ -8,6 +8,7 @@ from pydantic import field_validator
 from pydantic_serdes.custom_collections import HashableDict
 from pydantic_serdes.utils import convert_to_hashable
 
+from nornflow.builtins.processors import NornFlowHookProcessor
 from nornflow.hooks import Hook
 from nornflow.hooks.loader import load_hooks
 from nornflow.hooks.registry import HOOK_REGISTRY
@@ -132,7 +133,6 @@ class RunnableModel(NornFlowBaseModel, ABC):
         
         # Try to get the NornFlowHookProcessor from the Nornir instance
         try:
-            from nornflow.builtins.processors import NornFlowHookProcessor
             hook_processor = nornir_manager.get_processor_by_type(NornFlowHookProcessor)
             
             # Prepare the context for this task
