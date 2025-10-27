@@ -36,7 +36,7 @@ local_filters_dirs:
   - "filters"
 
 # List of paths to directories containing custom NornFlow Hook classes. It defaults to a 'hooks' directory in
-# the root of the project. NonrFlow will just make sure to import every .py file recursevely found inder each
+# the root of the project. NonrFlow will just make sure to import every .py file recursevely found in each
 # directory listed here. This is to trigger the Hook classes registration.
 local_hooks_dirs:
   - "hooks"
