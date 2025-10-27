@@ -111,22 +111,24 @@ def import_modules_recursively(dir_path: Path) -> list[str]:
     """
     imported_modules = []
     
-    # Get the current working directory to calculate relative paths
-    cwd = Path.cwd()
+    # Ensure we're working with resolved absolute paths to avoid path issues
+    dir_path = dir_path.resolve()
+    cwd = Path.cwd().resolve()
     
     for py_file in dir_path.rglob("*.py"):
         if py_file.name == "__init__.py":
             continue
+            
+        py_file = py_file.resolve()
+        
         try:
-            # Calculate relative path from CWD
+            # Try to calculate relative path from CWD first
             try:
                 relative_path = py_file.relative_to(cwd)
+                module_name = path_to_module_name(relative_path)
             except ValueError:
-                # If the path is not relative to CWD, skip it
-                logger.warning(f"Skipping {py_file}: not relative to current directory")
-                continue
-                
-            module_name = path_to_module_name(relative_path)
+                # If file is outside CWD, create a unique module name
+                module_name = f"hook_{py_file.stem}_{abs(hash(str(py_file))) % 100000}"
             
             # Try direct import first (if module is in sys.path)
             try:

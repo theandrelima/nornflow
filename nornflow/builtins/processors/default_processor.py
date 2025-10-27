@@ -21,22 +21,53 @@ output_lock = threading.Lock()
 
 class DefaultNornFlowProcessor(Processor):
     """Default processor for NornFlow that tracks execution time and statistics."""
+    
+    supports_shush_hook = True
 
     def __init__(self):
         """Initialize processor with tracking variables for timing and statistics."""
         super().__init__()
-        self.start_times = {}  # Dictionary to track start times by (task_name, host)
-        self.workflow_start_time = None  # Track the overall workflow start time
-        self.task_count = 0  # Count of unique tasks processed
-        self.task_executions = 0  # Count of total task executions (tasks * hosts)
-        self.tasks_completed = 0  # Count of unique tasks completed
-        self.successful_executions = 0  # Count of successfully completed task executions
-        self.failed_executions = 0  # Count of failed task executions
-        self.print_summary_after_each_task = False  # Default to only print at end
+        self.start_times = {}
+        self.workflow_start_time = None
+        self.task_count = 0
+        self.task_executions = 0
+        self.tasks_completed = 0
+        self.successful_executions = 0
+        self.failed_executions = 0
+        self.print_summary_after_each_task = False
+
+    def _is_output_suppressed(self, task: Task) -> bool:
+        """Check if output should be suppressed for the given task.
+        
+        Args:
+            task: The Nornir task to check
+            
+        Returns:
+            True if output should be suppressed, False otherwise
+        """
+        return (
+            hasattr(task.nornir, '_nornflow_suppressed_tasks') and 
+            task.name in task.nornir._nornflow_suppressed_tasks
+        )
+
+    def _format_task_output(self, result: Result, suppress_output: bool) -> str:
+        """Format the output section of a task result.
+        
+        Args:
+            result: The task result containing output data
+            suppress_output: Whether to suppress the actual output content
+            
+        Returns:
+            Formatted output string with appropriate styling
+        """
+        if not suppress_output and result.result:
+            return f"\n{Fore.WHITE}Output:\n{result.result}"
+        elif suppress_output:
+            return f"\n{Fore.WHITE}Output: {Style.DIM}[Shushed!]{Style.RESET_ALL}"
+        return ""
 
     def task_started(self, task: Task) -> None:
         """Record task start time and print header information."""
-        # Track the first task as the start of the workflow
         if not self.workflow_start_time:
             self.workflow_start_time = datetime.now()
             with output_lock:
@@ -52,11 +83,10 @@ class DefaultNornFlowProcessor(Processor):
 
     def task_instance_started(self, task: Task, host: Host) -> None:
         """Record start time for a specific task on a specific host."""
-        # Record the start time with high precision
         start_time = datetime.now()
         with output_lock:
             self.start_times[(task.name, host)] = start_time
-        self.task_executions += 1  # Count each task execution
+        self.task_executions += 1
 
     def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
         """Process task completion and print results for a specific host."""
@@ -70,20 +100,17 @@ class DefaultNornFlowProcessor(Processor):
         else:
             self.failed_executions += 1
 
-        # Get the start time from our dictionary
-        start_time = self.start_times.get(
-            (task.name, host), finish_time
-        )  # Default to finish time if not found
-
-        # Format times to show hours:minutes:seconds.milliseconds
-        start_str = start_time.strftime("%H:%M:%S.%f")[:-3]  # Trim microseconds to milliseconds
+        start_time = self.start_times.get((task.name, host), finish_time)
+        start_str = start_time.strftime("%H:%M:%S.%f")[:-3]
         finish_str = finish_time.strftime("%H:%M:%S.%f")[:-3]
 
         # Calculate duration
         duration = finish_time - start_time
         duration_ms = duration.total_seconds() * 1000
 
-        # Use the lock to ensure this entire block prints together
+        suppress_output = self._is_output_suppressed(task)
+        output_section = self._format_task_output(result, suppress_output)
+
         with output_lock:
             print(f"{Fore.WHITE}{'-' * 80}")
             print(
@@ -93,11 +120,12 @@ class DefaultNornFlowProcessor(Processor):
                 f"{Fore.WHITE}| {status_color}Status: {status}"
             )
             print(f"{Fore.BLUE}{start_str} - {finish_str} ({duration_ms:.0f}ms)")
-            if result.result:
-                print(f"\n{Fore.WHITE}Output:\n{result.result}")
+            
+            if output_section:
+                print(output_section)
+                
             print(f"{Fore.WHITE}{'-' * 80}")
 
-            # Clean up our dictionary
             if (task.name, host) in self.start_times:
                 del self.start_times[(task.name, host)]
 
@@ -109,18 +137,10 @@ class DefaultNornFlowProcessor(Processor):
         pass
 
     def subtask_instance_completed(self, task: Task, host: Host, result: Result) -> None:
-        # Only print task results if you really need them
         pass
 
     def subtask_instance_failed(self, task: Task, host: Host, result: Result) -> None:
-        # Print failed subtasks for debugging purposes
         pass
-    
-        with output_lock:
-            print(f"{Fore.RED}{'-' * 80}")
-            print(f"{Style.BRIGHT}{Fore.RED}SUBTASK FAILED: {task.name} on {host} at {finish_time}")
-            print(f"{Fore.WHITE}Error:\n{result.result}")
-            print(f"{Fore.RED}{'-' * 80}")
 
     def task_completed(self, task: Task, result: Result) -> None:
         self.tasks_completed += 1
@@ -142,10 +162,7 @@ class DefaultNornFlowProcessor(Processor):
         self.print_workflow_summary()
 
     def print_workflow_summary(self) -> None:
-        """
-        Generate and print a summary of the workflow execution with timing,
-        statistics and success metrics.
-        """
+        """Generate and print a summary of the workflow execution with timing, statistics and success metrics."""
         if not self.workflow_start_time:
             return
 

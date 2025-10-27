@@ -3,8 +3,8 @@
 This subpackage contains built-in hook implementations for NornFlow.
 """
 
-from .output import SetPrintOutputHook
+from .shush import ShushHook
 from .predicate import PredicateHook, SkipHostError
 from .set_to import SetToHook
 
-__all__ = ["SetPrintOutputHook", "SetToHook", "PredicateHook", "SkipHostError"]
+__all__ = ["ShushHook", "SetToHook", "PredicateHook", "SkipHostError"]

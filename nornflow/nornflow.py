@@ -115,9 +115,9 @@ class NornFlow:
             self._initialize_settings(nornflow_settings, kwargs)
             self._initialize_nornir()
             self._initialize_instance_vars(vars, filters, failure_strategy, processors)
+            self._initialize_hooks()
             self._initialize_catalogs()
             self._initialize_processors()
-            self._initialize_hooks()
             # Workflow is optional; not always do we want a NornFlow instance with
             # an executable workflow (e.g., for informational commands like 'show')
             if workflow is not None:
