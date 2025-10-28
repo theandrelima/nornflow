@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from nornir.core.inventory import Host
 from nornir.core.processor import Processor
@@ -17,89 +17,95 @@ class NornFlowHookProcessor(Processor):
     hook executions. It extracts hook information from task context
     and calls appropriate hook methods at each lifecycle point.
     
-    Context Injection:
+    Context Management:
     ==================
-    The NornFlowHookProcessor receives external NornFlow-specific data (e.g., task_model, vars_manager)
-    through a pre-registration mechanism. Before a task is run, RunnableModel registers the context
-    with this processor, associating it with the task function. When Nornir creates the Task
-    instance and calls processor methods, we match the task.task (the function) to retrieve
-    the registered context.
+    The processor manages two types of context:
     
-    Hook Retrieval Efficiency:
-    ==========================
-    _get_hooks_for_task() is called in every processor method because:
-    1. Hooks are task-specific - different tasks may have different hook configurations
-    2. Context is registered per-task function before execution
-    3. Nornir's processor architecture doesn't provide task-level state persistence
-    4. The overhead is minimal: dictionary lookup + list retrieval, cached per task
-    5. For scale (100k hosts), this is negligible compared to actual task execution
+    1. Workflow Context (set once during initialization):
+       - vars_manager: Variable resolution system
+       - nornir_manager: Nornir operations manager
+       - tasks_catalog: Available tasks
+       - filters_catalog: Available inventory filters
+       - workflows_catalog: Available workflows
     
-    Cache Cleanup:
+    2. Task-Specific Context (set once per task execution):
+       - task_model: The current TaskModel being executed
+       - hooks: List of Hook instances for this task
+    
+    The `context` property always returns the merged dictionary of both contexts.
+    Task-specific context is set at task start and cleared at task completion.
+    
+    Hook Retrieval:
     ==============
-    The _cleanup_task() method is needed because:
-    - The processor maintains caches to avoid repeated context extraction
-    - Without cleanup, these caches would grow indefinitely during workflow execution
-    - Cleanup happens in task_completed() when the task finishes across all hosts
+    Hooks are retrieved from the current task-specific context. The processor
+    calls hook methods at appropriate lifecycle points, injecting the merged
+    context into each hook's _current_context before execution.
     """
     
-    def __init__(self):
-        """Initialize the hook processor."""
-        self._active_hooks: dict[int, list["Hook"]] = {}
-        self._task_contexts: dict[Callable, dict[str, Any]] = {}  # Maps task function to context
-    
-    def register_task_context(self, task_func: Callable, context: dict[str, Any]) -> None:
-        """Register context for a task function before execution.
+    def __init__(self, workflow_context: dict[str, Any] | None = None):
+        """Initialize the hook processor.
         
         Args:
-            task_func: The task function that will be executed
-            context: The NornFlow context containing hooks, vars_manager, etc.
+            workflow_context: Optional workflow-level context to set during initialization
         """
-        self._task_contexts[task_func] = context
+        # workflow_context is set once and remains for the duration of NornFlowHookProcessor
+        self.workflow_context = workflow_context or {}
+        # task_specific_context is ephemeral and re-set with each new task
+        self.task_specific_context = {}
     
-    def _get_context_for_task(self, task: Task) -> dict[str, Any]:
-        """Get the registered context for a task.
+    @property
+    def workflow_context(self) -> dict[str, Any]:
+        """Get the workflow-level context shared across all tasks.
         
-        Args:
-            task: The Nornir task
-            
         Returns:
-            The NornFlow context dict, or empty dict if not found
+            The workflow context dictionary
         """
-        # task.task is the actual function being executed
-        return self._task_contexts.get(task.task, {})
+        return self._workflow_context
     
-    def _get_hooks_for_task(self, task: Task) -> list["Hook"]:
-        """Get active hooks for a task from context.
+    @workflow_context.setter
+    def workflow_context(self, value: dict[str, Any]) -> None:
+        """Set the workflow-level context shared across all tasks.
         
         Args:
-            task: The Nornir task
-            
+            value: The workflow context dictionary containing vars_manager, catalogs, etc.
+        """
+        self._workflow_context = value
+    
+    @property
+    def task_specific_context(self) -> dict[str, Any]:
+        """Get the current task-specific context.
+        
+        Returns:
+            The task-specific context dictionary
+        """
+        return self._task_specific_context
+    
+    @task_specific_context.setter
+    def task_specific_context(self, value: dict[str, Any]) -> None:
+        """Set the task-specific context for the current task.
+        
+        Args:
+            value: The task-specific context containing task_model and hooks
+        """
+        self._task_specific_context = value
+    
+    @property
+    def context(self) -> dict[str, Any]:
+        """Get the combined context (workflow + task-specific).
+        
+        Returns:
+            Merged dictionary of workflow and task-specific contexts
+        """
+        return {**self.workflow_context, **self.task_specific_context}
+    
+    @property
+    def task_hooks(self) -> list["Hook"]:
+        """Get active hooks for the current task.
+        
         Returns:
             List of Hook instances for this task
         """
-        task_id = id(task)
-        
-        if task_id in self._active_hooks:
-            return self._active_hooks[task_id]
-        
-        context = self._get_context_for_task(task)
-        hooks = context.get('hooks', [])
-        self._active_hooks[task_id] = hooks
-        return hooks
-    
-    def _cleanup_task(self, task: Task) -> None:
-        """Clean up cached data for completed task.
-        
-        Args:
-            task: The completed task
-        """
-        task_id = id(task)
-        if task_id in self._active_hooks:
-            del self._active_hooks[task_id]
-        
-        # Clean up the registered context for this task function
-        if task.task in self._task_contexts:
-            del self._task_contexts[task.task]
+        return self.task_specific_context.get('hooks', [])
     
     @hook_delegator
     def task_started(self, task: Task) -> None:
@@ -108,7 +114,7 @@ class NornFlowHookProcessor(Processor):
     @hook_delegator
     def task_completed(self, task: Task, result: AggregatedResult) -> None:
         """Delegate to hooks' task_completed methods."""
-        self._cleanup_task(task)
+        self.task_specific_context = {}
     
     @hook_delegator
     def task_instance_started(self, task: Task, host: Host) -> None:

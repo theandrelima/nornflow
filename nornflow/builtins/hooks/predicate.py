@@ -44,10 +44,11 @@ class PredicateHook(Hook):
             return
 
         context = self.get_context(task)
-        predicate_func = self.value
+        print(context)
+        # predicate_func = self.value
 
-        if not predicate_func(host, context):
-            raise SkipHostError(f"Predicate failed for host '{host.name}'")
+        # if not predicate_func(host, context):
+        #     raise SkipHostError(f"Predicate failed for host '{host.name}'")
 
     def _handle_skip_host_error(self, exception, task, args) -> None:
         """Handle SkipHostError by marking the host as skipped."""

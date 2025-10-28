@@ -86,17 +86,13 @@ class TaskModel(RunnableModel):
         Raises:
             TaskError: If the task name is not found in the tasks catalog.
         """
-        # Get the task function from the catalog
         task_func = tasks_catalog.get(self.name)
         if not task_func:
             raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")
 
-        # Get clean task arguments from parent
         task_args = self.get_task_args()
         
-        # Register hook context and validate (parent handles all hook logic)
-        self.register_hook_context_and_validate(nornir_manager, vars_manager, task_func)
+        self.validate_hooks_and_set_task_context(nornir_manager, vars_manager, task_func)
 
-        # Execute the task with clean args
         result = nornir_manager.nornir.run(task=task_func, **task_args)
         return result
