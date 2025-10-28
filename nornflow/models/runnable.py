@@ -9,6 +9,7 @@ from pydantic_serdes.custom_collections import HashableDict
 from pydantic_serdes.utils import convert_to_hashable
 
 from nornflow.builtins.processors import NornFlowHookProcessor
+from nornflow.exceptions import ProcessorError
 from nornflow.hooks import Hook
 from nornflow.hooks.loader import load_hooks
 from nornflow.hooks.registry import HOOK_REGISTRY
@@ -35,10 +36,12 @@ class RunnableModel(NornFlowBaseModel, ABC):
     - Memory usage: O(unique_hooks) via Flyweight pattern
     - Thread safety: Guaranteed via locks during instance creation
     - Validation: Happens once per task, results cached
+    - Processor caching: Hook processor reference cached to avoid repeated lookups
     """
 
     hooks: HashableDict[str, Any] | None = None
     _hooks_cache: list[Hook] | None = None
+    _hook_processor_cache: NornFlowHookProcessor | None = None
 
     @field_validator("hooks", mode="before")
     @classmethod
@@ -65,7 +68,6 @@ class RunnableModel(NornFlowBaseModel, ABC):
         Returns:
             The created RunnableModel instance.
         """
-        # Extract hook fields from model_dict
         hooks_dict = {}
         keys_to_remove = []
         for key, value in model_dict.items():
@@ -73,15 +75,12 @@ class RunnableModel(NornFlowBaseModel, ABC):
                 hooks_dict[key] = value
                 keys_to_remove.append(key)
 
-        # Remove hook fields from model_dict to avoid Pydantic extras
         for key in keys_to_remove:
             del model_dict[key]
 
-        # Add hooks to model_dict if any were found
         if hooks_dict:
             model_dict["hooks"] = convert_to_hashable(hooks_dict)
 
-        # Proceed with standard Pydantic creation
         return super().create(model_dict, *args, **kwargs)
 
     def get_hooks(self) -> list[Hook]:
@@ -110,45 +109,44 @@ class RunnableModel(NornFlowBaseModel, ABC):
         """
         return {} if self.args is None else dict(self.args)
 
-    def register_hook_context_and_validate(
+    def validate_hooks_and_set_task_context(
         self,
         nornir_manager: NornirManager,
         vars_manager: NornFlowVariablesManager,
         task_func: Callable
     ) -> None:
-        """Register hook context with the processor and validate hooks.
+        """Validate hooks and set task-specific context in the hook processor.
 
-        This method encapsulates all hook-related setup:
+        This method:
         1. Validates hooks
-        2. Finds the NornFlowHookProcessor
-        3. Registers context for the upcoming task
+        2. Gets/caches the hook processor reference (once per RunnableModel lifecycle)
+        3. Sets task-specific context on the processor
 
         Args:
             nornir_manager: The Nornir manager instance.
             vars_manager: The variables manager instance.
             task_func: The task function that will be executed.
+
+        Raises:
+            ProcessorError: If hooks are configured but hook processor cannot be retrieved.
         """
-        # Validate hooks first
         self.run_hook_validations()
         
-        # Try to get the NornFlowHookProcessor from the Nornir instance
-        try:
-            hook_processor = nornir_manager.get_processor_by_type(NornFlowHookProcessor)
-            
-            # Prepare the context for this task
-            nornflow_context = {
-                "task_model": self,
-                "hooks": self.get_hooks(),
-                "vars_manager": vars_manager,
-                "nornir_manager": nornir_manager,
-            }
-            
-            # Register the context with the processor
-            hook_processor.register_task_context(task_func, nornflow_context)
-            
-        except Exception as e:
-            # If no hook processor found, hooks won't work but execution continues
-            logger.debug(f"Could not register hook context: {e}")
+        hooks = self.get_hooks()
+        
+        if not self._hook_processor_cache:
+            try:
+                self._hook_processor_cache = nornir_manager.get_processor_by_type(NornFlowHookProcessor)
+            except Exception as e:
+                raise ProcessorError(
+                    f"Hooks are configured but NornFlowHookProcessor could not be retrieved: {e}"
+                ) from e
+        
+        task_context = {
+            "task_model": self,
+            "hooks": hooks,
+        }
+        self._hook_processor_cache.task_specific_context = task_context
 
     @abstractmethod
     def run(

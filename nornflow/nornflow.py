@@ -394,8 +394,8 @@ class NornFlow:
         Returns:
             NornFlowVariableProcessor | None: The variable processor instance or None if no workflow.
         """
-        if self._var_processor is None and self.workflow is not None:
-            vars_manager = self._get_variable_manager()
+        if not self._var_processor and self.workflow:
+            vars_manager = self._create_variable_manager()
             self._var_processor = NornFlowVariableProcessor(vars_manager)
         return self._var_processor
 
@@ -414,13 +414,20 @@ class NornFlow:
     @property
     def hook_processor(self) -> NornFlowHookProcessor:
         """
-        Get the hook processor, creating it lazily if needed.
+        Get the hook processor, creating it lazily with workflow context if needed.
 
         Returns:
             NornFlowHookProcessor: The hook processor instance.
         """
-        if self._hook_processor is None:
-            self._hook_processor = NornFlowHookProcessor()
+        if not self._hook_processor:
+            workflow_context = {
+                "vars_manager": self.var_processor.vars_manager if self.var_processor else None,
+                "nornir_manager": self._nornir_manager,
+                "tasks_catalog": self._tasks_catalog,
+                "filters_catalog": self._filters_catalog,
+                "workflows_catalog": self._workflows_catalog,
+            }
+            self._hook_processor = NornFlowHookProcessor(workflow_context=workflow_context)
         return self._hook_processor
 
     @property
@@ -519,7 +526,7 @@ class NornFlow:
                 component="NornFlow",
             )
 
-        # Reset system processors when workflow changes as they depend on workflow context
+        # Reset system processors when workflow changes since they depend on workflow context
         self._var_processor = None
         self._failure_strategy_processor = None
         self._hook_processor = None
@@ -838,12 +845,12 @@ class NornFlow:
                 component="NornFlow",
             ) from e
 
-    def _get_variable_manager(self) -> NornFlowVariablesManager:
+    def _create_variable_manager(self) -> NornFlowVariablesManager:
         """
-        Initialize the variable manager with workflow context.
+        Create a new variable manager instance with workflow context.
 
         Returns:
-            The initialized NornFlowVariablesManager.
+            The created NornFlowVariablesManager instance.
         """
         return NornFlowVariablesManager(
             vars_dir=self.settings.vars_dir,
@@ -911,7 +918,7 @@ class NornFlow:
             all_processors.extend(self.processors)
 
         # Add failure strategy processor last
-        all_processors.append(self.failure_strategy_processor)  # Always last for error handling
+        all_processors.append(self.failure_strategy_processor)
 
         nornir_manager.apply_processors(all_processors)
 
