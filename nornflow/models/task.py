@@ -70,22 +70,7 @@ class TaskModel(RunnableModel):
         vars_manager: NornFlowVariablesManager,
         tasks_catalog: dict[str, Callable],
     ) -> AggregatedResult:
-        """Execute the task using the provided managers and tasks catalog.
-
-        This method is hook-agnostic. All hook handling is delegated to
-        parent methods in RunnableModel.
-
-        Args:
-            nornir_manager: The NornirManager instance to use for execution.
-            vars_manager: The variables manager instance.
-            tasks_catalog: Dictionary mapping task names to their function implementations.
-
-        Returns:
-            The results of the task execution.
-
-        Raises:
-            TaskError: If the task name is not found in the tasks catalog.
-        """
+        """Execute the task using the provided managers and tasks catalog."""
         task_func = tasks_catalog.get(self.name)
         if not task_func:
             raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")

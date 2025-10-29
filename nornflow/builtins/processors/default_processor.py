@@ -27,13 +27,35 @@ class DefaultNornFlowProcessor(Processor):
     def __init__(self):
         """Initialize processor with tracking variables for timing and statistics."""
         super().__init__()
+        
+        # Dictionary to track start times for each (task_name, host) pair for timing calculations
         self.start_times = {}
+        
+        # Timestamp when the entire workflow started, used for overall duration
         self.workflow_start_time = None
+        
+        # Number of unique tasks that have started (incremented once per task in task_started)
         self.task_count = 0
+        
+        # Total number of task-host executions (incremented for each host that actually runs a task, excluding predicate-skipped hosts)
         self.task_executions = 0
+        
+        # Number of unique tasks that have completed (incremented once per task in task_completed/task_failed)
         self.tasks_completed = 0
+        
+        # Number of successful task-host executions (hosts that completed without failure)
         self.successful_executions = 0
+        
+        # Number of failed task-host executions (hosts that failed during execution)
         self.failed_executions = 0
+        
+        # Number of skipped task-host executions (hosts skipped due to predicates or result.skipped)
+        self.skipped_executions = 0
+        
+        # Total number of hosts in the inventory (set once from the first task)
+        self.total_hosts = None
+        
+        # Flag to enable printing workflow summary after each task completion
         self.print_summary_after_each_task = False
 
     def _is_output_suppressed(self, task: Task) -> bool:
@@ -49,6 +71,23 @@ class DefaultNornFlowProcessor(Processor):
             hasattr(task.nornir, '_nornflow_suppressed_tasks') and 
             task.name in task.nornir._nornflow_suppressed_tasks
         )
+
+    def _is_host_skipped(self, task: Task, host: Host) -> tuple[bool, str]:
+        """Check if a host was skipped for a given task.
+
+        Args:
+            task: The Nornir task
+            host: The host to check
+
+        Returns:
+            Tuple of (is_skipped, skip_reason)
+        """
+        if not hasattr(task.nornir, "_nornflow_skipped_hosts"):
+            return (False, "")
+
+        task_skips = task.nornir._nornflow_skipped_hosts.get(task.name, {})
+        reason = task_skips.get(host.name, "")
+        return (bool(reason), reason)
 
     def _format_task_output(self, result: Result, suppress_output: bool) -> str:
         """Format the output section of a task result.
@@ -76,6 +115,9 @@ class DefaultNornFlowProcessor(Processor):
                     f"{self.workflow_start_time.strftime('%H:%M:%S.%f')[:-3]}{Style.RESET_ALL}"
                 )
 
+        if self.total_hosts is None:
+            self.total_hosts = len(task.nornir.inventory.hosts)
+
         self.task_count += 1
         # Print task header only once per task, not per host
         with output_lock:
@@ -83,6 +125,11 @@ class DefaultNornFlowProcessor(Processor):
 
     def task_instance_started(self, task: Task, host: Host) -> None:
         """Record start time for a specific task on a specific host."""
+        is_skipped_by_predicate, _ = self._is_host_skipped(task, host)
+        
+        if is_skipped_by_predicate:
+            return
+
         start_time = datetime.now()
         with output_lock:
             self.start_times[(task.name, host)] = start_time
@@ -90,14 +137,25 @@ class DefaultNornFlowProcessor(Processor):
 
     def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
         """Process task completion and print results for a specific host."""
-        finish_time = datetime.now()
-        status = "Success" if result.failed is False else "Failed"
-        status_color = Fore.GREEN if result.failed is False else Fore.RED
+        is_skipped, skip_reason = self._is_host_skipped(task, host)
+        if is_skipped:
+            self._print_skipped_host(task, host, skip_reason)
+            return
 
-        # Update execution statistics
-        if result.failed is False:
+        finish_time = datetime.now()
+        
+        # Determine status based on result attributes
+        if getattr(result, 'skipped', False):
+            status = "Skipped"
+            status_color = Fore.YELLOW
+            self.skipped_executions += 1
+        elif result.failed is False:
+            status = "Success"
+            status_color = Fore.GREEN
             self.successful_executions += 1
         else:
+            status = "Failed"
+            status_color = Fore.RED
             self.failed_executions += 1
 
         start_time = self.start_times.get((task.name, host), finish_time)
@@ -124,6 +182,41 @@ class DefaultNornFlowProcessor(Processor):
             if output_section:
                 print(output_section)
                 
+            print(f"{Fore.WHITE}{'-' * 80}")
+
+            if (task.name, host) in self.start_times:
+                del self.start_times[(task.name, host)]
+
+    def _print_skipped_host(self, task: Task, host: Host, reason: str) -> None:
+        """Print a skipped host entry with consistent formatting.
+
+        Args:
+            task: The Nornir task.
+            host: The host that was skipped.
+            reason: The reason for skipping.
+        """
+        finish_time = datetime.now()
+        start_time = self.start_times.get((task.name, host), finish_time)
+
+        start_str = start_time.strftime("%H:%M:%S.%f")[:-3]
+        finish_str = finish_time.strftime("%H:%M:%S.%f")[:-3]
+
+        duration = finish_time - start_time
+        duration_ms = duration.total_seconds() * 1000
+
+        self.skipped_executions += 1
+
+        with output_lock:
+            print(f"{Fore.WHITE}{'-' * 80}")
+            print(
+                f"{Style.BRIGHT}{Fore.CYAN}Task: {task.name} "
+                f"{Fore.WHITE}| {Fore.YELLOW}Host: {host} "
+                f"{Fore.WHITE}| {Fore.MAGENTA}Hostname: {task.host.hostname or 'N/A'} "
+                f"{Fore.WHITE}| {Fore.YELLOW}Status: Skipped"
+            )
+            print(f"{Fore.BLUE}{start_str} - {finish_str} ({duration_ms:.0f}ms)")
+            if reason:
+                print(f"{Fore.YELLOW}Reason: {reason}")
             print(f"{Fore.WHITE}{'-' * 80}")
 
             if (task.name, host) in self.start_times:
@@ -162,7 +255,9 @@ class DefaultNornFlowProcessor(Processor):
         self.print_workflow_summary()
 
     def print_workflow_summary(self) -> None:
-        """Generate and print a summary of the workflow execution with timing, statistics and success metrics."""
+        """
+        Generate and print a summary of the workflow execution with timing, statistics and success metrics.
+        """
         if not self.workflow_start_time:
             return
 
@@ -170,18 +265,21 @@ class DefaultNornFlowProcessor(Processor):
         duration = end_time - self.workflow_start_time
         duration_ms = duration.total_seconds() * 1000
 
-        # Calculate success/failure percentages based on task executions
         success_percent = (
             (self.successful_executions / self.task_executions * 100) if self.task_executions > 0 else 0
         )
         failure_percent = (
             (self.failed_executions / self.task_executions * 100) if self.task_executions > 0 else 0
         )
+        skipped_percent = (
+            (self.skipped_executions / self.task_executions * 100) if self.task_executions > 0 else 0
+        )
 
         # Create a visual progress bar
         bar_length = 40
         success_bars = int(bar_length * success_percent / 100)
         failure_bars = int(bar_length * failure_percent / 100)
+        skipped_bars = int(bar_length * skipped_percent / 100)
 
         # Add extra space before summary
         with output_lock:
@@ -211,9 +309,18 @@ class DefaultNornFlowProcessor(Processor):
                 f"{self.successful_executions} ({success_percent:.1f}%)"
             )
             print(f"  {Fore.RED}Failed:      {Style.BRIGHT}{self.failed_executions} ({failure_percent:.1f}%)")
+            if self.skipped_executions > 0:
+                print(
+                    f"  {Fore.YELLOW}Skipped:     {Style.BRIGHT}{self.skipped_executions} ({skipped_percent:.1f}%)"
+                )
             print()
 
             # VISUAL GREEN/RED STATUS BAR
-            bar = f"{Back.GREEN}{' ' * success_bars}{Back.RED}{' ' * failure_bars}{Style.RESET_ALL}"
+            bar = (
+                f"{Back.GREEN}{' ' * success_bars}"
+                f"{Back.RED}{' ' * failure_bars}"
+                f"{Back.YELLOW}{' ' * skipped_bars}"
+                f"{Style.RESET_ALL}"
+            )
             print(f"  {bar}")
             print()
