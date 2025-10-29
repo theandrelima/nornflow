@@ -976,7 +976,10 @@ class NornFlow:
         """
         Calculate the return code based on processor execution statistics and failed hosts.
 
-        Iterates through processors to find execution stats (task_executions and failed_executions).
+        Iterates through processors to find execution stats (failed_executions and task_executions).
+        This is a FEATURE - the first processor with these attributes provides the stats.
+        Uses the EXACT same calculation as the summary: failed_executions / task_executions * 100.
+        
         If stats are available and failures occurred, returns the failure percentage (0-100).
         If no stats but failed hosts exist, returns 101. Otherwise, returns 0 for success.
 
@@ -984,17 +987,15 @@ class NornFlow:
             int: Exit code (0 for success, 1-100 for failure percentage, 101 for failures without stats).
         """
         for processor in self.nornir_manager.nornir.processors:
-            task_executions: int = getattr(processor, "task_executions", 0)
-            failed_executions: int = getattr(processor, "failed_executions", 0)
-
-            if (
-                isinstance(task_executions, int)
-                and isinstance(failed_executions, int)
-                and task_executions
-                and failed_executions
-            ):
-                failure_percentage = int(failed_executions * 100 / task_executions)
-                return failure_percentage
+            failed_executions = getattr(processor, "failed_executions", 0)
+            task_executions = getattr(processor, "task_executions", 0)
+            
+            if not task_executions:
+                continue
+            
+            # Use EXACT same calculation as summary: failed_executions / task_executions * 100
+            failure_percentage = int((failed_executions / task_executions) * 100)
+            return failure_percentage
 
         if self.nornir_manager.nornir.data.failed_hosts:
             return 101
