@@ -41,8 +41,7 @@ class SetToHook(Hook):
         if self.value is None or result is None:
             return
 
-        context = self.get_context(task)
-        vars_manager = context.get("vars_manager")
+        vars_manager = self.context.get("vars_manager")
 
         if vars_manager:
             vars_manager.set_runtime_variable(self.value, result, host.name)
