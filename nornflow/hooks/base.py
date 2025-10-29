@@ -31,7 +31,6 @@ Example:
         exception_handlers = {MyCustomError: "_handle_my_error"}
 
         def _handle_my_error(self, exception, task, args):
-            # Custom handling logic here
             pass
 
 EXECUTION SCOPES
@@ -51,10 +50,11 @@ Hooks validate at instantiation and execution:
 """
 from abc import ABC
 from typing import Any, TYPE_CHECKING
-from nornir.core.task import Task, AggregatedResult, MultiResult
-from nornir.core.inventory import Host
-from nornflow.hooks.exceptions import HookValidationError
 
+from nornir.core.inventory import Host
+from nornir.core.task import AggregatedResult, MultiResult, Task
+
+from nornflow.hooks.exceptions import HookValidationError
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
@@ -70,6 +70,13 @@ class Hook(ABC):
     Subclasses must define `hook_name` and can override only the lifecycle methods
     that are relevant to their use cases.
     
+    Context Injection:
+    ==================
+    The NornFlowHookProcessor automatically injects the complete context into
+    `self._current_context` before calling any hook method. Hooks access this
+    context via the `context` property, which returns the pre-injected dict
+    containing task_model, vars_manager, and other workflow-level data.
+    
     Exception Handling:
     ====================
     Hooks can define custom exception handling via the `exception_handlers` class
@@ -83,17 +90,13 @@ class Hook(ABC):
         exception_handlers = {SkipHostError: "_handle_skip"}
         
         def _handle_skip(self, exception, task, args):
-            # Mark host as skipped
             pass
     """
     
-    # Required: Identifies this hook in task configuration
     hook_name: str
     
-    # Public: Control execution scope (True = once per task, False = per host)
     run_once_per_task: bool = False
     
-    # Optional: Dict of exception classes to handler method names for custom handling
     exception_handlers: dict[type[Exception], str] = {}
     
     def __init__(self, value: Any = None):
@@ -103,10 +106,8 @@ class Hook(ABC):
             value: The value from task's hooks configuration
         """
         self.value = value
-        self._execution_count = {}  # Track executions per task
+        self._execution_count = {}
         self._current_context: dict[str, Any] | None = None
-    
-    # Processor Protocol Methods (all optional to implement)
     
     def task_started(self, task: Task) -> None:
         """Called when task starts across all hosts."""
@@ -132,16 +133,16 @@ class Hook(ABC):
         """Called after subtask executes on host."""
         pass
     
-    # Hook-specific helpers
-    
-    def get_context(self, task: Task) -> dict[str, Any]:
-        """Extract NornFlow context from task.
+    @property
+    def context(self) -> dict[str, Any]:
+        """Get the complete NornFlow context for this execution.
         
-        Args:
-            task: The Nornir task
+        The context is automatically injected by NornFlowHookProcessor before
+        any hook method is called. It contains both workflow-level data
+        (vars_manager, catalogs) and task-specific data (task_model, hooks).
             
         Returns:
-            Context dict with task_model, vars_manager, etc.
+            Context dict with task_model, vars_manager, and other execution data.
         """
         return self._current_context or {}
     
