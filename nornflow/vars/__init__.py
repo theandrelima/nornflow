@@ -13,6 +13,7 @@ from nornflow.vars.exceptions import TemplateError, VariableError
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
 from nornflow.vars.proxy import NornirHostProxy
+from nornflow.vars.constants import JINJA2_MARKERS
 
 __all__ = [
     "NornFlowDeviceContext",

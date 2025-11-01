@@ -41,7 +41,7 @@ class TaskModel(RunnableModel):
     _key = ("id", "name")
     _directive = "tasks"
     _err_on_duplicate = False
-    _exclude_from_universal_validations: ClassVar[tuple[str, ...]] = ("args",)
+    _exclude_from_universal_validations: ClassVar[tuple[str, ...]] = ("args", "hooks")
 
     id: int | None = None
     name: str
