@@ -51,3 +51,11 @@ class TestHookRegistry:
 
         register_hook(MockHook2)
         assert HOOK_REGISTRY["test_hook"] == MockHook2
+
+    def test_if_hook_registered(self):
+        """Test that the 'if' hook is properly registered."""
+        from nornflow.builtins.hooks import IfHook
+        
+        assert "if" in HOOK_REGISTRY
+        assert HOOK_REGISTRY["if"] == IfHook
+        assert IfHook.hook_name == "if"
