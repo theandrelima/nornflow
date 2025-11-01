@@ -22,4 +22,5 @@ __all__ = [
     "NornirHostProxy",
     "TemplateError",
     "VariableError",
+    "JINJA2_MARKERS",
 ]
