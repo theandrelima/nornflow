@@ -29,41 +29,41 @@ class TestSetToHook:
         hook = SetToHook()
         assert hook.value is None
 
-    def test_validate_task_compatibility_valid_task(self):
+    def test_execute_hook_validations_valid_task(self):
         """Test validation passes for compatible tasks."""
         hook = SetToHook("var_name")
         mock_task_model = MagicMock()
         mock_task_model.name = "ping"
 
         # Should not raise
-        hook.validate_task_compatibility(mock_task_model)
+        hook.execute_hook_validations(mock_task_model)
 
-    def test_validate_task_compatibility_invalid_set_task(self):
+    def test_execute_hook_validations_invalid_set_task(self):
         """Test validation fails for 'set' task."""
         hook = SetToHook("var_name")
         mock_task_model = MagicMock()
         mock_task_model.name = "set"
 
         with pytest.raises(HookValidationError, match="Hook 'SetToHook' cannot be used with task 'set'"):
-            hook.validate_task_compatibility(mock_task_model)
+            hook.execute_hook_validations(mock_task_model)
 
-    def test_validate_task_compatibility_invalid_echo_task(self):
+    def test_execute_hook_validations_invalid_echo_task(self):
         """Test validation fails for 'echo' task."""
         hook = SetToHook("var_name")
         mock_task_model = MagicMock()
         mock_task_model.name = "echo"
 
         with pytest.raises(HookValidationError, match="Hook 'SetToHook' cannot be used with task 'echo'"):
-            hook.validate_task_compatibility(mock_task_model)
+            hook.execute_hook_validations(mock_task_model)
 
-    def test_validate_task_compatibility_invalid_set_to_task(self):
+    def test_execute_hook_validations_invalid_set_to_task(self):
         """Test validation fails for 'set_to' task."""
         hook = SetToHook("var_name")
         mock_task_model = MagicMock()
         mock_task_model.name = "set_to"
 
         with pytest.raises(HookValidationError, match="Hook 'SetToHook' cannot be used with task 'set_to'"):
-            hook.validate_task_compatibility(mock_task_model)
+            hook.execute_hook_validations(mock_task_model)
 
     def test_task_instance_completed_stores_result(self):
         """Test that task_instance_completed stores result in runtime variable."""
@@ -73,7 +73,11 @@ class TestSetToHook:
         mock_host = MagicMock(spec=Host)
         mock_host.name = "router1"
         
-        mock_result = MagicMock(spec=MultiResult)
+        # Create a MultiResult with a result for the host
+        mock_result = MultiResult("test_task")
+        host_result = Result(host=mock_host, result="test_data")
+        mock_result.append(host_result)
+        
         mock_vars_manager = MagicMock()
         
         # Set up the context
@@ -81,7 +85,7 @@ class TestSetToHook:
 
         hook.task_instance_completed(mock_task, mock_host, mock_result)
 
-        mock_vars_manager.set_runtime_variable.assert_called_once_with("test_variable", mock_result, "router1")
+        mock_vars_manager.set_runtime_variable.assert_called_once_with("test_variable", "test_data", "router1")
 
     def test_task_instance_completed_no_value_does_nothing(self):
         """Test that task_instance_completed does nothing when value is None."""
@@ -144,12 +148,11 @@ class TestSetToHook:
         # Should not raise any exceptions
         hook.task_instance_completed(mock_task, mock_host, mock_result)
 
-    def test_get_context_returns_empty_when_no_context(self):
-        """Test get_context returns empty dict when no context is set."""
+    def test_context_property_returns_empty_when_no_context(self):
+        """Test context property returns empty dict when no context is set."""
         hook = SetToHook("test_variable")
-        mock_task = MagicMock()
         
-        context = hook.get_context(mock_task)
+        context = hook.context
         assert context == {}
 
     def test_task_instance_completed_with_complex_result(self):
@@ -162,14 +165,15 @@ class TestSetToHook:
         
         # Create a more realistic MultiResult
         mock_result = MultiResult("test_task")
-        mock_result.append(Result(host=mock_host, result={"config": "data"}, changed=True))
+        host_result = Result(host=mock_host, result={"config": "data"}, changed=True)
+        mock_result.append(host_result)
         
         mock_vars_manager = MagicMock()
         hook._current_context = {"vars_manager": mock_vars_manager}
 
         hook.task_instance_completed(mock_task, mock_host, mock_result)
 
-        mock_vars_manager.set_runtime_variable.assert_called_once_with("complex_var", mock_result, "switch1")
+        mock_vars_manager.set_runtime_variable.assert_called_once_with("complex_var", {"config": "data"}, "switch1")
 
     def test_other_processor_methods_do_nothing(self):
         """Test that other processor methods have no implementation."""
@@ -203,7 +207,11 @@ class TestSetToHook:
         mock_host = MagicMock(spec=Host)
         mock_host.name = "complex-host-name.domain.com"
         
-        mock_result = MagicMock(spec=MultiResult)
+        # Create a MultiResult with a result for the host
+        mock_result = MultiResult("test_task")
+        host_result = Result(host=mock_host, result="host_data")
+        mock_result.append(host_result)
+        
         mock_vars_manager = MagicMock()
         
         hook._current_context = {"vars_manager": mock_vars_manager}
@@ -211,17 +219,17 @@ class TestSetToHook:
         hook.task_instance_completed(mock_task, mock_host, mock_result)
 
         mock_vars_manager.set_runtime_variable.assert_called_once_with(
-            "host_result", mock_result, "complex-host-name.domain.com"
+            "host_result", "host_data", "complex-host-name.domain.com"
         )
 
-    def test_validation_error_message_includes_incompatible_tasks(self):
+    def test_execute_hook_validations_error_message_includes_incompatible_tasks(self):
         """Test that validation error message lists all incompatible tasks."""
         hook = SetToHook("var_name")
         mock_task_model = MagicMock()
         mock_task_model.name = "set"
 
         with pytest.raises(HookValidationError) as exc_info:
-            hook.validate_task_compatibility(mock_task_model)
+            hook.execute_hook_validations(mock_task_model)
 
         error_message = str(exc_info.value)
         assert "set" in error_message
