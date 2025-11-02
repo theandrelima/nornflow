@@ -57,20 +57,18 @@ class TestHook:
         assert hook.should_execute(mock_task2) is True
 
     def test_get_context_empty(self):
-        """Test get_context returns empty dict when no context set."""
+        """Test context property returns empty dict when no context set."""
         hook = Hook()
-        mock_task = MagicMock()
         
-        context = hook.get_context(mock_task)
+        context = hook.context
         assert context == {}
 
     def test_get_context_with_current_context(self):
-        """Test get_context returns current context when set."""
+        """Test context property returns current context when set."""
         hook = Hook()
         hook._current_context = {"key": "value"}
-        mock_task = MagicMock()
         
-        context = hook.get_context(mock_task)
+        context = hook.context
         assert context == {"key": "value"}
 
     def test_processor_methods_are_optional(self):
