@@ -1,9 +1,8 @@
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
 from collections.abc import Callable
 from typing import Any
 
-from nornir.core.task import AggregatedResult
 from pydantic import field_validator
 from pydantic_serdes.custom_collections import HashableDict
 from pydantic_serdes.utils import convert_to_hashable
@@ -20,12 +19,12 @@ from .base import NornFlowBaseModel
 logger = logging.getLogger(__name__)
 
 
-class RunnableModel(NornFlowBaseModel, ABC):
-    """Abstract base class for runnable entities with processor-based hook support.
+class HookableModel(NornFlowBaseModel, ABC):
+    """Abstract base class for models that support hooks.
 
     Hook Processing Architecture:
     =============================
-    Hooks are now full Nornir processors that participate in the task lifecycle.
+    Hooks are full Nornir processors that participate in the task lifecycle.
     This class manages hook discovery and caching, but execution is delegated
     to the NornFlowHookProcessor during task runtime. Hook validation is abstracted
     to the run_hook_validations() method, allowing child classes to handle it as needed.
@@ -50,8 +49,8 @@ class RunnableModel(NornFlowBaseModel, ABC):
         return convert_to_hashable(v)
 
     @classmethod
-    def create(cls, model_dict: dict[str, Any], *args: Any, **kwargs: Any) -> "RunnableModel":
-        """Create a RunnableModel instance, migrating hook fields to the hooks dict.
+    def create(cls, model_dict: dict[str, Any], *args: Any, **kwargs: Any) -> "HookableModel":
+        """Create a HookableModel instance, migrating hook fields to the hooks dict.
 
         This method processes the input model_dict to automatically move hook-related
         keywords (matching registered hook names) into the 'hooks' field. Unknown
@@ -66,7 +65,7 @@ class RunnableModel(NornFlowBaseModel, ABC):
             **kwargs: Additional keyword arguments.
 
         Returns:
-            The created RunnableModel instance.
+            The created HookableModel instance.
         """
         hooks_dict = {}
         keys_to_remove = []
@@ -84,7 +83,7 @@ class RunnableModel(NornFlowBaseModel, ABC):
         return super().create(model_dict, *args, **kwargs)
 
     def get_hooks(self) -> list[Hook]:
-        """Get all hooks for this runnable."""
+        """Get all hooks for this hookable model."""
         if self._hooks_cache is not None:
             return self._hooks_cache
 
@@ -92,7 +91,7 @@ class RunnableModel(NornFlowBaseModel, ABC):
         return self._hooks_cache
 
     def run_hook_validations(self) -> None:
-        """Run hook validations for this runnable.
+        """Run hook validations for this hookable model.
 
         This method should be explicitly called at the beginning of the run() method
         in subclasses to ensure hooks are validated before execution.
@@ -119,7 +118,7 @@ class RunnableModel(NornFlowBaseModel, ABC):
 
         This method:
         1. Validates hooks
-        2. Gets/caches the hook processor reference (once per RunnableModel lifecycle)
+        2. Gets/caches the hook processor reference (once per HookableModel lifecycle)
         3. Sets task-specific context on the processor
 
         Args:
@@ -147,13 +146,3 @@ class RunnableModel(NornFlowBaseModel, ABC):
             "hooks": hooks,
         }
         self._hook_processor_cache.task_specific_context = task_context
-
-    @abstractmethod
-    def run(
-        self,
-        nornir_manager: NornirManager,
-        vars_manager: NornFlowVariablesManager,
-        tasks_catalog: dict[str, Callable],
-    ) -> AggregatedResult:
-        """Execute the runnable."""
-        pass
