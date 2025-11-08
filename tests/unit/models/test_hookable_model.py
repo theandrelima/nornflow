@@ -1,58 +1,41 @@
-"""Tests for RunnableModel."""
-
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
 from nornir.core.task import AggregatedResult
 
-from nornflow.models import RunnableModel
+from nornflow.models import HookableModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.vars.manager import NornFlowVariablesManager
 
 
-class TestRunnableModel:
+class TestHookableModel:
     def test_run_no_hooks(self, mock_nornir_manager, mock_vars_manager):
         """Test run with no hooks."""
-        class TestRunnable(RunnableModel):
+        class TestHookable(HookableModel):
             name: str = "test"
             _key: ClassVar[tuple[str, ...]] = ("name",)
             
             def run(self, nornir_manager, vars_manager, tasks_catalog):
                 return MagicMock(spec=AggregatedResult)
 
-        runnable = TestRunnable()
+        hookable = TestHookable()
         tasks_catalog = {}
 
-        result = runnable.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
+        result = hookable.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
 
         assert isinstance(result, (MagicMock, AggregatedResult))
 
-    def test_get_pre_hooks_caching(self):
-        """Test pre-hook caching."""
-        class TestRunnable(RunnableModel):
+    def test_get_hooks_caching(self):
+        """Test hook caching."""
+        class TestHookable(HookableModel):
             name: str = "test"
             _key: ClassVar[tuple[str, ...]] = ("name",)
 
             def run(self, nornir_manager, vars_manager, tasks_catalog):
                 pass
 
-        instance = TestRunnable()
-        hooks = instance.get_hooks()
-        assert hooks == []
-        # Second call should use cache
-        assert instance.get_hooks() is hooks
-
-    def test_get_post_hooks_caching(self):
-        """Test post-hook caching."""
-        class TestRunnable(RunnableModel):
-            name: str = "test"
-            _key: ClassVar[tuple[str, ...]] = ("name",)
-
-            def run(self, nornir_manager, vars_manager, tasks_catalog):
-                pass
-
-        instance = TestRunnable()
+        instance = TestHookable()
         hooks = instance.get_hooks()
         assert hooks == []
         # Second call should use cache
@@ -60,7 +43,7 @@ class TestRunnableModel:
 
     def test_run_with_pre_hooks(self, mock_nornir_manager, mock_vars_manager):
         """Test run with pre-run hooks that filter hosts."""
-        class TestRunnable(RunnableModel):
+        class TestHookable(HookableModel):
             name: str = "test"
             _key: ClassVar[tuple[str, ...]] = ("name",)
             
@@ -78,10 +61,10 @@ class TestRunnableModel:
         mock_pre_hook._has_capability = MagicMock(return_value=True)  # Has filtering capability
         
         # Setup mocks
-        runnable = TestRunnable()
+        hookable = TestHookable()
         
         # Directly set hooks cache on the instance
-        runnable._hooks_cache = [mock_pre_hook]
+        hookable._hooks_cache = [mock_pre_hook]
         
         # Create mock hosts
         mock_host1 = MagicMock()
@@ -100,7 +83,7 @@ class TestRunnableModel:
         
         tasks_catalog = {}
 
-        result = runnable.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
+        result = hookable.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
         
         # Check that only host1 and host3 were included (host2 filtered out)
         assert len(result) == 2
@@ -110,7 +93,7 @@ class TestRunnableModel:
 
     def test_run_with_post_hooks(self, mock_nornir_manager, mock_vars_manager):
         """Test run with post-run hooks."""
-        class TestRunnable(RunnableModel):
+        class TestHookable(HookableModel):
             name: str = "test"
             _key: ClassVar[tuple[str, ...]] = ("name",)
             
@@ -131,10 +114,10 @@ class TestRunnableModel:
         mock_post_hook.process_results = MagicMock()
         
         # Setup mocks
-        runnable = TestRunnable()
+        hookable = TestHookable()
         
         # Directly set hooks cache on the instance
-        runnable._hooks_cache = [mock_post_hook]
+        hookable._hooks_cache = [mock_post_hook]
         
         mock_host1 = MagicMock()
         mock_host1.name = "host1"
@@ -143,7 +126,7 @@ class TestRunnableModel:
         mock_nornir_manager.nornir.inventory.hosts = {"host1": mock_host1}
         tasks_catalog = {}
 
-        result = runnable.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
+        result = hookable.run(mock_nornir_manager, mock_vars_manager, tasks_catalog)
         
         # Check that the post-hook's process_results method was called
         mock_post_hook.process_results.assert_called()

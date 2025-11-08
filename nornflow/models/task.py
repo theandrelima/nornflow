@@ -7,13 +7,13 @@ from pydantic_serdes.custom_collections import HashableDict
 from pydantic_serdes.utils import convert_to_hashable
 
 from nornflow.exceptions import TaskError
-from nornflow.models import RunnableModel
+from nornflow.models import HookableModel
 from nornflow.models.validators import run_post_creation_task_validation
 from nornflow.nornir_manager import NornirManager
 from nornflow.vars.manager import NornFlowVariablesManager
 
 
-class TaskModel(RunnableModel):
+class TaskModel(HookableModel):
     """Task model with processor-based hook support.
 
     CRITICAL - Model Immutability:
