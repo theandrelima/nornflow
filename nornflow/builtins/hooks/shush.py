@@ -1,77 +1,132 @@
-from typing import Any
-from colorama import Fore, Style
-from nornir.core.task import Task
+import re
+
 from nornflow.hooks import Hook, register_hook
+from nornflow.hooks.exceptions import HookValidationError
 
 
 @register_hook
 class ShushHook(Hook):
-    """Signals to output processors that task results should be suppressed.
+    """Hook to suppress task output printing.
     
-    This hook does NOT implement output suppression itself. Instead, it marks tasks
-    for suppression by setting a flag that output-aware processors further down the
-    processor chain can check and act upon. The hook verifies that at least one
-    processor in the chain has the 'supports_shush_hook' attribute set to True,
-    warning the user if no compatible processor is found.
+    The shush hook allows conditional suppression of task output based on
+    boolean values or Jinja2 expressions that evaluate to boolean.
     
-    The actual suppression logic is delegated to processors that handle output
-    (like DefaultNornFlowProcessor), allowing this hook to remain decoupled from
-    specific output implementations while preserving all result data for other
-    hooks and processors to consume.
+    Supported values:
+        - Boolean: True/False for static suppression control
+        - Jinja2 expression: Dynamic suppression based on variables
+        - None: No suppression (default)
     
-    Configuration:
-        True: Mark task for output suppression
-        False: Normal output behavior (default)
-    
-    Examples:
-        # Suppress output for noisy tasks while preserving data for other hooks
-        tasks:
-          - name: backup_configs
-            task: netmiko_send_config
-            shush: true
-            set_to: backup_results  # Result data still available
-            
-        # Normal output behavior
-        tasks:
-          - name: show_version
-            task: netmiko_send_command
-            shush: false
+    The hook works in conjunction with processors that support output
+    suppression by marking tasks in a special set on the Nornir instance.
     """
     
     hook_name = "shush"
     run_once_per_task = True
-    
-    def __init__(self, value: Any = None):
-        """Initialize shush hook.
+
+    def __init__(self, value: bool | str | None = None):
+        """Initialize the shush hook.
         
         Args:
-            value: Boolean indicating whether to suppress output display
+            value: Boolean, Jinja2 expression string, or None
         """
         super().__init__(value)
-        self.should_suppress = bool(value) if value is not None else False
-    
-    def task_started(self, task: Task) -> None:
-        """Check for processor support and mark task for output suppression."""
-        if not self.should_suppress:
-            return
-            
-        has_support = any(
-            getattr(processor, 'supports_shush_hook', False)
-            for processor in task.nornir.processors
-        )
+        self.is_jinja2_expression = self._detect_jinja2_expression(value)
+
+    def _detect_jinja2_expression(self, value: bool | str | None) -> bool:
+        """Detect if value is a Jinja2 expression.
         
-        if not has_support:
+        Args:
+            value: The value to check
+            
+        Returns:
+            True if value contains Jinja2 markers
+        """
+        if not isinstance(value, str):
+            return False
+        jinja2_patterns = [r'\{\{.*?\}\}', r'\{%.*?%\}', r'\{#.*?#\}']
+        return any(re.search(pattern, value) for pattern in jinja2_patterns)
+
+    def _evaluate_suppression(self, task: "Task") -> bool:
+        """Evaluate whether output should be suppressed.
+        
+        Args:
+            task: The Nornir task
+            
+        Returns:
+            True if output should be suppressed
+        """
+        if isinstance(self.value, bool):
+            return self.value
+        
+        if self.value is None:
+            return False
+        
+        if self.is_jinja2_expression:
+            vars_manager = self.context.get("vars_manager")
+            if vars_manager:
+                host = next(iter(task.nornir.inventory.hosts.values()))
+                resolved = vars_manager.resolve_string(self.value, host)
+                return resolved.lower() in ('true', 'yes', '1')
+            return False
+        
+        return bool(self.value)
+
+    def task_started(self, task: "Task") -> None:
+        """Mark task for output suppression if conditions are met.
+        
+        Args:
+            task: The Nornir task
+        """
+        should_suppress = self._evaluate_suppression(task)
+        
+        if not should_suppress:
+            return
+
+        has_compatible_processor = any(
+            getattr(proc, 'supports_shush_hook', False) 
+            for proc in task.nornir.processors
+        )
+
+        if not has_compatible_processor:
             print(
-                f"{Fore.YELLOW}{Style.BRIGHT}Warning: 'shush' hook has no effect - "
-                f"no compatible processor found in chain. Outputs are not going to be suppressed.{Style.RESET_ALL}"
+                f"Warning: 'shush' hook has no effect - "
+                f"no compatible processor found in chain. "
+                f"Outputs are not going to be suppressed."
             )
             return
-            
+
         if not hasattr(task.nornir, '_nornflow_suppressed_tasks'):
             task.nornir._nornflow_suppressed_tasks = set()
         task.nornir._nornflow_suppressed_tasks.add(task.name)
-    
-    def task_completed(self, task: Task, result: Any) -> None:
-        """Clean up the suppression marker."""
+
+    def task_completed(self, task: "Task", result: "AggregatedResult") -> None:
+        """Remove task from suppression set after completion.
+        
+        Args:
+            task: The Nornir task
+            result: The aggregated result
+        """
         if hasattr(task.nornir, '_nornflow_suppressed_tasks'):
             task.nornir._nornflow_suppressed_tasks.discard(task.name)
+
+    def execute_hook_validations(self, task_model: "TaskModel") -> None:
+        """Validate shush hook configuration.
+        
+        Args:
+            task_model: The task model being validated
+            
+        Raises:
+            HookValidationError: If string value lacks Jinja2 markers
+        """
+        if isinstance(self.value, str) and not self.is_jinja2_expression:
+            raise HookValidationError(
+                hook_class=self.hook_name,
+                errors=[
+                    (
+                        "value",
+                        f"Task '{task_model.name}': 'shush' hook received string value "
+                        f"'{self.value}' without Jinja2 markers. Use boolean values "
+                        f"(true/false) or Jinja2 expressions (e.g., '{{{{ condition }}}}')"
+                    )
+                ]
+            )
