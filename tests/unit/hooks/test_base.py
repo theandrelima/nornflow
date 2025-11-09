@@ -1,7 +1,5 @@
 from unittest.mock import MagicMock
 
-import pytest
-
 from nornflow.hooks.base import Hook
 from nornflow.hooks.exceptions import HookConfigurationError
 

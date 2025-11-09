@@ -1,7 +1,5 @@
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from nornflow.builtins.hooks import SetToHook
 from nornflow.hooks.loader import load_hooks
 
