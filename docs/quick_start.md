@@ -43,6 +43,7 @@ This creates:
 - 📁 tasks - Where your Nornir tasks should live
 - 📁 workflows - Holds YAML workflow definitions
 - 📁 filters - Custom Nornir inventory filters
+- 📁 hooks - Custom hook implementations for extending task behavior
 - 📁 vars - Will contain Global and Domain-specific default variables
 - 📁 nornir_configs - Nornir configuration
 - 📑 nornflow.yaml - NornFlow settings
@@ -114,18 +115,13 @@ simple_inventory:
     router1:
       hostname: 192.168.1.1
       platform: ios
-      groups:
-        - routers
+      username: admin
+      password: secret
     switch1:
-      hostname: 192.168.1.10
-      platform: nxos_ssh
-      groups:
-        - switches
-  groups:
-    routers:
+      hostname: 192.168.1.2
+      platform: nxos
       username: admin
-    switches:
-      username: admin
+      password: secret
 ```
 
 ### 2. Configure Nornir (config.yaml):
@@ -134,7 +130,12 @@ simple_inventory:
 inventory:
   plugin: SimpleInventory
   options:
-    host_file: inventory.yaml
+    host_file: "nornir_configs/inventory.yaml"
+
+runner:
+  plugin: threaded
+  options:
+    num_workers: 10
 ```
 
 ### 3. Verify NornFlow settings (nornflow.yaml):
@@ -151,12 +152,13 @@ local_workflows_dirs:
   - "workflows"
 local_filters_dirs:
   - "filters"
+local_hooks_dirs:
+  - "hooks"
 imported_packages: []
 dry_run: False
 failure_strategy: "skip-failed"
 processors:
   - class: "nornflow.builtins.DefaultNornFlowProcessor"
-    args: {}
 vars_dir: "vars"
 ```
 
@@ -165,16 +167,17 @@ vars_dir: "vars"
 ```yaml
 workflow:
   name: "Backup Device Configs"
+  description: "Backup configurations from all network devices"
   tasks:
     - name: netmiko_send_command
       args:
         command_string: "show running-config"
-      set_to: config_output
+      set_to: "running_config"
     
     - name: write_file
       args:
         filename: "backups/{{ host.name }}_config.txt"
-        content: "{{ config_output.result }}"
+        content: "{{ running_config }}"
 ```
 
 Run it:

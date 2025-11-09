@@ -27,6 +27,9 @@
   - [Filter Behavior](#filter-behavior)
   - [Ways to Define Filter Parameters](#ways-to-define-filter-parameters)
   - [Creating Custom Filters](#creating-custom-filters)
+- [Hooks System](#hooks-system)
+  - [What are Hooks?](#what-are-hooks)
+  - [Built-in Hooks](#built-in-hooks)
 - [Processors](#processors)
   - [What Processors Do](#what-processors-do)
   - [Processor Precedence](#processor-precedence)
@@ -88,26 +91,27 @@ NornFlow's architecture consists of several components working together in a lay
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    NornFlow                             │ ← Main Orchestrator
-│                                                         │   - Controls the entire workflow execution
-└──┬──────────────────┬──────────────────┬────────────────┘   - Discovers and catalogs tasks/workflows/filter
-   │                  │                  │                    - Manages configuration
-   │creates/uses      │creates/uses      │creates & uses
-   │                  │                  │
-   ▼                  ▼                  ▼
+└──┬──────────────────┬──────────────────┬────────────────┘    - Controls the entire workflow execution
+   │                  │                  │                     - Discovers and catalogs tasks/workflows/filter
+   ▼                  ▼                  ▼                     - Manages configuration
 ┌─────────────┐  ┌─────────────┐     ┌────────────┐
-│WorkflowModel│  │NornirManager│     │NornFlowVars│ ← Supporting Components
-└──┬──────────┘  └────────┬────┘     │ Manager    │   - Data modeling
-   │               ▲      │          └───┬────────┘   - Nornir integration
-   │contains       │      │creates &     │     ▲      - Variable management
-   │               │      │uses          │     │
-   ▼               │      ▼              │     │
-┌─────────┐        │  ┌───────┐      uses│     │
-│TaskModel│───┐────┘  │Nornir │◄─────────┘     │
-└─────────┘   │       └───────┘                │
-              │                                │
-              │ uses both for forexecution     │
-              └────────────────────────────────┘       
-                                 
+│WorkflowModel│  │NornirManager│ ◄───│NornFlowVars│        ← Supporting Components
+└──┬──────────┘  └───┬─────┬───┘     │ Manager    │           - Data modeling
+   │               ▲ |     │         └────────────┘           - Nornir integration
+   ▼               │ |     ▼               ▲                  - Variable management
+┌─────────┐        │ |  ┌───────┐          │                  - Processors management
+│TaskModel│───┐────┘ |  │Nornir │          │
+└─────────┘   │      |  └───────┘          │
+              │      |      ▲              │
+              │      ▼      |              │
+              │    ┌─────────────┐         │
+              │    │ Processors  │         │             ← Processors are applied to the Nonrnir object
+              │    │  - Vars     |         |               by NornirManager, as part of the processing
+              |    |  - Hooks    │         │               orchestrated by the NornFlow object.
+              │    │  - Failure  │         │
+              │    │  - Default  │         │
+              │    └─────────────┘         │
+              └────────────────────────────┘
 ```
 Notice how `Nornir` is the fundamental block where all paths lead to in the above diagram.
 
@@ -128,9 +132,10 @@ Notice how `Nornir` is the fundamental block where all paths lead to in the abov
 
 **TaskModel (Execution Unit)**
 - Represents a single task to be executed
+- Inherits from `HookableModel` to support hook configurations
 - Contains task name, arguments, and variable storage instructions
 - Uses both `NornirManager` and `NornFlowVarsManager` during execution
-- Validates task definition structure
+- Validates task definition structure and hook compatibility
 
 **NornirManager (Integration Bridge)**
 - Provides an abstraction layer over Nornir
@@ -190,6 +195,8 @@ my_project/
 │   └── my_tasks.py
 ├── filters/                # Custom filter functions
 │   └── site_filters.py
+├── hooks/                  # Custom hooks
+│   └── custom_hook.py
 └── vars/                   # Variable files
     ├── defaults.yaml       # Global variables
     ├── backup/             # Domain variables
@@ -251,6 +258,9 @@ local_workflows_dirs: ["workflows", "dev_workflows"]
 nornir_config_file: "configs/nornir-prod.yaml"
 dry_run: false
 local_workflows_dirs: ["workflows"]
+local_tasks_dirs: ["tasks"]
+local_filters_dirs: ["filters"]
+local_hooks_dirs: ["hooks"]
 ```
 
 ## Catalogs
@@ -556,6 +566,80 @@ workflow:
   # ...
 ```
 
+## Hooks System
+
+### What are Hooks?
+
+Hooks are a task extension mechanism in NornFlow that allow you to modify task behavior without changing the task implementation itself. Hooks are configured at the task level in workflows and are completely optional.
+
+Hooks enable:
+- Conditional execution of tasks on specific hosts
+- Suppression of task output
+- Storage of task results as runtime variables
+- Extension of task behavior through custom implementations
+
+Under the hood, hooks are implemented as Nornir Processors and are orchestrated by the `NornFlowHookProcessor`, which manages hook registration and execution throughout the task lifecycle.
+
+### Built-in Hooks
+
+NornFlow provides three built-in hooks:
+
+**`if` Hook - Conditional Execution**
+
+Controls whether a task executes on specific hosts based on filter functions or Jinja2 expressions.
+
+```yaml
+tasks:
+  # Using filter function
+  - name: ios_specific_task
+    if:
+      platform: "ios"
+  
+  # Using Jinja2 expression
+  - name: conditional_backup
+    if: "{{ host.data.backup_enabled and environment == 'prod' }}"
+```
+
+**`set_to` Hook - Result Storage**
+
+Captures task execution results and stores them as runtime variables for use in subsequent tasks.
+
+```yaml
+tasks:
+  # Store complete result
+  - name: get_facts
+    set_to: device_facts
+  
+  # Extract specific data from result
+  - name: get_environment
+    set_to:
+      cpu_usage: "environment.cpu.0.%usage"
+      serial: "serial_number"
+  
+  # Use stored data in later tasks
+  - name: echo
+    args:
+      msg: "CPU: {{ cpu_usage }}%, Serial: {{ serial }}"
+```
+
+**`shush` Hook - Output Suppression**
+
+Suppresses task output printing while preserving result data for other hooks and processors.
+
+```yaml
+tasks:
+  # Static suppression
+  - name: noisy_task
+    shush: true
+    set_to: task_result  # Result still available
+  
+  # Dynamic suppression based on variables
+  - name: conditional_quiet
+    shush: "{{ debug_mode == false }}"
+```
+
+For comprehensive documentation on hooks, including creating custom hooks, see the Hooks Guide.
+
 ## Processors
 
 Processors are middleware components that extend Nornir's task execution to provide features like:
@@ -564,6 +648,7 @@ Processors are middleware components that extend Nornir's task execution to prov
 - Progress tracking
 - Logging and reporting
 - Failure handling
+- Hook orchestration
 
 ### What Processors Do
 
@@ -587,6 +672,18 @@ processors:
     args:
       option: "value"
 ```
+
+**Built-in Processors:**
+- `DefaultNornFlowProcessor`: Formats task output and tracks execution statistics
+- `NornFlowVariableProcessor`: Handles variable resolution (always applied first)
+- `NornFlowFailureStrategyProcessor`: Implements failure handling (always applied last)
+- `NornFlowHookProcessor`: Orchestrates hook execution (automatically added when hooks are present)
+
+The `NornFlowHookProcessor` manages a two-tier context system:
+- **Workflow context**: Set once during initialization (vars_manager, filters_catalog, etc.)
+- **Task-specific context**: Updated for each task (task_model, hooks for that task)
+
+This processor is responsible for registering hooks and delegating lifecycle events to the appropriate hook instances.
 
 ### Processor Precedence
 
