@@ -271,30 +271,33 @@ class SetToHook(Hook):
 
     def _handle_key_segment(self, current_obj: Any, key: str, extraction_path: str) -> Any:
         """Handle key access for dict objects."""
-        if isinstance(current_obj, dict):
-            if key in current_obj:
-                return current_obj[key]
-            if key.isdigit() and int(key) in current_obj:
-                return current_obj[int(key)]
+        if not isinstance(current_obj, dict):
             available = self._get_available_keys(current_obj)
             raise HookValidationError(
                 "SetToHook",
                 [
                     (
                         "extraction_key_error",
-                        f"Key '{key}' not found in extraction path '{extraction_path}'. "
-                        f"Available: {available}",
+                        f"Cannot access key '{key}' on non-dict object in path '{extraction_path}'. "
+                        f"Object type: {type(current_obj).__name__}. Available: {available}",
                     )
                 ],
             )
+
+        if key in current_obj:
+            return current_obj[key]
+
+        if key.isdigit() and int(key) in current_obj:
+            return current_obj[int(key)]
+
         available = self._get_available_keys(current_obj)
         raise HookValidationError(
             "SetToHook",
             [
                 (
                     "extraction_key_error",
-                    f"Cannot access key '{key}' on non-dict object in path '{extraction_path}'. "
-                    f"Object type: {type(current_obj).__name__}",
+                    f"Key '{key}' not found in extraction path '{extraction_path}'. "
+                    f"Available: {available}",
                 )
             ],
         )
