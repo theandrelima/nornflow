@@ -1,6 +1,6 @@
 [project]
 name = "nornflow"
-version = "0.4.0"
+version = "0.5.0"
 description = "A workflow orchestration tool for network automation built around Nornir."
 readme = "README.md"
 requires-python = ">=3.10"
