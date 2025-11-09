@@ -1,5 +1,6 @@
 import importlib
 import inspect
+import logging
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -28,6 +29,8 @@ from nornflow.exceptions import (
     ProcessorError,
     WorkflowError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_failure_strategy(
@@ -90,6 +93,77 @@ def import_module_from_path(module_name: str, module_path: str) -> ModuleType:
         ) from e
 
     return module
+
+
+def import_modules_recursively(dir_path: Path) -> list[str]:
+    """
+    Recursively import all Python modules under a directory.
+
+    Finds all .py files in the directory and subdirectories, converts them to
+    module names, and imports them. Skips __init__.py files. Logs errors for
+    failed imports but continues with others.
+
+    Args:
+        dir_path: The root directory to search for modules.
+
+    Returns:
+        List of successfully imported module names.
+    """
+    imported_modules = []
+
+    # Ensure we're working with resolved absolute paths to avoid path issues
+    dir_path = dir_path.resolve()
+    cwd = Path.cwd().resolve()
+
+    for py_file in dir_path.rglob("*.py"):
+        if py_file.name == "__init__.py":
+            continue
+
+        py_file = py_file.resolve()
+
+        try:
+            # Try to calculate relative path from CWD first
+            try:
+                relative_path = py_file.relative_to(cwd)
+                module_name = path_to_module_name(relative_path)
+            except ValueError:
+                # If file is outside CWD, create a unique module name
+                module_name = f"hook_{py_file.stem}_{abs(hash(str(py_file))) % 100000}"
+
+            # Try direct import first (if module is in sys.path)
+            try:
+                importlib.import_module(module_name)
+                imported_modules.append(module_name)
+                logger.debug(f"Imported module: {module_name}")
+            except ImportError:
+                # If direct import fails, try importing from file path
+                import_module_from_path(module_name, str(py_file))
+                imported_modules.append(module_name)
+                logger.debug(f"Imported module from path: {module_name}")
+
+        except Exception as e:
+            logger.error(f"Failed to import module {py_file}: {e}")
+
+    return imported_modules
+
+
+def path_to_module_name(py_file: Path) -> str:
+    """
+    Convert a Python file path to a module name.
+
+    Assumes the file is importable from the project root.
+
+    Args:
+        py_file: The Python file path.
+
+    Returns:
+        The module name as a dotted string.
+    """
+    # Remove .py extension and convert path parts to module name
+    parts = py_file.with_suffix("").parts
+    # Filter out any empty parts
+    parts = [p for p in parts if p]
+    return ".".join(parts)
 
 
 def is_nornir_task(attr: Callable) -> bool:
@@ -290,7 +364,7 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
             check_for_jinja2_recursive(item, f"{path}[{idx}]")
 
 
-def _format_variable_value(key: str, value: Any) -> str:
+def format_variable_value(key: str, value: Any) -> str:
     """
     Format a variable value for display, masking protected keywords and adjusting tuple brackets.
 
@@ -368,7 +442,7 @@ def print_workflow_overview(
             # Sort workflow variables by name lexicographically
             for k, v in sorted(workflow_vars.items(), key=lambda item: item[0]):
                 vars_table.add_row(
-                    "w", k, _format_variable_value(k, v), type_mapping.get(type(v).__name__, type(v).__name__)
+                    "w", k, format_variable_value(k, v), type_mapping.get(type(v).__name__, type(v).__name__)
                 )
         if vars:
             # Sort CLI/programmatic variables by name lexicographically
@@ -376,7 +450,7 @@ def print_workflow_overview(
                 vars_table.add_row(
                     "c*",
                     k,
-                    _format_variable_value(k, v),
+                    format_variable_value(k, v),
                     type_mapping.get(type(v).__name__, type(v).__name__),
                 )
 

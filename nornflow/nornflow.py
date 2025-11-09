@@ -4,7 +4,7 @@ from typing import Any
 from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
-from nornflow.builtins.processors import NornFlowFailureStrategyProcessor
+from nornflow.builtins.processors import NornFlowFailureStrategyProcessor, NornFlowHookProcessor
 from nornflow.catalogs import CallableCatalog, FileCatalog
 from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
 from nornflow.exceptions import (
@@ -22,6 +22,7 @@ from nornflow.models import WorkflowModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import (
+    import_modules_recursively,
     is_nornir_filter,
     is_nornir_task,
     is_workflow_file,
@@ -65,10 +66,15 @@ class NornFlow:
     4. Default processor if none of the above are specified
 
     Variable precedence follows this order (highest to lowest priority):
-    1. Vars (passed via command line or set programmatically as overrides)
-    2. Workflow variables (defined in workflow file)
-    3. Environment variables
-    4. Variables from external files
+    1. Runtime Variables (dynamically set by the 'set' task or 'set_to' hook)
+    2. CLI Variables (passed via --vars option or set programmatically)
+    3. Inline Workflow Variables (defined in workflow YAML under vars: section)
+    4. Domain-specific Default Variables (from vars_dir/<domain>/defaults.yaml)
+    5. Default Variables (from vars_dir/defaults.yaml)
+    6. Environment Variables (prefixed with NORNFLOW_VAR_)
+
+    The 'host.' namespace provides read-only access to Nornir inventory data
+    (e.g., {{ host.name }}, {{ host.platform }}).
     """
 
     def __init__(
@@ -88,7 +94,7 @@ class NornFlow:
             nornflow_settings: NornFlow configuration settings object
             workflow: Pre-configured WorkflowModel instance or workflow name string (optional)
             processors: List of processor configurations to override default processors
-            vars: Variables with highest precedence in the resolution chain.
+            vars: Variables with highest precedence in the variable resolution chain.
                 While named "vars" due to their primary source being command-line
                 arguments, these serve as a universal override mechanism that can be:
                 - Parsed from actual CLI arguments (--vars)
@@ -109,6 +115,7 @@ class NornFlow:
             self._initialize_settings(nornflow_settings, kwargs)
             self._initialize_nornir()
             self._initialize_instance_vars(vars, filters, failure_strategy, processors)
+            self._initialize_hooks()
             self._initialize_catalogs()
             self._initialize_processors()
             # Workflow is optional; not always do we want a NornFlow instance with
@@ -146,8 +153,11 @@ class NornFlow:
         self._processors = processors
         self._workflow = None
         self._workflow_path = None
+        # System processors are initialized lazily in their property getters
+        # when needed during workflow execution, not during __init__
         self._var_processor = None
-        self._failure_processor = None
+        self._failure_strategy_processor = None
+        self._hook_processor = None
 
     def _initialize_catalogs(self) -> None:
         """Initialize and load catalogs."""
@@ -157,6 +167,13 @@ class NornFlow:
         self._load_tasks_catalog()
         self._load_filters_catalog()
         self._load_workflows_catalog()
+
+    def _initialize_hooks(self) -> None:
+        """Initialize hooks by importing modules from configured directories."""
+        for dir_path in self.settings.local_hooks_dirs:
+            dir_path_obj = Path(dir_path)
+            if dir_path_obj.exists():
+                import_modules_recursively(dir_path_obj)
 
     def _initialize_nornir(self) -> None:
         """Initialize Nornir configurations and manager."""
@@ -175,8 +192,23 @@ class NornFlow:
 
     def _initialize_processors(self) -> None:
         """
-        Load processors with proper precedence and store them in ``self._processors``.
-        Precedence:
+        Load USER-CONFIGURABLE processors with proper precedence and store them in `self._processors`.
+
+        This method ONLY handles processors that users can configure via:
+        - CLI arguments (--processors)
+        - Settings file (processors: section)
+        - Default processor (if none specified)
+
+        System processors (NornFlowVariableProcessor, NornFlowHookProcessor,
+        NornFlowFailureStrategyProcessor) are NOT initialized here because:
+        1. They require workflow context that may not be available during __init__
+        2. They have fixed positions in the processor chain (first, second, last)
+        3. They are always present and cannot be overridden by users
+
+        System processors are added later in _with_processors() when a workflow
+        is being executed and all necessary context is available.
+
+        Precedence for user-configurable processors:
         1. Processors passed through kwargs (likely from CLI)
         2. Processors from settings
         3. DefaultNornFlowProcessor
@@ -279,6 +311,8 @@ class NornFlow:
         if not isinstance(value, dict):
             raise CoreError(f"Vars must be a dictionary, got {type(value).__name__}", component="NornFlow")
         self._vars = value
+        # Reset var processor since it depends on vars
+        self._var_processor = None
 
     @property
     def filters(self) -> dict[str, Any]:
@@ -347,19 +381,54 @@ class NornFlow:
                 component="NornFlow",
             )
         self._failure_strategy = value
-        self._failure_processor = None
+        self._failure_strategy_processor = None
 
     @property
-    def failure_processor(self) -> NornFlowFailureStrategyProcessor:
+    def var_processor(self) -> NornFlowVariableProcessor | None:
         """
-        Get the failure processor, creating it lazily if needed.
+        Get the variable processor, creating it lazily if needed.
+
+        This processor requires workflow context to initialize the variable manager.
+        Returns None if no workflow is set, otherwise creates and caches the processor.
 
         Returns:
-            NornFlowFailureStrategyProcessor: The failure processor instance.
+            NornFlowVariableProcessor | None: The variable processor instance or None if no workflow.
         """
-        if self._failure_processor is None:
-            self._failure_processor = NornFlowFailureStrategyProcessor(self.failure_strategy)
-        return self._failure_processor
+        if not self._var_processor and self.workflow:
+            vars_manager = self._create_variable_manager()
+            self._var_processor = NornFlowVariableProcessor(vars_manager)
+        return self._var_processor
+
+    @property
+    def failure_strategy_processor(self) -> NornFlowFailureStrategyProcessor:
+        """
+        Get the failure strategy processor, creating it lazily if needed.
+
+        Returns:
+            NornFlowFailureStrategyProcessor: The failure strategy processor instance.
+        """
+        if self._failure_strategy_processor is None:
+            self._failure_strategy_processor = NornFlowFailureStrategyProcessor(self.failure_strategy)
+        return self._failure_strategy_processor
+
+    @property
+    def hook_processor(self) -> NornFlowHookProcessor:
+        """
+        Get the hook processor, creating it lazily with workflow context if needed.
+
+        Returns:
+            NornFlowHookProcessor: The hook processor instance.
+        """
+        if not self._hook_processor:
+            workflow_context = {
+                "vars_manager": self.var_processor.vars_manager if self.var_processor else None,
+                "nornir_manager": self._nornir_manager,
+                "tasks_catalog": self._tasks_catalog,
+                "filters_catalog": self._filters_catalog,
+                "workflows_catalog": self._workflows_catalog,
+            }
+            self._hook_processor = NornFlowHookProcessor(workflow_context=workflow_context)
+        return self._hook_processor
 
     @property
     def tasks_catalog(self) -> CallableCatalog:
@@ -457,7 +526,10 @@ class NornFlow:
                 component="NornFlow",
             )
 
-        self._failure_processor = None
+        # Reset system processors when workflow changes since they depend on workflow context
+        self._var_processor = None
+        self._failure_strategy_processor = None
+        self._hook_processor = None
 
     @property
     def workflow_path(self) -> Path | None:
@@ -730,7 +802,6 @@ class NornFlow:
         if len(filter_values) != len(param_names):
             raise WorkflowError(f"Filter expects {len(param_names)} parameters, got {len(filter_values)}")
 
-        # Dict built in one shot – satisfies PERF403/416.
         filter_kwargs: dict[str, Any] = dict(zip(param_names, filter_values, strict=False))
         filter_kwargs["filter_func"] = filter_func
         return filter_kwargs
@@ -774,12 +845,12 @@ class NornFlow:
                 component="NornFlow",
             ) from e
 
-    def _init_variable_manager(self) -> NornFlowVariablesManager:
+    def _create_variable_manager(self) -> NornFlowVariablesManager:
         """
-        Initialize the variable manager with workflow context.
+        Create a new variable manager instance with workflow context.
 
         Returns:
-            The initialized NornFlowVariablesManager.
+            The created NornFlowVariablesManager instance.
         """
         return NornFlowVariablesManager(
             vars_dir=self.settings.vars_dir,
@@ -797,27 +868,39 @@ class NornFlow:
         """
         Apply processors to the Nornir instance based on configuration.
 
-        IMPORTANT: Always adds NornFlowVariableProcessor as the first processor
-        to ensure host context is available for variable resolution.
-        Always adds NornFlowFailureStrategyProcessor as the second processor
-        to handle error policies during task execution.
+        This method handles TWO distinct types of processors:
 
-        This method handles the processor selection logic:
-        1. Always add NornFlowVariableProcessor first (for variable resolution)
-        2. Use workflow-specific processors from self._workflow.processors if defined
-        3. Otherwise use the passed processors parameter
-        4. If neither exists, use NornFlow's global processors (self._processors)
-        5. Always add NornFlowFailureStrategyProcessor last (for failure strategy handling)
+        1. SYSTEM PROCESSORS (always present, fixed positions):
+           - NornFlowVariableProcessor: ALWAYS first (provides variable resolution)
+           - NornFlowHookProcessor: ALWAYS second (handles hook execution)
+           - NornFlowFailureStrategyProcessor: ALWAYS last (handles error policies)
+
+        2. USER-CONFIGURABLE PROCESSORS (optional, middle position):
+           - From workflow definition (self._workflow.processors)
+           - From passed parameter (processors)
+           - From NornFlow settings (self._processors initialized in _initialize_processors)
+
+        System processors are initialized lazily via their properties when first accessed.
+        The var_processor is special as it requires workflow context to be available.
+
+        Processor chain order:
+        1. NornFlowVariableProcessor (system - variable resolution)
+        2. NornFlowHookProcessor (system - hook execution)
+        3. User-configurable processors (custom business logic)
+        4. NornFlowFailureStrategyProcessor (system - error handling)
 
         Args:
             nornir_manager: The NornirManager instance to apply processors to
             processors: List of processors to apply if no workflow-specific processors defined
         """
-        vars_manager = self._init_variable_manager()
-        self._var_processor = NornFlowVariableProcessor(vars_manager)
+        # Build processor chain with system processors at fixed positions
+        # The var_processor property will handle lazy initialization if needed
+        all_processors = [
+            self.var_processor,
+            self.hook_processor,
+        ]
 
-        all_processors = [self._var_processor]
-
+        # Add user-configurable processors in the middle
         if self.workflow and self.workflow.processors:
             try:
                 workflow_processors = []
@@ -834,7 +917,8 @@ class NornFlow:
         elif self.processors:
             all_processors.extend(self.processors)
 
-        all_processors.append(self.failure_processor)
+        # Add failure strategy processor last
+        all_processors.append(self.failure_strategy_processor)
 
         nornir_manager.apply_processors(all_processors)
 
@@ -854,7 +938,7 @@ class NornFlow:
 
                 task.run(
                     nornir_manager=self.nornir_manager,
-                    vars_manager=self._var_processor.vars_manager,
+                    vars_manager=self.var_processor.vars_manager,
                     tasks_catalog=dict(self.tasks_catalog),
                 )
 
@@ -892,7 +976,10 @@ class NornFlow:
         """
         Calculate the return code based on processor execution statistics and failed hosts.
 
-        Iterates through processors to find execution stats (task_executions and failed_executions).
+        Iterates through processors to find execution stats (failed_executions and task_executions).
+        This is a FEATURE - the first processor with these attributes provides the stats.
+        Uses the EXACT same calculation as the summary: failed_executions / task_executions * 100.
+
         If stats are available and failures occurred, returns the failure percentage (0-100).
         If no stats but failed hosts exist, returns 101. Otherwise, returns 0 for success.
 
@@ -900,17 +987,15 @@ class NornFlow:
             int: Exit code (0 for success, 1-100 for failure percentage, 101 for failures without stats).
         """
         for processor in self.nornir_manager.nornir.processors:
-            task_executions: int = getattr(processor, "task_executions", 0)
-            failed_executions: int = getattr(processor, "failed_executions", 0)
+            failed_executions = getattr(processor, "failed_executions", 0)
+            task_executions = getattr(processor, "task_executions", 0)
 
-            if (
-                isinstance(task_executions, int)
-                and isinstance(failed_executions, int)
-                and task_executions
-                and failed_executions
-            ):
-                failure_percentage = int(failed_executions * 100 / task_executions)
-                return failure_percentage
+            if not task_executions:
+                continue
+
+            # Use EXACT same calculation as summary: failed_executions / task_executions * 100
+            failure_percentage = int((failed_executions / task_executions) * 100)
+            return failure_percentage
 
         if self.nornir_manager.nornir.data.failed_hosts:
             return 101

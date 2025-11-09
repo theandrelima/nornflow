@@ -152,9 +152,14 @@ CLI variables override `workflow`, `domain`, `global`, and `environment` variabl
 
 ### 6. Runtime Variables
 
-Runtime variables can be created or updated in two ways:
+Runtime variables are the highest priority variables in NornFlow's variable system. They can be created or updated in two ways:
 
-1. **Directly using NornFlow's built-in `set` task:**
+1. **Using NornFlow's built-in `set` task**
+2. **Using NornFlow's built-in `set_to` hook to capture task results**
+
+#### Using the `set` Task
+
+The `set` task allows you to create or update runtime variables with any values you specify:
 
 ```yaml
 tasks:
@@ -168,7 +173,18 @@ tasks:
       msg: "Working on {{ device_type }} at {{ timestamp }}"
 ```
 
-2. **Using the `set_to` hook to capture a task's results:**
+When this task runs:
+- NornFlow creates new runtime variables (`timestamp`, `device_type`)
+- If variables with these names already exist, they are updated with the new values
+- Variables are isolated per device - each host has its own `timestamp`, `device_type`, etc.
+
+#### Using the `set_to` Hook
+
+The `set_to` hook captures task execution results and stores them as runtime variables. It supports two modes:
+
+##### Simple Storage Mode
+
+Store the complete Nornir `Result` object from a task:
 
 ```yaml
 tasks:
@@ -180,10 +196,129 @@ tasks:
       msg: "Version: {{ version_output.result }}"
 ```
 
-> **IMPORTANT:**
-> - When you use the `set` task, NornFlow creates or updates variables with the names and values you specify in `args`.
-> - When you use the `set_to` hook in a task, NornFlow creates or updates a variable with the given name and stores the entire `Result` object returned by the task (including fields like `result`, `changed`, `failed`, etc.).
-> - In both cases, if the variable does not exist, it will be created; if it already exists, it will be updated with the new value.
+In simple mode, `set_to: "variable_name"` stores the entire Nornir `Result` object, which includes:
+- `result`: The actual data returned by the task
+- `failed`: Boolean indicating if the task failed
+- `changed`: Boolean indicating if the task made changes
+- Other Result object attributes
+
+##### Extraction Mode
+
+Extract specific data from the result and store it in named variables:
+
+```yaml
+tasks:
+  - name: get_environment
+    set_to:
+      cpu_usage: "environment.cpu.0.%usage"
+      device_serial: "serial_number"
+      uptime_seconds: "environment.uptime"
+```
+
+**Extraction Path Syntax:**
+
+The extraction paths directly reference keys in the result data. **No `result.` prefix is needed** - NornFlow automatically looks in the result data:
+
+```yaml
+# Direct key access
+set_to:
+  vendor: "vendor"              # Gets Result.result["vendor"] and sets it to a 'vendor' var
+  hostname: "hostname"          # Gets Result.result["hostname"] and sets it to a 'hostname' var
+
+# Nested dictionary access (dot notation)
+set_to:
+  cpu: "environment.cpu.usage"  # Gets Result.result["environment"]["cpu"]["usage"] and sets it to a 'cpu' var
+  
+# List indexing (bracket notation)
+set_to:
+  first_cpu: "environment.cpu[0].usage"    # Gets Result.result["environment"]["cpu"][0]["usage"] and sets it to a 'first_cpu' var  
+# Complex nested structures
+set_to:
+  value: "dict.nested_list[1].another_dict.list[10]"  # Any combination of nested access
+```
+
+**Special Extraction Prefixes:**
+
+Three special prefixes extract metadata from the `Result` object itself:
+
+```yaml
+set_to:
+  task_failed: "_failed"        # Gets result.failed (boolean)
+  task_changed: "_changed"      # Gets result.changed (boolean)
+  complete_data: "_result"      # Gets the entire result.result dictionary
+```
+
+**Real-World Example:**
+
+```yaml
+workflow:
+  name: "Device Information Collection"
+  tasks:
+    # Collect facts and extract specific data
+    - name: napalm_get
+      args:
+        getters: ["facts", "environment", "interfaces"]
+      set_to:
+        device_model: "facts.model"
+        device_serial: "facts.serial_number"
+        device_vendor: "facts.vendor"
+        cpu_usage: "environment.cpu.0.%usage"
+        memory_used: "environment.memory.used_ram"
+        interface_count: "interfaces"  # Will store the entire interfaces dict
+        task_succeeded: "_failed"  # Store if collection failed
+    
+    # Use extracted data in subsequent tasks
+    - name: set
+      args:
+        backup_filename: "{{ device_vendor }}_{{ device_model }}_{{ device_serial }}.cfg"
+        high_cpu_alert: "{{ cpu_usage | int > 80 }}"
+    
+    # Conditional action based on extracted data
+    - name: send_alert
+      if: "{{ high_cpu_alert }}"
+      args:
+        message: "High CPU usage detected: {{ cpu_usage }}%"
+```
+
+#### Key Differences Between `set` Task and `set_to` Hook
+
+| Aspect | `set` Task | `set_to` Hook |
+|--------|------------|---------------|
+| **Purpose** | Create/update variables with specified values | Create/update variables with task execution results |
+| **What's stored** | Values you explicitly provide in `args` | Task's `Result` object or extracted data |
+| **When to use** | Setting calculated/templated values | Capturing output from tasks |
+| **Data format** | Any data type (strings, numbers, lists, dicts) | `Result` object or extracted values |
+| **Typical use** | Setting timestamps, counters, filenames | Storing device facts, command output, API responses |
+
+#### Variable Creation and Updates
+
+**Important behavior for both approaches:**
+
+- If a runtime variable **does not exist**, it will be **created**
+- If a runtime variable **already exists**, it will be **updated** with the new value
+- All runtime variables are **isolated per device** - each host maintains its own set
+- Runtime variables have the **highest precedence** and override all other variable sources
+
+```yaml
+tasks:
+  # Create initial counter
+  - name: set
+    args:
+      attempt_count: 1
+  
+  # Later, update the counter
+  - name: set
+    args:
+      attempt_count: "{{ attempt_count | int + 1 }}"  # Updates existing variable
+  
+  # Capture task result
+  - name: get_version
+    set_to: version_data  # Creates 'version_data' variable
+  
+  # Update with new data
+  - name: get_config
+    set_to: version_data  # Updates 'version_data' with new result
+```
 
 Runtime variables override `CLI`, `workflow`, `domain`, `global`, and `environment` variables with the same name.
 
@@ -192,6 +327,8 @@ Runtime variables override `CLI`, `workflow`, `domain`, `global`, and `environme
 ## Accessing Nornir's Inventory Variables
 
 NornFlow provides seamless access to your Nornir inventory data through the `host.` namespace. This gives you ***read-only access*** to all host-specific information defined in your Nornir inventory files.
+
+> **Implementation Note:** This read-only access is provided by the `NornirHostProxy` class, which is managed by the `NornFlowVariableProcessor`. The processor ensures that the proxy always has the correct host context when variables are being resolved, allowing safe concurrent access to inventory data across multiple devices running in parallel.
 
 ### Basic Host Attributes
 
@@ -258,7 +395,7 @@ This isolation is managed by NornFlow's `NornFlowDeviceContext` class, which cre
 3. **Group related variables**: Use domain variables for domain-specific settings
 4. **Document variables**: Add comments in your variable files (`<vars_dir>/defaults.yaml` and `<vars_dir>/<domain>/default.yaml`)
 5. **Avoid name conflicts**: Don't start variable names with *`host`* to avoid confusion with the `host.` namespace
-6. **Use set_to sparingly**: Remember that `set_to` captures the entire result object, which might be larger than needed
+6. **Use `set_to` extraction for cleaner code**: Extract only the data you need upfront instead of storing complete results
 7. **Leverage Jinja2 filters**: Use filters to transform data, especially when working with complex structures
 
 ## Quick Reference
@@ -271,7 +408,8 @@ This isolation is managed by NornFlow's `NornFlowDeviceContext` class, which cre
 | Workflow           | In workflow YAML                | `vars: {vlan: 100}`            | `{{ vlan }}`                 |
 | CLI                | Command line                    | `--vars "x=1"`                 | `{{ x }}`                    |
 | Runtime            | Set with `set` task             | `status: "done"`               | `{{ status }}`               |
-|                    | Set with `set_to`               | `set_to: version_output`       | `{{ version_output.result }}`|
+|                    | Set with `set_to` (simple)      | `set_to: version_output`       | `{{ version_output.result }}`|
+|                    | Set with `set_to` (extraction)  | `set_to: {vendor: "vendor"}`   | `{{ vendor }}`               |
 | Host data          | Nornir Inventory                | `data: {site_code: NYC01}`     | `{{ host.data.site_code }}`  |
 
 
@@ -287,7 +425,7 @@ This isolation is managed by NornFlow's `NornFlowDeviceContext` class, which cre
 <td width="33%" align="center" style="border: none;">
 </td>
 <td width="33%" align="right" style="border: none;">
-<a href="./nornflow_settings.md">Next: NornFlow Settings →</a>
+<a href="./hooks_guide.md">Next: Hooks Guide →</a>
 </td>
 </tr>
 </table>

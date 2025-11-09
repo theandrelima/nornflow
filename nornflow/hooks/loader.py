@@ -1,33 +1,30 @@
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
-from nornflow.hooks.base import PostRunHook, PreRunHook
+from nornflow.hooks.registry import HOOK_REGISTRY
 
 if TYPE_CHECKING:
-    from nornflow.models import TaskModel
+    from nornflow.hooks import Hook
 
 
-def load_hooks(task_model: "TaskModel") -> tuple[list[PreRunHook], list[PostRunHook]]:
-    """Load hooks from a task model.
+def load_hooks(hooks_dict: dict[str, Any]) -> list["Hook"]:
+    """Load hooks from a hooks dictionary.
 
-    Gets hook instances from the model's fields.
+    Processes the hooks configuration dict and returns instantiated Hook instances.
 
     Args:
-        task_model: The TaskModel to load hooks for
+        hooks_dict: Dictionary mapping hook names to hook configurations
 
     Returns:
-        Tuple of (pre_hooks, post_hooks) lists
+        List of instantiated Hook instances
     """
-    pre_hooks = []
-    post_hooks = []
+    hooks = []
+    if not hooks_dict:
+        return hooks
 
-    # Load hooks for each type
-    for hook_getter, hooks_list in [
-        (task_model.get_pre_hooks, pre_hooks),
-        (task_model.get_post_hooks, post_hooks),
-    ]:
-        for field_name in hook_getter():
-            hook = getattr(task_model, field_name)
-            if hook is not None:
-                hooks_list.append(hook)
+    for hook_name, hook_config in hooks_dict.items():
+        hook_class = HOOK_REGISTRY.get(hook_name)
+        if hook_class:
+            hook_instance = hook_class(hook_config)
+            hooks.append(hook_instance)
 
-    return pre_hooks, post_hooks
+    return hooks
