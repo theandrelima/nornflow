@@ -193,21 +193,21 @@ class NornFlow:
     def _initialize_processors(self) -> None:
         """
         Load USER-CONFIGURABLE processors with proper precedence and store them in `self._processors`.
-        
+
         This method ONLY handles processors that users can configure via:
         - CLI arguments (--processors)
         - Settings file (processors: section)
         - Default processor (if none specified)
-        
-        System processors (NornFlowVariableProcessor, NornFlowHookProcessor, 
+
+        System processors (NornFlowVariableProcessor, NornFlowHookProcessor,
         NornFlowFailureStrategyProcessor) are NOT initialized here because:
         1. They require workflow context that may not be available during __init__
         2. They have fixed positions in the processor chain (first, second, last)
         3. They are always present and cannot be overridden by users
-        
+
         System processors are added later in _with_processors() when a workflow
         is being executed and all necessary context is available.
-        
+
         Precedence for user-configurable processors:
         1. Processors passed through kwargs (likely from CLI)
         2. Processors from settings
@@ -387,7 +387,7 @@ class NornFlow:
     def var_processor(self) -> NornFlowVariableProcessor | None:
         """
         Get the variable processor, creating it lazily if needed.
-        
+
         This processor requires workflow context to initialize the variable manager.
         Returns None if no workflow is set, otherwise creates and caches the processor.
 
@@ -867,22 +867,22 @@ class NornFlow:
     ) -> None:
         """
         Apply processors to the Nornir instance based on configuration.
-        
+
         This method handles TWO distinct types of processors:
-        
+
         1. SYSTEM PROCESSORS (always present, fixed positions):
            - NornFlowVariableProcessor: ALWAYS first (provides variable resolution)
            - NornFlowHookProcessor: ALWAYS second (handles hook execution)
            - NornFlowFailureStrategyProcessor: ALWAYS last (handles error policies)
-        
+
         2. USER-CONFIGURABLE PROCESSORS (optional, middle position):
            - From workflow definition (self._workflow.processors)
            - From passed parameter (processors)
            - From NornFlow settings (self._processors initialized in _initialize_processors)
-        
+
         System processors are initialized lazily via their properties when first accessed.
         The var_processor is special as it requires workflow context to be available.
-        
+
         Processor chain order:
         1. NornFlowVariableProcessor (system - variable resolution)
         2. NornFlowHookProcessor (system - hook execution)
@@ -979,7 +979,7 @@ class NornFlow:
         Iterates through processors to find execution stats (failed_executions and task_executions).
         This is a FEATURE - the first processor with these attributes provides the stats.
         Uses the EXACT same calculation as the summary: failed_executions / task_executions * 100.
-        
+
         If stats are available and failures occurred, returns the failure percentage (0-100).
         If no stats but failed hosts exist, returns 101. Otherwise, returns 0 for success.
 
@@ -989,10 +989,10 @@ class NornFlow:
         for processor in self.nornir_manager.nornir.processors:
             failed_executions = getattr(processor, "failed_executions", 0)
             task_executions = getattr(processor, "task_executions", 0)
-            
+
             if not task_executions:
                 continue
-            
+
             # Use EXACT same calculation as summary: failed_executions / task_executions * 100
             failure_percentage = int((failed_executions / task_executions) * 100)
             return failure_percentage

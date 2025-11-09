@@ -8,19 +8,19 @@ This package provides the variable management functionality for NornFlow, includ
 - Template rendering with Jinja2
 """
 
+from nornflow.vars.constants import JINJA2_MARKERS
 from nornflow.vars.context import NornFlowDeviceContext
 from nornflow.vars.exceptions import TemplateError, VariableError
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
 from nornflow.vars.proxy import NornirHostProxy
-from nornflow.vars.constants import JINJA2_MARKERS
 
 __all__ = [
+    "JINJA2_MARKERS",
     "NornFlowDeviceContext",
     "NornFlowVariableProcessor",
     "NornFlowVariablesManager",
     "NornirHostProxy",
     "TemplateError",
     "VariableError",
-    "JINJA2_MARKERS",
 ]

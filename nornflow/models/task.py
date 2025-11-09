@@ -76,7 +76,7 @@ class TaskModel(HookableModel):
             raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")
 
         task_args = self.get_task_args()
-        
+
         self.validate_hooks_and_set_task_context(nornir_manager, vars_manager, task_func)
 
         result = nornir_manager.nornir.run(task=task_func, **task_args)

@@ -1,11 +1,11 @@
-# ruff: noqa: T201
+# ruff: noqa: T201, SLF001
 import threading
 from datetime import datetime
 
-from colorama import Back, Fore, Style, init
+from colorama import Back, Fore, init, Style
+from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import Result, Task
-from nornir.core.inventory import Host
 
 # Initialize colorama
 init(autoreset=True)
@@ -21,87 +21,71 @@ output_lock = threading.Lock()
 
 class DefaultNornFlowProcessor(Processor):
     """Default processor for NornFlow that tracks execution time and statistics."""
-    
+
     supports_shush_hook = True
 
     def __init__(self):
         """Initialize processor with tracking variables for timing and statistics."""
         super().__init__()
-        
+
         # Dictionary to track start times for each (task_name, host) pair for timing calculations
         self.start_times = {}
-        
+
         # Timestamp when the entire workflow started, used for overall duration
         self.workflow_start_time = None
-        
+
         # Number of unique tasks that have started (incremented once per task in task_started)
         self.task_count = 0
-        
-        # Total number of task-host executions (incremented for each host that actually runs a task, excluding predicate-skipped hosts)
+
+        # Total number of task-host executions
+        # (incremented for each host that actually runs a task, excluding predicate-skipped hosts)
         self.task_executions = 0
-        
+
         # Number of unique tasks that have completed (incremented once per task in task_completed/task_failed)
         self.tasks_completed = 0
-        
+
         # Number of successful task-host executions (hosts that completed without failure)
         self.successful_executions = 0
-        
+
         # Number of failed task-host executions (hosts that failed during execution)
         self.failed_executions = 0
-        
+
         # Number of skipped task-host executions (hosts skipped due to predicates or result.skipped)
         self.skipped_executions = 0
-        
+
         # Total number of hosts in the inventory (set once from the first task)
         self.total_hosts = None
-        
+
         # Flag to enable printing workflow summary after each task completion
         self.print_summary_after_each_task = False
 
     def _is_output_suppressed(self, task: Task) -> bool:
         """Check if output should be suppressed for the given task.
-        
+
         Args:
             task: The Nornir task to check
-            
+
         Returns:
             True if output should be suppressed, False otherwise
         """
         return (
-            hasattr(task.nornir, '_nornflow_suppressed_tasks') and 
-            task.name in task.nornir._nornflow_suppressed_tasks
+            hasattr(task.nornir, "_nornflow_suppressed_tasks")
+            and task.name in task.nornir._nornflow_suppressed_tasks
         )
-
-    def _is_host_skipped(self, task: Task, host: Host) -> tuple[bool, str]:
-        """Check if a host was skipped for a given task.
-
-        Args:
-            task: The Nornir task
-            host: The host to check
-
-        Returns:
-            Tuple of (is_skipped, skip_reason)
-        """
-        if not hasattr(task.nornir, "_nornflow_skipped_hosts"):
-            return (False, "")
-
-        task_skips = task.nornir._nornflow_skipped_hosts.get(task.name, {})
-        reason = task_skips.get(host.name, "")
-        return (bool(reason), reason)
 
     def _format_task_output(self, result: Result, suppress_output: bool) -> str:
         """Format the output section of a task result.
-        
+
         Args:
             result: The task result containing output data
             suppress_output: Whether to suppress the actual output content
-            
+
         Returns:
             Formatted output string with appropriate styling
         """
         if not suppress_output and result.result:
             return f"\n{Fore.WHITE}Output:\n{result.result}"
-        elif suppress_output:
+        if suppress_output:
             return f"\n{Fore.WHITE}Output: {Style.DIM}[Shushed!]{Style.RESET_ALL}"
         return ""
 
@@ -125,11 +109,6 @@ class DefaultNornFlowProcessor(Processor):
 
     def task_instance_started(self, task: Task, host: Host) -> None:
         """Record start time for a specific task on a specific host."""
-        is_skipped_by_predicate, _ = self._is_host_skipped(task, host)
-        
-        if is_skipped_by_predicate:
-            return
-
         start_time = datetime.now()
         with output_lock:
             self.start_times[(task.name, host)] = start_time
@@ -137,15 +116,10 @@ class DefaultNornFlowProcessor(Processor):
 
     def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
         """Process task completion and print results for a specific host."""
-        is_skipped, skip_reason = self._is_host_skipped(task, host)
-        if is_skipped:
-            self._print_skipped_host(task, host, skip_reason)
-            return
-
         finish_time = datetime.now()
-        
+
         # Determine status based on result attributes
-        if getattr(result, 'skipped', False):
+        if getattr(result, "skipped", False):
             status = "Skipped"
             status_color = Fore.YELLOW
             self.skipped_executions += 1
@@ -178,45 +152,10 @@ class DefaultNornFlowProcessor(Processor):
                 f"{Fore.WHITE}| {status_color}Status: {status}"
             )
             print(f"{Fore.BLUE}{start_str} - {finish_str} ({duration_ms:.0f}ms)")
-            
+
             if output_section:
                 print(output_section)
-                
-            print(f"{Fore.WHITE}{'-' * 80}")
 
-            if (task.name, host) in self.start_times:
-                del self.start_times[(task.name, host)]
-
-    def _print_skipped_host(self, task: Task, host: Host, reason: str) -> None:
-        """Print a skipped host entry with consistent formatting.
-
-        Args:
-            task: The Nornir task.
-            host: The host that was skipped.
-            reason: The reason for skipping.
-        """
-        finish_time = datetime.now()
-        start_time = self.start_times.get((task.name, host), finish_time)
-
-        start_str = start_time.strftime("%H:%M:%S.%f")[:-3]
-        finish_str = finish_time.strftime("%H:%M:%S.%f")[:-3]
-
-        duration = finish_time - start_time
-        duration_ms = duration.total_seconds() * 1000
-
-        self.skipped_executions += 1
-
-        with output_lock:
-            print(f"{Fore.WHITE}{'-' * 80}")
-            print(
-                f"{Style.BRIGHT}{Fore.CYAN}Task: {task.name} "
-                f"{Fore.WHITE}| {Fore.YELLOW}Host: {host} "
-                f"{Fore.WHITE}| {Fore.MAGENTA}Hostname: {task.host.hostname or 'N/A'} "
-                f"{Fore.WHITE}| {Fore.YELLOW}Status: Skipped"
-            )
-            print(f"{Fore.BLUE}{start_str} - {finish_str} ({duration_ms:.0f}ms)")
-            if reason:
-                print(f"{Fore.YELLOW}Reason: {reason}")
             print(f"{Fore.WHITE}{'-' * 80}")
 
             if (task.name, host) in self.start_times:
@@ -311,7 +250,8 @@ class DefaultNornFlowProcessor(Processor):
             print(f"  {Fore.RED}Failed:      {Style.BRIGHT}{self.failed_executions} ({failure_percent:.1f}%)")
             if self.skipped_executions > 0:
                 print(
-                    f"  {Fore.YELLOW}Skipped:     {Style.BRIGHT}{self.skipped_executions} ({skipped_percent:.1f}%)"
+                    f"  {Fore.YELLOW}Skipped:     {Style.BRIGHT}"
+                    f"{self.skipped_executions} ({skipped_percent:.1f}%)"
                 )
             print()
 
