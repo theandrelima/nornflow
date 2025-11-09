@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any
+from typing import Any, TYPE_CHECKING
 
 from nornflow.hooks.registry import HOOK_REGISTRY
 

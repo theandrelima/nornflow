@@ -6,8 +6,8 @@ from .task import TaskModel
 from .workflow import WorkflowModel
 
 __all__ = [
-    "NornFlowBaseModel",
     "HookableModel",
+    "NornFlowBaseModel",
     "TaskModel",
     "WorkflowModel",
 ]

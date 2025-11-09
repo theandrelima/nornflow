@@ -109,10 +109,7 @@ class HookableModel(NornFlowBaseModel, ABC):
         return {} if self.args is None else dict(self.args)
 
     def validate_hooks_and_set_task_context(
-        self,
-        nornir_manager: NornirManager,
-        vars_manager: NornFlowVariablesManager,
-        task_func: Callable
+        self, nornir_manager: NornirManager, vars_manager: NornFlowVariablesManager, task_func: Callable
     ) -> None:
         """Validate hooks and set task-specific context in the hook processor.
 
@@ -130,9 +127,9 @@ class HookableModel(NornFlowBaseModel, ABC):
             ProcessorError: If hooks are configured but hook processor cannot be retrieved.
         """
         self.run_hook_validations()
-        
+
         hooks = self.get_hooks()
-        
+
         if not self._hook_processor_cache:
             try:
                 self._hook_processor_cache = nornir_manager.get_processor_by_type(NornFlowHookProcessor)
@@ -140,7 +137,7 @@ class HookableModel(NornFlowBaseModel, ABC):
                 raise ProcessorError(
                     f"Hooks are configured but NornFlowHookProcessor could not be retrieved: {e}"
                 ) from e
-        
+
         task_context = {
             "task_model": self,
             "hooks": hooks,

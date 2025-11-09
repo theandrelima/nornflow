@@ -58,7 +58,7 @@ class NornirManager:
         """
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """
         Exit the context manager protocol, ensuring connections are cleaned up.
 
@@ -205,7 +205,5 @@ class NornirManager:
         for processor in self.nornir.processors:
             if isinstance(processor, processor_type):
                 return processor
-        
-        raise ProcessorError(
-            f"No processor of type {processor_type.__name__} found in Nornir instance"
-        )
+
+        raise ProcessorError(f"No processor of type {processor_type.__name__} found in Nornir instance")

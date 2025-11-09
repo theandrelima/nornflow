@@ -1,10 +1,10 @@
 # ruff: noqa: T201
 import threading
 
-from colorama import Fore, Style, init
+from colorama import Fore, init, Style
+from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import Result, Task
-from nornir.core.inventory import Host
 from tabulate import tabulate
 
 from nornflow.constants import FailureStrategy

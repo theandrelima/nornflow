@@ -110,17 +110,17 @@ def import_modules_recursively(dir_path: Path) -> list[str]:
         List of successfully imported module names.
     """
     imported_modules = []
-    
+
     # Ensure we're working with resolved absolute paths to avoid path issues
     dir_path = dir_path.resolve()
     cwd = Path.cwd().resolve()
-    
+
     for py_file in dir_path.rglob("*.py"):
         if py_file.name == "__init__.py":
             continue
-            
+
         py_file = py_file.resolve()
-        
+
         try:
             # Try to calculate relative path from CWD first
             try:
@@ -129,7 +129,7 @@ def import_modules_recursively(dir_path: Path) -> list[str]:
             except ValueError:
                 # If file is outside CWD, create a unique module name
                 module_name = f"hook_{py_file.stem}_{abs(hash(str(py_file))) % 100000}"
-            
+
             # Try direct import first (if module is in sys.path)
             try:
                 importlib.import_module(module_name)
@@ -140,10 +140,10 @@ def import_modules_recursively(dir_path: Path) -> list[str]:
                 import_module_from_path(module_name, str(py_file))
                 imported_modules.append(module_name)
                 logger.debug(f"Imported module from path: {module_name}")
-                
+
         except Exception as e:
             logger.error(f"Failed to import module {py_file}: {e}")
-    
+
     return imported_modules
 
 

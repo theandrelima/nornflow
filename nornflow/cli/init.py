@@ -9,6 +9,7 @@ from nornflow.cli.constants import (
     FILTERS_DIR,
     GREET_USER_TASK_FILE,
     HELLO_WORLD_TASK_FILE,
+    HOOKS_DIR,
     INIT_BANNER,
     NORNFLOW_SETTINGS,
     NORNIR_DEFAULT_CONFIG_DIR,
@@ -18,7 +19,6 @@ from nornflow.cli.constants import (
     SAMPLE_WORKFLOW_FILE,
     TASKS_DIR,
     WORKFLOWS_DIR,
-    HOOKS_DIR,
 )
 from nornflow.cli.exceptions import CLIInitError
 from nornflow.cli.show import show_catalog, show_nornflow_settings
