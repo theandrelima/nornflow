@@ -1,7 +1,5 @@
 # Jinja2 Filters Reference
 
-**File path:** `docs/jinja2_filters.md`
-
 ## Table of Contents
 - [Introduction](#introduction)
 - [Built-in Jinja2 Filters](#built-in-jinja2-filters)
@@ -176,11 +174,19 @@ These provide Python-like functionality not available in standard Jinja2:
 
 | Filter | Description | Example |
 |--------|-------------|---------|
-| `enumerate` | Get index-value pairs | `{{ items \| enumerate }}` |
-| `zip` | Combine sequences | `{{ list1 \| zip(list2) }}` |
+| `enumerate` | Get index-value pairs | `{{ items \| enumerate }}` → `[(0, 'a'), (1, 'b'), (2, 'c')]` |
+| `zip` | Combine sequences | `{{ list1 \| zip(list2) }}` → `[('a', 1), ('b', 2), ('c', 3)]` |
 | `range` | Generate number sequence | `{{ 5 \| range }}` → `[0, 1, 2, 3, 4]` |
 | `divmod` | Division with remainder | `{{ 10 \| divmod(3) }}` → `(3, 1)` |
 | `splitx` | Python-style split with maxsplit | `{{ text \| splitx(' ', 2) }}` |
+| `type` | Get the type name of a value | `{{ value \| type }}` → `'str'` |
+| `any` | Check if any element is truthy | `{{ [false, true, false] \| any }}` → `true` |
+| `all` | Check if all elements are truthy | `{{ [true, false, true] \| all }}` → `false` |
+| `len` | Get the length of a value | `{{ [1, 2, 3] \| len }}` → `3` |
+| `sorted` | Sort items with optional key and reverse | `{{ [3, 1, 2] \| sorted }}` → `[1, 2, 3]` |
+| `reversed` | Return list in reverse order | `{{ [1, 2, 3] \| reversed }}` → `[3, 2, 1]` |
+| `strip` | Remove leading and trailing characters | `{{ " text " \| strip }}` → `"text"` |
+| `joinx` | Join iterable with separator | `{{ [1, 2, 3] \| joinx('-') }}` → `"1-2-3"` |
 
 ## Filter Chaining
 

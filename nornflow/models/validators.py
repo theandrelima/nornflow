@@ -72,7 +72,7 @@ def run_universal_field_validation(instance: "NornFlowBaseModel") -> None:
 
     Uses dynamic discovery to find and call functions with naming pattern
     'universal_{whatever}_validator' in this module. These validators run on all
-    fields except those listed in the model's _exclude_from_global_validators.
+    fields except those listed in the model's _exclude_from_universal_validations.
 
     Universal validator functions must return a tuple: (bool, str)
     - If first element is True, validation passes (second element ignored)
@@ -88,7 +88,7 @@ def run_universal_field_validation(instance: "NornFlowBaseModel") -> None:
     all_fields = set(instance.model_fields.keys())
 
     # Get excluded fields for this specific model class
-    excluded_fields = set(getattr(instance.__class__, "_exclude_from_global_validators", set()))
+    excluded_fields = set(getattr(instance.__class__, "_exclude_from_universal_validations", set()))
 
     # Fields to validate = all fields - excluded fields
     fields_to_validate = all_fields - excluded_fields
@@ -139,37 +139,6 @@ def run_universal_field_validation(instance: "NornFlowBaseModel") -> None:
                 ) from e
 
 
-# Field-specific validators (existing pattern) - naming convention: {field_name}_validator
-def set_to_validator(task: "TaskModel") -> tuple[bool, str]:
-    """
-    Validate that the TaskModel instance does not have a set_to set
-    for tasks that shouldn't have it.
-
-    Args:
-        task: The TaskModel instance to validate
-
-    Returns:
-        tuple[bool, str]: (is_valid, error_message)
-            - If valid: (True, "")
-            - If invalid: (False, "detailed error message")
-    """
-    invalid_tasks = {
-        "set",
-        "echo",
-        "set_to",  # including for sanity. Shame on you if you create a set_to task with a set_to flag in it.
-    }
-
-    # Only validate if set_to is actually set
-    if task.set_to is not None and task.name in invalid_tasks:
-        return (
-            False,
-            f"The 'set_to' keyword is not supported for NornFlow's built-in task '{task.name}'. "
-            f"Use 'set_to' only with Nornir tasks that produce meaningful result objects.",
-        )
-
-    return (True, "")
-
-
 # Universal validators (new pattern) - naming convention: universal_{name}_validator
 def universal_jinja2_validator(
     instance: "NornFlowBaseModel", field_name: str, field_value: Any
@@ -178,7 +147,7 @@ def universal_jinja2_validator(
     Universal validator to prevent Jinja2 code in fields.
 
     This validator is automatically discovered and applied to all fields
-    unless excluded via _exclude_from_global_validators.
+    unless excluded via _exclude_from_universal_validations.
 
     Args:
         instance: The model instance being validated

@@ -11,6 +11,7 @@ NORNIR_DEFAULT_CONFIG_DIR = CWD / "nornir_configs"
 TASKS_DIR = CWD / "tasks"
 WORKFLOWS_DIR = CWD / "workflows"
 FILTERS_DIR = CWD / "filters"
+HOOKS_DIR = CWD / "hooks"
 NORNFLOW_SETTINGS = CWD / "nornflow.yaml"
 
 # NornFlow's samples directory

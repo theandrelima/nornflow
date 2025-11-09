@@ -178,8 +178,8 @@ class Catalog(ABC, dict[str, Any]):
         """
 
 
-class PythonEntityCatalog(Catalog):
-    """Catalog specialized for Python code modules containing functions like Nornir tasks and filters.
+class CallableCatalog(Catalog):
+    """Catalog specialized for Python callables like Nornir tasks and filters.
 
     This catalog extends BaseCatalog with functionality for:
     - Discovering Python modules in directories

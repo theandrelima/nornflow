@@ -5,7 +5,7 @@ from typing import Any
 import yaml
 from pydantic_serdes.utils import load_file_to_dict
 
-from nornflow.constants import NONRFLOW_SETTINGS_MANDATORY, NONRFLOW_SETTINGS_OPTIONAL
+from nornflow.constants import NORNFLOW_SETTINGS_MANDATORY, NORNFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import NornFlowError, ResourceError, SettingsError
 
 
@@ -96,7 +96,7 @@ class NornFlowSettings:
         Raises:
             SettingsError: If a mandatory setting is missing or empty.
         """
-        for setting in NONRFLOW_SETTINGS_MANDATORY:
+        for setting in NORNFLOW_SETTINGS_MANDATORY:
             if setting not in self.loaded_settings:
                 raise SettingsError("Mandatory setting is missing from configuration", setting=setting)
             if not self.loaded_settings[setting]:
@@ -110,12 +110,12 @@ class NornFlowSettings:
         The preference algorithm is as follows:
         1. Use the value passed explicitly in kwargs.
         2. If not in kwargs, use the value read from the YAML file.
-        3. If not in the YAML file, use the default value from NONRFLOW_OPTIONAL_SETTINGS.
+        3. If not in the YAML file, use the default value from NORNFLOW_OPTIONAL_SETTINGS.
 
         Args:
             **kwargs (Any): Keyword arguments containing optional settings.
         """
-        for setting, default_value in NONRFLOW_SETTINGS_OPTIONAL.items():
+        for setting, default_value in NORNFLOW_SETTINGS_OPTIONAL.items():
             self.loaded_settings[setting] = kwargs.get(
                 setting, self.loaded_settings.get(setting, default_value)
             )

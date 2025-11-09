@@ -4,7 +4,7 @@ from nornir import InitNornir
 from nornir.core import Nornir
 from nornir.core.processor import Processor
 
-from nornflow.constants import NONRFLOW_SETTINGS_OPTIONAL
+from nornflow.constants import NORNFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import CoreError, ProcessorError
 
 
@@ -58,7 +58,7 @@ class NornirManager:
         """
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ANN001
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """
         Exit the context manager protocol, ensuring connections are cleaned up.
 
@@ -101,7 +101,7 @@ class NornirManager:
         Args:
             kwargs: The kwargs dictionary to modify in-place
         """
-        for key in NONRFLOW_SETTINGS_OPTIONAL:
+        for key in NORNFLOW_SETTINGS_OPTIONAL:
             kwargs.pop(key, None)
 
     def apply_filters(self, **kwargs) -> Nornir:
@@ -188,3 +188,22 @@ class NornirManager:
             )
 
         self.nornir.data.dry_run = value
+
+    def get_processor_by_type(self, processor_type: type) -> Any:
+        """
+        Get a processor instance by its type.
+
+        Args:
+            processor_type: The type of processor to retrieve
+
+        Returns:
+            The processor instance of the requested type
+
+        Raises:
+            ProcessorError: If no processor of the requested type is found
+        """
+        for processor in self.nornir.processors:
+            if isinstance(processor, processor_type):
+                return processor
+
+        raise ProcessorError(f"No processor of type {processor_type.__name__} found in Nornir instance")

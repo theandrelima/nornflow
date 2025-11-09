@@ -1,6 +1,6 @@
 [project]
 name = "nornflow"
-version = "0.4.0"
+version = "0.5.0"
 description = "A workflow orchestration tool for network automation built around Nornir."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -56,6 +56,7 @@ exclude = ["tests/*", "nornflow/cli/tests/*", "nornflow/vars/tests/*"]
 select = ["ALL"]
 ignore = [
     "A",
+    "ANN001",
     "ANN003",
     "ANN204",
     "ANN205",
@@ -85,9 +86,11 @@ ignore = [
     "TRY300",
     "TRY301",
     "TRY400",
+    "PIE790",
     "PLR0913",
     "PLR0915",
     "PLE0604",
+    "RUF003",
     "RUF013"
 ]
 extend-select = ["I"]

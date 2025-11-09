@@ -9,6 +9,7 @@ from nornflow.cli.constants import (
     FILTERS_DIR,
     GREET_USER_TASK_FILE,
     HELLO_WORLD_TASK_FILE,
+    HOOKS_DIR,
     INIT_BANNER,
     NORNFLOW_SETTINGS,
     NORNIR_DEFAULT_CONFIG_DIR,
@@ -101,6 +102,7 @@ def create_required_directories() -> None:
     create_directory(TASKS_DIR)
     create_directory(WORKFLOWS_DIR)
     create_directory(FILTERS_DIR)
+    create_directory(HOOKS_DIR)
 
     # If vars_dir is different from default, it will be created later
     # based on the actual settings after NornFlow is built

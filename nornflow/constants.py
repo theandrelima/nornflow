@@ -56,27 +56,28 @@ class FailureStrategy(StrEnum):
 NORNFLOW_SPECIAL_FILTER_KEYS = ["hosts", "groups"]
 
 # used to track the mandatory kwargs for a NornFlowSettings object
-NONRFLOW_SETTINGS_MANDATORY = ("nornir_config_file",)
+NORNFLOW_SETTINGS_MANDATORY = ("nornir_config_file",)
 
 # used to track the optional kwargs for a NornFlowSettings object
-NONRFLOW_SETTINGS_OPTIONAL = {
+NORNFLOW_SETTINGS_OPTIONAL = {
     "local_tasks_dirs": [],
     "local_workflows_dirs": [],
     "local_filters_dirs": [],
+    "local_hooks_dirs": [],
     "imported_packages": [],
     "processors": [],
     "vars_dir": "vars",
     "failure_strategy": FailureStrategy.SKIP_FAILED,
 }
 
-# Used to check if the kwargs passed to a NornFlow initializer are valid.
-# The args listed here are can only be passed through a nornflow settings YAML file
-# that will be used to initialize a NornFlowSettings object
+# Kwargs that cannot be passed to NornFlow.__init__; they must be set via the settings YAML file.
+# These are optional settings (see NORNFLOW_SETTINGS_OPTIONAL), but if customized, use YAML.
 NORNFLOW_INVALID_INIT_KWARGS = (
     "nornir_config_file",
     "local_tasks_dirs",
     "local_workflows_dirs",
     "local_filters_dirs",
+    "local_hooks_dirs",
     "imported_packages",
 )
 
@@ -85,3 +86,89 @@ NORNFLOW_SUPPORTED_YAML_EXTENSIONS = (".yaml", ".yml")
 
 # Default inventory filter keys
 JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")
+
+# Keywords in variable names that should be masked in display
+PROTECTED_KEYWORDS = [
+    # Authentication
+    "password",
+    "passwd",
+    "pwd",
+    "secret",
+    "token",
+    "apikey",
+    "api_key",
+    "access_token",
+    "auth_token",
+    "authorization",
+    "jwt",
+    "bearer",
+    "sessionid",
+    "session_id",
+    # Cloud credentials
+    "aws_access_key_id",
+    "aws_secret_access_key",
+    "azure_client_secret",
+    "gcp_credentials",
+    "gcp_private_key",
+    "gcp_client_secret",
+    "gcp_token",
+    # Database
+    "db_password",
+    "db_pass",
+    "db_user",
+    "db_username",
+    "db_token",
+    "db_connection_string",
+    # SSH / TLS / Certificates
+    "ssh_key",
+    "private_key",
+    "tls_key",
+    "certificate",
+    "cert",
+    "pem",
+    "pfx",
+    "keystore",
+    # Environment variables
+    "env_secret",
+    "env_token",
+    "env_password",
+    "env_key",
+    # 2FA / MFA / OTP
+    "2fa_code",
+    "mfa_code",
+    "otp",
+    "one_time_password",
+    "verification_code",
+    "authenticator_code",
+    "totp",
+    "hotp",
+    "backup_code",
+    "recovery_code",
+    "sms_code",
+    "email_code",
+    "push_token",
+    "push_auth",
+    "security_code",
+    # Custom patterns
+    "client_secret",
+    "consumer_secret",
+    "app_secret",
+    "webhook_secret",
+    "signing_key",
+    "encryption_key",
+    "master_key",
+    "recovery_key",
+    "reset_token",
+    "magic_link",
+    # Config file keys
+    "config_secret",
+    "config_token",
+    "config_password",
+    "config_key",
+    # Generic
+    "key",
+    "secret",
+    "credentials",
+    "identity",
+    "login",
+]

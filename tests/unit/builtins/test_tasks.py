@@ -1,3 +1,4 @@
+# filepath: test_tasks.py
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -12,11 +13,27 @@ class TestSetTask:
         """set() should call build_set_task_report and return its output in Result."""
         mock_task = MagicMock()
         mock_task.host = MagicMock()
-        with patch("nornflow.builtins.tasks.build_set_task_report", return_value="REPORT") as mock_report:
-            res: Result = set(mock_task, foo="bar")
-            mock_report.assert_called_once_with(mock_task, {"foo": "bar"})
-            assert isinstance(res, Result)
-            assert res.result == "REPORT"
+        mock_task.host.name = "test_host"
+        
+        # Mock the vars_manager with required methods
+        mock_vars_manager = MagicMock()
+        mock_vars_manager.resolve_data.return_value = "resolved_value"
+        
+        with patch("nornflow.builtins.tasks.get_task_vars_manager", return_value=mock_vars_manager) as mock_get_vars:
+            with patch("nornflow.builtins.tasks.build_set_task_report", return_value="REPORT") as mock_report:
+                res: Result = set(mock_task, foo="bar")
+                
+                # Verify get_task_vars_manager was called
+                mock_get_vars.assert_called_once_with(mock_task)
+                
+                # Verify vars_manager methods were called
+                mock_vars_manager.resolve_data.assert_called_once_with("bar", "test_host")
+                mock_vars_manager.set_runtime_variable.assert_called_once_with("foo", "resolved_value", "test_host")
+                
+                # Verify build_set_task_report was called and result returned
+                mock_report.assert_called_once_with(mock_task, {"foo": "bar"})
+                assert isinstance(res, Result)
+                assert res.result == "REPORT"
 
 
 class TestEchoTask:
@@ -111,3 +128,4 @@ class TestWriteFileTask:
         assert res.failed is True
         assert hasattr(res, "exception")
         assert isinstance(res.exception, Exception)
+    

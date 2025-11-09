@@ -8,9 +8,9 @@
   - [`local_tasks_dirs`](#local_tasks_dirs)
   - [`local_workflows_dirs`](#local_workflows_dirs)
   - [`local_filters_dirs`](#local_filters_dirs)
+  - [`local_hooks_dirs`](#local_hooks_dirs)
   - [`vars_dir`](#vars_dir)
   - [`dry_run`](#dry_run)
-  - [`processors`](#processors)
   - [`imported_packages`](#imported_packages)
 - [NornFlow Settings vs Nornir Configs](#nornflow-settings-vs-nornir-configs)
 
@@ -45,8 +45,8 @@ NornFlow will try to find a settings YAML file in the following order:
 - **Example**:
   ```yaml
   local_tasks_dirs:
-    - "tasks" 
-    - "/home/myself/other_tasks"
+    - "tasks"
+    - "shared_tasks"
   ```
 
 ### `local_workflows_dirs`
@@ -58,7 +58,7 @@ NornFlow will try to find a settings YAML file in the following order:
   ```yaml
   local_workflows_dirs:
     - "workflows"
-    - "../automation/nornflow_worflows"
+    - "shared_workflows"
   ```
 
 ### `local_filters_dirs`
@@ -70,9 +70,22 @@ NornFlow will try to find a settings YAML file in the following order:
   ```yaml
   local_filters_dirs:
     - "filters"
-    - "../custom_filters"
+    - "custom_filters"
   ```
 - **Note**: For details on how these filters can be used in workflows, see the [Inventory Filtering](./how_to_write_workflows.md#inventory-filtering) section in the Workflows documentation.
+
+### `local_hooks_dirs`
+
+- **Description**: List of paths to directories containing custom hook implementations to be included in NornFlow's hook registry. Hooks extend task behavior without modifying task code. The search is recursive, meaning that all subdirectories will be searched as well.
+- **Type**: list[str]
+- **Default**: []
+- **Example**:
+  ```yaml
+  local_hooks_dirs:
+    - "hooks"
+    - "custom_hooks"
+  ```
+- **Note**: For details on creating custom hooks, see the [Hooks Guide](./hooks_guide.md) documentation.
 
 ### `vars_dir`
 
@@ -81,7 +94,7 @@ NornFlow will try to find a settings YAML file in the following order:
 - **Default**: "vars"
 - **Example**:
   ```yaml
-  vars_dir: "variables"
+  vars_dir: "vars"
   ```
 - **Note**: For details on how variables are loaded and their precedence, see the [Variables Basics](./variables_basics.md) documentation.
 
@@ -95,30 +108,37 @@ NornFlow will try to find a settings YAML file in the following order:
   dry_run: True
   ```  
 
+### `failure_strategy`
+
+- **Description**: Sets NornFlow's behavior when a task fails for a host during the execution of workflows. This setting controls whether NornFlow will skip failed hosts from subsequent tasks, stop execution as soon as possible, or continue running all tasks regardless of failures.
+- **Type**: `str` (one of: "skip-failed", "fail-fast", "run-all")
+- **Default**: "skip-failed"
+- **Example**:
+  ```yaml
+  failure_strategy: "fail-fast"
+  ```
+- **Note**: For details on how failure strategies work, see the [Failure Strategies](./failure_strategies.md) documentation.
+
 ### `processors`
-- **Description**: List of Nornir processor configurations to be applied during task/workflow execution. If not provided, NornFlow will default to using only its default processor: `nornflow.builtins.processors.DefaultNornFlowProcessor`.
+- **Description**: List of Nornir processor configurations to be applied during task/workflow execution. If not provided, NornFlow will default to using only its default processor: `nornflow.builtins.DefaultNornFlowProcessor`.
 - **Type**: `list[dict]`
 - **Default**: Uses `DefaultNornFlowProcessor` if not specified
 - **Example**:
   ```yaml
   processors:
     - class: "nornflow.builtins.DefaultNornFlowProcessor"
-      args: {} # included for completeness. If empty, it can be simply omitted. 
-    - class: "mypackage.mymodule.MyCustomProcessor" 
+    - class: "my_custom_package.MyCustomProcessor"
       args:
-        verbose: true
-        log_level: "INFO"
+        verbosity: 2
   ```
 - **Note**: Each processor configuration requires:
   - `class`: Full Python import path to the processor class
-  - `args`: Optional dictionary of keyword arguments passed to the processor constructor
-
-  **IMPORTANT**: If you specify custom processors, the `DefaultNornFlowProcessor` **WILL NOT** be automatically included. You must explicitly add it if you still want its functionality.
+  - `args` (optional): Dictionary of arguments to pass to the processor's `__init__` method
   
-  Workflows can define their own processors section in their YAML files, with the same structure. Processor precedence follows this order:
-  1. CLI arguments (via `--processors`/`-p` option)
-  2. Workflow-specific processors (defined in the YAML file)
-  3. Global processors setting (defined in the settings YAML file - defaults to `nornflow.yaml` in the root of the project directory)
+  Processor precedence (highest to lowest):
+  1. Processors passed directly to NornFlow constructor
+  2. Processors defined in workflow YAML
+  3. Processors defined in this settings file
   4. `DefaultNornFlowProcessor` (if no other processors specified)
 
 ---
@@ -130,7 +150,9 @@ NornFlow will try to find a settings YAML file in the following order:
 - ***Default**: `[]`*
 - ***Example**:*
   ```yaml
-  imported_packages: []
+  imported_packages:
+    - "nornir_napalm"
+    - "nornir_netmiko"
   ```
 ---
 <br><br>
@@ -157,7 +179,7 @@ In fact, even the choice of words here is purposeful: you may have noticed that 
 <table width="100%" border="0" style="border-collapse: collapse;">
 <tr>
 <td width="33%" align="left" style="border: none;">
-<a href="./variables_basics.md">← Previous: Variables Basics</a>
+<a href="./hooks_guide.md">← Previous: Hooks Guide</a>
 </td>
 <td width="33%" align="center" style="border: none;">
 </td>

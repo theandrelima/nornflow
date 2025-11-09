@@ -43,6 +43,7 @@ This creates:
 - 📁 tasks - Where your Nornir tasks should live
 - 📁 workflows - Holds YAML workflow definitions
 - 📁 filters - Custom Nornir inventory filters
+- 📁 hooks - Custom hook implementations for extending task behavior
 - 📁 vars - Will contain Global and Domain-specific default variables
 - 📁 nornir_configs - Nornir configuration
 - 📑 nornflow.yaml - NornFlow settings
@@ -55,8 +56,8 @@ nornflow show --catalogs
 
 You'll see three catalogs:
 - **Tasks**: Individual Nornir tasks, that represent a single automation action.
-- **Workflows**: Sequences of tasks grouped in a YAML file, representing a set of tasks that should be executed together over an invetory to achieve a end-goal.
-- **Nornir Filters**: Nornir filters that allow to select specific devices from the whole inventory to run either tasks or workflows against.
+- **Workflows**: Sequences of tasks defined in YAML files that describe operations to be executed together.
+- **Filters**: Nornir filters that allow you to select specific devices from the inventory.
 
 ## Running Tasks
 
@@ -75,11 +76,11 @@ nornflow run greet_user --args "greeting='Hello', user='Network Team'"
 
 ## Running Workflows
 
-Workflows combine multiple tasks. As an example, let's look at the sample `workflows/hello_world.yaml` that was created by `nornflow init`.
+Workflows combine multiple tasks into a sequence. As an example, let's look at the sample hello_world.yaml that was created by `nornflow init`.
 
 ```yaml
 workflow: 
-  name: Hello World Playbook
+  name: Hello World Workflow
   description: "A simple workflow that just works"
   tasks:
     - name: hello_world
@@ -114,34 +115,34 @@ simple_inventory:
     router1:
       hostname: 192.168.1.1
       platform: ios
-      groups:
-        - routers
+      username: admin
+      password: secret
     switch1:
-      hostname: 192.168.1.10
-      platform: nxos_ssh
-      groups:
-        - switches
-  groups:
-    routers:
+      hostname: 192.168.1.2
+      platform: nxos
       username: admin
-    switches:
-      username: admin
+      password: secret
 ```
 
-### 2. Configure Nornir (`nornir_configs/config.yaml`):
+### 2. Configure Nornir (config.yaml):
 
 ```yaml
 inventory:
   plugin: SimpleInventory
   options:
-    host_file: inventory.yaml
+    host_file: "nornir_configs/inventory.yaml"
+
+runner:
+  plugin: threaded
+  options:
+    num_workers: 10
 ```
 
-### 3. Verify NornFlow settings (`nornflow.yaml`):
+### 3. Verify NornFlow settings (nornflow.yaml):
 
 NornFlow's settings file is created with sensible defaults by running `nornflow init`. You are encouraged to use these defaults, but feel free to modify the settings to best fit your scenario or use case.
 
-**The following is the sample `nornflow.yaml` created:**
+**The following is the sample nornflow.yaml created:**
 
 ```yaml
 nornir_config_file: "nornir_configs/config.yaml"
@@ -151,11 +152,13 @@ local_workflows_dirs:
   - "workflows"
 local_filters_dirs:
   - "filters"
+local_hooks_dirs:
+  - "hooks"
 imported_packages: []
 dry_run: False
+failure_strategy: "skip-failed"
 processors:
   - class: "nornflow.builtins.DefaultNornFlowProcessor"
-    args: {}
 vars_dir: "vars"
 ```
 
@@ -164,16 +167,17 @@ vars_dir: "vars"
 ```yaml
 workflow:
   name: "Backup Device Configs"
+  description: "Backup configurations from all network devices"
   tasks:
     - name: netmiko_send_command
       args:
         command_string: "show running-config"
-      set_to: config_output
+      set_to: "running_config"
     
     - name: write_file
       args:
         filename: "backups/{{ host.name }}_config.txt"
-        content: "{{ config_output.result }}"
+        content: "{{ running_config }}"
 ```
 
 Run it:
@@ -205,6 +209,7 @@ workflow:
 Set variables dynamically during workflow execution:
 
 ```yaml
+# vlan_config.yaml
 workflow:
   name: "Dynamic Device Configuration"
   tasks:
@@ -312,3 +317,5 @@ nornflow run my_workflow.yaml --dry-run
 </td>
 </tr>
 </table>
+
+</div>
