@@ -18,6 +18,7 @@ from nornflow.cli.constants import (
     SAMPLE_WORKFLOW_FILE,
     TASKS_DIR,
     WORKFLOWS_DIR,
+    HOOKS_DIR,
 )
 from nornflow.cli.exceptions import CLIInitError
 from nornflow.cli.show import show_catalog, show_nornflow_settings
@@ -101,6 +102,7 @@ def create_required_directories() -> None:
     create_directory(TASKS_DIR)
     create_directory(WORKFLOWS_DIR)
     create_directory(FILTERS_DIR)
+    create_directory(HOOKS_DIR)
 
     # If vars_dir is different from default, it will be created later
     # based on the actual settings after NornFlow is built
