@@ -6,7 +6,7 @@ from typing import Any, TYPE_CHECKING
 from nornir.core.inventory import Host
 from nornir.core.task import Result, Task
 
-from nornflow.hooks import Hook, register_hook
+from nornflow.hooks import Hook
 from nornflow.hooks.exceptions import HookValidationError
 from nornflow.vars.constants import JINJA2_MARKERS
 from nornflow.vars.exceptions import TemplateError
@@ -51,7 +51,6 @@ def skip_if_condition_flagged(task_func: Callable) -> Callable:
     return wrapper
 
 
-@register_hook
 class IfHook(Hook):
     """Conditionally execute tasks per host based on filter functions or Jinja2 expressions.
 

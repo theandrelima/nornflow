@@ -6,7 +6,7 @@ from typing import Any, TYPE_CHECKING
 from nornir.core.inventory import Host
 from nornir.core.task import MultiResult, Result, Task
 
-from nornflow.hooks import Hook, register_hook
+from nornflow.hooks import Hook
 from nornflow.hooks.exceptions import HookValidationError
 
 if TYPE_CHECKING:
@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@register_hook
 class SetToHook(Hook):
     """
     Store task execution results as runtime variables with optional data extraction.

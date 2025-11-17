@@ -1,14 +1,14 @@
 """Task Hook Framework for NornFlow.
 
-This package provides a structured system for extending task behavior through hooks.
+Hooks provide a clean way to extend task behavior without modifying task code.
+Simply inherit from Hook and define a hook_name - registration is automatic!
 """
 
-from nornflow.hooks.base import Hook
+from nornflow.hooks.base import Hook, HOOK_REGISTRY
 from nornflow.hooks.loader import load_hooks
-from nornflow.hooks.registry import register_hook
 
 __all__ = [
     "Hook",
+    "HOOK_REGISTRY", 
     "load_hooks",
-    "register_hook",
 ]
