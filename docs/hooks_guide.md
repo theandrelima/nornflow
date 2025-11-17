@@ -14,7 +14,7 @@
 - [Hook Configuration](#hook-configuration)
   - [Task-Level Configuration](#task-level-configuration)
   - [Multiple Hooks per Task](#multiple-hooks-per-task)
-- [Creating Custom Hooks](#creating-custom-hooks)
+- [Creating Your Custom Hooks](#creating-your-custom-hooks)
   - [Basic Hook Structure](#basic-hook-structure)
   - [Hook Registration](#hook-registration)
   - [Hook Discovery and Loading](#hook-discovery-and-loading)
@@ -35,7 +35,7 @@ This guide covers everything you need to know about using and creating hooks in 
 
 ## What Are Hooks?
 
-Hooks are special components that can intercept and modify task execution behavior. They act as "processors in disguise" - implementing Nornir's Processor protocol while providing a simpler, more focused interface for common automation patterns.
+Hooks are special components that can intercept and modify task execution behavior. They act as "mini processors", implementing Nornir's Processor protocol while providing a simpler, more focused interface for common automation patterns.
 
 **Key characteristics:**
 - **Declarative**: Configure hooks in YAML alongside tasks
@@ -43,6 +43,7 @@ Hooks are special components that can intercept and modify task execution behavi
 - **Isolated**: Each task gets its own hook context
 - **Powerful**: Full access to task lifecycle events
 - **Selective**: Activate only when configured on specific tasks, and according to implemented logic.
+- **Automatic**: Registration happens automatically when you define a hook class
 
 **Potential use cases:**
 - **Task-level orchestration**: Implement setup or teardown logic that runs once per task across all hosts
@@ -53,33 +54,21 @@ Hooks are special components that can intercept and modify task execution behavi
 - **Cross-cutting concerns**: Implement logging, auditing, or notification logic without cluttering task code
 - **Dynamic behavior injection**: Add functionality to tasks without modifying their source code
 
-Unlike Nornir processors (which apply globally to all tasks) or filters (which apply at the inventory level), hooks provide surgical precision - they only activate when explicitly configured on individual tasks in your workflow.
+Unlike Nornir processors (which apply globally to all tasks) or filters (which apply at the inventory level), hooks provide surgical precision: they only activate when explicitly configured on individual tasks in your workflow.
 
 ## Hook Architecture
 
 ### Hooks as Nornir Processors
 
-Under the hood, hooks are Nornir processors managed by the [`NornFlowHookProcessor`](../nornflow/builtins/processors/hook_processor.py). This design provides:
+Under the hood, hooks are Nornir processors managed by the [`NornFlowHookProcessor`](../nornflow/builtins/processors/hook_processor.py). The design provides:
 
 1. **Full lifecycle access**: Hooks can react to any point in task execution
 2. **Processor chain integration**: Hooks work alongside other processors
 3. **Performance optimization**: Hook instances are cached and reused (Flyweight pattern)
 
-```python
-# Simplified view of how hooks integrate
-class NornFlowHookProcessor(Processor):
-    """Orchestrator that delegates to hooks."""
-    
-    def task_instance_started(self, task: Task, host: Host):
-        # Delegate to all registered hooks
-        for hook in self.task_hooks:
-            if hook.should_execute(task):
-                hook.task_instance_started(task, host)
-```
-
 ### Execution Lifecycle
 
-Hooks participate in these task lifecycle events:
+Hooks can participate in these task lifecycle events:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -123,29 +112,13 @@ Hooks participate in these task lifecycle events:
 
 ### Performance Characteristics
 
-NornFlow implements the **Flyweight pattern** for hook instances:
+- **Hook instances**: Created ONCE per unique (hook_class, value) pair via Flyweight pattern
+- **Memory usage**: O(unique_hooks) - shared instances across tasks
+- **Thread safety**: Guaranteed via execution context isolation
+- **Registration**: Happens at import time via `__init_subclass__`
+- **Validation**: Happens once per task during workflow preparation
 
-- **Hook instances**: Created ONCE per unique `(hook_class, value)` pair
-- **Memory usage**: O(unique_hooks) instead of O(tasks × hooks)
-- **Thread safety**: Guaranteed via locks during instance creation
-- **Validation**: Happens once per task, results cached
-
-```yaml
-# Example: Only ONE IfHook instance created for both tasks
-tasks:
-  - name: configure_vlans
-    if: "{{ host.platform == 'ios' }}"
-    args:
-      config_commands:
-        - "vlan 10"
-    
-  - name: verify_config
-    if: "{{ host.platform == 'ios' }}"
-    args:
-      command_string: "show vlan"
-```
-
-## Built-in Hooks
+## NornFlow's Built-in Hooks
 
 NornFlow includes three built-in hooks that demonstrate the framework's capabilities and serve as practical examples for creating your own custom hooks.
 
@@ -153,45 +126,18 @@ NornFlow includes three built-in hooks that demonstrate the framework's capabili
 
 Conditionally execute tasks based on filter functions or Jinja2 expressions.
 
-#### Configuration Formats
-
-**Jinja2 Expression**
-```yaml
-tasks:
-  - name: ios_specific_config
-    if: "{{ host.platform == 'ios' }}"
-    
-  - name: backup_if_changed
-    if: "{{ config_changed | default(false) }}"
-    
-  - name: complex_condition
-    if: "{{ host.data.site == 'prod' and maintenance_mode == false }}"
-```
-
-**Filter Function Format**
-```yaml
-tasks:
-  - name: filter_by_platform
-    if:
-      platform_filter: {platform: "ios"}
-      
-  - name: filter_by_site
-    if:
-      site_filter: ["dc1", "dc2"]
-      
-  - name: simple_filter
-    if:
-      is_production: true
-```
-
-#### How It Works
+You are encouraged to examine the source code for the `if` Hook [here](../nornflow/builtins/hooks/if_hook.py), but as a summary, here is how it works:
 
 1. **task_started**: Decorates the task function with skip-checking logic
 2. **task_instance_started**: Evaluates condition for each host
-3. If condition is `false`: Sets `nornflow_skip_flag` in `host.data`
+3. If condition is evaluated to `false`: Sets `nornflow_skip_flag` in `host.data`
 4. Decorated function checks flag and returns skipped Result if set
 
-#### Jinja2 Expression Details
+#### Configuration Formats
+
+The `if` Hook accepts inputs either as Jinja2 expressions or as Nornir filters in the filters catalogue.
+
+##### Jinja2 Expression Details
 
 Expressions have access to:
 - `host.*` namespace (Nornir inventory)
@@ -209,10 +155,22 @@ if: "{{ count > 5 }}"
 if: "{{ host.name }}"  # Returns string
 if: "{{ vlans }}"      # Returns list
 ```
+**Using the `if` Hook with Jinja2 Expressions**
+```yaml
+tasks:
+  - name: ios_specific_config
+    if: "{{ host.platform == 'ios' }}"
+    
+  - name: backup_if_changed
+    if: "{{ config_changed | default(false) }}"
+    
+  - name: complex_condition
+    if: "{{ host.data.site == 'prod' and maintenance_mode == false }}"
+```
 
-#### Filter Function Requirements
+##### Filter Function Details
 
-Filter functions must:
+The Filter functions must:
 1. Be registered in filters catalog
 2. Accept `Host` as first parameter
 3. Return boolean value
@@ -224,87 +182,63 @@ def platform_filter(host: Host, platform: str) -> bool:
     return host.platform == platform
 ```
 
-#### Examples
-
-**Conditional Backup**
+**Using the `if` Hook with Nornir Filter Functions**
 ```yaml
-workflow:
-  name: Conditional Configuration Backup
-  tasks:
-    - name: netmiko_send_command
-      args:
-        command_string: "show running-config"
-      set_to: current_config
+tasks:
+  - name: filter_by_platform
+    if:
+      platform_filter: {platform: "ios"}
       
-    - name: write_file
-      if: "{{ current_config != last_known_config | default('') }}"
-      args:
-        filename: "/backups/{{ host.name }}.cfg"
-        content: "{{ current_config }}"
-```
-
-**Platform-Specific Tasks**
-```yaml
-tasks:
-  - name: netmiko_send_config
-    if: "{{ host.platform == 'ios' }}"
-    args:
-      config_commands:
-        - "interface GigabitEthernet0/1"
-        - "description Configured by NornFlow"
-        
-  - name: netmiko_send_config
-    if: "{{ host.platform == 'nxos' }}"
-    args:
-      config_commands:
-        - "interface Ethernet1/1"
-        - "description Configured by NornFlow"
-```
-
-**Maintenance Window Check**
-```yaml
-vars:
-  maintenance_windows:
-    router1: true
-    router2: false
-    
-tasks:
-  - name: netmiko_send_config
-    if: "{{ maintenance_windows[host.name] | default(false) }}"
+  - name: filter_by_site
+    if:
+      site_filter: ["dc1", "dc2"]
+      
+  - name: simple_filter
+    if:
+      is_production: true
 ```
 
 ### The `set_to` Hook
 
-Capture task results and store them as runtime variables with optional data extraction.
+You are encouraged to refer to the source code for the `set_to` Hook [here](../nornflow/builtins/hooks/set_to.py), but here is a summary of how it works:
+
+1. **Validation**: Checks configuration format during task preparation
+2. **task_instance_completed**: Runs after task completes on each host
+3. **Storage**: Stores extracted value as runtime variable for the host
+
+The actual data captured depends on the configuration format used for the `set_to` hook:  
+   - In *simple mode*, the entire Nornir's `Result` object returned by a task execution is captured and assigned
+   - In *extraction mode*, you specify exactly what nested data out of the `Result` object you want to capture and assign to your variable.
 
 #### Configuration Formats
 
-**Simple Storage (Store Complete Result)**
+**Simple Mode (stores the complete Nornir's `Result` object)**
 ```yaml
 tasks:
   - name: netmiko_send_command
     args:
       command_string: "show version"
-    set_to: device_facts
+    set_to: device_facts # stores the entire Result object returned by `netmiko_send_command` to a 'device_facts' var
 ```
 
-**Extraction Mode (Extract Specific Data)**
+**Extraction Mode (extracts specific data from the Nornir's `Result.result` object)**
 ```yaml
 tasks:
   - name: napalm_get
     args:
       getters: ["facts", "interfaces"]
     set_to:
-      device_hostname: "facts.hostname"
-      device_vendor: "facts.vendor"
-      mgmt_ip: "interfaces.Management1.ipv4.address"
+      mgmt_ip: "interfaces.Management1.ipv4.address" # stores the IPv4 Address deeply nested in the Result object returned by the `napalm_get` task to a var named 'mgmt_ip'
 ```
 
 #### Extraction Path Syntax
 
-Access data from `result.result` dictionary using:
+Access data from `Result.result` dictionary using:
 
 **Dot notation for nested dicts:**
+
+The below would update/create two NornFlow vars named "**vendor**" (with the value extracted from `Result.result['vendor']`) and "**cpu**" (with the value extracted from `Result.result['environment']['cup']['usage']`)
+
 ```yaml
 set_to:
   vendor: "vendor"
@@ -312,150 +246,83 @@ set_to:
 ```
 
 **Bracket notation for lists:**
+
+The below would update/create two NornFlow vars named "**first_cpu**" (with the value extracted from `Result.ressult['environment']['cpu'][0]['usage']`) and "**interface_ip**" (with the value extracted from `Result.result['interfaces']['eth0']['ipv4'][0]['address']`). 
+
 ```yaml
 set_to:
   first_cpu: "environment.cpu[0].usage"
   interface_ip: "interfaces.eth0.ipv4[0].address"
 ```
 
-**Dot and Bracket notations can be combined:**
-```yaml
-set_to:
-  complex_value: "data.nested_list[2].another_dict.values[5]"
-```
-
 **Special prefixes for Result attributes:**
 ```yaml
 set_to:
-  task_failed: "_failed"
-  task_changed: "_changed"
-  complete_result: "_result"
+  task_failed: "_failed" # the `Result.failed` object
+  task_changed: "_changed" # the `Result.changed` object
+  complete_result: "_result" # the `Result.result` object
 ```
-
-#### How It Works
-
-1. **Validation**: Checks configuration format during task preparation
-2. **task_instance_completed**: Runs after task completes on each host
-3. **Extraction**: Navigates result data using specified path
-4. **Storage**: Stores extracted value as runtime variable for the host
-
-#### Examples
-
-**Simple Result Storage**
-```yaml
-tasks:
-  - name: netmiko_send_command
-    args:
-      command_string: "show version"
-    set_to: version_output
-    
-  - name: echo
-    args:
-      msg: "Version: {{ version_output.result }}"
-```
-
-**Data Extraction**
-```yaml
-tasks:
-  - name: napalm_get
-    args:
-      getters: ["facts"]
-    set_to:
-      hostname: "facts.hostname"
-      model: "facts.model"
-      os_version: "facts.os_version"
-      serial: "facts.serial_number"
-      
-  - name: echo
-    args:
-      msg: "Device {{ hostname }} ({{ model }}) running {{ os_version }}"
-```
-
-**Conditional Logic Based on Results**
-```yaml
-tasks:
-  - name: netmiko_send_command
-    args:
-      command_string: "show bgp summary"
-    set_to:
-      bgp_output: "_result"
-      bgp_failed: "_failed"
-      
-  - name: send_notification
-    if: "{{ 'Established' not in bgp_output and not bgp_failed }}"
-    args:
-      message: "BGP not established on {{ host.name }}"
-```
-
-**Complex Extraction**
-```yaml
-tasks:
-  - name: napalm_get
-    args:
-      getters: ["interfaces"]
-    set_to:
-      mgmt_mac: "interfaces.Management1.mac_address"
-      mgmt_mtu: "interfaces.Management1.mtu"
-      first_ip: "interfaces.Management1.ipv4.address"
-      all_interfaces: "interfaces"
-      
-  - name: custom_processing
-    args:
-      interfaces: "{{ all_interfaces }}"
-      primary_mac: "{{ mgmt_mac }}"
-```
-
-**Capturing Task Status**
-```yaml
-tasks:
-  - name: netmiko_send_config
-    args:
-      config_commands:
-        - "interface GigabitEthernet0/1"
-        - "shutdown"
-    set_to:
-      operation_failed: "_failed"
-      operation_changed: "_changed"
-      
-  - name: netmiko_send_config
-    if: "{{ operation_failed }}"
-    args:
-      config_commands:
-        - "interface GigabitEthernet0/1"
-        - "no shutdown"
-```
-
 
 ### The `shush` Hook
 
-Signal to output processors that task results should be suppressed.
+Signal to output processors if a task results should be suppressed.
 
-#### Configuration
+You are encouraged to refer to the source code for the `shush` Hook [here](../nornflow/builtins/hooks/shush.py), but here is a summary of how it works:
 
+1. **task_started**: Checks for compatible processors with `supports_shush_hook` attribute
+2. Evaluates the configured value (boolean or Jinja2 expression)
+3. If the value evaluates to `True`: Marks task in suppression set on Nornir instance
+4. Output processor checks suppression set and skips output display while preserving all data
+5. **task_completed**: Removes task from suppression set after completion
+
+#### Configuration Formats
+
+**Boolean (static suppression)**
 ```yaml
 tasks:
   - name: netmiko_send_command
-    shush: true
+    shush: true  # Always suppress
     set_to: backup_result
     
   - name: verify_config
-    shush: false
+    shush: false  # Never suppress
 ```
 
-#### How It Works
+**Jinja2 Expression (dynamic suppression)**
 
-1. **task_started**: Checks for compatible processors with `supports_shush_hook` attribute
-2. If compatible processor found: Adds task name to `_nornflow_suppressed_tasks` set
-3. Output processor checks this set and skips output display while preserving all data
+```yaml
+vars:
+  debug_mode: false
+  quiet_mode: true
+  
+tasks:
+  - name: backup_config
+    shush: "{{ not debug_mode }}"  # Suppress unless debugging
+    set_to: config_backup
+    
+  - name: get_facts
+    shush: "{{ quiet_mode }}"  # Suppress based on variable
+    set_to: device_facts
+    
+  - name: show_interfaces
+    shush: "{{ host.platform == 'ios'}}"  # dynamic condition
+```
+
+**Expression Evaluation:**
+- Jinja2 expressions have access to all NornFlow variables (runtime, CLI, inline, domain, default, env)
+- Expressions have access to host.* namespace (Nornir inventory)
+- Must contain Jinja2 markers ({{, {%, or {#)
+- Expressions are resolved to strings, then evaluated as boolean. 
+- String values "true", "yes", "1" evaluate to True. 
+- All other string values evaluate to False. 
 
 #### Processor Compatibility
 
 The `shush` hook is **automatically supported** by NornFlow's `DefaultNornFlowProcessor`, which is applied by default to all workflows.
 
-**Important Notes:**
+If you configure custom processors via the `processors` setting (either globally in `nornflow.yaml` or per-workflow), the `shush` hook will only work if at least one of those processors also implement `supports_shush_hook` attribute
 
-- **Default behavior**: Works out of the box via `DefaultNornFlowProcessor`
-- **Custom processors**: If you configure custom processors via the `processors` setting (either globally in nornflow.yaml or per-workflow), the `shush` hook will only work if at least one of those processors also implement `supports_shush_hook` attribute
+In summary: 
 - **Signal mechanism**: The hook doesn't implement suppression directly - it signals to compatible processors
 - **Data preservation**: Result objects remain intact regardless of suppression
 - **Warning on incompatibility**: Shows warning if no compatible processor is found
@@ -483,78 +350,28 @@ class MyCustomProcessor(Processor):
         print(result)
 ```
 
-#### Examples
-
-**Suppress Noisy Commands**
-```yaml
-tasks:
-  - name: netmiko_send_command
-    args:
-      command_string: "show running-config"
-    shush: true
-    set_to: config_backup
-    
-  - name: echo
-    args:
-      msg: "Backup captured {{ config_backup.result | length }} characters"
-```
-
-**Quiet Data Collection**
-```yaml
-workflow:
-  name: Silent Data Collection
-  tasks:
-    - name: netmiko_send_command
-      args:
-        command_string: "show ip arp"
-      shush: true
-      set_to: arp_table
-      
-    - name: netmiko_send_command
-      args:
-        command_string: "show mac address-table"
-      shush: true
-      set_to: mac_table
-      
-    - name: netmiko_send_command
-      args:
-        command_string: "show ip route"
-      shush: true
-      set_to: routing_table
-      
-    - name: echo
-      args:
-        msg: |
-          Collected data for {{ host.name }}:
-          - ARP entries: {{ arp_table.result | length }}
-          - MAC entries: {{ mac_table.result | length }}
-          - Routes: {{ routing_table.result | length }}
-```
-
-**Conditional Output Suppression**
-```yaml
-vars:
-  debug_mode: false
-  
-tasks:
-  - name: netmiko_send_command
-    args:
-      command_string: "show tech-support"
-    shush: "{{ not debug_mode }}"
-```
-
 ## Hook Configuration
 
 ### Task-Level Configuration
 
-Hooks are configured directly on tasks in workflow YAML/dict:
+Hooks are configured directly on tasks in workflow YAML/dict like if it were one of the attributes of a task, rather than args passed to a task:
 
 ```yaml
+# ✅ Correct - hooks configured at task level
 tasks:
   - name: my_task
-    if: "{{ condition }}"
-    set_to: variable_name
-    shush: true
+    args:                  # Task arguments
+      arg1: true
+      arg2: "device"
+    set_to: result_var     # Hook configuration
+
+# ❌ Incorrect - hooks inside args block
+tasks:
+  - name: my_task
+    args:
+      arg1: true
+      arg2: "device"
+      set_to: result_var       # Wrong! This is passed to task function
 ```
 
 ### Multiple Hooks per Task
@@ -573,22 +390,21 @@ tasks:
 1. `if` hook evaluates condition (task_instance_started)
 2. If condition passes, task executes
 3. `set_to` hook captures results (task_instance_completed)
-4. `shush` hook affects output display (throughout)
+4. `shush` hook affects output display
 
-## Creating Custom Hooks
+## Creating Your Custom Hooks
 
 ### Basic Hook Structure
+
+Creating a custom hook is simple - just inherit from `Hook` and define a `hook_name`. Registration happens automatically!
 
 ```python
 from typing import Any
 from nornir.core.task import Task
 from nornir.core.inventory import Host
-from nornflow.hooks import Hook, register_hook
+from nornflow.hooks import Hook
 
-@register_hook
 class MyCustomHook(Hook):
-    """Description of what your hook does."""
-    
     hook_name = "my_custom"
     run_once_per_task = False
     
@@ -608,17 +424,19 @@ class MyCustomHook(Hook):
 
 ### Hook Registration
 
-The `@register_hook` decorator registers your hook in the global registry:
+**Automatic Registration via Inheritance**
+
+When you define a hook class that inherits from `Hook` and sets a `hook_name`, it's automatically registered when Python imports the module.
 
 ```python
-from nornflow.hooks import register_hook
+from nornflow.hooks import Hook
 
-@register_hook
 class MyHook(Hook):
     hook_name = "my_hook"
+    ...
 ```
 
-After registration, use in workflows:
+After your hook module is imported (via `local_hooks_dirs`), it's immediately available in workflows:
 
 ```yaml
 tasks:
@@ -634,7 +452,7 @@ tasks:
 
 #### The `local_hooks_dirs` Setting
 
-Configure this in your nornflow.yaml file (either in your project root or the path specified in `NORNFLOW_SETTINGS` environment variable):
+Configure this in your `nornflow.yaml` file:
 
 ```yaml
 # nornflow.yaml
@@ -655,7 +473,7 @@ When NornFlow starts, it:
 1. **Reads `local_hooks_dirs`** from settings (or uses default `["hooks"]`)
 2. **Recursively scans** each directory for `.py` files
 3. **Imports** each Python module found
-4. **Registration happens automatically** via `@register_hook` decorator at import time
+4. **Registration happens automatically** via `__init_subclass__` during import
 5. **Hooks become available** for use in workflows
 
 ```
@@ -675,7 +493,7 @@ Project Structure:
 **Registration timing:**
 - Hooks are registered **at import time** when the module is loaded
 - This happens **before** any workflow execution
-- The `@register_hook` decorator adds the hook to the global registry immediately
+- The `Hook.__init_subclass__` mechanism adds the hook to the global registry immediately
 
 **Common pitfalls:**
 
@@ -698,14 +516,13 @@ Project Structure:
        └── custom.py
    ```
 
-2. **Missing `@register_hook` decorator:**
+2. **Missing `hook_name`:**
    ```python
    # ❌ Hook won't be registered
    class MyHook(Hook):
-       hook_name = "my_hook"
+       pass  # No hook_name defined
    
    # ✅ Correct
-   @register_hook
    class MyHook(Hook):
        hook_name = "my_hook"
    ```
@@ -713,7 +530,6 @@ Project Structure:
 3. **Syntax errors in hook files:**
    - Python import errors will prevent hook registration
    - Check logs for import failures during NornFlow startup
-
 
 ### Lifecycle Methods
 
@@ -755,9 +571,8 @@ class Hook(ABC):
 ```python
 from nornir.core.task import Task
 from nornir.core.inventory import Host
-from nornflow.hooks import Hook, register_hook
+from nornflow.hooks import Hook
 
-@register_hook
 class SimpleValidationHook(Hook):
     """Only needs task_instance_started - no need to define others."""
     
@@ -768,36 +583,38 @@ class SimpleValidationHook(Hook):
             raise ValueError(f"No username for {host.name}")
 ```
 
-The base `Hook` class already provides default implementations (empty `pass` statements) for all lifecycle methods, so your custom hook only needs to inherit from `Hook` and be decorated with `@register_hook`.
+The base `Hook` class already provides default implementations (empty `pass` statements) for all lifecycle methods, so your custom hook only needs to inherit from `Hook` and set `hook_name`.
+
+Here's a clearer rewrite of the "Execution Scopes" section:
 
 ### Execution Scopes
 
-Control how often your hook executes:
+Control whether your hook executes once per task or independently for each host using the `run_once_per_task` class attribute:
+
+**Once per task** - Hook logic runs only for the first host, subsequent hosts skip execution:
 
 ```python
 class MyHook(Hook):
-    # Run once per task (shared across all hosts)
     run_once_per_task = True
-    
-    def task_instance_started(self, task: Task, host: Host):
-        # This runs only for the FIRST host
-        # Subsequent hosts are skipped automatically
-        pass
+  
 ```
+
+Use this when your hook's logic applies to the entire task regardless of which hosts are involved. Examples: deciding whether to suppress output (`shush`), logging task start/completion, or setting task-wide flags.
+
+**Per host (default)** - Hook logic runs independently for every host:
 
 ```python
 class MyHook(Hook):
-    # Run per host (default)
-    run_once_per_task = False
-    
-    def task_instance_started(self, task: Task, host: Host):
-        # This runs independently for EACH host
-        pass
+    run_once_per_task = False  # This is the default
+
 ```
+
+Use this when your hook needs to evaluate conditions or perform actions specific to each individual host. Examples: conditional execution based on host attributes (`if`), storing per-host results (`set_to`), or per-host validation.
+
 
 ### Context Access
 
-Hooks receive context from the `NornFlowHookProcessor`:
+Hooks receive context from the `NornFlowHookProcessor`. You can easily access various NornFlow components through it by accessing `self.context`:
 
 ```python
 class MyHook(Hook):
@@ -853,7 +670,7 @@ import smtplib
 from email.message import EmailMessage
 from nornir.core.task import Task, MultiResult
 from nornir.core.inventory import Host
-from nornflow.hooks import Hook, register_hook
+from nornflow.hooks import Hook
 
 logger = logging.getLogger(__name__)
 
@@ -863,7 +680,6 @@ class DeviceUnreachableError(Exception):
     pass
 
 
-@register_hook
 class NotifyOnErrorHook(Hook):
     """Send email notification when specific errors occur."""
     
