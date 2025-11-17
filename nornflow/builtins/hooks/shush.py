@@ -1,11 +1,10 @@
 # ruff: noqa: SLF001, T201
 import re
 
-from nornflow.hooks import Hook, register_hook
+from nornflow.hooks import Hook
 from nornflow.hooks.exceptions import HookValidationError
 
 
-@register_hook
 class ShushHook(Hook):
     """Hook to suppress task output printing.
 

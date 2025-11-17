@@ -9,9 +9,8 @@ from pydantic_serdes.utils import convert_to_hashable
 
 from nornflow.builtins.processors import NornFlowHookProcessor
 from nornflow.exceptions import ProcessorError
-from nornflow.hooks import Hook
+from nornflow.hooks import Hook, HOOK_REGISTRY
 from nornflow.hooks.loader import load_hooks
-from nornflow.hooks.registry import HOOK_REGISTRY
 from nornflow.nornir_manager import NornirManager
 from nornflow.vars.manager import NornFlowVariablesManager
 from .base import NornFlowBaseModel

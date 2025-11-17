@@ -1,6 +1,6 @@
 from typing import Any, TYPE_CHECKING
 
-from nornflow.hooks.registry import HOOK_REGISTRY
+from nornflow.hooks.base import HOOK_REGISTRY
 
 if TYPE_CHECKING:
     from nornflow.hooks import Hook

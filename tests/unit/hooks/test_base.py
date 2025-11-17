@@ -1,7 +1,9 @@
 from unittest.mock import MagicMock
 
-from nornflow.hooks.base import Hook
-from nornflow.hooks.exceptions import HookConfigurationError
+import pytest
+
+from nornflow.hooks.base import Hook, HOOK_REGISTRY
+from nornflow.hooks.exceptions import HookRegistrationError
 
 
 class TestHook:
@@ -33,7 +35,6 @@ class TestHook:
         hook.run_once_per_task = False
         mock_task = MagicMock()
         
-        # Should always return True when run_once_per_task is False
         assert hook.should_execute(mock_task) is True
         assert hook.should_execute(mock_task) is True
 
@@ -43,14 +44,11 @@ class TestHook:
         hook.run_once_per_task = True
         mock_task = MagicMock()
         
-        # First call should return True
         assert hook.should_execute(mock_task) is True
         
-        # Subsequent calls with same task should return False
         assert hook.should_execute(mock_task) is False
         assert hook.should_execute(mock_task) is False
         
-        # Different task should return True
         mock_task2 = MagicMock()
         assert hook.should_execute(mock_task2) is True
 
@@ -76,7 +74,6 @@ class TestHook:
         mock_host = MagicMock()
         mock_result = MagicMock()
         
-        # These should all execute without error
         hook.task_started(mock_task)
         hook.task_completed(mock_task, mock_result)
         hook.task_instance_started(mock_task, mock_host)
@@ -89,10 +86,59 @@ class TestHook:
         hook = Hook()
         mock_task_model = MagicMock()
         
-        # Should not raise
         hook.execute_hook_validations(mock_task_model)
 
     def test_exception_handlers_default(self):
         """Test that exception_handlers is empty by default."""
         hook = Hook()
         assert hook.exception_handlers == {}
+
+    def test_auto_registration(self):
+        """Test that hooks with hook_name are automatically registered."""
+        initial_registry_size = len(HOOK_REGISTRY)
+        
+        class TestAutoHook(Hook):
+            hook_name = "test_auto_hook"
+        
+        assert "test_auto_hook" in HOOK_REGISTRY
+        assert HOOK_REGISTRY["test_auto_hook"] == TestAutoHook
+        assert len(HOOK_REGISTRY) == initial_registry_size + 1
+
+    def test_no_registration_without_hook_name(self):
+        """Test that hooks without hook_name are not registered."""
+        initial_registry_size = len(HOOK_REGISTRY)
+        
+        class TestNoNameHook(Hook):
+            pass
+        
+        assert len(HOOK_REGISTRY) == initial_registry_size
+
+    def test_duplicate_registration_same_class(self):
+        """Test that re-importing same class doesn't raise error."""
+        class TestDuplicateHook(Hook):
+            hook_name = "test_duplicate"
+        
+        assert "test_duplicate" in HOOK_REGISTRY
+        assert HOOK_REGISTRY["test_duplicate"] == TestDuplicateHook
+
+    def test_duplicate_registration_different_class(self):
+        """Test that different class with same hook_name raises error."""
+        class FirstHook(Hook):
+            hook_name = "conflict_hook"
+        
+        with pytest.raises(HookRegistrationError, match="already registered"):
+            class SecondHook(Hook):
+                hook_name = "conflict_hook"
+
+    def test_builtin_hooks_registered(self):
+        """Test that built-in hooks are properly registered."""
+        from nornflow.builtins.hooks import IfHook, SetToHook, ShushHook
+        
+        assert "if" in HOOK_REGISTRY
+        assert HOOK_REGISTRY["if"] == IfHook
+        
+        assert "set_to" in HOOK_REGISTRY
+        assert HOOK_REGISTRY["set_to"] == SetToHook
+        
+        assert "shush" in HOOK_REGISTRY
+        assert HOOK_REGISTRY["shush"] == ShushHook
