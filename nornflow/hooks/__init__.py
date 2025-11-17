@@ -9,6 +9,6 @@ from nornflow.hooks.loader import load_hooks
 
 __all__ = [
     "Hook",
-    "HOOK_REGISTRY", 
+    "HOOK_REGISTRY",
     "load_hooks",
 ]
