@@ -48,7 +48,7 @@ class Hook:
         super().__init_subclass__(**kwargs)
 
         # Only register if hook_name is defined
-        if not hasattr(cls, "hook_name") or cls.hook_name is None:
+        if not hasattr(cls, "hook_name") or not cls.hook_name:
             return
 
         # Check for duplicate registration
