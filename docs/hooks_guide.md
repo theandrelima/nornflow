@@ -43,6 +43,7 @@ Hooks are special components that can intercept and modify task execution behavi
 - **Isolated**: Each task gets its own hook context
 - **Powerful**: Full access to task lifecycle events
 - **Selective**: Activate only when configured on specific tasks, and according to implemented logic.
+- **Automatic**: Registration happens automatically when you define a hook class
 
 **Potential use cases:**
 - **Task-level orchestration**: Implement setup or teardown logic that runs once per task across all hosts
@@ -59,23 +60,11 @@ Unlike Nornir processors (which apply globally to all tasks) or filters (which a
 
 ### Hooks as Nornir Processors
 
-Under the hood, hooks are Nornir processors managed by the [`NornFlowHookProcessor`](../nornflow/builtins/processors/hook_processor.py). This design provides:
+Under the hood, hooks are Nornir processors managed by the [`NornFlowHookProcessor`](../nornflow/builtins/processors/hook_processor.py). The design provides:
 
 1. **Full lifecycle access**: Hooks can react to any point in task execution
 2. **Processor chain integration**: Hooks work alongside other processors
 3. **Performance optimization**: Hook instances are cached and reused (Flyweight pattern)
-
-```python
-# Simplified view of how hooks integrate
-class NornFlowHookProcessor(Processor):
-    """Orchestrator that delegates to hooks."""
-    
-    def task_instance_started(self, task: Task, host: Host):
-        # Delegate to all registered hooks
-        for hook in self.task_hooks:
-            if hook.should_execute(task):
-                hook.task_instance_started(task, host)
-```
 
 ### Execution Lifecycle
 
@@ -120,6 +109,14 @@ Hooks can participate in these task lifecycle events:
               │   (all hosts)        │
               └──────────────────────┘
 ```
+
+### Performance Characteristics
+
+- **Hook instances**: Created ONCE per unique (hook_class, value) pair via Flyweight pattern
+- **Memory usage**: O(unique_hooks) - shared instances across tasks
+- **Thread safety**: Guaranteed via execution context isolation
+- **Registration**: Happens at import time via `__init_subclass__`
+- **Validation**: Happens once per task during workflow preparation
 
 ## NornFlow's Built-in Hooks
 
@@ -240,7 +237,7 @@ Access data from `Result.result` dictionary using:
 
 **Dot notation for nested dicts:**
 
-The below would update/create two NornFlow vars named "**vendor**" (with the value extracted from `Result.result['vendor']`) and "**cpu**" (with the value extracted from `Result.result['environment]['cup']['usage']`)
+The below would update/create two NornFlow vars named "**vendor**" (with the value extracted from `Result.result['vendor']`) and "**cpu**" (with the value extracted from `Result.result['environment']['cup']['usage']`)
 
 ```yaml
 set_to:
@@ -250,7 +247,7 @@ set_to:
 
 **Bracket notation for lists:**
 
-The below would update/create two NornFlow vars named "**first_cpu**" (with the value extracted from `Result.ressult['environment']['cpu'][0]['usage']`) and "**interface_ip**" (with the value extracted from `Result.result['interfaces]['eth0']['ipv4'][0]['address']`). 
+The below would update/create two NornFlow vars named "**first_cpu**" (with the value extracted from `Result.ressult['environment']['cpu'][0]['usage']`) and "**interface_ip**" (with the value extracted from `Result.result['interfaces']['eth0']['ipv4'][0]['address']`). 
 
 ```yaml
 set_to:
@@ -375,6 +372,7 @@ tasks:
       arg1: true
       arg2: "device"
       set_to: result_var       # Wrong! This is passed to task function
+```
 
 ### Multiple Hooks per Task
 
@@ -398,16 +396,15 @@ tasks:
 
 ### Basic Hook Structure
 
+Creating a custom hook is simple - just inherit from `Hook` and define a `hook_name`. Registration happens automatically!
+
 ```python
 from typing import Any
 from nornir.core.task import Task
 from nornir.core.inventory import Host
-from nornflow.hooks import Hook, register_hook
+from nornflow.hooks import Hook
 
-@register_hook
 class MyCustomHook(Hook):
-    """Description of what your hook does."""
-    
     hook_name = "my_custom"
     run_once_per_task = False
     
@@ -427,17 +424,19 @@ class MyCustomHook(Hook):
 
 ### Hook Registration
 
-The `@register_hook` decorator registers your hook in the global registry:
+**Automatic Registration via Inheritance**
+
+When you define a hook class that inherits from `Hook` and sets a `hook_name`, it's automatically registered when Python imports the module.
 
 ```python
-from nornflow.hooks import register_hook
+from nornflow.hooks import Hook
 
-@register_hook
 class MyHook(Hook):
     hook_name = "my_hook"
+    ...
 ```
 
-After registration, use in workflows:
+After your hook module is imported (via `local_hooks_dirs`), it's immediately available in workflows:
 
 ```yaml
 tasks:
@@ -473,8 +472,8 @@ When NornFlow starts, it:
 
 1. **Reads `local_hooks_dirs`** from settings (or uses default `["hooks"]`)
 2. **Recursively scans** each directory for `.py` files
-3. **Imports** each Python module found *(so be careful with this...)*
-4. **Registration happens automatically** via `@register_hook` decorator at import time
+3. **Imports** each Python module found
+4. **Registration happens automatically** via `__init_subclass__` during import
 5. **Hooks become available** for use in workflows
 
 ```
@@ -494,7 +493,7 @@ Project Structure:
 **Registration timing:**
 - Hooks are registered **at import time** when the module is loaded
 - This happens **before** any workflow execution
-- The `@register_hook` decorator adds the hook to the global registry immediately
+- The `Hook.__init_subclass__` mechanism adds the hook to the global registry immediately
 
 **Common pitfalls:**
 
@@ -517,14 +516,13 @@ Project Structure:
        └── custom.py
    ```
 
-2. **Missing `@register_hook` decorator:**
+2. **Missing `hook_name`:**
    ```python
    # ❌ Hook won't be registered
    class MyHook(Hook):
-       hook_name = "my_hook"
+       pass  # No hook_name defined
    
    # ✅ Correct
-   @register_hook
    class MyHook(Hook):
        hook_name = "my_hook"
    ```
@@ -532,7 +530,6 @@ Project Structure:
 3. **Syntax errors in hook files:**
    - Python import errors will prevent hook registration
    - Check logs for import failures during NornFlow startup
-
 
 ### Lifecycle Methods
 
@@ -574,9 +571,8 @@ class Hook(ABC):
 ```python
 from nornir.core.task import Task
 from nornir.core.inventory import Host
-from nornflow.hooks import Hook, register_hook
+from nornflow.hooks import Hook
 
-@register_hook
 class SimpleValidationHook(Hook):
     """Only needs task_instance_started - no need to define others."""
     
@@ -587,36 +583,39 @@ class SimpleValidationHook(Hook):
             raise ValueError(f"No username for {host.name}")
 ```
 
-The base `Hook` class already provides default implementations (empty `pass` statements) for all lifecycle methods, so your custom hook only needs to inherit from `Hook` and be decorated with `@register_hook`.
+The base `Hook` class already provides default implementations (empty `pass` statements) for all lifecycle methods, so your custom hook only needs to inherit from `Hook` and set `hook_name`.
 
+Here's a clearer rewrite of the "Execution Scopes" section:
+
+```markdown
 ### Execution Scopes
 
-Control how often your hook executes:
+Control whether your hook executes once per task or independently for each host using the `run_once_per_task` class attribute:
+
+**Once per task** - Hook logic runs only for the first host, subsequent hosts skip execution:
 
 ```python
 class MyHook(Hook):
-    # Run once per task (shared across all hosts)
     run_once_per_task = True
-    
-    def task_instance_started(self, task: Task, host: Host):
-        # This runs only for the FIRST host
-        # Subsequent hosts are skipped automatically
-        pass
+  
 ```
+
+Use this when your hook's logic applies to the entire task regardless of which hosts are involved. Examples: deciding whether to suppress output (`shush`), logging task start/completion, or setting task-wide flags.
+
+**Per host (default)** - Hook logic runs independently for every host:
 
 ```python
 class MyHook(Hook):
-    # Run per host (default)
-    run_once_per_task = False
-    
-    def task_instance_started(self, task: Task, host: Host):
-        # This runs independently for EACH host
-        pass
+    run_once_per_task = False  # This is the default
+
 ```
+
+Use this when your hook needs to evaluate conditions or perform actions specific to each individual host. Examples: conditional execution based on host attributes (`if`), storing per-host results (`set_to`), or per-host validation.
+
 
 ### Context Access
 
-Hooks receive context from the `NornFlowHookProcessor`:
+Hooks receive context from the `NornFlowHookProcessor`. You can easily access various NornFlow components through it by accessing `self.context`:
 
 ```python
 class MyHook(Hook):
@@ -672,7 +671,7 @@ import smtplib
 from email.message import EmailMessage
 from nornir.core.task import Task, MultiResult
 from nornir.core.inventory import Host
-from nornflow.hooks import Hook, register_hook
+from nornflow.hooks import Hook
 
 logger = logging.getLogger(__name__)
 
@@ -682,7 +681,6 @@ class DeviceUnreachableError(Exception):
     pass
 
 
-@register_hook
 class NotifyOnErrorHook(Hook):
     """Send email notification when specific errors occur."""
     
