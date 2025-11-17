@@ -587,7 +587,6 @@ The base `Hook` class already provides default implementations (empty `pass` sta
 
 Here's a clearer rewrite of the "Execution Scopes" section:
 
-```markdown
 ### Execution Scopes
 
 Control whether your hook executes once per task or independently for each host using the `run_once_per_task` class attribute:
