@@ -9,7 +9,6 @@ from nornir.core.task import Result, Task
 from nornflow.hooks import Hook, Jinja2ResolvableMixin
 from nornflow.hooks.exceptions import HookValidationError
 from nornflow.vars.constants import JINJA2_MARKERS
-from nornflow.vars.exceptions import TemplateError
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel

@@ -1,3 +1,4 @@
+# ruff: noqa: SLF001, T201
 from nornflow.hooks import Hook, Jinja2ResolvableMixin
 from nornflow.hooks.exceptions import HookValidationError
 
