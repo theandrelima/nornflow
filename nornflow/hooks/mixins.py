@@ -16,9 +16,15 @@ class Jinja2ResolvableMixin:
 
     The mixin expects the hook to have:
         - self.value: The hook's configuration value
-        - self.context: Dict containing 'vars_manager' for resolution
+        - self.context: Property returning hook execution context
 
-    These are guaranteed by the Hook base class.
+    The Hook base class provides both. The context will contain 'vars_manager'
+    during hook lifecycle execution (task_started, task_instance_started, etc.)
+    but NOT during initialization or validation.
+
+    Important:
+        Only call get_resolved_value() with Jinja2 expressions inside lifecycle
+        methods where the execution context has been populated by the framework.
 
     Example:
         class MyHook(Hook, Jinja2ResolvableMixin):
@@ -43,8 +49,9 @@ class Jinja2ResolvableMixin:
             The resolved value, optionally converted to boolean.
 
         Raises:
-            HookError: If vars_manager not available in context or if
-                task has no hosts when Jinja2 resolution is needed.
+            HookError: If vars_manager not available in context (likely called
+                outside of hook lifecycle methods) or if task has no hosts
+                when Jinja2 resolution is needed.
         """
         if not self.value:
             return default
@@ -106,7 +113,13 @@ class Jinja2ResolvableMixin:
         """
         vars_manager = self.context.get("vars_manager")
         if not vars_manager:
-            raise HookError("vars_manager not available in hook context")
+            raise HookError(
+                "vars_manager not available in hook context. "
+                "get_resolved_value() can only be called from hook lifecycle methods "
+                "(task_started, task_instance_started, etc.) where the execution "
+                "framework has populated the context. It cannot be called from "
+                "__init__() or execute_hook_validations()."
+            )
 
         device_context = vars_manager.get_device_context(host.name)
         return device_context.resolve_value(value)
