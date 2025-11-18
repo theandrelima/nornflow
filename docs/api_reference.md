@@ -403,16 +403,11 @@ Create a new WorkflowModel from a workflow dictionary.
 
 Hooks extend task behavior without modifying task code. They are implemented as Nornir Processors that activate when configured on specific tasks.
 
-> **For detailed hook documentation, including:**
-> - Complete lifecycle methods reference
-> - Built-in hooks (if, set_to, shush)
-> - Creating custom hooks
-> - Hook validation patterns
-> - Exception handling strategies
->
-> **See:** [Hooks Guide](hooks_guide.md)
+> **For comprehensive hook documentation, including lifecycle methods, creating custom hooks, validation patterns, and exception handling, see:** [Hooks Guide](./hooks_guide.md)
 
 ### Hook Base Class
+
+Base class for all hooks with lifecycle management and context access.
 
 ```python
 from nornflow.hooks import Hook
@@ -432,6 +427,29 @@ from nornflow.hooks import Hook
 def __init__(self, value: Any = None)
 ```
 
+**Parameters:**
+- `value`: Hook configuration value from YAML
+
+**Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `value` | `Any` | Hook configuration value |
+| `context` | `dict[str, Any]` | Execution context injected by NornFlowHookProcessor (read-only) |
+
+**Context Dictionary Contents:**
+
+The `context` property provides access to execution context populated by `NornFlowHookProcessor`:
+
+- `vars_manager`: NornFlowVariablesManager instance for variable resolution
+- `nornir_manager`: NornirManager instance for Nornir operations
+- `tasks_catalog`: Dictionary of available task functions
+- `filters_catalog`: Dictionary of available inventory filter functions
+- `workflows_catalog`: FileCatalog of available workflow files
+- `task_model`: Current TaskModel being executed (task-specific context)
+
+**Important:** Context is only available during hook lifecycle execution (after `task_started`). It will be empty during `__init__()` and `execute_hook_validations()`.
+
 **Key Lifecycle Methods:**
 
 All lifecycle methods are optional - override only those needed:
@@ -448,17 +466,137 @@ All lifecycle methods are optional - override only those needed:
 #### `should_execute(task: Task) -> bool`
 Check if this hook should execute for given task.
 
+**Returns:**
+- `True` if hook should execute, `False` to skip
+
 #### `execute_hook_validations(task_model: TaskModel) -> None`
 Execute validation logic specific to this hook.
+
+Called during workflow preparation before any task execution.
+
+**Parameters:**
+- `task_model`: TaskModel instance to validate against
 
 **Raises:**
 - `HookValidationError`: If validation fails
 
+### Jinja2ResolvableMixin
+
+Optional mixin providing seamless Jinja2 template resolution for hooks.
+
+```python
+from nornflow.hooks import Jinja2ResolvableMixin
+```
+
+**Purpose:**
+Adds automatic Jinja2 detection and resolution to hooks. Use this mixin when your hook accepts user-provided values that could benefit from dynamic resolution via templates.
+
+**When to Use:**
+- ✅ Hook accepts both static values AND Jinja2 expressions
+- ✅ Hook needs to resolve templates through NornFlow's variable system
+- ✅ Hook wants standardized boolean conversion
+
+**When NOT to Use:**
+- ❌ Hook should never accept Jinja2 expressions (security/performance)
+- ❌ Hook operates only on available structured data (dicts, lists)
+- ❌ Hook has custom Jinja2 resolution logic
+
+**Usage:**
+
+```python
+class MyHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "my_hook"
+    
+    def task_instance_started(self, task: Task, host: Host) -> None:
+        condition = self.get_resolved_value(task, as_bool=True, default=False)
+        if condition:
+            # Hook logic
+            pass
+```
+
+**Methods:**
+
+#### `get_resolved_value(task: Task, as_bool: bool = False, default: Any = None) -> Any`
+Get the final resolved value, handling Jinja2 automatically.
+
+Detects if `self.value` contains Jinja2 markers and resolves through variable system if needed.
+
+**Parameters:**
+- `task`: Task being executed (used to extract host for template resolution)
+- `as_bool`: Convert result to boolean using standard truthy values
+- `default`: Fallback value if `self.value` is falsy
+
+**Returns:**
+- Resolved value, optionally converted to boolean
+
+**Raises:**
+- `HookError`: If vars_manager not available (likely called outside lifecycle methods) or if task has no hosts
+
+**Boolean Conversion:**
+
+When `as_bool=True`, converts values using these rules:
+
+- **Truthy strings** (case-insensitive): `"true"`, `"yes"`, `"1"`, `"on"`, `"y"`, `"t"`, `"enabled"`
+- **Other strings**: Falsy
+- **Booleans**: Returned as-is
+- **Other types**: Converted via Python's `bool()`
+
+**Important:** Only call `get_resolved_value()` with Jinja2 expressions inside lifecycle methods where context has been populated by the framework (e.g., `task_started`, `task_instance_started`). It cannot be called from `__init__()` or `execute_hook_validations()`.
+
+#### `_is_jinja2_expression(value: Any) -> bool`
+Check if value contains Jinja2 template markers.
+
+**Parameters:**
+- `value`: Value to check
+
+**Returns:**
+- `True` if value is string with Jinja2 markers (`{{`, `{%`, `{#`), `False` otherwise
+
+#### `_resolve_jinja2(value: str, host: Host) -> Any`
+Resolve Jinja2 template string through variable system.
+
+**Parameters:**
+- `value`: Template string to resolve
+- `host`: Host to resolve for
+
+**Returns:**
+- Resolved value from template
+
+**Raises:**
+- `HookError`: If vars_manager not available in context
+
+#### `_to_bool(value: Any) -> bool`
+Convert value to boolean.
+
+**Parameters:**
+- `value`: Value to convert
+
+**Returns:**
+- Boolean representation using standard truthy values
 
 ### Built-in Hooks
 
-**IfHook** - Conditional task execution
+#### IfHook
 
+Conditionally execute tasks per host based on filter functions or Jinja2 expressions.
+
+```python
+from nornflow.builtins.hooks import IfHook
+```
+
+Supports two evaluation modes:
+
+**Filter-based (dictionary syntax):**
+```yaml
+tasks:
+  - name: napalm_get
+    args:
+      getters: ["facts"]
+    if:
+      platform: "ios"
+```
+
+**Jinja2 expression (string syntax):**
 ```yaml
 tasks:
   - name: napalm_get
@@ -467,17 +605,32 @@ tasks:
     if: "{{ host.platform == 'ios' }}"
 ```
 
-**SetToHook** - Capture and store task results
+**Features:**
+- Uses `Jinja2ResolvableMixin` for Jinja2 expression support
+- Evaluates per host (`run_once_per_task = False`)
+- Sets skip flag on hosts that don't match condition
+- Supports all registered inventory filters
 
+#### SetToHook
+
+Capture and store task results as runtime variables.
+
+```python
+from nornflow.builtins.hooks import SetToHook
+```
+
+**Store entire result:**
 ```yaml
 tasks:
-  # stores the entire Nornir Result object to a var
   - name: napalm_get
     args:
       getters: ["facts"]
     set_to: "device_facts"
-  
-  # or extract specific nested data from the Nornir Result object
+```
+
+**Extract nested data using dot notation:**
+```yaml
+tasks:
   - name: napalm_get
     args:
       getters: ["facts", "environment"]
@@ -486,20 +639,44 @@ tasks:
       cpu_usage: "environment.cpu.0.%usage"
 ```
 
-**ShushHook** - Suppress task output
+**Features:**
+- Extracts data from Nornir Result objects
+- Supports dot notation for nested paths
+- Array indexing with numeric indices
+- Dictionary key access with special characters via `%` prefix
+- Stores variables per-host in runtime context
 
+#### ShushHook
+
+Suppress task output printing conditionally.
+
+```python
+from nornflow.builtins.hooks import ShushHook
+```
+
+**Static suppression:**
 ```yaml
 tasks:
   - name: netmiko_send_command
     args:
       command_string: "show version"
     shush: true
+```
 
+**Dynamic suppression:**
+```yaml
+tasks:
   - name: netmiko_send_command
     args:
       command_string: "show interfaces"
     shush: "{{ verbose_mode == false }}"
 ```
+
+**Features:**
+- Uses `Jinja2ResolvableMixin` for dynamic evaluation
+- Runs once per task (`run_once_per_task = True`)
+- Requires compatible processor with `supports_shush_hook` attribute
+- Marks tasks in processor's suppression registry
 
 ## Variable System Classes
 
