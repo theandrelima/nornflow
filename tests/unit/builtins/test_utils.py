@@ -1,6 +1,3 @@
-# filepath: test_utils.py
-"""Tests for nornflow.builtins.utils module."""
-
 import json
 from unittest.mock import MagicMock
 
@@ -18,32 +15,25 @@ from nornflow.exceptions import ProcessorError
 class TestGetTaskVarsManager:
     """Test get_task_vars_manager function."""
 
-    def test_finds_vars_manager_in_first_processor(self):
+    def test_finds_vars_manager_in_first_processor(self, mock_processor_with_vars_manager):
         """Test finding vars_manager in the first processor."""
-        mock_vars_manager = MagicMock()
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
         mock_task = MagicMock()
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         result = get_task_vars_manager(mock_task)
 
-        assert result is mock_vars_manager
+        assert result is mock_processor_with_vars_manager.vars_manager
 
-    def test_finds_vars_manager_in_second_processor(self):
+    def test_finds_vars_manager_in_second_processor(self, mock_processor_with_vars_manager):
         """Test finding vars_manager in a later processor."""
-        mock_vars_manager = MagicMock()
         mock_processor1 = MagicMock(spec=[])
-        mock_processor2 = MagicMock()
-        mock_processor2.vars_manager = mock_vars_manager
-
+        
         mock_task = MagicMock()
-        mock_task.nornir.processors = [mock_processor1, mock_processor2]
+        mock_task.nornir.processors = [mock_processor1, mock_processor_with_vars_manager]
 
         result = get_task_vars_manager(mock_task)
 
-        assert result is mock_vars_manager
+        assert result is mock_processor_with_vars_manager.vars_manager
 
     def test_raises_exception_when_no_vars_manager_found(self):
         """Test raises ProcessorError when no processor has vars_manager."""
@@ -180,44 +170,26 @@ class TestFormatValueForDisplay:
 class TestGetResolvedRuntimeValues:
     """Test get_resolved_runtime_values function."""
 
-    def test_get_values_with_vars_manager(self):
+    def test_get_values_with_vars_manager(self, mock_task, mock_processor_with_vars_manager, mock_device_context):
         """Test retrieving resolved runtime values when vars_manager exists."""
-        mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {
             "var1": "value1",
             "var2": 123,
             "var3": {"nested": "dict"}
         }
 
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
-        mock_task = MagicMock()
-        mock_task.host.name = "test_host"
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         result = get_resolved_runtime_values(mock_task, ["var1", "var2"])
 
         assert result == {"var1": "value1", "var2": 123}
-        mock_vars_manager.get_device_context.assert_called_once_with("test_host")
+        mock_processor_with_vars_manager.vars_manager.get_device_context.assert_called_once_with("test_host")
 
-    def test_get_values_when_var_not_found(self):
+    def test_get_values_when_var_not_found(self, mock_task, mock_processor_with_vars_manager, mock_device_context):
         """Test behavior when a requested variable is not in runtime_vars."""
-        mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {"var1": "value1"}
 
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
-        mock_task = MagicMock()
-        mock_task.host.name = "test_host"
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         result = get_resolved_runtime_values(mock_task, ["var1", "missing_var"])
 
@@ -237,42 +209,21 @@ class TestGetResolvedRuntimeValues:
         with pytest.raises(ProcessorError, match="Could not find NornFlowVariableProcessor"):
             get_resolved_runtime_values(mock_task, ["var1", "var2"])
 
-    def test_get_values_with_empty_var_names_list(self):
+    def test_get_values_with_empty_var_names_list(self, mock_task, mock_processor_with_vars_manager, mock_device_context):
         """Test with empty list of variable names."""
-        mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {"var1": "value1"}
 
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
-        mock_task = MagicMock()
-        mock_task.host.name = "test_host"
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         result = get_resolved_runtime_values(mock_task, [])
 
         assert result == {}
 
-    def test_get_values_all_missing(self):
+    def test_get_values_all_missing(self, mock_task, mock_processor_with_vars_manager, mock_device_context):
         """Test when all requested variables are missing from runtime_vars."""
-        mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {}
 
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
-        mock_task = MagicMock()
-        mock_task.host.name = "test_host"
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         result = get_resolved_runtime_values(mock_task, ["var1", "var2"])
 
@@ -285,23 +236,14 @@ class TestGetResolvedRuntimeValues:
 class TestBuildSetTaskReport:
     """Test build_set_task_report function."""
 
-    def test_build_report_with_simple_values(self):
+    def test_build_report_with_simple_values(self, mock_task, mock_processor_with_vars_manager, mock_device_context):
         """Test building report with simple variable values."""
-        mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {
             "var1": "value1",
             "var2": 123
         }
 
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
-        mock_task = MagicMock()
-        mock_task.host.name = "test_host"
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         kwargs = {"var1": "{{ some_template }}", "var2": "{{ other_template }}"}
 
@@ -311,22 +253,14 @@ class TestBuildSetTaskReport:
         assert '• var1 = "value1"' in result
         assert "• var2 = 123" in result
 
-    def test_build_report_with_dict_value(self):
+    def test_build_report_with_dict_value(self, mock_task, mock_processor_with_vars_manager, mock_device_context):
         """Test building report with dictionary values."""
-        mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {
             "config": {"interface": "eth0", "ip": "192.168.1.1"}
         }
 
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
-        mock_task = MagicMock()
         mock_task.host.name = "router1"
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         kwargs = {"config": "{{ device_config }}"}
 
@@ -337,22 +271,14 @@ class TestBuildSetTaskReport:
         assert '"interface": "eth0"' in result
         assert '"ip": "192.168.1.1"' in result
 
-    def test_build_report_with_list_value(self):
+    def test_build_report_with_list_value(self, mock_task, mock_processor_with_vars_manager, mock_device_context):
         """Test building report with list values."""
-        mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {
             "interfaces": ["eth0", "eth1", "lo"]
         }
 
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
-        mock_task = MagicMock()
         mock_task.host.name = "switch1"
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         kwargs = {"interfaces": "{{ device_interfaces }}"}
 
@@ -397,20 +323,11 @@ class TestBuildSetTaskReport:
 
         assert result == "No variables were set (no arguments provided to 'set' task)"
 
-    def test_build_report_with_missing_variable(self):
+    def test_build_report_with_missing_variable(self, mock_task, mock_processor_with_vars_manager, mock_device_context):
         """Test building report when variable is not found in runtime_vars."""
-        mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {"var1": "value1"}
 
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
-        mock_task = MagicMock()
-        mock_task.host.name = "test_host"
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         kwargs = {"var1": "template1", "missing_var": "template2"}
 
@@ -420,23 +337,14 @@ class TestBuildSetTaskReport:
         assert '• var1 = "value1"' in result
         assert '• missing_var = "<value not found in runtime vars>"' in result
 
-    def test_build_report_with_boolean_values(self):
+    def test_build_report_with_boolean_values(self, mock_task, mock_processor_with_vars_manager, mock_device_context):
         """Test building report with boolean values."""
-        mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {
             "enabled": True,
             "disabled": False
         }
 
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
-        mock_task = MagicMock()
-        mock_task.host.name = "test_host"
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         kwargs = {"enabled": "{{ is_enabled }}", "disabled": "{{ is_disabled }}"}
 
@@ -445,20 +353,11 @@ class TestBuildSetTaskReport:
         assert "• enabled = True" in result
         assert "• disabled = False" in result
 
-    def test_build_report_with_none_value(self):
+    def test_build_report_with_none_value(self, mock_task, mock_processor_with_vars_manager, mock_device_context):
         """Test building report with None value."""
-        mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {"null_var": None}
 
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
-        mock_task = MagicMock()
-        mock_task.host.name = "test_host"
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         kwargs = {"null_var": "{{ template }}"}
 
@@ -466,24 +365,15 @@ class TestBuildSetTaskReport:
 
         assert "• null_var = None" in result
 
-    def test_build_report_preserves_variable_order(self):
+    def test_build_report_preserves_variable_order(self, mock_task, mock_processor_with_vars_manager, mock_device_context):
         """Test that report maintains the order of variables from kwargs."""
-        mock_device_context = MagicMock()
         mock_device_context.runtime_vars = {
             "var_c": "value_c",
             "var_a": "value_a",
             "var_b": "value_b"
         }
 
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.get_device_context.return_value = mock_device_context
-
-        mock_processor = MagicMock()
-        mock_processor.vars_manager = mock_vars_manager
-
-        mock_task = MagicMock()
-        mock_task.host.name = "test_host"
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_with_vars_manager]
 
         kwargs = {"var_c": "t1", "var_a": "t2", "var_b": "t3"}
 

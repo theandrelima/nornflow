@@ -1,11 +1,8 @@
-# ruff: noqa: SLF001, T201
-import re
-
-from nornflow.hooks import Hook
+from nornflow.hooks import Hook, Jinja2ResolvableMixin
 from nornflow.hooks.exceptions import HookValidationError
 
 
-class ShushHook(Hook):
+class ShushHook(Hook, Jinja2ResolvableMixin):
     """Hook to suppress task output printing.
 
     The shush hook allows conditional suppression of task output based on
@@ -23,61 +20,13 @@ class ShushHook(Hook):
     hook_name = "shush"
     run_once_per_task = True
 
-    def __init__(self, value: bool | str | None = None):
-        """Initialize the shush hook.
-
-        Args:
-            value: Boolean, Jinja2 expression string, or None
-        """
-        super().__init__(value)
-        self.is_jinja2_expression = self._detect_jinja2_expression(value)
-
-    def _detect_jinja2_expression(self, value: bool | str | None) -> bool:
-        """Detect if value is a Jinja2 expression.
-
-        Args:
-            value: The value to check
-
-        Returns:
-            True if value contains Jinja2 markers
-        """
-        if not isinstance(value, str):
-            return False
-        jinja2_patterns = [r"\{\{.*?\}\}", r"\{%.*?%\}", r"\{#.*?#\}"]
-        return any(re.search(pattern, value) for pattern in jinja2_patterns)
-
-    def _evaluate_suppression(self, task: "Task") -> bool:
-        """Evaluate whether output should be suppressed.
-
-        Args:
-            task: The Nornir task
-
-        Returns:
-            True if output should be suppressed
-        """
-        if isinstance(self.value, bool):
-            return self.value
-
-        if self.value is None:
-            return False
-
-        if self.is_jinja2_expression:
-            vars_manager = self.context.get("vars_manager")
-            if vars_manager:
-                host = next(iter(task.nornir.inventory.hosts.values()))
-                resolved = vars_manager.resolve_string(self.value, host)
-                return resolved.lower() in ("true", "yes", "1")
-            return False
-
-        return bool(self.value)
-
     def task_started(self, task: "Task") -> None:
         """Mark task for output suppression if conditions are met.
 
         Args:
             task: The Nornir task
         """
-        should_suppress = self._evaluate_suppression(task)
+        should_suppress = self.get_resolved_value(task, as_bool=True, default=False)
 
         if not should_suppress:
             return
@@ -117,7 +66,7 @@ class ShushHook(Hook):
         Raises:
             HookValidationError: If string value lacks Jinja2 markers
         """
-        if isinstance(self.value, str) and not self.is_jinja2_expression:
+        if isinstance(self.value, str) and not self._is_jinja2_expression(self.value):
             raise HookValidationError(
                 hook_class=self.hook_name,
                 errors=[

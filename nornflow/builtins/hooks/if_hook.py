@@ -6,7 +6,7 @@ from typing import Any, TYPE_CHECKING
 from nornir.core.inventory import Host
 from nornir.core.task import Result, Task
 
-from nornflow.hooks import Hook
+from nornflow.hooks import Hook, Jinja2ResolvableMixin
 from nornflow.hooks.exceptions import HookValidationError
 from nornflow.vars.constants import JINJA2_MARKERS
 from nornflow.vars.exceptions import TemplateError
@@ -51,7 +51,7 @@ def skip_if_condition_flagged(task_func: Callable) -> Callable:
     return wrapper
 
 
-class IfHook(Hook):
+class IfHook(Hook, Jinja2ResolvableMixin):
     """Conditionally execute tasks per host based on filter functions or Jinja2 expressions.
 
     This hook evaluates a condition for each host before task execution.
@@ -156,8 +156,8 @@ class IfHook(Hook):
                 # Filter function evaluation
                 should_skip = not self._evaluate_filter_condition(host)
             else:
-                # Jinja2 expression evaluation
-                should_skip = not self._evaluate_jinja2_condition(host)
+                # Jinja2 expression evaluation - use mixin
+                should_skip = not self.get_resolved_value(task, as_bool=True, default=True)
 
             if should_skip:
                 host.data["nornflow_skip_flag"] = True
@@ -190,27 +190,6 @@ class IfHook(Hook):
         filter_kwargs = self._build_filter_kwargs(param_names, filter_values)
 
         return filter_func(host, **filter_kwargs)
-
-    def _evaluate_jinja2_condition(self, host: Host) -> bool:
-        """Evaluate Jinja2 expression condition for the host."""
-        vars_manager = self.context.get("vars_manager")
-        if not vars_manager:
-            raise HookValidationError(
-                "IfHook", [("no_vars_manager", "vars_manager not available for Jinja2 expression evaluation")]
-            )
-
-        # Resolve the Jinja2 expression
-        resolved_expression = vars_manager.resolve_string(self.value, host.name)
-
-        # Evaluate as boolean
-        try:
-            result = bool(eval(resolved_expression))  # noqa: S307 - controlled environment
-        except Exception as e:
-            raise TemplateError(
-                f"Jinja2 expression did not evaluate to a boolean: '{resolved_expression}'"
-            ) from e
-
-        return result
 
     def _build_filter_kwargs(self, param_names: list[str], filter_values: Any) -> dict[str, Any]:
         """Build keyword arguments for the filter function based on value format."""

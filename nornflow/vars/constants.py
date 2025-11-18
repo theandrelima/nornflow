@@ -13,3 +13,8 @@ JINJA2_MARKERS = [
     "{#",  # Comment
     "{#-",  # Comment with left whitespace control
 ]
+
+# Lower case string values that evaluate to True when converting to boolean.
+# This provides a centralized reference point to avoid ambiguity across the codebase.
+# Note: This has limited use - primarily for hook configurations and CLI flags.
+TRUTHY_STRING_VALUES = ("true", "yes", "1", "on", "y", "t", "enabled")
