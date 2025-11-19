@@ -1,15 +1,9 @@
 from unittest.mock import MagicMock
 
+import pytest
+
 from nornflow.builtins.hooks import ShushHook
 from nornflow.hooks.exceptions import HookValidationError
-
-
-class MockNornir:
-    """Simple mock object for Nornir that behaves like a real object for attribute checks."""
-    
-    def __init__(self):
-        self.processors = []
-        self.inventory = MagicMock()
 
 
 class TestShushHook:
@@ -27,62 +21,52 @@ class TestShushHook:
         """Test hook initialization with True value."""
         hook = ShushHook(True)
         assert hook.value is True
-        assert hook.is_jinja2_expression is False
 
     def test_init_with_false_value(self):
         """Test hook initialization with False value."""
         hook = ShushHook(False)
         assert hook.value is False
-        assert hook.is_jinja2_expression is False
 
     def test_init_without_value(self):
         """Test hook initialization without a value defaults to None."""
         hook = ShushHook()
         assert hook.value is None
-        assert hook.is_jinja2_expression is False
 
     def test_init_with_none_value_explicit(self):
         """Test hook initialization with explicit None value."""
         hook = ShushHook(None)
         assert hook.value is None
-        assert hook.is_jinja2_expression is False
 
     def test_init_with_jinja2_expression(self):
         """Test hook initialization with Jinja2 expression."""
         hook = ShushHook("{{ debug_mode }}")
         assert hook.value == "{{ debug_mode }}"
-        assert hook.is_jinja2_expression is True
 
     def test_init_with_jinja2_expression_using_percent(self):
         """Test hook initialization with Jinja2 expression using {% syntax."""
         hook = ShushHook("{% if condition %}true{% endif %}")
-        assert hook.is_jinja2_expression is True
+        assert hook.value == "{% if condition %}true{% endif %}"
 
-    def test_task_started_does_nothing_when_false(self):
+    def test_task_started_does_nothing_when_false(self, mock_task):
         """Test task_started does nothing when value is False."""
         hook = ShushHook(False)
-        mock_task = MagicMock()
-        mock_task.nornir = MockNornir()
 
         hook.task_started(mock_task)
 
         assert not hasattr(mock_task.nornir, '_nornflow_suppressed_tasks')
 
-    def test_task_started_does_nothing_when_none(self):
+    def test_task_started_does_nothing_when_none(self, mock_task):
         """Test task_started does nothing when value is None."""
         hook = ShushHook(None)
-        mock_task = MagicMock()
-        mock_task.nornir = MockNornir()
 
         hook.task_started(mock_task)
 
         assert not hasattr(mock_task.nornir, '_nornflow_suppressed_tasks')
 
-    def test_task_started_warns_when_no_compatible_processor(self, capsys):
+    def test_task_started_warns_when_no_compatible_processor(self, capsys, mock_task):
         """Test task_started warns when no processor supports shush hook."""
         hook = ShushHook(True)
-        mock_task = MagicMock()
-        mock_task.nornir = MockNornir()
+        
         mock_task.nornir.processors = []
 
         hook.task_started(mock_task)
@@ -92,15 +76,11 @@ class TestShushHook:
         assert "no compatible processor found" in captured.out
         assert not hasattr(mock_task.nornir, '_nornflow_suppressed_tasks')
 
-    def test_task_started_warns_when_processor_lacks_support(self, capsys):
+    def test_task_started_warns_when_processor_lacks_support(self, capsys, mock_task, mock_processor_incompatible):
         """Test task_started warns when processor doesn't have supports_shush_hook attribute."""
         hook = ShushHook(True)
-        mock_task = MagicMock()
-        mock_task.nornir = MockNornir()
         
-        mock_processor = MagicMock()
-        mock_processor.supports_shush_hook = False
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_incompatible]
 
         hook.task_started(mock_task)
 
@@ -109,16 +89,11 @@ class TestShushHook:
         assert "no compatible processor found in chain. Outputs are not going to be suppressed." in captured.out
         assert not hasattr(mock_task.nornir, '_nornflow_suppressed_tasks')
 
-    def test_task_started_sets_suppression_marker_with_compatible_processor(self):
+    def test_task_started_sets_suppression_marker_with_compatible_processor(self, mock_task, mock_processor_compatible):
         """Test task_started sets suppression marker when compatible processor exists."""
         hook = ShushHook(True)
-        mock_task = MagicMock()
-        mock_task.name = "test_task"
-        mock_task.nornir = MockNornir()
         
-        mock_processor = MagicMock()
-        mock_processor.supports_shush_hook = True
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_compatible]
 
         hook.task_started(mock_task)
 
@@ -126,65 +101,48 @@ class TestShushHook:
         assert isinstance(mock_task.nornir._nornflow_suppressed_tasks, set)
         assert "test_task" in mock_task.nornir._nornflow_suppressed_tasks
 
-    def test_task_started_creates_set_if_not_exists(self):
+    def test_task_started_creates_set_if_not_exists(self, mock_task, mock_processor_compatible):
         """Test task_started creates the suppressed_tasks set if it doesn't exist."""
         hook = ShushHook(True)
-        mock_task = MagicMock()
-        mock_task.name = "task1"
-        mock_task.nornir = MockNornir()
         
-        mock_processor = MagicMock()
-        mock_processor.supports_shush_hook = True
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir.processors = [mock_processor_compatible]
+        mock_task.name = "task1"
 
         hook.task_started(mock_task)
 
         assert hasattr(mock_task.nornir, '_nornflow_suppressed_tasks')
         assert "task1" in mock_task.nornir._nornflow_suppressed_tasks
 
-    def test_task_started_adds_to_existing_set(self):
+    def test_task_started_adds_to_existing_set(self, mock_task, mock_processor_compatible):
         """Test task_started adds task name to existing suppressed_tasks set."""
         hook = ShushHook(True)
-        mock_task = MagicMock()
-        mock_task.name = "task2"
-        mock_task.nornir = MockNornir()
-        mock_task.nornir._nornflow_suppressed_tasks = {"task1"}
         
-        mock_processor = MagicMock()
-        mock_processor.supports_shush_hook = True
-        mock_task.nornir.processors = [mock_processor]
+        mock_task.nornir._nornflow_suppressed_tasks = {"task1"}
+        mock_task.nornir.processors = [mock_processor_compatible]
+        mock_task.name = "task2"
 
         hook.task_started(mock_task)
 
         assert "task1" in mock_task.nornir._nornflow_suppressed_tasks
         assert "task2" in mock_task.nornir._nornflow_suppressed_tasks
 
-    def test_task_started_with_multiple_processors_one_compatible(self):
+    def test_task_started_with_multiple_processors_one_compatible(self, mock_task, mock_processor_compatible, mock_processor_incompatible):
         """Test task_started works when one of multiple processors is compatible."""
         hook = ShushHook(True)
-        mock_task = MagicMock()
-        mock_task.name = "test_task"
-        mock_task.nornir = MockNornir()
         
-        mock_processor1 = MagicMock()
-        mock_processor1.supports_shush_hook = False
-        
-        mock_processor2 = MagicMock()
-        mock_processor2.supports_shush_hook = True
-        
-        mock_task.nornir.processors = [mock_processor1, mock_processor2]
+        mock_task.nornir.processors = [mock_processor_incompatible, mock_processor_compatible]
 
         hook.task_started(mock_task)
 
         assert hasattr(mock_task.nornir, '_nornflow_suppressed_tasks')
         assert "test_task" in mock_task.nornir._nornflow_suppressed_tasks
 
-    def test_task_completed_removes_suppression_marker(self):
+    def test_task_completed_removes_suppression_marker(self, mock_nornir):
         """Test task_completed removes the task from suppressed_tasks set."""
         hook = ShushHook(True)
         mock_task = MagicMock()
         mock_task.name = "test_task"
-        mock_task.nornir = MockNornir()
+        mock_task.nornir = mock_nornir
         mock_task.nornir._nornflow_suppressed_tasks = {"test_task", "other_task"}
 
         hook.task_completed(mock_task, MagicMock())
@@ -192,39 +150,26 @@ class TestShushHook:
         assert "test_task" not in mock_task.nornir._nornflow_suppressed_tasks
         assert "other_task" in mock_task.nornir._nornflow_suppressed_tasks
 
-    def test_task_completed_handles_missing_attribute(self):
+    def test_task_completed_handles_missing_attribute(self, mock_nornir):
         """Test task_completed handles missing _nornflow_suppressed_tasks gracefully."""
         hook = ShushHook(True)
         mock_task = MagicMock()
         mock_task.name = "test_task"
-        mock_task.nornir = MockNornir()
+        mock_task.nornir = mock_nornir
 
         hook.task_completed(mock_task, MagicMock())
 
-    def test_task_completed_handles_task_not_in_set(self):
+    def test_task_completed_handles_task_not_in_set(self, mock_nornir):
         """Test task_completed handles task not being in the set gracefully."""
         hook = ShushHook(True)
         mock_task = MagicMock()
         mock_task.name = "test_task"
-        mock_task.nornir = MockNornir()
+        mock_task.nornir = mock_nornir
         mock_task.nornir._nornflow_suppressed_tasks = {"other_task"}
 
         hook.task_completed(mock_task, MagicMock())
 
         assert "other_task" in mock_task.nornir._nornflow_suppressed_tasks
-
-    def test_validate_string_without_jinja2_markers(self):
-        """Test validation fails for string values without Jinja2 markers."""
-        from nornflow.models import TaskModel
-        
-        hook = ShushHook("invalid_string")
-        task_model = TaskModel.create({"name": "test_task", "args": {}})
-        
-        try:
-            hook.execute_hook_validations(task_model)
-            assert False, "Should have raised HookValidationError"
-        except HookValidationError as e:
-            assert "without Jinja2 markers" in str(e)
 
     def test_validate_string_with_jinja2_markers(self):
         """Test validation passes for string values with Jinja2 markers."""
@@ -246,87 +191,76 @@ class TestShushHook:
         hook_true.execute_hook_validations(task_model)
         hook_false.execute_hook_validations(task_model)
 
-    def test_evaluate_suppression_with_boolean_true(self):
-        """Test _evaluate_suppression returns True for boolean True value."""
+    def test_get_resolved_value_with_boolean_true(self, mock_task):
+        """Test get_resolved_value returns True for boolean True value."""
         hook = ShushHook(True)
-        mock_task = MagicMock()
         
-        result = hook._evaluate_suppression(mock_task)
+        result = hook.get_resolved_value(mock_task, as_bool=True, default=False)
         
         assert result is True
 
-    def test_evaluate_suppression_with_boolean_false(self):
-        """Test _evaluate_suppression returns False for boolean False value."""
+    def test_get_resolved_value_with_boolean_false(self, mock_task):
+        """Test get_resolved_value returns False for boolean False value."""
         hook = ShushHook(False)
-        mock_task = MagicMock()
         
-        result = hook._evaluate_suppression(mock_task)
+        result = hook.get_resolved_value(mock_task, as_bool=True, default=False)
         
         assert result is False
 
-    def test_evaluate_suppression_with_none(self):
-        """Test _evaluate_suppression returns False for None value."""
+    def test_get_resolved_value_with_none(self, mock_task):
+        """Test get_resolved_value returns default for None value."""
         hook = ShushHook(None)
-        mock_task = MagicMock()
         
-        result = hook._evaluate_suppression(mock_task)
+        result = hook.get_resolved_value(mock_task, as_bool=True, default=False)
         
         assert result is False
 
-    def test_evaluate_suppression_with_jinja2_expression_true(self):
-        """Test _evaluate_suppression with Jinja2 expression that evaluates to True."""
+    def test_get_resolved_value_with_jinja2_expression_true(self, mock_task, mock_vars_manager, mock_device_context):
+        """Test get_resolved_value with Jinja2 expression that evaluates to True."""
         hook = ShushHook("{{ true }}")
-        mock_task = MagicMock()
-        mock_task.nornir.inventory.hosts = {"host1": MagicMock()}
         
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.resolve_string.return_value = "True"
+        mock_device_context.resolve_value.return_value = "true"
+        
         hook._current_context = {"vars_manager": mock_vars_manager}
         
-        result = hook._evaluate_suppression(mock_task)
+        result = hook.get_resolved_value(mock_task, as_bool=True, default=False)
         
         assert result is True
 
-    def test_evaluate_suppression_with_jinja2_expression_false(self):
-        """Test _evaluate_suppression with Jinja2 expression that evaluates to False."""
+    def test_get_resolved_value_with_jinja2_expression_false(self, mock_task, mock_vars_manager, mock_device_context):
+        """Test get_resolved_value with Jinja2 expression that evaluates to False."""
         hook = ShushHook("{{ false }}")
-        mock_task = MagicMock()
-        mock_task.nornir.inventory.hosts = {"host1": MagicMock()}
         
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.resolve_string.return_value = "False"
+        mock_device_context.resolve_value.return_value = "false"
+        
         hook._current_context = {"vars_manager": mock_vars_manager}
         
-        result = hook._evaluate_suppression(mock_task)
+        result = hook.get_resolved_value(mock_task, as_bool=True, default=False)
         
         assert result is False
 
     def test_hook_with_truthy_non_boolean_values(self):
-        """Test hook handles truthy non-boolean values correctly (as Jinja2 expressions)."""
+        """Test hook handles truthy non-boolean values correctly."""
         hook = ShushHook("yes")
         assert hook.value == "yes"
-        assert hook.is_jinja2_expression is False
 
     def test_hook_with_falsy_non_boolean_values(self):
         """Test hook handles falsy non-boolean values correctly."""
         hook = ShushHook("")
         assert hook.value == ""
-        assert hook.is_jinja2_expression is False
 
-    def test_hook_with_integer_zero(self):
+    def test_hook_with_integer_zero(self, mock_task):
         """Test hook with integer 0 (falsy non-boolean)."""
         hook = ShushHook(0)
-        mock_task = MagicMock()
         
-        result = hook._evaluate_suppression(mock_task)
+        result = hook.get_resolved_value(mock_task, as_bool=True, default=False)
         
         assert result is False
 
-    def test_hook_with_integer_one(self):
+    def test_hook_with_integer_one(self, mock_task):
         """Test hook with integer 1 (truthy non-boolean)."""
         hook = ShushHook(1)
-        mock_task = MagicMock()
         
-        result = hook._evaluate_suppression(mock_task)
+        result = hook.get_resolved_value(mock_task, as_bool=True, default=False)
         
         assert result is True

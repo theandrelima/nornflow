@@ -8,18 +8,20 @@ from nornflow.hooks.exceptions import HookRegistrationError
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
 
-# Global registry populated automatically when Hook subclasses are defined
 HOOK_REGISTRY: dict[str, type["Hook"]] = {}
 
 
 class Hook:
-    """Base hook class with automatic registration.
+    """Base hook class with automatic registration and cooperative validation.
 
     Any class that inherits from Hook and defines a hook_name will be
     automatically registered when the class is defined (at import time).
 
+    The execute_hook_validations method uses cooperative super() calls to ensure
+    proper validation in multiple inheritance scenarios (e.g., with mixins).
+
     Example:
-        class MyHook(Hook):  # Automatically registered!
+        class MyHook(Hook):
             hook_name = "my_hook"
 
             def task_started(self, task: Task) -> None:
@@ -61,7 +63,6 @@ class Hook:
                     f"Cannot register {cls.__module__}.{cls.__name__}"
                 )
 
-        # Register the hook class
         HOOK_REGISTRY[cls.hook_name] = cls
 
     def __init__(self, value: Any = None):
@@ -160,10 +161,14 @@ class Hook:
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
         """Validate hook configuration for the task.
 
+        Uses cooperative super() to ensure validation methods in mixins and
+        parent classes are called properly in multiple inheritance scenarios.
+
         Args:
             task_model: The task model to validate against.
 
         Raises:
             HookValidationError: If validation fails.
         """
-        pass
+        if hasattr(super(), "execute_hook_validations"):
+            super().execute_hook_validations(task_model)

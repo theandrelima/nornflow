@@ -42,4 +42,5 @@ NornFlow promotes collaboration between developers and network engineers:
 - [Variables Basics](https://github.com/theandrelima/nornflow/blob/main/docs/variables_basics.md) - Understand NornFlow's variable system
 - [NornFlow Settings](https://github.com/theandrelima/nornflow/blob/main/docs/nornflow_settings.md) - Configure your NornFlow environment
 - [Jinja2 Filters](https://github.com/theandrelima/nornflow/blob/main/docs/jinja2_filters.md) - Advanced template manipulation
+- [Hooks Guide](https://github.com/theandrelima/nornflow/blob/main/docs/hooks_guide.md) - Extend task behavior with custom hooks
 - [API Reference](https://github.com/theandrelima/nornflow/blob/main/docs/api_reference.md) - For developers extending NornFlow

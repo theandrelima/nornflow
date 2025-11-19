@@ -360,7 +360,7 @@ from nornflow.models import TaskModel
 | `id` | `int \| None` | Auto-incrementing task ID |
 | `name` | `str` | Task name (must exist in tasks catalog) |
 | `args` | `HashableDict[str, Any] \| None` | Task arguments (supports Jinja2) |
-| hooks | `HashableDict[str, Any] \| None` | Hook configurations (inherited from HookableModel) |
+| `hooks` | `HashableDict[str, Any] \| None` | Hook configurations (inherited from HookableModel) |
 
 **Key Characteristics:**
 - Inherits from `HookableModel` (not RunnableModel)
@@ -403,16 +403,11 @@ Create a new WorkflowModel from a workflow dictionary.
 
 Hooks extend task behavior without modifying task code. They are implemented as Nornir Processors that activate when configured on specific tasks.
 
-> **For detailed hook documentation, including:**
-> - Complete lifecycle methods reference
-> - Built-in hooks (if, set_to, shush)
-> - Creating custom hooks
-> - Hook validation patterns
-> - Exception handling strategies
->
-> **See:** [Hooks Guide](hooks_guide.md)
+> **For comprehensive hook documentation, including lifecycle methods, creating custom hooks, validation patterns, and exception handling, see:** Hooks Guide
 
 ### Hook Base Class
+
+Base class for all hooks with lifecycle management and context access.
 
 ```python
 from nornflow.hooks import Hook
@@ -432,6 +427,29 @@ from nornflow.hooks import Hook
 def __init__(self, value: Any = None)
 ```
 
+**Parameters:**
+- `value`: Hook configuration value from YAML
+
+**Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `value` | `Any` | Hook configuration value |
+| `context` | `dict[str, Any]` | Execution context injected by NornFlowHookProcessor (read-only) |
+
+**Context Dictionary Contents:**
+
+The `context` property provides access to execution context populated by `NornFlowHookProcessor`:
+
+- `vars_manager`: NornFlowVariablesManager instance for variable resolution
+- `nornir_manager`: NornirManager instance for Nornir operations
+- `tasks_catalog`: Dictionary of available task functions
+- `filters_catalog`: Dictionary of available inventory filter functions
+- `workflows_catalog`: FileCatalog of available workflow files
+- `task_model`: Current TaskModel being executed (task-specific context)
+
+**Important:** Context is only available during hook lifecycle execution (after `task_started`). It will be empty during `__init__()` and `execute_hook_validations()`.
+
 **Key Lifecycle Methods:**
 
 All lifecycle methods are optional - override only those needed:
@@ -448,17 +466,215 @@ All lifecycle methods are optional - override only those needed:
 #### `should_execute(task: Task) -> bool`
 Check if this hook should execute for given task.
 
+**Returns:**
+- `True` if hook should execute, `False` to skip
+
 #### `execute_hook_validations(task_model: TaskModel) -> None`
 Execute validation logic specific to this hook.
+
+Called during workflow preparation before any task execution. Uses cooperative `super()` to ensure validation methods in mixins and parent classes are called properly.
+
+**Parameters:**
+- `task_model`: TaskModel instance to validate against
 
 **Raises:**
 - `HookValidationError`: If validation fails
 
+### Jinja2ResolvableMixin
+
+***Optional*** mixin providing automatic Jinja2 validation and seamless template resolution for hooks.
+
+```python
+from nornflow.hooks import Jinja2ResolvableMixin
+```
+
+**Purpose:**
+Adds automatic Jinja2 validation during workflow preparation and resolution methods for execution. Developers using this mixin don't need Jinja2 awareness - just include it in the inheritance chain, optionally override `execute_hook_validations()` to add custom validations, and call `get_resolved_value()` in lifecycle methods.
+
+**When to Use:**
+- ✅ Hook accepts both static values AND Jinja2 expressions
+- ✅ Hook needs automatic validation of Jinja2 expressions
+
+**When NOT to Use:**
+- ❌ Hook should never accept Jinja2 expressions (security/performance)
+- ❌ Hook demands custom/complex Jinja2 resolution logic
+
+
+**Usage:**
+
+```python
+class MyHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "my_hook"
+    
+    def task_instance_started(self, task: Task, host: Host) -> None:
+        condition = self.get_resolved_value(task, host=host, as_bool=True, default=False)
+        if condition:
+            pass
+```
+
+You can override `execute_hook_validations()` if you need additional custom validation:
+
+```python
+class MyHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "my_hook"
+    
+    def execute_hook_validations(self, task_model: TaskModel) -> None:
+        super().execute_hook_validations(task_model)
+        
+        if self.value and not isinstance(self.value, (str, bool)):
+            raise HookValidationError(
+                self.hook_name,
+                [("value_type", "my_hook only accepts strings or booleans")]
+            )
+    
+    def task_instance_started(self, task: Task, host: Host) -> None:
+        condition = self.get_resolved_value(task, host=host, as_bool=True, default=False)
+        if condition:
+            pass
+```
+
+
+**Automatic Validation:**
+
+The mixin automatically validates Jinja2 expressions by overriding `execute_hook_validations()`. Thanks to cooperative `super()` calls in the Hook base class, this works with any inheritance order.
+
+**What gets validated by the mixin:**
+- **Jinja2 expressions are validated**: `my_hook: "{{ variable }}"` - Template syntax checked
+- **Plain strings are NOT validated**: `my_hook: "plain text"` - Passed through as-is
+- **Empty strings are NOT validated**: `my_hook: ""` - Treated as falsy value
+- **Non-string values skip validation**: `my_hook: true`, `my_hook: {"key": "value"}` - No checks
+
+**Individual hooks can add stricter validation** if needed:
+
+```python
+from nornflow.hooks import Hook, Jinja2ResolvableMixin
+from nornflow.hooks.exceptions import HookValidationError
+
+class StrictHook(Hook, Jinja2ResolvableMixin):
+    """Hook that rejects empty strings as meaningless configuration."""
+    
+    hook_name = "strict_hook"
+    
+    def execute_hook_validations(self, task_model: TaskModel) -> None:
+        super().execute_hook_validations(task_model)
+        
+        if isinstance(self.value, str) and not self.value.strip():
+            raise HookValidationError(
+                "StrictHook",
+                [("empty_string", f"Task '{task_model.name}': strict_hook value cannot be empty")]
+            )
+```
+
+**Validation responsibility split:**
+- **Mixin validates**: Jinja2 expression syntax (only when markers present)
+- **Individual hooks validate**: Hook-specific constraints (empty strings, value types, etc.)
+
+Always call `super().execute_hook_validations(task_model)` first in your validation method to ensure cooperative super() calls work correctly with multiple inheritance.
+
+**Methods:**
+
+#### `execute_hook_validations(task_model: TaskModel) -> None`
+Validate hook configuration, including automatic Jinja2 validation for expressions containing markers.
+
+Subclasses can override to add additional validation but must call `super().execute_hook_validations(task_model)` first.
+
+**Parameters:**
+- `task_model`: TaskModel to validate against
+
+**Raises:**
+- `HookValidationError`: If validation fails
+
+#### `get_resolved_value(task: Task, host: Host | None = None, as_bool: bool = False, default: Any = None) -> Any`
+Get the final resolved value, handling Jinja2 automatically.
+
+Detects if `self.value` contains Jinja2 markers and resolves through variable system if needed.
+
+**Parameters:**
+- `task`: Task being executed (used to extract host for template resolution)
+- `host`: The specific host to resolve for. **MUST** be provided when calling from `task_instance_started()` for per-host resolution
+- `as_bool`: Convert result to boolean using standard truthy values
+- `default`: Fallback value if `self.value` is falsy
+
+**Returns:**
+- Resolved value, optionally converted to boolean
+
+**Raises:**
+- `HookError`: If vars_manager not available (likely called outside lifecycle methods) or if task has no hosts
+
+**Boolean Conversion:**
+
+When `as_bool=True`, converts values using these rules:
+
+- **Truthy strings** (case-insensitive): `"true"`, `"yes"`, `"1"`, `"on"`, `"y"`, `"t"`, `"enabled"`
+- **Other strings**: Falsy
+- **Booleans**: Returned as-is
+- **Other types**: Converted via Python's `bool()`
+
+**Important:** Only call `get_resolved_value()` inside lifecycle methods where context has been populated by the framework. When calling from `task_instance_started()`, always pass the `host` parameter explicitly.
+
+#### `_is_jinja2_expression(value: Any) -> bool`
+Check if value contains Jinja2 template markers.
+
+**Parameters:**
+- `value`: Value to check
+
+**Returns:**
+- `True` if value is string with Jinja2 markers (`{{`, `{%`, `{#`), `False` otherwise
+
+#### `_resolve_jinja2(value: str, host: Host) -> Any`
+Resolve Jinja2 template string through variable system.
+
+**Parameters:**
+- `value`: Template string to resolve
+- `host`: Host to resolve for
+
+**Returns:**
+- Resolved value from template
+
+**Raises:**
+- `HookError`: If vars_manager not available in context
+
+#### `_to_bool(value: Any) -> bool`
+Convert value to boolean.
+
+**Parameters:**
+- `value`: Value to convert
+
+**Returns:**
+- Boolean representation using standard truthy values
+
+#### `_validate_jinja2_string(task_model: TaskModel) -> None`
+Validate that string value containing Jinja2 markers is a proper Jinja2 expression.
+
+**Parameters:**
+- `task_model`: The task model being validated
+
+**Raises:**
+- `HookValidationError`: If string with Jinja2 markers has invalid template syntax
 
 ### Built-in Hooks
 
-**IfHook** - Conditional task execution
+#### IfHook
 
+Conditionally execute tasks per host based on filter functions or Jinja2 expressions.
+
+```python
+from nornflow.builtins.hooks import IfHook
+```
+
+Supports two evaluation modes:
+
+**Filter-based (dictionary syntax):**
+```yaml
+tasks:
+  - name: napalm_get
+    args:
+      getters: ["facts"]
+    if:
+      platform: "ios"
+```
+
+**Jinja2 expression (string syntax):**
 ```yaml
 tasks:
   - name: napalm_get
@@ -467,17 +683,38 @@ tasks:
     if: "{{ host.platform == 'ios' }}"
 ```
 
-**SetToHook** - Capture and store task results
+**Boolean Semantics:**
+- `True` (or truthy): Task **executes** for the host
+- `False` (or falsy): Task **skips** for the host
 
+This follows Python's standard truthiness rules where `True` means "proceed" and `False` means "don't proceed".
+
+**Features:**
+- Uses `Jinja2ResolvableMixin` for Jinja2 expression support with automatic validation
+- Evaluates per host (`run_once_per_task = False`)
+- Sets skip flag on hosts that don't match condition
+- Supports all registered inventory filters
+
+#### SetToHook
+
+Capture and store task results as runtime variables.
+
+```python
+from nornflow.builtins.hooks import SetToHook
+```
+
+**Store entire result:**
 ```yaml
 tasks:
-  # stores the entire Nornir Result object to a var
   - name: napalm_get
     args:
       getters: ["facts"]
     set_to: "device_facts"
-  
-  # or extract specific nested data from the Nornir Result object
+```
+
+**Extract nested data using dot notation:**
+```yaml
+tasks:
   - name: napalm_get
     args:
       getters: ["facts", "environment"]
@@ -486,20 +723,44 @@ tasks:
       cpu_usage: "environment.cpu.0.%usage"
 ```
 
-**ShushHook** - Suppress task output
+**Features:**
+- Extracts data from Nornir Result objects
+- Supports dot notation for nested paths
+- Array indexing with numeric indices
+- Dictionary key access with special characters via `%` prefix
+- Stores variables per-host in runtime context
 
+#### ShushHook
+
+Suppress task output printing conditionally.
+
+```python
+from nornflow.builtins.hooks import ShushHook
+```
+
+**Static suppression:**
 ```yaml
 tasks:
   - name: netmiko_send_command
     args:
       command_string: "show version"
     shush: true
+```
 
+**Dynamic suppression:**
+```yaml
+tasks:
   - name: netmiko_send_command
     args:
       command_string: "show interfaces"
     shush: "{{ verbose_mode == false }}"
 ```
+
+**Features:**
+- Uses `Jinja2ResolvableMixin` for dynamic evaluation with automatic validation
+- Runs once per task (`run_once_per_task = True`)
+- Requires compatible processor with `supports_shush_hook` attribute
+- Marks tasks in processor's suppression registry
 
 ## Variable System Classes
 
