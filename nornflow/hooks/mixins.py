@@ -30,11 +30,11 @@ class Jinja2ResolvableMixin:
         class MyHook(Hook, Jinja2ResolvableMixin):
             hook_name = "my_hook"
 
-            def task_started(self, task: Task):
-                should_run = self.get_resolved_value(task, as_bool=True)
+            def task_instance_started(self, task: Task, host: Host):
+                should_run = self.get_resolved_value(task, host=host, as_bool=True)
     """
 
-    def get_resolved_value(self, task: Task, as_bool: bool = False, default: Any = None) -> Any:
+    def get_resolved_value(self, task: Task, host: Host | None = None, as_bool: bool = False, default: Any = None) -> Any:
         """Get the final resolved value, handling Jinja2 automatically.
 
         This method checks if self.value is a Jinja2 expression, resolves it
@@ -42,6 +42,8 @@ class Jinja2ResolvableMixin:
 
         Args:
             task: The task being executed.
+            host: The specific host to resolve for. If None, extracts first host
+                from task inventory (only safe for task_started, not task_instance_started).
             as_bool: If True, convert result to boolean.
             default: Default value if self.value is falsy.
 
@@ -57,7 +59,8 @@ class Jinja2ResolvableMixin:
             return default
 
         if self._is_jinja2_expression(self.value):
-            host = self._extract_host_from_task(task)
+            if not host:
+                host = self._extract_host_from_task(task)
             resolved = self._resolve_jinja2(self.value, host)
         else:
             resolved = self.value
@@ -83,6 +86,10 @@ class Jinja2ResolvableMixin:
 
     def _extract_host_from_task(self, task: Task) -> Host:
         """Extract a host from task inventory.
+
+        Warning: This returns the FIRST host from inventory, which is only safe
+        when called from task_started (runs once per task). For task_instance_started,
+        you MUST pass the host parameter explicitly.
 
         Args:
             task: The task to extract host from.

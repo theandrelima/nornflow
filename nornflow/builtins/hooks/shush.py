@@ -27,7 +27,7 @@ class ShushHook(Hook, Jinja2ResolvableMixin):
         Args:
             task: The Nornir task
         """
-        should_suppress = self.get_resolved_value(task, as_bool=True, default=False)
+        should_suppress = self.get_resolved_value(task, host=None, as_bool=True, default=False)
 
         if not should_suppress:
             return

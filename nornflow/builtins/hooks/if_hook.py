@@ -155,8 +155,8 @@ class IfHook(Hook, Jinja2ResolvableMixin):
                 # Filter function evaluation
                 should_skip = not self._evaluate_filter_condition(host)
             else:
-                # Jinja2 expression evaluation - use mixin
-                should_skip = not self.get_resolved_value(task, as_bool=True, default=True)
+                condition = self.get_resolved_value(task, host=host, as_bool=True, default=True)
+                should_skip = not condition
 
             if should_skip:
                 host.data["nornflow_skip_flag"] = True
@@ -197,7 +197,6 @@ class IfHook(Hook, Jinja2ResolvableMixin):
 
         if isinstance(filter_values, list):
             if len(param_names) == 1:
-                # Special case: single parameter that expects a list
                 return {param_names[0]: filter_values}
             if len(filter_values) != len(param_names):
                 raise HookValidationError(
