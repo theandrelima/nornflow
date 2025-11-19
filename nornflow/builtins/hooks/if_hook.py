@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Callable
 from functools import wraps
-from typing import TYPE_CHECKING, Any
+from typing import Any, TYPE_CHECKING
 
 from nornir.core.inventory import Host
 from nornir.core.task import Result, Task
