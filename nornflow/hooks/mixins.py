@@ -30,7 +30,7 @@ class Jinja2ResolvableMixin:
         string values that contain Jinja2 markers. Plain strings (like "yes", "true")
         are allowed and later converted by _to_bool(). Works with any inheritance order
         thanks to cooperative super() calls in the Hook base class.
-        
+
         NOTE: Empty string validation is NOT performed by this mixin. Individual hook
         implementations should validate empty strings if their specific use case
         requires it, as some hooks may legitimately accept empty strings.
@@ -64,7 +64,7 @@ class Jinja2ResolvableMixin:
         """
         if isinstance(self.value, str) and self._is_jinja2_expression(self.value):
             self._validate_jinja2_string(task_model)
-        
+
         if hasattr(super(), "execute_hook_validations"):
             super().execute_hook_validations(task_model)
 
@@ -80,10 +80,7 @@ class Jinja2ResolvableMixin:
         if not self.value.strip():
             raise HookValidationError(
                 self.hook_name,
-                [(
-                    "empty_expression",
-                    f"Task '{task_model.name}': Jinja2 expression cannot be empty"
-                )]
+                [("empty_expression", f"Task '{task_model.name}': Jinja2 expression cannot be empty")],
             )
 
     def get_resolved_value(

@@ -115,17 +115,17 @@ class IfHook(Hook, Jinja2ResolvableMixin):
         elif isinstance(self.value, str):
             if not self.value.strip():
                 raise HookValidationError(
-                    "IfHook",
-                    [("empty_string", f"Task '{task_model.name}': if value cannot be empty string")]
+                    "IfHook", [("empty_string", f"Task '{task_model.name}': if value cannot be empty string")]
                 )
         elif self.value is not None:
             raise HookValidationError(
-                "IfHook", [("value_type", "if value must be a dict (Nornir filter) or string (Jinja2 expression)")]
+                "IfHook",
+                [("value_type", "if value must be a dict (Nornir filter) or string (Jinja2 expression)")],
             )
 
     def task_started(self, task: Task) -> None:
         """Dynamically decorate the task function to enable per-host skipping."""
-        # here we really need to check for 'None' specifically to not 
+        # here we really need to check for 'None' specifically to not
         # return (and don't skip) when a falsy value is statically passed
         if self.value is None:
             return
@@ -170,11 +170,13 @@ class IfHook(Hook, Jinja2ResolvableMixin):
             available = ", ".join(sorted(filters_catalog.keys()))
             raise HookValidationError(
                 "IfHook",
-                [(
-                    filter_name,
-                    f"Filter '{filter_name}' not found in filters catalog. "
-                    f"Available filters: {available}",
-                )]
+                [
+                    (
+                        filter_name,
+                        f"Filter '{filter_name}' not found in filters catalog. "
+                        f"Available filters: {available}",
+                    )
+                ],
             )
 
         filter_func, param_names = filters_catalog[filter_name]
@@ -193,10 +195,12 @@ class IfHook(Hook, Jinja2ResolvableMixin):
             if len(filter_values) != len(param_names):
                 raise HookValidationError(
                     "IfHook",
-                    [(
-                        "param_count",
-                        f"Filter expects {len(param_names)} parameters, got {len(filter_values)}",
-                    )]
+                    [
+                        (
+                            "param_count",
+                            f"Filter expects {len(param_names)} parameters, got {len(filter_values)}",
+                        )
+                    ],
                 )
             return dict(zip(param_names, filter_values, strict=False))
 
