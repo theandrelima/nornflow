@@ -635,7 +635,7 @@ class MyHook(Hook):
 
 ### Jinja2 Template Support
 
-NornFlow provides an optional [`Jinja2ResolvableMixin`](../nornflow/hooks/mixins.py) that makes it easy to add Jinja2 template support to your custom hooks. This mixin handles all the complexity of detecting Jinja2 expressions, resolving them through the variable system, and converting results to the appropriate type.
+NornFlow provides an optional [`Jinja2ResolvableMixin`](../nornflow/hooks/mixins.py) that makes it easy to add Jinja2 template support to your custom hooks. This mixin handles all the complexity of detecting Jinja2 expressions, validating them during workflow preparation, resolving them through the variable system at runtime, and converting results to the appropriate type.  
 
 #### When to Use the Mixin
 
@@ -646,9 +646,8 @@ The mixin is **entirely optional** and should only be used when:
 
 **Do NOT use the mixin when:**
 
-1. ❌ **Your hook should never accept Jinja2 expressions** (security concerns, performance requirements)
-2. ❌ **Your hook operates on structured data only** (dicts, lists) where templates don't make sense
-3. ❌ **Your hook has complex custom Jinja2 resolution logic** that conflicts with standard Jinja2 resolution provided by the Mixin
+1. ❌ **Your hook should NEVER accept Jinja2 expressions**
+2. ❌ **Your hook has complex custom Jinja2 resolution and/or validation logic** that conflicts with standard Jinja2 resolution provided by the Mixin
 
 #### How the Mixin Works
 
@@ -676,12 +675,15 @@ class MyConditionalHook(Hook, Jinja2ResolvableMixin):
     hook_name = "my_hook"
     run_once_per_task = False
     
+    def execute_hook_validations(self, task_model: "TaskModel") -> None:
+        super().execute_hook_validations(task_model)
+        # your own custom validations here if any...
+        # otherwise, you don't even need to override this method at all
+    
     def task_instance_started(self, task: Task, host: Host) -> None:
-        # Get resolved value - works with both static and Jinja2
-        condition = self.get_resolved_value(task, as_bool=True, default=False)
+        condition = self.get_resolved_value(task, host=host, as_bool=True, default=False)
         
         if condition:
-            # Your hook logic here
             print(f"Executing for {host.name}")
 ```
 
@@ -701,29 +703,77 @@ tasks:
     my_hook: "yes"  # Truthy string value
 ```
 
+#### Automatic Validation
+
+When you use the mixin, **validation happens automatically** during workflow preparation for Jinja2 expressions. The mixin validates that strings containing Jinja2 markers (`{{`, `{%`, `{#`) are properly formatted templates.
+
+**What gets validated by the mixin:**
+- **Jinja2 expressions are validated**: `my_hook: "{{ variable }}"` - Template syntax checked
+- **Plain strings are NOT validated**: `my_hook: "plain text"` - Passed through as-is
+- **Empty strings are NOT validated**: `my_hook: ""` - Treated as falsy value
+- **Non-string values skip validation**: `my_hook: true`, `my_hook: {"key": "value"}` - No checks. Returns as-is for your Hook's own processing logic.
+
+**Individual hooks can add stricter validation** if needed:
+
+```python
+from nornflow.hooks import Hook, Jinja2ResolvableMixin
+from nornflow.hooks.exceptions import HookValidationError
+
+class StrictHook(Hook, Jinja2ResolvableMixin):
+    """Hook that rejects empty strings as meaningless configuration."""
+    
+    hook_name = "strict_hook"
+    
+    def execute_hook_validations(self, task_model: "TaskModel") -> None:
+        super().execute_hook_validations(task_model) # ATTENTION: If you don't call super's execute_hook_validations, you loose all the Mixin's validations.
+        
+        if isinstance(self.value, str) and not self.value.strip():
+            raise HookValidationError(
+                "StrictHook",
+                [("empty_string", f"Task '{task_model.name}': strict_hook value cannot be empty")]
+            )
+```
+
+**Example: The `if` hook adds empty string validation** because an empty condition is meaningless:
+
+```python
+class IfHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "if"
+    
+    def execute_hook_validations(self, task_model: "TaskModel") -> None:
+        super().execute_hook_validations(task_model)
+        
+        if isinstance(self.value, str):
+            if not self.value.strip():
+                raise HookValidationError(
+                    "IfHook",
+                    [("empty_string", f"Task '{task_model.name}': if condition cannot be empty string")]
+                )
+```
+
+**Validation responsibility split:**
+- **Mixin validates**: Jinja2 expression syntax (only when markers present)
+- **Individual hooks validate**: Hook-specific constraints (empty strings, value types, etc.)
+
+The mixin uses **cooperative super() calls**, so it works correctly with multiple inheritance. You are **strongly** encouraged to always call `super().execute_hook_validations(task_model)` first in your validation method.
+
 #### The `get_resolved_value()` Method
 
 ```python
 def get_resolved_value(
     self,
     task: Task,
+    host: Host | None = None,
     as_bool: bool = False,
     default: Any = None
 ) -> Any:
-    """Get the final resolved value, handling Jinja2 automatically.
-    
-    Args:
-        task: The task being executed.
-        as_bool: If True, convert result to boolean.
-        default: Default value if self.value is falsy.
-    
-    Returns:
-        The resolved value, optionally converted to boolean.
-    """
+    """Get the final resolved value, handling Jinja2 automatically."""
+    ...
 ```
 
 **Parameters:**
 - `task`: The current Nornir task (used to extract host for template resolution)
+- `host`: The specific host for per-host resolution (MUST provide in task_instance_started)
 - `as_bool`: Convert the final result to boolean (useful for conditional hooks)
 - `default`: Fallback value if `self.value` is None or empty
 
@@ -784,10 +834,8 @@ class IfHook(Hook, Jinja2ResolvableMixin):
     
     def task_instance_started(self, task: Task, host: Host) -> None:
         if isinstance(self.value, str):
-            # Jinja2 expression - use mixin
-            should_run = self.get_resolved_value(task, as_bool=True, default=True)
+            should_run = self.get_resolved_value(task, host=host, as_bool=True, default=True)
         else:
-            # Filter function - custom logic
             should_run = self._evaluate_filter_condition(host)
         
         if not should_run:
@@ -803,16 +851,13 @@ class NumericHook(Hook, Jinja2ResolvableMixin):
     hook_name = "numeric"
     
     def task_instance_started(self, task: Task, host: Host) -> None:
-        # Get resolved value (could be Jinja2 or static)
-        raw_value = self.get_resolved_value(task)
+        raw_value = self.get_resolved_value(task, host=host)
         
-        # Custom conversion to integer
         try:
             numeric_value = int(raw_value)
         except (ValueError, TypeError):
             numeric_value = 0
         
-        # Use the numeric value
         if numeric_value > 10:
             ...
 ```
@@ -826,7 +871,6 @@ from nornflow.hooks.exceptions import HookValidationError
 
 class MyHook(Hook):
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
-        """Validate hook configuration."""
         
         if not isinstance(self.value, str):
             raise HookValidationError(

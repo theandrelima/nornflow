@@ -56,20 +56,13 @@ class TestIfHook:
         with pytest.raises(HookValidationError, match="if must specify exactly one filter"):
             hook.execute_hook_validations(mock_task_model)
 
-    def test_execute_hook_validations_invalid_empty_jinja(self):
-        """Test validation fails for empty Jinja2 expression."""
+    def test_execute_hook_validations_invalid_empty_string(self):
+        """Test validation fails for empty string."""
         hook = IfHook("")
         mock_task_model = MagicMock()
+        mock_task_model.name = "test_task"
 
-        with pytest.raises(HookValidationError, match="if expression cannot be empty"):
-            hook.execute_hook_validations(mock_task_model)
-
-    def test_execute_hook_validations_invalid_no_jinja_markers(self):
-        """Test validation fails for string without Jinja2 markers."""
-        hook = IfHook("host.platform == 'ios'")
-        mock_task_model = MagicMock()
-
-        with pytest.raises(HookValidationError, match="if expression must be a valid Jinja2 template"):
+        with pytest.raises(HookValidationError, match="Task 'test_task': if value cannot be empty string"):
             hook.execute_hook_validations(mock_task_model)
 
     def test_execute_hook_validations_invalid_type(self):
@@ -77,7 +70,7 @@ class TestIfHook:
         hook = IfHook(123)
         mock_task_model = MagicMock()
 
-        with pytest.raises(HookValidationError, match="if value must be a dict \\(filter\\) or string \\(expression\\)"):
+        with pytest.raises(HookValidationError, match="if value must be a dict \\(Nornir filter\\) or string \\(Jinja2 expression\\)"):
             hook.execute_hook_validations(mock_task_model)
 
     def test_task_started_applies_decorator(self):

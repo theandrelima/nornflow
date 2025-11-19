@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock
 
+import pytest
+
 from nornflow.builtins.hooks import ShushHook
 from nornflow.hooks.exceptions import HookValidationError
 
@@ -168,19 +170,6 @@ class TestShushHook:
         hook.task_completed(mock_task, MagicMock())
 
         assert "other_task" in mock_task.nornir._nornflow_suppressed_tasks
-
-    def test_validate_string_without_jinja2_markers(self):
-        """Test validation fails for string values without Jinja2 markers."""
-        from nornflow.models import TaskModel
-        
-        hook = ShushHook("invalid_string")
-        task_model = TaskModel.create({"name": "test_task", "args": {}})
-        
-        try:
-            hook.execute_hook_validations(task_model)
-            assert False, "Should have raised HookValidationError"
-        except HookValidationError as e:
-            assert "without Jinja2 markers" in str(e)
 
     def test_validate_string_with_jinja2_markers(self):
         """Test validation passes for string values with Jinja2 markers."""

@@ -1,14 +1,13 @@
 import logging
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from nornir.core.inventory import Host
 from nornir.core.task import Result, Task
 
 from nornflow.hooks import Hook, Jinja2ResolvableMixin
 from nornflow.hooks.exceptions import HookValidationError
-from nornflow.vars.constants import JINJA2_MARKERS
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
@@ -59,7 +58,14 @@ class IfHook(Hook, Jinja2ResolvableMixin):
     1. Filter Functions: Dict-based configuration using registered filter functions
     2. Jinja2 Expressions: String-based boolean expressions evaluated per host
 
-    Filter Function Format (existing):
+    Boolean Semantics (Python-style):
+        - True (or truthy): Task EXECUTES for the host
+        - False (or falsy): Task SKIPS for the host
+
+    This follows Python's standard truthiness rules where True means "proceed"
+    and False means "don't proceed".
+
+    Filter Function Format:
         if:
           filter_name: {param1: value1, param2: value2}
         # OR
@@ -69,10 +75,12 @@ class IfHook(Hook, Jinja2ResolvableMixin):
         if:
           filter_name: single_value  # single arg
 
-    Jinja2 Expression Format (new):
+    Jinja2 Expression Format:
         if: "{{ host.platform == 'ios' and host.data.site == 'dc1' }}"
         # OR
         if: "{{ some_variable | default(false) }}"
+        # OR
+        if: false
 
     Filter Functions:
         Filter functions must be registered in the filters catalog and should
@@ -88,15 +96,6 @@ class IfHook(Hook, Jinja2ResolvableMixin):
         - All NornFlow variables (runtime, CLI, inline, domain, default, env)
         - Jinja2 filters and functions
 
-    Filter Catalog Integration:
-        The hook retrieves filter functions from the filters_catalog in the
-        execution context. This catalog contains both built-in NornFlow filters
-        and user-defined custom filters discovered from local_filters_dirs.
-
-    Error Handling:
-        - HookValidationError: Raised during validation if condition config is invalid
-        - TemplateError: Raised if Jinja2 expression doesn't evaluate to boolean
-
     Attributes:
         hook_name: "if"
         run_once_per_task: False (evaluates independently for each host)
@@ -107,33 +106,28 @@ class IfHook(Hook, Jinja2ResolvableMixin):
 
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
         """Validate condition configuration during task preparation."""
+        super().execute_hook_validations(task_model)
+
         if isinstance(self.value, dict):
             # Filter function validation
             if len(self.value) != 1:
                 raise HookValidationError("IfHook", [("value_count", "if must specify exactly one filter")])
         elif isinstance(self.value, str):
-            # Jinja2 expression validation - basic check for non-empty string
             if not self.value.strip():
-                raise HookValidationError("IfHook", [("empty_expression", "if expression cannot be empty")])
-            # Ensure expression contains Jinja2 markers to prevent raw Python evaluation
-            if not any(marker in self.value for marker in JINJA2_MARKERS):
                 raise HookValidationError(
                     "IfHook",
-                    [
-                        (
-                            "invalid_expression",
-                            "if expression must be a valid Jinja2 template (contain {{, {%, {# etc.)",
-                        )
-                    ],
+                    [("empty_string", f"Task '{task_model.name}': if value cannot be empty string")]
                 )
-        else:
+        elif self.value is not None:
             raise HookValidationError(
-                "IfHook", [("value_type", "if value must be a dict (filter) or string (expression)")]
+                "IfHook", [("value_type", "if value must be a dict (Nornir filter) or string (Jinja2 expression)")]
             )
 
     def task_started(self, task: Task) -> None:
         """Dynamically decorate the task function to enable per-host skipping."""
-        if not self.value:
+        # here we really need to check for 'None' specifically to not 
+        # return (and don't skip) when a falsy value is statically passed
+        if self.value is None:
             return
 
         # Apply the skip decorator dynamically to the task function
@@ -176,13 +170,11 @@ class IfHook(Hook, Jinja2ResolvableMixin):
             available = ", ".join(sorted(filters_catalog.keys()))
             raise HookValidationError(
                 "IfHook",
-                [
-                    (
-                        filter_name,
-                        f"Filter '{filter_name}' not found in filters catalog. "
-                        f"Available filters: {available}",
-                    )
-                ],
+                [(
+                    filter_name,
+                    f"Filter '{filter_name}' not found in filters catalog. "
+                    f"Available filters: {available}",
+                )]
             )
 
         filter_func, param_names = filters_catalog[filter_name]
@@ -201,12 +193,10 @@ class IfHook(Hook, Jinja2ResolvableMixin):
             if len(filter_values) != len(param_names):
                 raise HookValidationError(
                     "IfHook",
-                    [
-                        (
-                            "param_count",
-                            f"Filter expects {len(param_names)} parameters, got {len(filter_values)}",
-                        )
-                    ],
+                    [(
+                        "param_count",
+                        f"Filter expects {len(param_names)} parameters, got {len(filter_values)}",
+                    )]
                 )
             return dict(zip(param_names, filter_values, strict=False))
 

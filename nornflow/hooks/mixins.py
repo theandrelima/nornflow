@@ -1,30 +1,44 @@
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from nornir.core.inventory import Host
 from nornir.core.task import Task
 
-from nornflow.hooks.exceptions import HookError
+from nornflow.hooks.exceptions import HookError, HookValidationError
 from nornflow.vars.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
+
+if TYPE_CHECKING:
+    from nornflow.models import TaskModel
 
 
 class Jinja2ResolvableMixin:
-    """Mixin providing seamless Jinja2 template resolution to hooks.
+    """Mixin providing automatic Jinja2 validation and resolution to hooks.
 
-    This mixin adds a single method `get_resolved_value()` that handles
-    all Jinja2 detection and resolution automatically. Hooks just call
-    this method and get back the final value ready to use.
+    This mixin automatically validates string values as Jinja2 expressions during
+    workflow preparation and provides resolution methods for execution. Developers
+    using this mixin don't need Jinja2 awareness - just include it in the inheritance
+    chain and call get_resolved_value() in lifecycle methods.
 
     The mixin expects the hook to have:
         - self.value: The hook's configuration value
         - self.context: Property returning hook execution context
+        - self.hook_name: The hook's name for error messages
 
-    The Hook base class provides both. The context will contain 'vars_manager'
-    during hook lifecycle execution (task_started, task_instance_started, etc.)
-    but NOT during initialization or validation.
+    The Hook base class provides all of these.
+
+    Automatic Validation:
+        The mixin overrides execute_hook_validations() to automatically validate
+        string values that contain Jinja2 markers. Plain strings (like "yes", "true")
+        are allowed and later converted by _to_bool(). Works with any inheritance order
+        thanks to cooperative super() calls in the Hook base class.
+        
+        NOTE: Empty string validation is NOT performed by this mixin. Individual hook
+        implementations should validate empty strings if their specific use case
+        requires it, as some hooks may legitimately accept empty strings.
 
     Important:
-        Only call get_resolved_value() with Jinja2 expressions inside lifecycle
-        methods where the execution context has been populated by the framework.
+        Only call get_resolved_value() inside lifecycle methods where the execution
+        context has been populated by the framework. When calling from task_instance_started(),
+        you MUST pass the host parameter explicitly to ensure per-host resolution.
 
     Example:
         class MyHook(Hook, Jinja2ResolvableMixin):
@@ -34,26 +48,63 @@ class Jinja2ResolvableMixin:
                 should_run = self.get_resolved_value(task, host=host, as_bool=True)
     """
 
-    def get_resolved_value(self, task: Task, host: Host | None = None, as_bool: bool = False, default: Any = None) -> Any:
+    def execute_hook_validations(self, task_model: "TaskModel") -> None:
+        """Validate hook configuration, including automatic Jinja2 validation.
+
+        If self.value is a string containing Jinja2 markers, validates it as a
+        Jinja2 expression. Plain strings without markers are allowed.
+        Subclasses can override to add additional validation, but must
+        call super().execute_hook_validations(task_model) first.
+
+        Args:
+            task_model: The task model to validate against
+
+        Raises:
+            HookValidationError: If validation fails
+        """
+        if isinstance(self.value, str) and self._is_jinja2_expression(self.value):
+            self._validate_jinja2_string(task_model)
+        
+        if hasattr(super(), "execute_hook_validations"):
+            super().execute_hook_validations(task_model)
+
+    def _validate_jinja2_string(self, task_model: "TaskModel") -> None:
+        """Validate that string value is a proper Jinja2 expression.
+
+        Args:
+            task_model: The task model being validated
+
+        Raises:
+            HookValidationError: If string is empty
+        """
+        if not self.value.strip():
+            raise HookValidationError(
+                self.hook_name,
+                [(
+                    "empty_expression",
+                    f"Task '{task_model.name}': Jinja2 expression cannot be empty"
+                )]
+            )
+
+    def get_resolved_value(
+        self, task: Task, host: Host | None = None, as_bool: bool = False, default: Any = None
+    ) -> Any:
         """Get the final resolved value, handling Jinja2 automatically.
 
         This method checks if self.value is a Jinja2 expression, resolves it
         if needed, converts to the requested type, and returns the final value.
 
         Args:
-            task: The task being executed.
+            task: The task being executed
             host: The specific host to resolve for. If None, extracts first host
-                from task inventory (only safe for task_started, not task_instance_started).
-            as_bool: If True, convert result to boolean.
-            default: Default value if self.value is falsy.
+            as_bool: If True, convert result to boolean
+            default: Default value if self.value is falsy
 
         Returns:
-            The resolved value, optionally converted to boolean.
+            The resolved value, optionally converted to boolean
 
         Raises:
-            HookError: If vars_manager not available in context (likely called
-                outside of hook lifecycle methods) or if task has no hosts
-                when Jinja2 resolution is needed.
+            HookError: If vars_manager not available or task has no hosts
         """
         if not self.value:
             return default

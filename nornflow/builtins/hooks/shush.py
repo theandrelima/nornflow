@@ -1,6 +1,5 @@
 # ruff: noqa: SLF001, T201
 from nornflow.hooks import Hook, Jinja2ResolvableMixin
-from nornflow.hooks.exceptions import HookValidationError
 
 
 class ShushHook(Hook, Jinja2ResolvableMixin):
@@ -22,11 +21,7 @@ class ShushHook(Hook, Jinja2ResolvableMixin):
     run_once_per_task = True
 
     def task_started(self, task: "Task") -> None:
-        """Mark task for output suppression if conditions are met.
-
-        Args:
-            task: The Nornir task
-        """
+        """Mark task for output suppression if conditions are met."""
         should_suppress = self.get_resolved_value(task, host=None, as_bool=True, default=False)
 
         if not should_suppress:
@@ -49,33 +44,6 @@ class ShushHook(Hook, Jinja2ResolvableMixin):
         task.nornir._nornflow_suppressed_tasks.add(task.name)
 
     def task_completed(self, task: "Task", result: "AggregatedResult") -> None:
-        """Remove task from suppression set after completion.
-
-        Args:
-            task: The Nornir task
-            result: The aggregated result
-        """
+        """Remove task from suppression set after completion."""
         if hasattr(task.nornir, "_nornflow_suppressed_tasks"):
             task.nornir._nornflow_suppressed_tasks.discard(task.name)
-
-    def execute_hook_validations(self, task_model: "TaskModel") -> None:
-        """Validate shush hook configuration.
-
-        Args:
-            task_model: The task model being validated
-
-        Raises:
-            HookValidationError: If string value lacks Jinja2 markers
-        """
-        if isinstance(self.value, str) and not self._is_jinja2_expression(self.value):
-            raise HookValidationError(
-                hook_class=self.hook_name,
-                errors=[
-                    (
-                        "value",
-                        f"Task '{task_model.name}': 'shush' hook received string value "
-                        f"'{self.value}' without Jinja2 markers. Use boolean values "
-                        f"(true/false) or Jinja2 expressions (e.g., '{{{{ condition }}}}')",
-                    )
-                ],
-            )
