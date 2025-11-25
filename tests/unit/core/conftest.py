@@ -76,7 +76,6 @@ workflow:
 @pytest.fixture
 def valid_workflow(valid_workflow_dict):
     """Create a valid workflow object."""
-    # Use WorkflowModel.create instead of Workflow constructor
     return WorkflowModel.create(valid_workflow_dict)
 
 
@@ -98,13 +97,19 @@ def basic_settings(tmp_path, task_content):
     tasks_dir = tmp_path / "tasks"
     tasks_dir.mkdir()
     (tasks_dir / "task1.py").write_text(task_content)
-    return NornFlowSettings(local_tasks_dirs=[str(tasks_dir)])
+    return NornFlowSettings(
+        nornir_config_file="dummy_config.yaml",
+        local_tasks_dirs=[str(tasks_dir)]
+    )
 
 
 @pytest.fixture
 def basic_nornflow(basic_settings):
     """Create a basic NornFlow instance."""
-    return NornFlow(nornflow_settings=basic_settings)
+    with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
+        nf = NornFlow(nornflow_settings=basic_settings)
+        nf._nornir_manager = Mock()
+        return nf
 
 
 @pytest.fixture
@@ -119,8 +124,8 @@ def mock_nornir():
     mock = Mock(spec=Nornir)
     mock.data = Mock()
     mock.data.failed_hosts = set()
-    mock.filter.return_value = mock  # Allow chaining
-    mock.with_processors.return_value = mock  # Allow chaining
+    mock.filter.return_value = mock
+    mock.with_processors.return_value = mock
     return mock
 
 
