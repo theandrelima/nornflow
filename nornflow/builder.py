@@ -1,15 +1,16 @@
+import contextlib
 from pathlib import Path
 from typing import Any
 
 from pydantic_serdes.utils import load_file_to_dict
 
+from nornflow.cli.constants import NORNFLOW_SETTINGS
 from nornflow.constants import FailureStrategy
 from nornflow.exceptions import InitializationError, ResourceError, SettingsError
 from nornflow.models import WorkflowModel
 from nornflow.nornflow import NornFlow
 from nornflow.settings import NornFlowSettings
 
-from nornflow.cli.constants import NORNFLOW_SETTINGS
 
 class NornFlowBuilder:
     """
@@ -271,14 +272,11 @@ class NornFlowBuilder:
         Returns:
             The constructed NornFlow object with all configurations applied.
         """
-        # If no settings were provided, try to load from default location
         if not self._settings:
             if NORNFLOW_SETTINGS.exists():
-                try:
+                with contextlib.suppress(SettingsError, ResourceError):
                     self._settings = NornFlowSettings.from_yaml(str(NORNFLOW_SETTINGS))
-                except (SettingsError, ResourceError):
-                    pass
-        
+
         return NornFlow(
             nornflow_settings=self._settings,
             workflow=self._workflow,
