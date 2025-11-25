@@ -1,131 +1,243 @@
 import os
-from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic_serdes.utils import load_file_to_dict
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from nornflow.constants import NORNFLOW_SETTINGS_MANDATORY, NORNFLOW_SETTINGS_OPTIONAL
-from nornflow.exceptions import NornFlowError, ResourceError, SettingsError
+from nornflow.constants import (
+    NORNFLOW_DEFAULT_FILTERS_DIR,
+    NORNFLOW_DEFAULT_HOOKS_DIR,
+    NORNFLOW_DEFAULT_TASKS_DIR,
+    NORNFLOW_DEFAULT_VARS_DIR,
+    NORNFLOW_DEFAULT_WORKFLOWS_DIR,
+    FailureStrategy,
+)
+from nornflow.exceptions import SettingsError
 
 
-class NornFlowSettings:
+class NornFlowSettings(BaseSettings):
     """
-    This class is used to store NornFlow settings for access during runtime.
-
-    For initialization, it requires the location of a YAML file that holds the settings.
-    This will be determined with the following order of preference:
-        - through an environment variable named `NORNFLOW_SETTINGS`.
-        - through the `settings_file` argument.
-        - a default file named 'nornflow.yaml' is assumed to exist.
-
-    To allow for extensibility and customizations, NornFlow was designed with the following
-    principles in mind:
-        1 - NornFlow settings and Nornir configs are kept separate, hence the need for a
-           `nornir_config_file` setting in the NornFlow settings YAML file.
-
-        2 - a minimal set of REQUIRED settings.
-
-        3 - a minimal set of OPTIONAL settings that can also be passed explicitly to the Class
-            initializer as keyword arguments.
-
-        4 - there's no fixed set of "acceptable settings". Users can add more settings if
-            they want to extend NornFlow to support custom use-cases, but currently this is
-            only supported through the YAML file, not through keyword arguments.
-
-        5 - settings can be accessed as attributes of a NornFlowSettings object:
-            NornFlowSettings().local_tasks_dirs # returns the 'local_tasks_dirs' setting
-
-        6 - trying to access non-supported settings also not informed in the YAML file
-            will simply return None:
-            NornFlowSettings().non_existing_setting_not_informed_in_yaml_either  # returns None
+    NornFlow settings management using Pydantic.
+    
+    Settings are loaded with the following priority (highest to lowest):
+    1. Environment variables (prefixed with NORNFLOW_SETTINGS_)
+    2. Values from settings YAML file
+    3. Default values defined in the model
+    
+    Note the careful terminology:
+    - "Settings" refers to NornFlow's own configuration
+    - "Configuration/Config" is reserved for Nornir's configuration
+    
+    Environment variable examples:
+    - NORNFLOW_SETTINGS_VARS_DIR=/custom/vars
+    - NORNFLOW_SETTINGS_LOCAL_TASKS_DIRS=["tasks", "custom_tasks"]
+    - NORNFLOW_SETTINGS_FAILURE_STRATEGY=fail-fast
     """
-
-    def __init__(self, settings_file: str = "nornflow.yaml", **kwargs: Any):
-        # Use environment variable to override settings file path if set
-        self.settings_file = os.getenv("NORNFLOW_SETTINGS", settings_file)
-        self._load_settings()
-        self._check_mandatory_settings()
-        self._set_optional_settings(**kwargs)
-
+    
+    model_config = SettingsConfigDict(
+        env_prefix='NORNFLOW_SETTINGS_',
+        env_nested_delimiter='__',
+        case_sensitive=False,
+        extra='allow',
+    )
+    
+    nornir_config_file: str = Field(
+        description="Path to Nornir configuration file (required)"
+    )
+    
+    local_tasks_dirs: list[str] = Field(
+        default=[NORNFLOW_DEFAULT_TASKS_DIR],
+        description="List of directories containing Nornir tasks"
+    )
+    local_workflows_dirs: list[str] = Field(
+        default=[NORNFLOW_DEFAULT_WORKFLOWS_DIR],
+        description="List of directories containing workflow definitions"
+    )
+    local_filters_dirs: list[str] = Field(
+        default=[NORNFLOW_DEFAULT_FILTERS_DIR],
+        description="List of directories containing custom filter functions"
+    )
+    local_hooks_dirs: list[str] = Field(
+        default=[NORNFLOW_DEFAULT_HOOKS_DIR],
+        description="List of directories containing custom hook classes"
+    )
+    imported_packages: list[str] = Field(
+        default_factory=list,
+        description="List of Python packages to import for additional resources"
+    )
+    processors: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of processor configurations with class and args"
+    )
+    vars_dir: str = Field(
+        default=NORNFLOW_DEFAULT_VARS_DIR,
+        description="Directory containing variable files"
+    )
+    failure_strategy: FailureStrategy = Field(
+        default=FailureStrategy.SKIP_FAILED,
+        description="Strategy for handling task failures"
+    )
+    dry_run: bool = Field(
+        default=False,
+        description="Whether to run in dry-run mode"
+    )
+    
+    _base_dir: Path | None = None
+    _settings_file: str | None = None
+    
+    @field_validator('processors', mode='before')
+    @classmethod
+    def validate_processors(cls, v: Any) -> list[dict[str, Any]]:
+        """Validate and normalize processor configurations."""
+        if not v:
+            return []
+        
+        if not isinstance(v, list):
+            raise ValueError("processors must be a list")
+        
+        validated = []
+        for item in v:
+            if isinstance(item, str):
+                # Support legacy string format - convert to dict format
+                validated.append({"class": item, "args": {}})
+            elif isinstance(item, dict):
+                if "class" not in item:
+                    raise ValueError("Each processor dict must have a 'class' key")
+                # Ensure args exists, default to empty dict
+                validated.append({
+                    "class": item["class"],
+                    "args": item.get("args", {})
+                })
+            else:
+                raise ValueError(f"Invalid processor type: {type(item).__name__}")
+        
+        return validated
+    
+    @field_validator('failure_strategy', mode='before')
+    @classmethod
+    def validate_failure_strategy(cls, v: Any) -> FailureStrategy:
+        """Convert string to FailureStrategy enum."""
+        if isinstance(v, str):
+            try:
+                return FailureStrategy(v)
+            except ValueError:
+                normalized = v.lower().replace('_', '-')
+                try:
+                    return FailureStrategy(normalized)
+                except ValueError:
+                    raise ValueError(
+                        f"Invalid failure strategy: {v}. "
+                        f"Must be one of: {', '.join(s.value for s in FailureStrategy)}"
+                    )
+        return v
+    
+    @model_validator(mode='after')
+    def resolve_relative_paths(self) -> 'NornFlowSettings':
+        """Resolve relative paths to absolute paths based on base directory."""
+        if not self._base_dir:
+            return self
+        
+        for field_name in ['local_tasks_dirs', 'local_workflows_dirs', 
+                          'local_filters_dirs', 'local_hooks_dirs']:
+            dirs = getattr(self, field_name)
+            if dirs:
+                resolved = []
+                for dir_path in dirs:
+                    path = Path(dir_path)
+                    if not path.is_absolute():
+                        resolved.append(str(self._base_dir / path))
+                    else:
+                        resolved.append(str(path))
+                setattr(self, field_name, resolved)
+        
+        vars_path = Path(self.vars_dir)
+        if not vars_path.is_absolute():
+            self.vars_dir = str(self._base_dir / vars_path)
+        
+        if self.nornir_config_file:
+            config_path = Path(self.nornir_config_file)
+            if not config_path.is_absolute():
+                self.nornir_config_file = str(self._base_dir / config_path)
+        
+        return self
+    
+    @classmethod
+    def from_yaml(cls, settings_file: str = "nornflow.yaml", 
+                  base_dir: Path | None = None, **overrides: Any) -> 'NornFlowSettings':
+        """
+        Create settings from a YAML file.
+        
+        Args:
+            settings_file: Path to the settings YAML file.
+            base_dir: Base directory for resolving relative paths.
+                     If None, uses the directory containing the settings file.
+            **overrides: Additional settings to override YAML values.
+        
+        Returns:
+            NornFlowSettings instance.
+        
+        Raises:
+            SettingsError: If the settings file cannot be loaded or validated.
+        """
+        settings_file = os.getenv("NORNFLOW_SETTINGS", settings_file)
+        settings_path = Path(settings_file).resolve()
+        
+        if not settings_path.exists():
+            raise SettingsError(f"Settings file not found: {settings_file}")
+        
+        if not base_dir:
+            base_dir = settings_path.parent
+        
+        try:
+            with open(settings_path, 'r') as f:
+                yaml_data = yaml.safe_load(f) or {}
+        except Exception as e:
+            raise SettingsError(f"Failed to load settings from {settings_file}: {e}")
+        
+        if not isinstance(yaml_data, dict):
+            raise SettingsError(
+                f"Settings file must contain a YAML dictionary, got {type(yaml_data).__name__}"
+            )
+        
+        settings_data = {**yaml_data, **overrides}
+        
+        instance = cls(**settings_data)
+        instance._base_dir = base_dir
+        instance._settings_file = str(settings_path)
+        
+        return instance.resolve_relative_paths()
+    
     @property
     def as_dict(self) -> dict[str, Any]:
-        return dict(self.loaded_settings)
-
-    def _load_settings(self) -> None:
-        """
-        This method reads the settings file specified by `self.settings_file`, parses its
-        contents, and stores them in `self.loaded_settings`. If any errors occur during this
-        process, appropriate custom exceptions are raised.
-
-        Raises:
-            ResourceError: If the settings file is not found or cannot be accessed
-            SettingsError: If there are issues with parsing the settings file or data type
-            NornFlowError: For any other unexpected errors
-        """
-        try:
-            settings_data = load_file_to_dict(file_path=self.settings_file)
-
-            if not isinstance(settings_data, dict):
-                raise SettingsError(f"Settings data must be a dictionary, got {type(settings_data).__name__}")
-
-            self.loaded_settings = defaultdict(lambda: None, settings_data)
-        except FileNotFoundError as e:
-            raise ResourceError(
-                f"Settings file not found: {self.settings_file}",
-                resource_type="File",
-                resource_name=self.settings_file,
-            ) from e
-        except PermissionError as e:
-            raise ResourceError(
-                f"Permission denied accessing settings file: {self.settings_file}",
-                resource_type="File",
-                resource_name=self.settings_file,
-            ) from e
-        except yaml.YAMLError as e:
-            raise SettingsError(f"Failed to parse YAML settings file '{self.settings_file}': {e!s}") from e
-        except TypeError as e:
-            raise SettingsError(f"Invalid data type in settings file: {e!s}") from e
-        except Exception as e:
-            raise NornFlowError(f"An unexpected error occurred while loading settings: {e}") from e
-
-    def _check_mandatory_settings(self) -> None:
-        """
-        Check if all mandatory settings are present and not empty in the configuration.
-
-        Raises:
-            SettingsError: If a mandatory setting is missing or empty.
-        """
-        for setting in NORNFLOW_SETTINGS_MANDATORY:
-            if setting not in self.loaded_settings:
-                raise SettingsError("Mandatory setting is missing from configuration", setting=setting)
-            if not self.loaded_settings[setting]:
-                raise SettingsError("Mandatory setting is empty in configuration", setting=setting)
-
-    def _set_optional_settings(self, **kwargs: Any) -> None:
-        """
-        Set optional settings from kwargs or default to existing attributes.
-        This enforces preference for optional settings passed as keyword arguments.
-
-        The preference algorithm is as follows:
-        1. Use the value passed explicitly in kwargs.
-        2. If not in kwargs, use the value read from the YAML file.
-        3. If not in the YAML file, use the default value from NORNFLOW_OPTIONAL_SETTINGS.
-
-        Args:
-            **kwargs (Any): Keyword arguments containing optional settings.
-        """
-        for setting, default_value in NORNFLOW_SETTINGS_OPTIONAL.items():
-            self.loaded_settings[setting] = kwargs.get(
-                setting, self.loaded_settings.get(setting, default_value)
-            )
-
+        """Get settings as a dictionary."""
+        return self.model_dump(exclude={'_base_dir', '_settings_file'})
+    
+    @property
+    def base_dir(self) -> Path:
+        """Get the base directory for resolving relative paths."""
+        if not self._base_dir:
+            if self._settings_file:
+                self._base_dir = Path(self._settings_file).parent
+            else:
+                self._base_dir = Path.cwd()
+        return self._base_dir
+    
+    @property
+    def loaded_settings(self) -> dict[str, Any]:
+        """Backward compatibility property for accessing settings as dict."""
+        return self.as_dict
+    
     def __getattr__(self, name: str) -> Any:
-        return self.loaded_settings[name]
-
+        """
+        Provide backward compatibility for accessing undefined settings.
+        Returns None for non-existent attributes instead of raising AttributeError.
+        """
+        if hasattr(self, '__pydantic_extra__'):
+            return self.__pydantic_extra__.get(name, None)
+        return None
+    
     def __str__(self) -> str:
-        """
-        Return a string representation of the NornFlowSettings instance,
-        excluding the 'loaded_settings' attribute.
-        """
-        return str(dict(self.loaded_settings))
+        """Return a string representation of the NornFlowSettings instance."""
+        return str(self.as_dict)

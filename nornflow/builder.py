@@ -9,6 +9,7 @@ from nornflow.models import WorkflowModel
 from nornflow.nornflow import NornFlow
 from nornflow.settings import NornFlowSettings
 
+from nornflow.cli.constants import NORNFLOW_SETTINGS
 
 class NornFlowBuilder:
     """
@@ -37,6 +38,13 @@ class NornFlowBuilder:
         builder = NornFlowBuilder()
         nornflow = builder.with_settings_path('settings.yaml')
                           .with_workflow_path('deploy.yaml')
+                          .build()
+
+        # Advanced configuration
+        builder = NornFlowBuilder()
+        nornflow = builder.with_settings_object(custom_settings)
+                          .with_workflow_name('backup')
+                          .with_processors([{'class': 'CustomProcessor'}])
                           .with_vars({'env': 'prod', 'debug': True})
                           .with_filters({'hosts': ['router1', 'router2']})
                           .build()
@@ -91,7 +99,7 @@ class NornFlowBuilder:
         """
         if not self._settings:
             try:
-                settings_object = NornFlowSettings(settings_file=settings_path)
+                settings_object = NornFlowSettings.from_yaml(settings_file=str(settings_path))
                 self._settings = settings_object
             except (SettingsError, ResourceError) as e:
                 raise InitializationError(f"Failed to load settings from '{settings_path}': {e}") from e
@@ -263,6 +271,14 @@ class NornFlowBuilder:
         Returns:
             The constructed NornFlow object with all configurations applied.
         """
+        # If no settings were provided, try to load from default location
+        if not self._settings:
+            if NORNFLOW_SETTINGS.exists():
+                try:
+                    self._settings = NornFlowSettings.from_yaml(str(NORNFLOW_SETTINGS))
+                except (SettingsError, ResourceError):
+                    pass
+        
         return NornFlow(
             nornflow_settings=self._settings,
             workflow=self._workflow,

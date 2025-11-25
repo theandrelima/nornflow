@@ -1,6 +1,13 @@
 # ruff: noqa: W291
 from pathlib import Path
 
+from nornflow.constants import (
+    NORNFLOW_DEFAULT_FILTERS_DIR,
+    NORNFLOW_DEFAULT_HOOKS_DIR,
+    NORNFLOW_DEFAULT_TASKS_DIR,
+    NORNFLOW_DEFAULT_VARS_DIR,
+    NORNFLOW_DEFAULT_WORKFLOWS_DIR,
+)
 from nornflow.vars.constants import DEFAULTS_FILENAME
 
 # Directory where the user is running the CLI from
@@ -8,10 +15,11 @@ CWD = Path.cwd()
 
 # Runtime directories and files (relative to user's current working directory)
 NORNIR_DEFAULT_CONFIG_DIR = CWD / "nornir_configs"
-TASKS_DIR = CWD / "tasks"
-WORKFLOWS_DIR = CWD / "workflows"
-FILTERS_DIR = CWD / "filters"
-HOOKS_DIR = CWD / "hooks"
+TASKS_DIR = CWD / NORNFLOW_DEFAULT_TASKS_DIR
+WORKFLOWS_DIR = CWD / NORNFLOW_DEFAULT_WORKFLOWS_DIR
+FILTERS_DIR = CWD / NORNFLOW_DEFAULT_FILTERS_DIR
+HOOKS_DIR = CWD / NORNFLOW_DEFAULT_HOOKS_DIR
+VARS_DIR = CWD / NORNFLOW_DEFAULT_VARS_DIR
 NORNFLOW_SETTINGS = CWD / "nornflow.yaml"
 
 # NornFlow's samples directory
@@ -29,7 +37,7 @@ SAMPLE_VARS_FILE = NORNFLOW_SAMPLES_DIR / DEFAULTS_FILENAME
 DESCRIPTION_FIRST_SENTENCE_LENGTH = 100
 
 # Banners
-INIT_BANNER = """ ██████   █████                               ███████████ ████                          
+INIT_BANNER = """\n ██████   █████                               ███████████ ████                          
 ░░██████ ░░███                               ░░███░░░░░░█░░███                          
  ░███░███ ░███   ██████  ████████  ████████   ░███   █ ░  ░███   ██████  █████ ███ █████
  ░███░░███░███  ███░░███░░███░░███░░███░░███  ░███████    ░███  ███░░███░░███ ░███░░███ 
