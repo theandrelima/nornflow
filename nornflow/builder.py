@@ -4,7 +4,6 @@ from typing import Any
 
 from pydantic_serdes.utils import load_file_to_dict
 
-from nornflow.cli.constants import NORNFLOW_SETTINGS
 from nornflow.constants import FailureStrategy
 from nornflow.exceptions import InitializationError, ResourceError, SettingsError
 from nornflow.models import WorkflowModel
@@ -100,7 +99,7 @@ class NornFlowBuilder:
         """
         if not self._settings:
             try:
-                settings_object = NornFlowSettings.from_yaml(settings_file=str(settings_path))
+                settings_object = NornFlowSettings.load(settings_file=str(settings_path))
                 self._settings = settings_object
             except (SettingsError, ResourceError) as e:
                 raise InitializationError(f"Failed to load settings from '{settings_path}': {e}") from e
@@ -273,9 +272,7 @@ class NornFlowBuilder:
             The constructed NornFlow object with all configurations applied.
         """
         if not self._settings:
-            if NORNFLOW_SETTINGS.exists():
-                with contextlib.suppress(SettingsError, ResourceError):
-                    self._settings = NornFlowSettings.from_yaml(str(NORNFLOW_SETTINGS))
+            self._settings = NornFlowSettings.load()
 
         return NornFlow(
             nornflow_settings=self._settings,

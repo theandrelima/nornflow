@@ -152,29 +152,66 @@ class NornFlowSettings(BaseSettings):
         return self
 
     @classmethod
-    def from_yaml(
-        cls, settings_file: str = "nornflow.yaml", base_dir: Path | None = None, **overrides: Any
+    def load(
+        cls, 
+        settings_file: str | None = None, 
+        base_dir: Path | None = None, 
+        **overrides: Any
     ) -> "NornFlowSettings":
         """
-        Create settings from a YAML file.
+        Load settings from a YAML file with automatic resolution and overrides.
+
+        This is the recommended way to create NornFlowSettings instances. It handles:
+        - Settings file discovery (explicit path, env var, or default)
+        - YAML loading and validation
+        - Path resolution relative to settings file location
+        - Programmatic value overrides
+
+        Settings file resolution priority (highest to lowest):
+        1. Explicit settings_file parameter (caller's direct intent)
+        2. NORNFLOW_SETTINGS environment variable (session default)
+        3. Default "nornflow.yaml" in current directory
 
         Args:
-            settings_file: Path to the settings YAML file.
-            base_dir: Base directory for resolving relative paths.
-                     If None, uses the directory containing the settings file.
-            **overrides: Additional settings to override YAML values.
+            settings_file: Path to settings YAML file. If None, checks NORNFLOW_SETTINGS 
+                          env var, then defaults to "nornflow.yaml" in current directory.
+            base_dir: Base directory for resolving relative paths. If None, uses the 
+                     directory containing the resolved settings file.
+            **overrides: Additional settings to override YAML values. Useful for 
+                        programmatic configuration. Example: dry_run=True
 
         Returns:
-            NornFlowSettings instance.
+            NornFlowSettings instance with all paths resolved.
 
         Raises:
-            SettingsError: If the settings file cannot be loaded or validated.
+            SettingsError: If settings file not found or contains invalid data.
+
+        Examples:
+            # Use default resolution (checks env var, then nornflow.yaml)
+            settings = NornFlowSettings.load()
+
+            # Explicit file path (highest priority)
+            settings = NornFlowSettings.load("configs/prod-settings.yaml")
+
+            # Override specific values programmatically
+            settings = NornFlowSettings.load(dry_run=True, failure_strategy="fail-fast")
+
+            # Combine file + overrides
+            settings = NornFlowSettings.load(
+                "configs/base.yaml",
+                processors=[{"class": "custom.Processor"}]
+            )
         """
-        settings_file = os.getenv("NORNFLOW_SETTINGS", settings_file)
-        settings_path = Path(settings_file).resolve()
+        resolved_file = (
+            settings_file or 
+            os.getenv("NORNFLOW_SETTINGS") or 
+            "nornflow.yaml"
+        )
+
+        settings_path = Path(resolved_file).resolve()
 
         if not settings_path.exists():
-            raise SettingsError(f"Settings file not found: {settings_file}")
+            raise SettingsError(f"Settings file not found: {resolved_file}")
 
         if not base_dir:
             base_dir = settings_path.parent
@@ -183,7 +220,7 @@ class NornFlowSettings(BaseSettings):
             with settings_path.open() as f:
                 yaml_data = yaml.safe_load(f) or {}
         except Exception as e:
-            raise SettingsError(f"Failed to load settings from {settings_file}: {e}") from e
+            raise SettingsError(f"Failed to load settings from {resolved_file}: {e}") from e
 
         if not isinstance(yaml_data, dict):
             raise SettingsError(

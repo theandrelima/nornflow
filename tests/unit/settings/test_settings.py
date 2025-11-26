@@ -22,7 +22,7 @@ def make_valid_settings_dict() -> dict[str, object]:
     return data
 
 
-def test_from_yaml_successful_load(tmp_path):
+def test_settings_load_successful_load(tmp_path):
     """Test successful loading from YAML file."""
     settings_file = tmp_path / "test_settings.yaml"
     settings_data = {
@@ -32,28 +32,28 @@ def test_from_yaml_successful_load(tmp_path):
     }
     settings_file.write_text(yaml.dump(settings_data))
 
-    settings = NornFlowSettings.from_yaml(str(settings_file))
+    settings = NornFlowSettings.load(str(settings_file))
 
     assert settings.nornir_config_file
     assert "tasks" in settings.local_tasks_dirs
 
 
-def test_from_yaml_file_not_found():
+def test_settings_load_file_not_found():
     """Test error when settings file doesn't exist."""
     with pytest.raises(SettingsError, match="Settings file not found"):
-        NornFlowSettings.from_yaml("nonexistent.yaml")
+        NornFlowSettings.load("nonexistent.yaml")
 
 
-def test_from_yaml_invalid_yaml(tmp_path):
+def test_settings_load_invalid_yaml(tmp_path):
     """Test error when YAML file is invalid."""
     settings_file = tmp_path / "bad_settings.yaml"
     settings_file.write_text("invalid: yaml: content:")
 
     with pytest.raises(SettingsError, match="Failed to load settings"):
-        NornFlowSettings.from_yaml(str(settings_file))
+        NornFlowSettings.load(str(settings_file))
 
 
-def test_from_yaml_missing_required_field(tmp_path):
+def test_settings_load_missing_required_field(tmp_path):
     """Test error when required field is missing."""
     settings_file = tmp_path / "incomplete_settings.yaml"
     settings_data = {
@@ -62,10 +62,10 @@ def test_from_yaml_missing_required_field(tmp_path):
     settings_file.write_text(yaml.dump(settings_data))
 
     with pytest.raises(Exception):
-        NornFlowSettings.from_yaml(str(settings_file))
+        NornFlowSettings.load(str(settings_file))
 
 
-def test_from_yaml_with_overrides(tmp_path):
+def test_settings_load_with_overrides(tmp_path):
     """Test that overrides work correctly."""
     settings_file = tmp_path / "test_settings.yaml"
     settings_data = {
@@ -74,7 +74,7 @@ def test_from_yaml_with_overrides(tmp_path):
     }
     settings_file.write_text(yaml.dump(settings_data))
 
-    settings = NornFlowSettings.from_yaml(str(settings_file), vars_dir="custom_vars")
+    settings = NornFlowSettings.load(str(settings_file), vars_dir="custom_vars")
 
     assert settings.vars_dir == "custom_vars"
 
@@ -144,7 +144,7 @@ def test_resolve_relative_paths(tmp_path):
     }
     settings_file.write_text(yaml.dump(settings_data))
 
-    settings = NornFlowSettings.from_yaml(str(settings_file))
+    settings = NornFlowSettings.load(str(settings_file))
 
     assert settings.nornir_config_file == "config.yaml"
     assert settings.local_tasks_dirs == ["tasks"]
@@ -174,9 +174,9 @@ def test_base_dir_property(tmp_path):
     }
     settings_file.write_text(yaml.dump(settings_data))
 
-    settings = NornFlowSettings.from_yaml(str(settings_file))
+    settings = NornFlowSettings.load(str(settings_file))
     
-    # The from_yaml method doesn't automatically set base_dir
+    # The NonrFlowSettings.load() method doesn't automatically set base_dir
     # base_dir is None unless explicitly set
     assert settings.base_dir is None
     
