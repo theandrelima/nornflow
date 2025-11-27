@@ -153,10 +153,7 @@ class NornFlowSettings(BaseSettings):
 
     @classmethod
     def load(
-        cls, 
-        settings_file: str | None = None, 
-        base_dir: Path | None = None, 
-        **overrides: Any
+        cls, settings_file: str | None = None, base_dir: Path | None = None, **overrides: Any
     ) -> "NornFlowSettings":
         """
         Load settings from a YAML file with automatic resolution and overrides.
@@ -173,11 +170,11 @@ class NornFlowSettings(BaseSettings):
         3. Default "nornflow.yaml" in current directory
 
         Args:
-            settings_file: Path to settings YAML file. If None, checks NORNFLOW_SETTINGS 
+            settings_file: Path to settings YAML file. If None, checks NORNFLOW_SETTINGS
                           env var, then defaults to "nornflow.yaml" in current directory.
-            base_dir: Base directory for resolving relative paths. If None, uses the 
+            base_dir: Base directory for resolving relative paths. If None, uses the
                      directory containing the resolved settings file.
-            **overrides: Additional settings to override YAML values. Useful for 
+            **overrides: Additional settings to override YAML values. Useful for
                         programmatic configuration. Example: dry_run=True
 
         Returns:
@@ -202,11 +199,7 @@ class NornFlowSettings(BaseSettings):
                 processors=[{"class": "custom.Processor"}]
             )
         """
-        resolved_file = (
-            settings_file or 
-            os.getenv("NORNFLOW_SETTINGS") or 
-            "nornflow.yaml"
-        )
+        resolved_file = settings_file or os.getenv("NORNFLOW_SETTINGS") or "nornflow.yaml"
 
         settings_path = Path(resolved_file).resolve()
 
