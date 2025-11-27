@@ -2,6 +2,7 @@
 
 ## Table of Contents
 - [Finding the Settings File](#finding-the-settings-file)
+- [Environment Variable Support](#environment-variable-support)
 - [Mandatory Settings](#mandatory-settings)
   - [`nornir_config_file`](#nornir_config_file)
 - [Optional Settings](#optional-settings)
@@ -11,6 +12,8 @@
   - [`local_hooks_dirs`](#local_hooks_dirs)
   - [`vars_dir`](#vars_dir)
   - [`dry_run`](#dry_run)
+  - [`failure_strategy`](#failure_strategy)
+  - [`processors`](#processors)
   - [`imported_packages`](#imported_packages)
 - [NornFlow Settings vs Nornir Configs](#nornflow-settings-vs-nornir-configs)
 
@@ -24,100 +27,164 @@ NornFlow will try to find a settings YAML file in the following order:
 2. The path passed to the `NornFlowSettings` initializer (through the CLI, it can be done using `nornflow --settings <PATH> ...` option).
 3. The path `nornflow.yaml` in the root of the project.
 
+## Environment Variable Support
+
+All settings can be overridden using environment variables with the `NORNFLOW_SETTINGS_` prefix:
+
+```bash
+# Override nornir_config_file
+export NORNFLOW_SETTINGS_NORNIR_CONFIG_FILE="configs/nornir-prod.yaml"
+
+# Override failure strategy
+export NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"
+
+# Override list values (JSON format)
+export NORNFLOW_SETTINGS_LOCAL_TASKS_DIRS='["tasks", "custom_tasks"]'
+
+# Override dry run
+export NORNFLOW_SETTINGS_DRY_RUN=true
+```
+
+**Settings Loading Priority (highest to lowest):**
+1. Environment variables with `NORNFLOW_SETTINGS_` prefix
+2. Values from settings YAML file
+3. Default values defined in the NornFlowSettings class
+
+> **Design Rationale**: NornFlow follows the [12-factor app](https://12factor.net/config) methodology where environment variables take precedence over configuration files for application settings. This allows for deployment-time configuration changes without modifying files, which is especially useful in containerized environments, CI/CD pipelines, and cloud deployments.
+
+Additionally, for certain settings like `dry_run` and `failure_strategy`, there's a **runtime precedence** layer that sits above the settings loading priority:
+
+**Runtime Precedence (for dry_run, failure_strategy, processors):**
+1. CLI flags or NornFlow constructor parameters (highest - explicit runtime intent)
+2. Workflow-level definitions in YAML (workflow-specific configuration)
+3. Settings value (from the loading priority chain above)
+
+This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, passing `--failure-strategy skip-failed` via CLI will override it, as the CLI represents the most explicit user intent at runtime.
+
 ## Mandatory Settings
 
 ### `nornir_config_file`
 
-- **Description**: Path to Nornir's configuration file.
+- **Description**: Path to Nornir's configuration file. This setting is **required** and must be provided.
 - **Type**: `str`
+- **Required**: **Yes** (mandatory field)
+- **Path Resolution**: Relative paths are resolved based on the settings file location (or current working directory if no settings file). Absolute paths are used as-is.
 - **Example**:
   ```yaml
   nornir_config_file: "nornir_configs/config.yaml"
   ```
+- **Note**: Can be set via environment variable `NORNFLOW_SETTINGS_NORNIR_CONFIG_FILE`.
 
 ## Optional Settings
 
 ### `local_tasks_dirs`
 
-- **Description**: List of paths to directories containing the Nornir tasks to be included in NornFlow's task catalog. The search is recursive, meaning that all subdirectories will be searched as well. Be careful with this.
+- **Description**: List of paths to directories containing the Nornir tasks to be included in NornFlow's task catalog. The search is recursive, meaning that all subdirectories will be searched as well. Be careful with this. Both absolute and relative paths are supported.
 - **Type**: list[str]
 - **Default**: ["tasks"]
+- **Path Resolution**: 
+  - Relative paths are resolved based on the settings file location (or current working directory if no settings file)
+  - Absolute paths are used as-is
 - **Example**:
   ```yaml
   local_tasks_dirs:
-    - "tasks"
-    - "shared_tasks"
+    - "tasks"                    # Relative to settings file
+    - "/abs/path/to/tasks"       # Absolute path
+    - "../shared_tasks"          # Relative to settings file
   ```
 
 ### `local_workflows_dirs`
 
-- **Description**: List of paths to directories containing the Nornir workflows to be included in NornFlow's workflow catalog. The search is recursive, meaning that all subdirectories will be searched as well. Be aware that all files with a .yaml or .yml extension will be considered workflows.
+- **Description**: List of paths to directories containing the Nornir workflows to be included in NornFlow's workflow catalog. The search is recursive, meaning that all subdirectories will be searched as well. Be aware that all files with a .yaml or .yml extension will be considered workflows. Both absolute and relative paths are supported.
 - **Type**: list[str]
 - **Default**: ["workflows"]
+- **Path Resolution**: 
+  - Relative paths are resolved based on the settings file location (or current working directory if no settings file)
+  - Absolute paths are used as-is
 - **Example**:
   ```yaml
   local_workflows_dirs:
     - "workflows"
-    - "shared_workflows"
+    - "/shared/workflows"
   ```
 
 ### `local_filters_dirs`
 
-- **Description**: List of paths to directories containing custom filter functions to be included in NornFlow's filter catalog. These filter functions can be referenced by name in workflow YAML files to perform advanced inventory filtering. The search is recursive, meaning that all subdirectories will be searched as well.
+- **Description**: List of paths to directories containing custom filter functions to be included in NornFlow's filter catalog. These filter functions can be referenced by name in workflow YAML files to perform advanced inventory filtering. The search is recursive, meaning that all subdirectories will be searched as well. Both absolute and relative paths are supported.
 - **Type**: list[str]
 - **Default**: ["filters"]
+- **Path Resolution**: 
+  - Relative paths are resolved based on the settings file location (or current working directory if no settings file)
+  - Absolute paths are used as-is
 - **Example**:
   ```yaml
   local_filters_dirs:
     - "filters"
-    - "custom_filters"
+    - "../custom_filters"
   ```
-- **Note**: For details on how these filters can be used in workflows, see the [Inventory Filtering](./how_to_write_workflows.md#inventory-filtering) section in the Workflows documentation.
+- **Note**: For details on how these filters can be used in workflows, see the Inventory Filtering section in the Workflows documentation.
 
 ### `local_hooks_dirs`
 
-- **Description**: List of paths to directories containing custom hook implementations to be included in NornFlow's hook registry. Hooks extend task behavior without modifying task code. The search is recursive, meaning that all subdirectories will be searched as well.
+- **Description**: List of paths to directories containing custom hook implementations to be included in NornFlow's hook registry. Hooks extend task behavior without modifying task code. The search is recursive, meaning that all subdirectories will be searched as well. Both absolute and relative paths are supported.
 - **Type**: list[str]
 - **Default**: []
+- **Path Resolution**: 
+  - Relative paths are resolved based on the settings file location (or current working directory if no settings file)
+  - Absolute paths are used as-is
 - **Example**:
   ```yaml
   local_hooks_dirs:
     - "hooks"
-    - "custom_hooks"
+    - "/shared/custom_hooks"
   ```
-- **Note**: For details on creating custom hooks, see the [Hooks Guide](./hooks_guide.md) documentation.
+- **Note**: For details on creating custom hooks, see the Hooks Guide documentation.
 
 ### `vars_dir`
 
-- **Description**: Path to the directory containing variable files for NornFlow's variable system. This directory will store global variables (`defaults.yaml`) and domain-specific variables.
+- **Description**: Path to the directory containing variable files for NornFlow's variable system. This directory will store global variables (`defaults.yaml`) and domain-specific variables. Both absolute and relative paths are supported.
 - **Type**: `str`
 - **Default**: "vars"
+- **Path Resolution**: 
+  - Relative paths are resolved based on the settings file location (or current working directory if no settings file)
+  - Absolute paths are used as-is
 - **Example**:
   ```yaml
   vars_dir: "vars"
+  # Or with absolute path:
+  vars_dir: "/shared/variables"
   ```
-- **Note**: For details on how variables are loaded and their precedence, see the [Variables Basics](./variables_basics.md) documentation.
+- **Note**: For details on how variables are loaded and their precedence, see the Variables Basics documentation.
 
 ### `dry_run`
 
-- **Description**: If set to True, NornFlow will invoke Nornir in dry-run mode.
+- **Description**: If set to True, NornFlow will invoke Nornir in dry-run mode. This setting can be overridden at multiple levels during runtime.
 - **Type**: `bool`
 - **Default**: `False`
+- **Runtime Precedence** (highest to lowest):
+  1. CLI `--dry-run` flag or NornFlow constructor `dry_run` parameter
+  2. Workflow-level `dry_run` setting in workflow YAML
+  3. This settings value (which itself follows: env var > YAML file > default)
 - **Example**:
   ```yaml
   dry_run: True
-  ```  
+  ```
+- **Note**: The runtime precedence means that even if you set `NORNFLOW_SETTINGS_DRY_RUN=true`, passing `--dry-run false` via CLI will override it.
 
 ### `failure_strategy`
 
 - **Description**: Sets NornFlow's behavior when a task fails for a host during the execution of workflows. This setting controls whether NornFlow will skip failed hosts from subsequent tasks, stop execution as soon as possible, or continue running all tasks regardless of failures.
 - **Type**: `str` (one of: "skip-failed", "fail-fast", "run-all")
 - **Default**: "skip-failed"
+- **Runtime Precedence** (highest to lowest):
+  1. CLI `--failure-strategy` flag or NornFlow constructor `failure_strategy` parameter
+  2. Workflow-level `failure_strategy` setting in workflow YAML
+  3. This settings value (which itself follows: env var > YAML file > default)
 - **Example**:
   ```yaml
   failure_strategy: "fail-fast"
   ```
-- **Note**: For details on how failure strategies work, see the [Failure Strategies](./failure_strategies.md) documentation.
+- **Note**: For details on how failure strategies work, see the Failure Strategies documentation.
 
 ### `processors`
 - **Description**: List of Nornir processor configurations to be applied during task/workflow execution. If not provided, NornFlow will default to using only its default processor: `nornflow.builtins.DefaultNornFlowProcessor`.
@@ -135,7 +202,7 @@ NornFlow will try to find a settings YAML file in the following order:
   - `class`: Full Python import path to the processor class
   - `args` (optional): Dictionary of arguments to pass to the processor's `__init__` method
   
-  Processor precedence (highest to lowest):
+  **Runtime Precedence** (highest to lowest):
   1. Processors passed directly to NornFlow constructor
   2. Processors defined in workflow YAML
   3. Processors defined in this settings file
