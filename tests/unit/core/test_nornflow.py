@@ -226,9 +226,9 @@ class TestNornFlowExecution:
         settings.vars = {}
 
         with patch("nornflow.nornflow.NornFlow._initialize_nornir"), patch.object(
-            NornFlow, "_with_processors", MagicMock()
+            NornFlow, "_apply_processors", MagicMock()
         ):
-            def dummy_exec(self, _dry):
+            def dummy_exec(self):
                 with self.nornir_manager:
                     pass
 
@@ -267,9 +267,9 @@ class TestNornFlowExecution:
         settings.vars = {}
 
         with patch("nornflow.nornflow.NornFlow._initialize_nornir"), patch.object(
-            NornFlow, "_with_processors", MagicMock()
+            NornFlow, "_apply_processors", MagicMock()
         ):
-            def dummy_exec(self, _dry):
+            def dummy_exec(self):
                 with self.nornir_manager:
                     raise Exception("Test error")
 

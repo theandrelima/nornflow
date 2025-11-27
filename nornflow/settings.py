@@ -211,7 +211,11 @@ class NornFlowSettings(BaseSettings):
         settings_path = Path(resolved_file).resolve()
 
         if not settings_path.exists():
-            raise SettingsError(f"Settings file not found: {resolved_file}")
+            raise SettingsError(
+                f"Settings file not found: {resolved_file}\n"
+                f"Resolved to absolute path: {settings_path}\n"
+                f"Current working directory: {Path.cwd()}"
+            )
 
         if not base_dir:
             base_dir = settings_path.parent
