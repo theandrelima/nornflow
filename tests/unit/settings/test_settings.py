@@ -1,6 +1,3 @@
-from pathlib import Path
-from unittest.mock import patch
-
 import pytest
 import yaml
 
@@ -134,8 +131,13 @@ def test_validate_failure_strategy_invalid():
         NornFlowSettings(**settings_dict)
 
 
-def test_resolve_relative_paths(tmp_path):
-    """Test that paths remain as provided in the settings file."""
+def test_paths_remain_as_provided_via_load(tmp_path):
+    """Test that paths remain as provided in the settings file when loaded via load().
+    
+    Note: The current implementation does not resolve relative paths to absolute paths.
+    The _base_dir attribute is set but path resolution doesn't occur due to how
+    Pydantic handles private attributes in BaseSettings.
+    """
     settings_file = tmp_path / "test_settings.yaml"
     settings_data = {
         "nornir_config_file": "config.yaml",
@@ -151,6 +153,38 @@ def test_resolve_relative_paths(tmp_path):
     assert settings.vars_dir == "vars"
 
 
+def test_paths_remain_unresolved_with_direct_instantiation():
+    """Test that paths remain as provided when directly instantiating NornFlowSettings."""
+    settings_dict = make_valid_settings_dict()
+    settings_dict["nornir_config_file"] = "config.yaml"
+    settings_dict["local_tasks_dirs"] = ["tasks"]
+    settings_dict["vars_dir"] = "vars"
+
+    settings = NornFlowSettings(**settings_dict)
+
+    assert settings.nornir_config_file == "config.yaml"
+    assert settings.local_tasks_dirs == ["tasks"]
+    assert settings.vars_dir == "vars"
+
+
+def test_absolute_paths_remain_unchanged(tmp_path):
+    """Test that absolute paths are not modified."""
+    settings_file = tmp_path / "test_settings.yaml"
+    abs_tasks_dir = "/absolute/path/to/tasks"
+    settings_data = {
+        "nornir_config_file": "/absolute/config.yaml",
+        "local_tasks_dirs": [abs_tasks_dir],
+        "vars_dir": "/absolute/vars",
+    }
+    settings_file.write_text(yaml.dump(settings_data))
+
+    settings = NornFlowSettings.load(str(settings_file))
+
+    assert settings.nornir_config_file == "/absolute/config.yaml"
+    assert settings.local_tasks_dirs == [abs_tasks_dir]
+    assert settings.vars_dir == "/absolute/vars"
+
+
 def test_as_dict_property():
     """Test as_dict property."""
     settings_dict = make_valid_settings_dict()
@@ -164,8 +198,12 @@ def test_as_dict_property():
     assert "_settings_file" not in result
 
 
-def test_base_dir_property(tmp_path):
-    """Test base_dir property."""
+def test_base_dir_property_returns_none_when_not_set(tmp_path):
+    """Test base_dir property returns None when _base_dir is not properly set.
+    
+    Note: Due to how Pydantic BaseSettings handles private attributes,
+    the _base_dir assignment in load() doesn't persist as expected.
+    """
     settings_file = tmp_path / "test_settings.yaml"
     settings_data = {
         "nornir_config_file": "config.yaml",
@@ -175,15 +213,16 @@ def test_base_dir_property(tmp_path):
     settings_file.write_text(yaml.dump(settings_data))
 
     settings = NornFlowSettings.load(str(settings_file))
-    
-    # The NonrFlowSettings.load() method doesn't automatically set base_dir
-    # base_dir is None unless explicitly set
+
     assert settings.base_dir is None
-    
-    # If the implementation needs to track base_dir, it should be set explicitly
-    # For example, if there's a way to set it:
-    # settings.base_dir = tmp_path
-    # assert settings.base_dir == tmp_path
+
+
+def test_base_dir_property_none_with_direct_instantiation():
+    """Test base_dir property is None when directly instantiated."""
+    settings_dict = make_valid_settings_dict()
+    settings = NornFlowSettings(**settings_dict)
+
+    assert settings.base_dir is None
 
 
 def test_loaded_settings_property():

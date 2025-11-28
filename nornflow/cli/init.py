@@ -89,16 +89,18 @@ def setup_nornir_configs() -> None:
     """Set up the Nornir configuration directory."""
     typer.secho(f"NornFlow will be initialized at {NORNIR_DEFAULT_CONFIG_DIR.parent}", fg=typer.colors.GREEN)
 
-    if create_directory(NORNIR_DEFAULT_CONFIG_DIR):
-        shutil.copytree(SAMPLE_NORNIR_CONFIGS_DIR, NORNIR_DEFAULT_CONFIG_DIR, dirs_exist_ok=True)
+    dir_existed = NORNIR_DEFAULT_CONFIG_DIR.exists()
+    shutil.copytree(SAMPLE_NORNIR_CONFIGS_DIR, NORNIR_DEFAULT_CONFIG_DIR, dirs_exist_ok=True)
+
+    if dir_existed:
         typer.secho(
-            f"Copied sample Nornir configuration to directory: {NORNIR_DEFAULT_CONFIG_DIR}",
-            fg=typer.colors.GREEN,
+            f"Merged sample Nornir configuration into existing directory: {NORNIR_DEFAULT_CONFIG_DIR}",
+            fg=typer.colors.YELLOW,
         )
     else:
         typer.secho(
-            f"Nornir configuration directory already exists: {NORNIR_DEFAULT_CONFIG_DIR}",
-            fg=typer.colors.YELLOW,
+            f"Created Nornir configuration directory: {NORNIR_DEFAULT_CONFIG_DIR}",
+            fg=typer.colors.GREEN,
         )
 
 

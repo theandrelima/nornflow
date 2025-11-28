@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-import typer
 
 from nornflow.cli.init import (
     get_user_confirmation,
@@ -144,16 +143,28 @@ class TestSetupFunctions:
 
         assert result is False
 
-    @patch("nornflow.cli.init.create_directory")
+    @patch("nornflow.cli.init.NORNIR_DEFAULT_CONFIG_DIR")
     @patch("nornflow.cli.init.shutil.copytree")
     @patch("nornflow.cli.init.typer.secho")
-    def test_setup_nornir_configs(self, mock_secho, mock_copytree, mock_create_dir):
-        """Test setup_nornir_configs function."""
-        mock_create_dir.return_value = True
+    def test_setup_nornir_configs_new_directory(self, mock_secho, mock_copytree, mock_config_dir):
+        """Test setup_nornir_configs when directory doesn't exist."""
+        mock_config_dir.exists.return_value = False
+        mock_config_dir.parent = MagicMock()
 
         setup_nornir_configs()
 
-        mock_create_dir.assert_called_once()
+        mock_copytree.assert_called_once()
+
+    @patch("nornflow.cli.init.NORNIR_DEFAULT_CONFIG_DIR")
+    @patch("nornflow.cli.init.shutil.copytree")
+    @patch("nornflow.cli.init.typer.secho")
+    def test_setup_nornir_configs_existing_directory(self, mock_secho, mock_copytree, mock_config_dir):
+        """Test setup_nornir_configs when directory already exists."""
+        mock_config_dir.exists.return_value = True
+        mock_config_dir.parent = MagicMock()
+
+        setup_nornir_configs()
+
         mock_copytree.assert_called_once()
 
     @patch("nornflow.cli.init.NORNFLOW_SETTINGS")
