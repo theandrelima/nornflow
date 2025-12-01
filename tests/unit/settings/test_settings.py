@@ -20,7 +20,7 @@ def make_valid_settings_dict() -> dict[str, object]:
 
 
 def test_settings_load_successful_load(tmp_path):
-    """Test successful loading from YAML file."""
+    """Load from YAML and ensure core values are populated."""
     settings_file = tmp_path / "test_settings.yaml"
     settings_data = {
         "nornir_config_file": "config.yaml",
@@ -31,8 +31,9 @@ def test_settings_load_successful_load(tmp_path):
 
     settings = NornFlowSettings.load(str(settings_file))
 
-    assert settings.nornir_config_file
-    assert "tasks" in settings.local_tasks_dirs
+    assert settings.nornir_config_file == str(tmp_path / "config.yaml")
+    assert settings.local_tasks_dirs == [str(tmp_path / "tasks")]
+    assert settings.vars_dir == str(tmp_path / "vars")
 
 
 def test_settings_load_file_not_found():
@@ -63,7 +64,7 @@ def test_settings_load_missing_required_field(tmp_path):
 
 
 def test_settings_load_with_overrides(tmp_path):
-    """Test that overrides work correctly."""
+    """Ensure overrides passed to load() are respected."""
     settings_file = tmp_path / "test_settings.yaml"
     settings_data = {
         "nornir_config_file": "config.yaml",
@@ -73,7 +74,7 @@ def test_settings_load_with_overrides(tmp_path):
 
     settings = NornFlowSettings.load(str(settings_file), vars_dir="custom_vars")
 
-    assert settings.vars_dir == "custom_vars"
+    assert settings.vars_dir == str(tmp_path / "custom_vars")
 
 
 def test_validate_processors_list():
@@ -131,30 +132,34 @@ def test_validate_failure_strategy_invalid():
         NornFlowSettings(**settings_dict)
 
 
-def test_paths_remain_as_provided_via_load(tmp_path):
-    """Test that paths remain as provided in the settings file when loaded via load().
-    
-    Note: The current implementation does not resolve relative paths to absolute paths.
-    The _base_dir attribute is set but path resolution doesn't occur due to how
-    Pydantic handles private attributes in BaseSettings.
-    """
+def test_relative_paths_resolved_via_load(tmp_path):
+    """Resolve all relative directories against the settings file location."""
     settings_file = tmp_path / "test_settings.yaml"
     settings_data = {
         "nornir_config_file": "config.yaml",
-        "local_tasks_dirs": ["tasks"],
+        "local_tasks_dirs": ["tasks", "nested/tasks"],
+        "local_workflows_dirs": ["workflows"],
+        "local_filters_dirs": ["filters"],
+        "local_hooks_dirs": ["hooks"],
         "vars_dir": "vars",
     }
     settings_file.write_text(yaml.dump(settings_data))
 
     settings = NornFlowSettings.load(str(settings_file))
 
-    assert settings.nornir_config_file == "config.yaml"
-    assert settings.local_tasks_dirs == ["tasks"]
-    assert settings.vars_dir == "vars"
+    assert settings.nornir_config_file == str(tmp_path / "config.yaml")
+    assert settings.local_tasks_dirs == [
+        str(tmp_path / "tasks"),
+        str(tmp_path / "nested/tasks"),
+    ]
+    assert settings.local_workflows_dirs == [str(tmp_path / "workflows")]
+    assert settings.local_filters_dirs == [str(tmp_path / "filters")]
+    assert settings.local_hooks_dirs == [str(tmp_path / "hooks")]
+    assert settings.vars_dir == str(tmp_path / "vars")
 
 
 def test_paths_remain_unresolved_with_direct_instantiation():
-    """Test that paths remain as provided when directly instantiating NornFlowSettings."""
+    """Direct instantiation leaves incoming paths untouched."""
     settings_dict = make_valid_settings_dict()
     settings_dict["nornir_config_file"] = "config.yaml"
     settings_dict["local_tasks_dirs"] = ["tasks"]
@@ -168,7 +173,7 @@ def test_paths_remain_unresolved_with_direct_instantiation():
 
 
 def test_absolute_paths_remain_unchanged(tmp_path):
-    """Test that absolute paths are not modified."""
+    """Absolute input paths should not be modified."""
     settings_file = tmp_path / "test_settings.yaml"
     abs_tasks_dir = "/absolute/path/to/tasks"
     settings_data = {
@@ -198,12 +203,8 @@ def test_as_dict_property():
     assert "_settings_file" not in result
 
 
-def test_base_dir_property_returns_none_when_not_set(tmp_path):
-    """Test base_dir property returns None when _base_dir is not properly set.
-    
-    Note: Due to how Pydantic BaseSettings handles private attributes,
-    the _base_dir assignment in load() doesn't persist as expected.
-    """
+def test_base_dir_property_set_when_loaded(tmp_path):
+    """Loading from disk sets base_dir to the settings file directory."""
     settings_file = tmp_path / "test_settings.yaml"
     settings_data = {
         "nornir_config_file": "config.yaml",
@@ -214,11 +215,11 @@ def test_base_dir_property_returns_none_when_not_set(tmp_path):
 
     settings = NornFlowSettings.load(str(settings_file))
 
-    assert settings.base_dir is None
+    assert settings.base_dir == tmp_path
 
 
 def test_base_dir_property_none_with_direct_instantiation():
-    """Test base_dir property is None when directly instantiated."""
+    """Direct instantiation leaves base_dir unset."""
     settings_dict = make_valid_settings_dict()
     settings = NornFlowSettings(**settings_dict)
 

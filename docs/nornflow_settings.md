@@ -68,7 +68,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Description**: Path to Nornir's configuration file. This setting is **required** and must be provided.
 - **Type**: `str`
 - **Required**: **Yes** (mandatory field)
-- **Path Resolution**: Relative paths are resolved based on the settings file location (or current working directory if no settings file). Absolute paths are used as-is.
+- **Path Resolution**: When loaded through `NornFlowSettings.load`, relative paths resolve against the settings file directory. Direct instantiation leaves the path untouched, so it resolves relative to the runtime working directory. Absolute paths are used as-is.
 - **Example**:
   ```yaml
   nornir_config_file: "nornir_configs/config.yaml"
@@ -83,7 +83,8 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Type**: list[str]
 - **Default**: ["tasks"]
 - **Path Resolution**: 
-  - Relative paths are resolved based on the settings file location (or current working directory if no settings file)
+  - When loaded through `NornFlowSettings.load`, relative paths resolve against the settings file directory
+  - Direct instantiation leaves relative paths untouched, so they resolve against the runtime working directory
   - Absolute paths are used as-is
 - **Example**:
   ```yaml
@@ -99,7 +100,8 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Type**: list[str]
 - **Default**: ["workflows"]
 - **Path Resolution**: 
-  - Relative paths are resolved based on the settings file location (or current working directory if no settings file)
+  - When loaded through `NornFlowSettings.load`, relative paths resolve against the settings file directory
+  - Direct instantiation leaves relative paths untouched, so they resolve against the runtime working directory
   - Absolute paths are used as-is
 - **Example**:
   ```yaml
@@ -114,7 +116,8 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Type**: list[str]
 - **Default**: ["filters"]
 - **Path Resolution**: 
-  - Relative paths are resolved based on the settings file location (or current working directory if no settings file)
+  - When loaded through `NornFlowSettings.load`, relative paths resolve against the settings file directory
+  - Direct instantiation leaves relative paths untouched, so they resolve against the runtime working directory
   - Absolute paths are used as-is
 - **Example**:
   ```yaml
@@ -130,7 +133,8 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Type**: list[str]
 - **Default**: []
 - **Path Resolution**: 
-  - Relative paths are resolved based on the settings file location (or current working directory if no settings file)
+  - When loaded through `NornFlowSettings.load`, relative paths resolve against the settings file directory
+  - Direct instantiation leaves relative paths untouched, so they resolve against the runtime working directory
   - Absolute paths are used as-is
 - **Example**:
   ```yaml
@@ -146,7 +150,8 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Type**: `str`
 - **Default**: "vars"
 - **Path Resolution**: 
-  - Relative paths are resolved based on the settings file location (or current working directory if no settings file)
+  - When loaded through `NornFlowSettings.load`, relative paths resolve against the settings file directory
+  - Direct instantiation leaves relative paths untouched, so they resolve against the runtime working directory
   - Absolute paths are used as-is
 - **Example**:
   ```yaml
@@ -214,8 +219,8 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 
 - ***Description**: List of Python packages installed in your environment that contain Nornir tasks and filter functions to be included in NornFlow's catalogs.*
 - ***Type**: `list[str]`*
-- ***Default**: `[]`*
-- ***Example**:*
+- ***Default***: `[]`
+- ***Example***:
   ```yaml
   imported_packages:
     - "nornir_napalm"

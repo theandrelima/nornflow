@@ -180,15 +180,15 @@ settings = NornFlowSettings(
 ### Class Methods
 
 #### `load(settings_file: str | None = None, base_dir: Path | None = None, **overrides: Any) -> NornFlowSettings`
-Load settings from a YAML file with automatic resolution and overrides.
+Load settings from a YAML file with automatic resolution and overrides. This call resolves relative paths by combining either the discovered settings directory or the explicit `base_dir` with the configured entries.
 
 **Parameters:**
 - `settings_file`: Path to settings YAML file. If None, checks NORNFLOW_SETTINGS env var, then defaults to "nornflow.yaml"
-- `base_dir`: Base directory for resolving relative paths. If None, uses the directory containing the settings file
+- `base_dir`: Base directory for resolving relative paths. If None, uses the directory containing the settings file. Providing a value overrides the discovery location used by `resolve_relative_paths`.
 - `**overrides`: Additional settings to override YAML values
 
 **Returns:**
-- `NornFlowSettings` instance with all paths resolved
+- `NornFlowSettings` instance with path fields rewritten relative to the resolved base directory. Constructing `NornFlowSettings` directly (without `load`) skips this step and leaves the incoming values untouched.
 
 ### Key Properties
 

@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from nornflow.cli.exceptions import CLIInitError
 from nornflow.cli.init import (
     get_user_confirmation,
     init,
@@ -81,31 +82,27 @@ class TestInitCommand:
     @patch("nornflow.cli.init.setup_builder")
     @patch("nornflow.cli.init.get_user_confirmation")
     @patch("nornflow.cli.init.setup_nornir_configs")
-    @patch("nornflow.cli.init.CLIInitError")
-    def test_init_file_not_found_error(
-        self, mock_error, mock_setup_nornir, mock_confirmation, mock_setup_builder
-    ):
+    def test_init_file_not_found_error(self, mock_setup_nornir, mock_confirmation, mock_setup_builder):
         """Test initialization with file not found error."""
         mock_confirmation.return_value = True
         mock_setup_nornir.side_effect = FileNotFoundError("File not found")
         mock_ctx = MagicMock()
         mock_ctx.obj = {"settings": ""}
 
-        with pytest.raises(Exception):
+        with pytest.raises(CLIInitError):
             init(mock_ctx)
 
     @patch("nornflow.cli.init.setup_builder")
     @patch("nornflow.cli.init.get_user_confirmation")
     @patch("nornflow.cli.init.setup_nornir_configs")
-    @patch("nornflow.cli.init.CLIInitError")
-    def test_init_permission_error(self, mock_error, mock_setup_nornir, mock_confirmation, mock_setup_builder):
+    def test_init_permission_error(self, mock_setup_nornir, mock_confirmation, mock_setup_builder):
         """Test initialization with permission error."""
         mock_confirmation.return_value = True
         mock_setup_nornir.side_effect = PermissionError("Permission denied")
         mock_ctx = MagicMock()
         mock_ctx.obj = {"settings": ""}
 
-        with pytest.raises(Exception):
+        with pytest.raises(CLIInitError):
             init(mock_ctx)
 
 

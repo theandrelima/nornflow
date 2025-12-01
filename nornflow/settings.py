@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, PrivateAttr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from nornflow.constants import (
@@ -73,8 +73,8 @@ class NornFlowSettings(BaseSettings):
     )
     dry_run: bool = Field(default=False, description="Whether to run in dry-run mode")
 
-    _base_dir: Path | None = None
-    _settings_file: str | None = None
+    _base_dir: Path | None = PrivateAttr(default=None)
+    _settings_file: str | None = PrivateAttr(default=None)
 
     @field_validator("processors", mode="before")
     @classmethod
@@ -117,10 +117,10 @@ class NornFlowSettings(BaseSettings):
                     ) from e
         return v
 
-    @model_validator(mode="after")
     def resolve_relative_paths(self) -> "NornFlowSettings":
         """Resolve relative paths to absolute paths based on base directory."""
-        if not self._base_dir:
+        base_dir = self.base_dir
+        if not base_dir:
             return self
 
         for field_name in [
@@ -131,23 +131,23 @@ class NornFlowSettings(BaseSettings):
         ]:
             dirs = getattr(self, field_name)
             if dirs:
-                resolved = []
+                resolved: list[str] = []
                 for dir_path in dirs:
                     path = Path(dir_path)
                     if not path.is_absolute():
-                        resolved.append(str(self._base_dir / path))
+                        resolved.append(str(base_dir / path))
                     else:
                         resolved.append(str(path))
                 setattr(self, field_name, resolved)
 
         vars_path = Path(self.vars_dir)
         if not vars_path.is_absolute():
-            self.vars_dir = str(self._base_dir / vars_path)
+            self.vars_dir = str(base_dir / vars_path)
 
         if self.nornir_config_file:
             config_path = Path(self.nornir_config_file)
             if not config_path.is_absolute():
-                self.nornir_config_file = str(self._base_dir / config_path)
+                self.nornir_config_file = str(base_dir / config_path)
 
         return self
 
@@ -238,14 +238,13 @@ class NornFlowSettings(BaseSettings):
         return self.model_dump(exclude={"_base_dir", "_settings_file"})
 
     @property
-    def base_dir(self) -> Path:
-        """Get the base directory for resolving relative paths."""
-        if not self._base_dir:
-            if self._settings_file:
-                self._base_dir = Path(self._settings_file).parent
-            else:
-                self._base_dir = Path.cwd()
-        return self._base_dir
+    def base_dir(self) -> Path | None:
+        """Get the base directory for resolving relative paths if available."""
+        if self._base_dir:
+            return self._base_dir
+        if self._settings_file:
+            return Path(self._settings_file).parent
+        return None
 
     @property
     def loaded_settings(self) -> dict[str, Any]:
@@ -257,8 +256,14 @@ class NornFlowSettings(BaseSettings):
         Provide backward compatibility for accessing undefined settings.
         Returns None for non-existent attributes instead of raising AttributeError.
         """
-        if hasattr(self, "__pydantic_extra__"):
-            return self.__pydantic_extra__.get(name, None)
+        private_attrs = getattr(self, "__pydantic_private__", None)
+        if private_attrs and name in private_attrs:
+            return private_attrs[name]
+        if name.startswith("_"):
+            raise SettingsError(f"Unknown private attribute requested: {name}")
+        extra_attrs = getattr(self, "__pydantic_extra__", None)
+        if extra_attrs:
+            return extra_attrs.get(name, None)
         return None
 
     def __str__(self) -> str:
