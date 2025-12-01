@@ -710,7 +710,7 @@ class TestMainCLIFunctionality:
         # Verify NornFlow was built and run
         mock_get_builder.assert_called_once()
         mock_builder.build.assert_called_once()
-        mock_nornflow.run.assert_called_once_with(dry_run=False)
+        mock_nornflow.run.assert_called_once()
         # Verify sys.exit was not called for success
         mock_exit.assert_not_called()
 
@@ -745,7 +745,7 @@ class TestMainCLIFunctionality:
 
         # Verify NornFlow was built and run
         mock_builder.build.assert_called_once()
-        mock_nornflow.run.assert_called_once_with(dry_run=False)
+        mock_nornflow.run.assert_called_once()
         # Verify the exit code was propagated
         mock_exit.assert_called_once_with(1)
 
@@ -765,7 +765,7 @@ class TestMainCLIFunctionality:
         run(mock_ctx, target="test_task", args=None, inventory_filters=None, hosts=None, groups=None, vars=None, dry_run=True, processors=None, failure_strategy=None)
 
         mock_builder.build.assert_called_once()
-        mock_nornflow.run.assert_called_once_with(dry_run=True)
+        mock_nornflow.run.assert_called_once()
         mock_exit.assert_not_called()
 
     @patch("typer.secho")

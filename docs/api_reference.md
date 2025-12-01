@@ -51,6 +51,7 @@ def __init__(
     vars: dict[str, Any] | None = None,
     filters: dict[str, Any] | None = None,
     failure_strategy: FailureStrategy | None = None,
+    dry_run: bool | None = None,
     **kwargs: Any,
 )
 ```
@@ -62,6 +63,7 @@ def __init__(
 - `vars`: Variables with highest precedence in the resolution chain
 - `filters`: Inventory filters with highest precedence that override workflow filters
 - `failure_strategy`: Failure handling strategy (skip-failed, fail-fast, or run-all)
+- `dry_run`: Dry run mode with highest precedence. Overrides workflow and settings values
 - `**kwargs`: Additional keyword arguments passed to NornFlowSettings
 
 ### Properties
@@ -78,27 +80,27 @@ def __init__(
 | `vars` | `dict[str, Any]` | Variables with highest precedence |
 | `filters` | `dict[str, Any]` | Inventory filters with highest precedence |
 | `failure_strategy` | `FailureStrategy` | Current failure handling strategy |
+| `dry_run` | `bool` | Current dry run mode (resolved via precedence chain) |
 | `nornir_configs` | `dict[str, Any]` | Nornir configuration (read-only) |
 | `nornir_manager` | `NornirManager` | NornirManager instance (read-only) |
 
 ### Methods
 
-#### `run(dry_run: bool = False) -> int`
+#### `run() -> int`
 Execute the configured workflow.
 
 ```python
-exit_code = nornflow.run(dry_run=True)  # Run in dry-run mode
-exit_code = nornflow.run()              # Run normally
+# dry_run is now set via constructor, workflow, or settings
+nornflow = NornFlow(workflow=my_workflow, dry_run=True)
+exit_code = nornflow.run()  # Uses the dry_run set during initialization
 ```
-
-**Parameters:**
-- `dry_run`: Whether to run the workflow in dry-run mode
 
 **Returns:**
 - `int`: Exit code representing execution status
   - 0: Success (all tasks passed)
-  - 1-100: Failure percentage (% of failed task executions, rounded down)
+  - 1-100: Failure with percentage information (% of failed task executions)
   - 101: Failure without percentage information
+  - 102+: Reserved for exceptions/internal errors
 
 **Exceptions:**
 - `WorkflowError`: If no workflow is configured
@@ -115,8 +117,8 @@ from nornflow.builder import NornFlowBuilder
 builder = NornFlowBuilder()
 nornflow = (builder
     .with_settings_path("nornflow.yaml")
-    .with_workflow_name("backup")
-    .with_vars({"env": "prod"})
+    .with_workflow_path("backup.yaml")
+    .with_kwargs(dry_run=True)  # Pass dry_run via kwargs
     .build())
 ```
 
@@ -153,42 +155,56 @@ Set inventory filters with highest precedence.
 Set the failure handling strategy.
 
 #### `with_kwargs(**kwargs: Any) -> NornFlowBuilder`
-Set additional keyword arguments.
+Set additional keyword arguments (including `dry_run`).
 
 #### `build() -> NornFlow`
 Build and return the NornFlow instance.
 
 ## NornFlowSettings Class
 
-Configuration settings for NornFlow.
+Configuration settings for NornFlow using Pydantic for validation and type safety.
 
 ```python
 from nornflow.settings import NornFlowSettings
 
-settings = NornFlowSettings(settings_file="nornflow.yaml")
-```
+# Load from YAML file
+settings = NornFlowSettings.load("nornflow.yaml")
 
-### Constructor
-
-```python
-def __init__(
-    self,
-    settings_file: str = "nornflow.yaml",
-    **kwargs: Any
+# Create directly with values
+settings = NornFlowSettings(
+    nornir_config_file="nornir.yaml",
+    dry_run=True
 )
 ```
+
+### Class Methods
+
+#### `load(settings_file: str | None = None, base_dir: Path | None = None, **overrides: Any) -> NornFlowSettings`
+Load settings from a YAML file with automatic resolution and overrides. This call resolves relative paths by combining either the discovered settings directory or the explicit `base_dir` with the configured entries.
+
+**Parameters:**
+- `settings_file`: Path to settings YAML file. If None, checks NORNFLOW_SETTINGS env var, then defaults to "nornflow.yaml"
+- `base_dir`: Base directory for resolving relative paths. If None, uses the directory containing the settings file. Providing a value overrides the discovery location used by `resolve_relative_paths`.
+- `**overrides`: Additional settings to override YAML values
+
+**Returns:**
+- `NornFlowSettings` instance with path fields rewritten relative to the resolved base directory. Constructing `NornFlowSettings` directly (without `load`) skips this step and leaves the incoming values untouched.
 
 ### Key Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `nornir_config_file` | `str` | Path to Nornir configuration file |
+| `nornir_config_file` | `str` | Path to Nornir configuration file (required) |
 | `local_tasks_dirs` | `list[str]` | Directories containing custom tasks |
 | `local_workflows_dirs` | `list[str]` | Directories containing workflow files |
 | `local_filters_dirs` | `list[str]` | Directories containing custom filters |
-| `processors` | `list[dict[str, Any]] \| None` | Nornir processor configurations |
+| `local_hooks_dirs` | `list[str]` | Directories containing custom hooks |
+| `processors` | `list[dict[str, Any]]` | Nornir processor configurations |
 | `vars_dir` | `str` | Directory for variable files |
 | `failure_strategy` | `FailureStrategy` | Task failure handling strategy |
+| `dry_run` | `bool` | Default dry run mode |
+| `as_dict` | `dict[str, Any]` | Settings as a dictionary |
+| `base_dir` | `Path` | Base directory for resolving relative paths |
 
 ## NornirManager Class
 
@@ -278,772 +294,243 @@ Universal validators must return a tuple of `(bool, str)` where:
 
 When models are created, the validation process follows this sequence:
 1. Pydantic performs basic type validation
-2. `create()` method is called, which runs universal field validation via `run_universal_field_validation()`
-3. For specific models (like TaskModel), additional post-creation validation may run via `run_post_creation_task_validation()`
-
-This multi-layered approach ensures models are validated consistently while allowing flexibility where needed.
-
-### HookableModel
-
-Abstract base class for models that support hooks (e.g., TaskModel).
-
-```python
-from nornflow.models import HookableModel
-```
-
-**Purpose:**
-HookableModel provides the infrastructure for models to support hook configurations. It manages hook discovery, caching, and validation, but delegates actual hook execution to the NornFlowHookProcessor during task runtime.
-
-**Key Features:**
-- Implements Flyweight pattern for hook instance management (one instance per unique hook configuration)
-- Automatically migrates hook fields from model dict to hooks field during creation
-- Caches hook instances and hook processor reference for performance
-- Provides hook validation interface through `run_hook_validations()`
-
-**Properties:**
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `hooks` | `HashableDict[str, Any] \| None` | Hook configurations for this model |
-| `_hooks_cache` | `list[Hook] \| None` | Cached hook instances (private) |
-| `_hook_processor_cache` | `NornFlowHookProcessor \| None` | Cached hook processor reference (private) |
-
-**Methods:**
-
-#### `get_hooks() -> list[Hook]`
-Get all hook instances for this model. Uses cached instances if available.
-
-**Returns:**
-- List of Hook instances configured for this model
-
-#### `run_hook_validations() -> None`
-Execute validation logic for all hooks configured on this model.
-
-Should be called explicitly at the beginning of the `run()` method in subclasses.
-
-**Raises:**
-- `HookValidationError`: If any hook validation fails
-
-#### `get_task_args() -> dict[str, Any]`
-Get clean task arguments without any NornFlow-specific context.
-
-**Returns:**
-- Dictionary of task arguments for the task function
-
-#### `validate_hooks_and_set_task_context(nornir_manager, vars_manager, task_func) -> None`
-Validate hooks and set task-specific context in the hook processor.
-
-**Parameters:**
-- `nornir_manager`: The NornirManager instance
-- `vars_manager`: The variables manager instance
-- `task_func`: The task function that will be executed
-
-**Raises:**
-- `ProcessorError`: If hooks are configured but hook processor cannot be retrieved
-
-**Immutability Constraints:**
-
-> **CRITICAL**: HookableModel instances (and subclasses like TaskModel) are **hashable** by design as PydanticSerdes models. **NEVER modify model attributes** after initialization, especially within Hook classes! Modifying attributes breaks the hash contract and can corrupt internal caches.
-
-### TaskModel
-
-Represents individual tasks within a workflow. Inherits from HookableModel to support hooks.
-
-```python
-from nornflow.models import TaskModel
-```
-
-**Properties:**
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | `int \| None` | Auto-incrementing task ID |
-| `name` | `str` | Task name (must exist in tasks catalog) |
-| `args` | `HashableDict[str, Any] \| None` | Task arguments (supports Jinja2) |
-| `hooks` | `HashableDict[str, Any] \| None` | Hook configurations (inherited from HookableModel) |
-
-**Key Characteristics:**
-- Inherits from `HookableModel` (not RunnableModel)
-- Instances are hashable and immutable after creation
-- Hook validation delegated to parent via `run_hook_validations()`
-- Excludes `args` and hooks from universal field validation
-
-**Methods:**
-
-#### `run(nornir_manager: NornirManager, vars_manager: NornFlowVariablesManager, tasks_catalog: dict[str, Callable]) -> AggregatedResult`
-Execute the task using the provided NornirManager and tasks catalog.
+2. Field validators run for specific fields
+3. Model validators run for cross-field validation
+4. Universal validators run for all non-excluded fields
+5. Final model instance is returned or validation error is raised
 
 ### WorkflowModel
 
-Represents a complete workflow definition. This is a data model that defines the structure of a workflow but does not contain execution logic.
+Represents a complete workflow definition.
 
 ```python
 from nornflow.models import WorkflowModel
+
+workflow = WorkflowModel.create({
+    "workflow": {
+        "name": "My Workflow",
+        "tasks": [...],
+        "dry_run": True
+    }
+})
 ```
 
-**Properties:**
+**Key Fields:**
+- `name`: Workflow name (required)
+- `description`: Workflow description (optional)
+- `tasks`: List of TaskModel instances (required, non-empty)
+- `dry_run`: Override dry run mode (optional, can be `None`)
+- `failure_strategy`: Override failure strategy (optional, can be `None`)
+- `vars`: Workflow-level variables (optional)
+- `inventory_filters`: Inventory filtering configuration (optional)
+- `processors`: Processor configurations (optional)
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `name` | `str` | Workflow name |
-| `description` | `str \| None` | Workflow description |
-| `inventory_filters` | `HashableDict[str, Any] \| None` | Workflow-level inventory filters |
-| `processors` | `tuple[HashableDict[str, Any]] \| None` | Workflow-level processors |
-| `tasks` | `OneToMany[TaskModel, ...]` | List of tasks in the workflow |
-| `dry_run` | `bool` | Whether to run in dry-run mode |
-| `vars` | `HashableDict[str, Any] \| None` | Workflow-level variables |
-| `failure_strategy` | `FailureStrategy` | Failure handling strategy |
+### TaskModel
 
-**Class Methods:**
+Represents a single task in a workflow.
 
-#### `create(dict_args: dict[str, Any]) -> WorkflowModel`
-Create a new WorkflowModel from a workflow dictionary.
+```python
+from nornflow.models import TaskModel
+
+task = TaskModel(
+    name="netmiko_send_command",
+    args={"command_string": "show version"},
+    set_to="version_output"
+)
+```
+
+**Key Fields:**
+- `name`: Task name from catalog (required)
+- `args`: Task arguments (optional)
+- `set_to`: Variable storage configuration (optional hook)
+- `if`: Conditional execution hook (optional hook)
+- `shush`: Output suppression hook (optional hook)
+- Other hook configurations as needed
 
 ## Hook Classes
 
-Hooks extend task behavior without modifying task code. They are implemented as Nornir Processors that activate when configured on specific tasks.
+Hooks extend task behavior without modifying task code. They implement the Nornir Processor protocol and are automatically registered when imported.
 
-> **For comprehensive hook documentation, including lifecycle methods, creating custom hooks, validation patterns, and exception handling, see:** Hooks Guide
+### BaseHook
 
-### Hook Base Class
-
-Base class for all hooks with lifecycle management and context access.
+Base class for all hooks, implementing the Nornir Processor protocol.
 
 ```python
-from nornflow.hooks import Hook
-```
+from nornflow.hooks import BaseHook
+from nornir.core.task import Task
+from typing import Any
 
-**Class Attributes:**
-
-| Attribute | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `hook_name` | `str` | Yes | Unique identifier for this hook type |
-| `run_once_per_task` | `bool` | No | If True, runs once per task; if False, runs per host (default: False) |
-| `exception_handlers` | `dict[type[Exception], str]` | No | Maps exception types to handler method names |
-
-**Constructor:**
-
-```python
-def __init__(self, value: Any = None)
-```
-
-**Parameters:**
-- `value`: Hook configuration value from YAML
-
-**Properties:**
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `value` | `Any` | Hook configuration value |
-| `context` | `dict[str, Any]` | Execution context injected by NornFlowHookProcessor (read-only) |
-
-**Context Dictionary Contents:**
-
-The `context` property provides access to execution context populated by `NornFlowHookProcessor`:
-
-- `vars_manager`: NornFlowVariablesManager instance for variable resolution
-- `nornir_manager`: NornirManager instance for Nornir operations
-- `tasks_catalog`: Dictionary of available task functions
-- `filters_catalog`: Dictionary of available inventory filter functions
-- `workflows_catalog`: FileCatalog of available workflow files
-- `task_model`: Current TaskModel being executed (task-specific context)
-
-**Important:** Context is only available during hook lifecycle execution (after `task_started`). It will be empty during `__init__()` and `execute_hook_validations()`.
-
-**Key Lifecycle Methods:**
-
-All lifecycle methods are optional - override only those needed:
-
-- `task_started(task: Task) -> None`
-- `task_completed(task: Task, result: AggregatedResult) -> None`
-- `task_instance_started(task: Task, host: Host) -> None`
-- `task_instance_completed(task: Task, host: Host, result: MultiResult) -> None`
-- `subtask_instance_started(task: Task, host: Host) -> None`
-- `subtask_instance_completed(task: Task, host: Host, result: MultiResult) -> None`
-
-**Control Methods:**
-
-#### `should_execute(task: Task) -> bool`
-Check if this hook should execute for given task.
-
-**Returns:**
-- `True` if hook should execute, `False` to skip
-
-#### `execute_hook_validations(task_model: TaskModel) -> None`
-Execute validation logic specific to this hook.
-
-Called during workflow preparation before any task execution. Uses cooperative `super()` to ensure validation methods in mixins and parent classes are called properly.
-
-**Parameters:**
-- `task_model`: TaskModel instance to validate against
-
-**Raises:**
-- `HookValidationError`: If validation fails
-
-### Jinja2ResolvableMixin
-
-***Optional*** mixin providing automatic Jinja2 validation and seamless template resolution for hooks.
-
-```python
-from nornflow.hooks import Jinja2ResolvableMixin
-```
-
-**Purpose:**
-Adds automatic Jinja2 validation during workflow preparation and resolution methods for execution. Developers using this mixin don't need Jinja2 awareness - just include it in the inheritance chain, optionally override `execute_hook_validations()` to add custom validations, and call `get_resolved_value()` in lifecycle methods.
-
-**When to Use:**
-- ✅ Hook accepts both static values AND Jinja2 expressions
-- ✅ Hook needs automatic validation of Jinja2 expressions
-
-**When NOT to Use:**
-- ❌ Hook should never accept Jinja2 expressions (security/performance)
-- ❌ Hook demands custom/complex Jinja2 resolution logic
-
-
-**Usage:**
-
-```python
-class MyHook(Hook, Jinja2ResolvableMixin):
-    hook_name = "my_hook"
+class MyCustomHook(BaseHook):
+    """Custom hook implementation."""
+    
+    def __init__(self, value: Any):
+        self.value = value
+    
+    def task_started(self, task: Task) -> None:
+        """Called when task starts."""
+        pass
     
     def task_instance_started(self, task: Task, host: Host) -> None:
-        condition = self.get_resolved_value(task, host=host, as_bool=True, default=False)
-        if condition:
-            pass
-```
-
-You can override `execute_hook_validations()` if you need additional custom validation:
-
-```python
-class MyHook(Hook, Jinja2ResolvableMixin):
-    hook_name = "my_hook"
+        """Called when task starts on a specific host."""
+        pass
     
-    def execute_hook_validations(self, task_model: TaskModel) -> None:
-        super().execute_hook_validations(task_model)
-        
-        if self.value and not isinstance(self.value, (str, bool)):
-            raise HookValidationError(
-                self.hook_name,
-                [("value_type", "my_hook only accepts strings or booleans")]
-            )
-    
-    def task_instance_started(self, task: Task, host: Host) -> None:
-        condition = self.get_resolved_value(task, host=host, as_bool=True, default=False)
-        if condition:
-            pass
+    def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
+        """Called when task completes on a specific host."""
+        pass
 ```
 
+### Hook Registration
 
-**Automatic Validation:**
-
-The mixin automatically validates Jinja2 expressions by overriding `execute_hook_validations()`. Thanks to cooperative `super()` calls in the Hook base class, this works with any inheritance order.
-
-**What gets validated by the mixin:**
-- **Jinja2 expressions are validated**: `my_hook: "{{ variable }}"` - Template syntax checked
-- **Plain strings are NOT validated**: `my_hook: "plain text"` - Passed through as-is
-- **Empty strings are NOT validated**: `my_hook: ""` - Treated as falsy value
-- **Non-string values skip validation**: `my_hook: true`, `my_hook: {"key": "value"}` - No checks
-
-**Individual hooks can add stricter validation** if needed:
+Hooks are automatically registered when their class is defined:
 
 ```python
-from nornflow.hooks import Hook, Jinja2ResolvableMixin
-from nornflow.hooks.exceptions import HookValidationError
+# hooks/my_hook.py
+from nornflow.hooks import BaseHook
 
-class StrictHook(Hook, Jinja2ResolvableMixin):
-    """Hook that rejects empty strings as meaningless configuration."""
-    
-    hook_name = "strict_hook"
-    
-    def execute_hook_validations(self, task_model: TaskModel) -> None:
-        super().execute_hook_validations(task_model)
-        
-        if isinstance(self.value, str) and not self.value.strip():
-            raise HookValidationError(
-                "StrictHook",
-                [("empty_string", f"Task '{task_model.name}': strict_hook value cannot be empty")]
-            )
+class MyHook(BaseHook):
+    """Automatically registered when this file is imported."""
+    pass
 ```
 
-**Validation responsibility split:**
-- **Mixin validates**: Jinja2 expression syntax (only when markers present)
-- **Individual hooks validate**: Hook-specific constraints (empty strings, value types, etc.)
-
-Always call `super().execute_hook_validations(task_model)` first in your validation method to ensure cooperative super() calls work correctly with multiple inheritance.
-
-**Methods:**
-
-#### `execute_hook_validations(task_model: TaskModel) -> None`
-Validate hook configuration, including automatic Jinja2 validation for expressions containing markers.
-
-Subclasses can override to add additional validation but must call `super().execute_hook_validations(task_model)` first.
-
-**Parameters:**
-- `task_model`: TaskModel to validate against
-
-**Raises:**
-- `HookValidationError`: If validation fails
-
-#### `get_resolved_value(task: Task, host: Host | None = None, as_bool: bool = False, default: Any = None) -> Any`
-Get the final resolved value, handling Jinja2 automatically.
-
-Detects if `self.value` contains Jinja2 markers and resolves through variable system if needed.
-
-**Parameters:**
-- `task`: Task being executed (used to extract host for template resolution)
-- `host`: The specific host to resolve for. **MUST** be provided when calling from `task_instance_started()` for per-host resolution
-- `as_bool`: Convert result to boolean using standard truthy values
-- `default`: Fallback value if `self.value` is falsy
-
-**Returns:**
-- Resolved value, optionally converted to boolean
-
-**Raises:**
-- `HookError`: If vars_manager not available (likely called outside lifecycle methods) or if task has no hosts
-
-**Boolean Conversion:**
-
-When `as_bool=True`, converts values using these rules:
-
-- **Truthy strings** (case-insensitive): `"true"`, `"yes"`, `"1"`, `"on"`, `"y"`, `"t"`, `"enabled"`
-- **Other strings**: Falsy
-- **Booleans**: Returned as-is
-- **Other types**: Converted via Python's `bool()`
-
-**Important:** Only call `get_resolved_value()` inside lifecycle methods where context has been populated by the framework. When calling from `task_instance_started()`, always pass the `host` parameter explicitly.
-
-#### `_is_jinja2_expression(value: Any) -> bool`
-Check if value contains Jinja2 template markers.
-
-**Parameters:**
-- `value`: Value to check
-
-**Returns:**
-- `True` if value is string with Jinja2 markers (`{{`, `{%`, `{#`), `False` otherwise
-
-#### `_resolve_jinja2(value: str, host: Host) -> Any`
-Resolve Jinja2 template string through variable system.
-
-**Parameters:**
-- `value`: Template string to resolve
-- `host`: Host to resolve for
-
-**Returns:**
-- Resolved value from template
-
-**Raises:**
-- `HookError`: If vars_manager not available in context
-
-#### `_to_bool(value: Any) -> bool`
-Convert value to boolean.
-
-**Parameters:**
-- `value`: Value to convert
-
-**Returns:**
-- Boolean representation using standard truthy values
-
-#### `_validate_jinja2_string(task_model: TaskModel) -> None`
-Validate that string value containing Jinja2 markers is a proper Jinja2 expression.
-
-**Parameters:**
-- `task_model`: The task model being validated
-
-**Raises:**
-- `HookValidationError`: If string with Jinja2 markers has invalid template syntax
-
-### Built-in Hooks
-
-#### IfHook
-
-Conditionally execute tasks per host based on filter functions or Jinja2 expressions.
-
-```python
-from nornflow.builtins.hooks import IfHook
-```
-
-Supports two evaluation modes:
-
-**Filter-based (dictionary syntax):**
-```yaml
-tasks:
-  - name: napalm_get
-    args:
-      getters: ["facts"]
-    if:
-      platform: "ios"
-```
-
-**Jinja2 expression (string syntax):**
-```yaml
-tasks:
-  - name: napalm_get
-    args:
-      getters: ["facts"]
-    if: "{{ host.platform == 'ios' }}"
-```
-
-**Boolean Semantics:**
-- `True` (or truthy): Task **executes** for the host
-- `False` (or falsy): Task **skips** for the host
-
-This follows Python's standard truthiness rules where `True` means "proceed" and `False` means "don't proceed".
-
-**Features:**
-- Uses `Jinja2ResolvableMixin` for Jinja2 expression support with automatic validation
-- Evaluates per host (`run_once_per_task = False`)
-- Sets skip flag on hosts that don't match condition
-- Supports all registered inventory filters
-
-#### SetToHook
-
-Capture and store task results as runtime variables.
-
-```python
-from nornflow.builtins.hooks import SetToHook
-```
-
-**Store entire result:**
-```yaml
-tasks:
-  - name: napalm_get
-    args:
-      getters: ["facts"]
-    set_to: "device_facts"
-```
-
-**Extract nested data using dot notation:**
-```yaml
-tasks:
-  - name: napalm_get
-    args:
-      getters: ["facts", "environment"]
-    set_to:
-      vendor: "vendor"
-      cpu_usage: "environment.cpu.0.%usage"
-```
-
-**Features:**
-- Extracts data from Nornir Result objects
-- Supports dot notation for nested paths
-- Array indexing with numeric indices
-- Dictionary key access with special characters via `%` prefix
-- Stores variables per-host in runtime context
-
-#### ShushHook
-
-Suppress task output printing conditionally.
-
-```python
-from nornflow.builtins.hooks import ShushHook
-```
-
-**Static suppression:**
-```yaml
-tasks:
-  - name: netmiko_send_command
-    args:
-      command_string: "show version"
-    shush: true
-```
-
-**Dynamic suppression:**
-```yaml
-tasks:
-  - name: netmiko_send_command
-    args:
-      command_string: "show interfaces"
-    shush: "{{ verbose_mode == false }}"
-```
-
-**Features:**
-- Uses `Jinja2ResolvableMixin` for dynamic evaluation with automatic validation
-- Runs once per task (`run_once_per_task = True`)
-- Requires compatible processor with `supports_shush_hook` attribute
-- Marks tasks in processor's suppression registry
+NornFlow discovers hooks by importing all Python files in configured hook directories.
 
 ## Variable System Classes
 
 ### NornFlowVariablesManager
 
-Manages the loading, accessing, and resolution of variables from multiple sources.
+Manages variable contexts and resolution for all devices during workflow execution.
 
 ```python
 from nornflow.vars.manager import NornFlowVariablesManager
 ```
 
-#### Constructor
-
-```python
-def __init__(
-    self,
-    vars_dir: str,
-    cli_vars: dict[str, Any] | None = None,
-    inline_workflow_vars: dict[str, Any] | None = None,
-    workflow_path: Path | None = None,
-    workflow_roots: list[str] | None = None,
-) -> None
-```
-
-#### Methods
-
-- `get_device_context(host_name: str) -> NornFlowDeviceContext`: Get or create device context
-- `set_runtime_variable(name: str, value: Any, host_name: str) -> None`: Set runtime variable
-- `get_nornflow_variable(var_name: str, host_name: str) -> Any`: Get variable following precedence
-- `resolve_string(template_str: str, host_name: str, additional_vars: dict[str, Any] | None = None) -> str`: Resolve Jinja2 templates
-- `resolve_data(data: Any, host_name: str, additional_vars: dict[str, Any] | None = None) -> Any`: Recursively resolve templates
-
-### NornFlowDeviceContext
-
-Maintains an isolated variable context for a specific device.
-
-```python
-from nornflow.vars.context import NornFlowDeviceContext
-```
-
-**Properties:**
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `cli_vars` | `dict[str, Any]` | CLI variables |
-| `workflow_inline_vars` | `dict[str, Any]` | Inline workflow variables |
-| `domain_vars` | `dict[str, Any]` | Domain-specific variables |
-| `default_vars` | `dict[str, Any]` | Default variables |
-| `env_vars` | `dict[str, Any]` | Environment variables |
-| `runtime_vars` | `dict[str, Any]` | Runtime variables (device-specific) |
-
-**Methods:**
-
-- `get_flat_context() -> dict[str, Any]`: Get flattened variables respecting precedence
+**Key Methods:**
+- `get_vars(host: Host) -> dict`: Get variables for a specific host
+- `set_var(host: Host, key: str, value: Any) -> None`: Set a runtime variable
+- `render_template(template: str, host: Host) -> str`: Render Jinja2 template
 
 ### NornirHostProxy
 
-Read-only proxy for accessing Nornir inventory variables via the `host.` namespace.
+Provides read-only access to Nornir inventory data within Jinja2 templates.
 
 ```python
-from nornflow.vars.proxy import NornirHostProxy
+# Automatically available in templates as 'host'
+# Example: {{ host.name }}, {{ host.platform }}, {{ host.data.site }}
 ```
-
-**Purpose:**
-Acts as a proxy to provide direct access to host attributes and `host.data` dictionary values within Jinja2 templates. Managed by `NornFlowVariableProcessor` which sets the current host context before variable resolution.
-
-**Key Features:**
-- Read-only access to Nornir inventory
-- Provides `host.name`, `host.platform`, `host.data.*` access in templates
-- Automatically set by `NornFlowVariableProcessor` during task execution
-- Does not modify Nornir inventory
-
-**Properties:**
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `current_host` | `Host \| None` | Current Nornir Host object being proxied |
-| `nornir` | `Nornir \| None` | Nornir instance for inventory access |
-| `current_host_name` | `str \| None` | Name of current host |
-
-**Setting `current_host_name`:**
-When set, looks up the host in Nornir inventory and sets `current_host`. If host not found or Nornir instance not set, clears current host context.
-
-**Magic Method:**
-
-#### `__getattr__(name: str) -> Any`
-Dynamically retrieve attributes or data keys from current Nornir host.
-
-Follows precedence:
-1. Direct Host object attributes (e.g., `name`, `platform`, `data`)
-2. Keys within `Host.data` dictionary (merged from host, groups, defaults)
-
-**Parameters:**
-- `name`: Attribute or data key name
-
-**Returns:**
-- Value from host's inventory
-
-**Raises:**
-- `VariableError`: If no Nornir instance or current host set, or if attribute/key not found
-
-### NornFlowVariableProcessor
-
-Processor for variable substitution and management during task execution.
-
-```python
-from nornflow.vars.processors import NornFlowVariableProcessor
-```
-
-#### Constructor
-
-```python
-def __init__(self, vars_manager: NornFlowVariablesManager)
-```
-
-#### Methods
-
-- `task_instance_started(task: Task, host: Host) -> None`: Set host context and process templates
-- `task_instance_completed(task: Task, host: Host, result: MultiResult) -> None`: Clear host context
 
 ## Built-in Tasks
 
-### echo
+NornFlow includes several built-in tasks for common operations:
 
-Print a message with variable interpolation.
+### `echo`
 
-```yaml
-- name: echo
-  args:
-    msg: "Processing {{ host.name }}"
-```
-
-### set
-
-Set runtime variables for use in subsequent tasks.
+Print a message for debugging or logging.
 
 ```yaml
-- name: set
-  args:
-    vlan_id: 100
-    backup_path: "/tmp/{{ host.name }}.cfg"
+tasks:
+  - name: echo
+    args:
+      msg: "Processing {{ host.name }}"
 ```
 
-### write_file
+### `set`
+
+Set runtime variables dynamically.
+
+```yaml
+tasks:
+  - name: set
+    args:
+      timestamp: "{{ now() }}"
+      counter: 0
+```
+
+### `write_file`
 
 Write content to a file.
 
 ```yaml
-- name: write_file
-  args:
-    filename: "/tmp/config.txt"
-    content: "{{ config_data }}"
-    append: false
-    mkdir: true
+tasks:
+  - name: write_file
+    args:
+      filename: "configs/{{ host.name }}.txt"
+      content: "{{ config_data }}"
+```
+
+### `read_file`
+
+Read content from a file.
+
+```yaml
+tasks:
+  - name: read_file
+    args:
+      filename: "templates/config.j2"
+    set_to: "template_content"
+```
+
+### `template_file`
+
+Render a Jinja2 template file.
+
+```yaml
+tasks:
+  - name: template_file
+    args:
+      template: "templates/config.j2"
+      dest: "configs/{{ host.name }}.conf"
 ```
 
 ## Built-in Filters
 
-### hosts
+NornFlow includes built-in Nornir inventory filters:
 
-Filter inventory by hostname list.
+### `filter_by_hosts`
+
+Filter inventory to specific hosts.
 
 ```yaml
 inventory_filters:
-  hosts: ["router1", "router2"]
+  filter_by_hosts: ["host1", "host2"]
 ```
 
-### groups
+### `filter_by_groups`
 
-Filter inventory by group membership.
+Filter inventory to hosts in specific groups.
 
 ```yaml
 inventory_filters:
-  groups: ["core", "distribution"]
+  filter_by_groups: ["routers", "switches"]
 ```
 
 ## Built-in Processors
 
 ### DefaultNornFlowProcessor
 
-The default processor that formats and displays task results.
+The default processor that provides standard output formatting.
 
 ```yaml
 processors:
   - class: "nornflow.builtins.DefaultNornFlowProcessor"
 ```
 
-**Features:**
-- Colored output for success/failure
-- Execution timing tracking
+Features:
+- Formatted task output
 - Progress indicators
-- Final workflow summary
+- Result summaries
+- Support for the `shush` hook
 
 ### NornFlowFailureStrategyProcessor
 
-Implements failure handling strategies during execution.
-
-```python
-from nornflow.builtins.processors import NornFlowFailureStrategyProcessor
-```
-
-**Strategies:**
-- `SKIP_FAILED`: Remove failed hosts from subsequent tasks (default)
-- `FAIL_FAST`: Stop all execution on first failure
-- `RUN_ALL`: Continue all tasks regardless of failures
+Internally used processor that implements failure handling strategies.
 
 ### NornFlowHookProcessor
 
-Orchestrator processor that delegates execution to registered hooks.
+Internally used processor that manages hook execution for tasks.
 
-```python
-from nornflow.builtins.processors import NornFlowHookProcessor
-```
+### NornFlowVariableProcessor
 
-**Purpose:**
-Manages all hook executions by extracting hook information from task context and calling appropriate hook methods at each lifecycle point. Automatically added to processor chain when hooks are present in workflow.
-
-**Key Features:**
-- Delegates to registered hooks at appropriate lifecycle points
-- Manages two-tier context system (workflow + task-specific)
-- Injects complete context into hooks before execution
-- Handles hook exception delegation to custom handlers
-
-**Constructor:**
-
-```python
-def __init__(self, workflow_context: dict[str, Any] | None = None)
-```
-
-**Parameters:**
-- `workflow_context`: Optional workflow-level context set during initialization
-
-**Properties:**
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `workflow_context` | `dict[str, Any]` | Workflow-level context (vars_manager, catalogs, etc.) |
-| `task_specific_context` | `dict[str, Any]` | Current task-specific context (task_model, hooks) |
-| `context` | `dict[str, Any]` | Combined workflow + task-specific context (read-only) |
-| `task_hooks` | `list[Hook]` | Active hooks for current task (read-only) |
-
-**Context Management:**
-
-The processor manages two types of context:
-
-1. **Workflow Context** (set once during initialization):
-   - `vars_manager`: Variable resolution system
-   - `nornir_manager`: Nornir operations manager  
-   - `tasks_catalog`: Available tasks
-   - `filters_catalog`: Available inventory filters
-   - `workflows_catalog`: Available workflows
-
-2. **Task-Specific Context** (set per task execution):
-   - `task_model`: Current TaskModel being executed
-   - hooks: List of Hook instances for this task
-
-The `context` property always returns merged dictionary of both contexts. Task-specific context is set at task start and cleared at task completion.
-
-**Lifecycle Methods:**
-
-All lifecycle methods use the `@hook_delegator` decorator which:
-- Extracts hooks from `task_specific_context`
-- Injects merged context into each hook's `_current_context`
-- Delegates to corresponding hook methods
-- Handles custom exception handlers defined by hooks
-
-#### `task_started(task: Task) -> None`
-Delegates to hooks' `task_started` methods.
-
-#### `task_completed(task: Task, result: AggregatedResult) -> None`
-Delegates to hooks' `task_completed` methods and clears task-specific context.
-
-#### `task_instance_started(task: Task, host: Host) -> None`
-Delegates to hooks' `task_instance_started` methods.
-
-#### `task_instance_completed(task: Task, host: Host, result: MultiResult) -> None`
-Delegates to hooks' `task_instance_completed` methods.
-
-#### `subtask_instance_started(task: Task, host: Host) -> None`
-Delegates to hooks' `subtask_instance_started` methods.
-
-#### `subtask_instance_completed(task: Task, host: Host, result: MultiResult) -> None`
-Delegates to hooks' `subtask_instance_completed` methods.
+Internally used processor that handles variable resolution and template rendering.
 
 <div align="center">
   

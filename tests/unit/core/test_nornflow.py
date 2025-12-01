@@ -27,7 +27,10 @@ class TestNornFlowBasicCreation:
         (tasks_dir / "task1.py").write_text(task_content)
 
         with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
-            settings = NornFlowSettings(local_tasks_dirs=[str(tasks_dir)])
+            settings = NornFlowSettings(
+                nornir_config_file="dummy_config.yaml",
+                local_tasks_dirs=[str(tasks_dir)]
+            )
             nornflow = NornFlow(nornflow_settings=settings)
 
             assert isinstance(nornflow, NornFlow)
@@ -35,10 +38,15 @@ class TestNornFlowBasicCreation:
             assert "set" in nornflow.tasks_catalog
 
     def test_create_with_invalid_kwargs(self):
-        """Test creating NornFlow with invalid kwargs."""
+        """Test creating NornFlow with invalid kwargs raises InitializationError."""
+        settings = NornFlowSettings(nornir_config_file="dummy_config.yaml")
+        
         with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
-            nornflow = NornFlow(invalid_kwarg="value")
-            assert isinstance(nornflow, NornFlow)
+            with pytest.raises(InitializationError, match="Invalid kwarg"):
+                NornFlow(
+                    nornflow_settings=settings,
+                    nornir_config_file="should_not_be_passed_here"
+                )
 
 
 class TestNornFlowValidation:
@@ -53,7 +61,10 @@ class TestNornFlowValidation:
         tasks_dir = tmp_path / "empty_tasks"
         tasks_dir.mkdir()
 
-        settings = NornFlowSettings(local_tasks_dirs=[str(tasks_dir)])
+        settings = NornFlowSettings(
+            nornir_config_file="dummy_config.yaml",
+            local_tasks_dirs=[str(tasks_dir)]
+        )
 
         with patch("nornflow.nornflow.builtin_tasks", {}), patch(
             "nornflow.nornflow.NornFlow._initialize_nornir"
@@ -63,10 +74,11 @@ class TestNornFlowValidation:
 
     def test_invalid_tasks_directory(self):
         """Test error when tasks directory doesn't exist raises ResourceError."""
-        with patch("nornflow.nornflow.NornFlow._initialize_nornir"), patch(
-            "nornflow.settings.load_file_to_dict", return_value={"nornir_config_file": "dummy.yaml"}
-        ):
-            settings = NornFlowSettings(local_tasks_dirs=["/nonexistent/dir"])
+        with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
+            settings = NornFlowSettings(
+                nornir_config_file="dummy_config.yaml",
+                local_tasks_dirs=["/nonexistent/dir"]
+            )
 
             with pytest.raises(InitializationError) as exc_info:
                 NornFlow(nornflow_settings=settings)
@@ -214,9 +226,9 @@ class TestNornFlowExecution:
         settings.vars = {}
 
         with patch("nornflow.nornflow.NornFlow._initialize_nornir"), patch.object(
-            NornFlow, "_with_processors", MagicMock()
+            NornFlow, "_apply_processors", MagicMock()
         ):
-            def dummy_exec(self, _dry):
+            def dummy_exec(self):
                 with self.nornir_manager:
                     pass
 
@@ -255,9 +267,9 @@ class TestNornFlowExecution:
         settings.vars = {}
 
         with patch("nornflow.nornflow.NornFlow._initialize_nornir"), patch.object(
-            NornFlow, "_with_processors", MagicMock()
+            NornFlow, "_apply_processors", MagicMock()
         ):
-            def dummy_exec(self, _dry):
+            def dummy_exec(self):
                 with self.nornir_manager:
                     raise Exception("Test error")
 
@@ -286,10 +298,12 @@ class TestNornFlowExecution:
         wf.name = "WF"
         wf.description = None
 
+        settings = NornFlowSettings(nornir_config_file="dummy_config.yaml")
+
         with patch("nornflow.nornflow.NornFlow._initialize_nornir"), patch.object(
             NornFlow, "_create_variable_manager", return_value=MagicMock()
         ):
-            nf = NornFlow(workflow=wf)
+            nf = NornFlow(workflow=wf, nornflow_settings=settings)
             mgr = MagicMock()
             mgr.__enter__.return_value = mgr
             nf._nornir_manager = mgr

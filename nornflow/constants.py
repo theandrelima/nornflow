@@ -58,16 +58,22 @@ NORNFLOW_SPECIAL_FILTER_KEYS = ["hosts", "groups"]
 # used to track the mandatory kwargs for a NornFlowSettings object
 NORNFLOW_SETTINGS_MANDATORY = ("nornir_config_file",)
 
-# used to track the optional kwargs for a NornFlowSettings object
+NORNFLOW_DEFAULT_TASKS_DIR = "tasks"
+NORNFLOW_DEFAULT_WORKFLOWS_DIR = "workflows"
+NORNFLOW_DEFAULT_FILTERS_DIR = "filters"
+NORNFLOW_DEFAULT_HOOKS_DIR = "hooks"
+NORNFLOW_DEFAULT_VARS_DIR = "vars"
+
 NORNFLOW_SETTINGS_OPTIONAL = {
-    "local_tasks_dirs": [],
-    "local_workflows_dirs": [],
-    "local_filters_dirs": [],
-    "local_hooks_dirs": [],
+    "local_tasks_dirs": [NORNFLOW_DEFAULT_TASKS_DIR],
+    "local_workflows_dirs": [NORNFLOW_DEFAULT_WORKFLOWS_DIR],
+    "local_filters_dirs": [NORNFLOW_DEFAULT_FILTERS_DIR],
+    "local_hooks_dirs": [NORNFLOW_DEFAULT_HOOKS_DIR],
     "imported_packages": [],
     "processors": [],
-    "vars_dir": "vars",
+    "vars_dir": NORNFLOW_DEFAULT_VARS_DIR,
     "failure_strategy": FailureStrategy.SKIP_FAILED,
+    "dry_run": False,
 }
 
 # Kwargs that cannot be passed to NornFlow.__init__; they must be set via the settings YAML file.

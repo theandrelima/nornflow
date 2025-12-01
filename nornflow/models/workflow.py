@@ -21,9 +21,9 @@ class WorkflowModel(NornFlowBaseModel):
     inventory_filters: HashableDict[str, Any] | None = None
     processors: tuple[HashableDict[str, Any]] | None = None
     tasks: OneToMany[TaskModel, ...]
-    dry_run: bool = False
+    dry_run: bool | None = None
     vars: HashableDict[str, Any] | None = None
-    failure_strategy: FailureStrategy = FailureStrategy.SKIP_FAILED
+    failure_strategy: FailureStrategy | None = None
 
     @classmethod
     def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "WorkflowModel":
