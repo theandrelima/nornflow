@@ -89,19 +89,18 @@ def setup_nornir_configs() -> None:
     """Set up the Nornir configuration directory."""
     typer.secho(f"NornFlow will be initialized at {NORNIR_DEFAULT_CONFIG_DIR.parent}", fg=typer.colors.GREEN)
 
-    dir_existed = NORNIR_DEFAULT_CONFIG_DIR.exists()
-    shutil.copytree(SAMPLE_NORNIR_CONFIGS_DIR, NORNIR_DEFAULT_CONFIG_DIR, dirs_exist_ok=True)
-
-    if dir_existed:
+    if NORNIR_DEFAULT_CONFIG_DIR.exists():
         typer.secho(
-            f"Merged sample Nornir configuration into existing directory: {NORNIR_DEFAULT_CONFIG_DIR}",
+            f"Nornir configuration directory already exists: {NORNIR_DEFAULT_CONFIG_DIR}",
             fg=typer.colors.YELLOW,
         )
-    else:
-        typer.secho(
-            f"Created Nornir configuration directory: {NORNIR_DEFAULT_CONFIG_DIR}",
-            fg=typer.colors.GREEN,
-        )
+        return
+
+    shutil.copytree(SAMPLE_NORNIR_CONFIGS_DIR, NORNIR_DEFAULT_CONFIG_DIR)
+    typer.secho(
+        f"Created Nornir configuration directory: {NORNIR_DEFAULT_CONFIG_DIR}",
+        fg=typer.colors.GREEN,
+    )
 
 
 def setup_nornflow_settings_file(settings: str) -> None:
@@ -143,16 +142,16 @@ def setup_builder(ctx: typer.Context) -> NornFlowBuilder:
 
 def create_settings_based_directories(nornflow: NornFlow) -> None:
     """Create any additional directories specified in settings that differ from defaults."""
-    for tasks_dir in nornflow.settings.local_tasks_dirs:
+    for tasks_dir in nornflow.settings.local_tasks:
         create_directory(Path(tasks_dir))
 
-    for workflows_dir in nornflow.settings.local_workflows_dirs:
+    for workflows_dir in nornflow.settings.local_workflows:
         create_directory(Path(workflows_dir))
 
-    for filters_dir in nornflow.settings.local_filters_dirs:
+    for filters_dir in nornflow.settings.local_filters:
         create_directory(Path(filters_dir))
 
-    for hooks_dir in nornflow.settings.local_hooks_dirs:
+    for hooks_dir in nornflow.settings.local_hooks:
         create_directory(Path(hooks_dir))
 
     vars_dir = Path(nornflow.settings.vars_dir)
@@ -161,14 +160,14 @@ def create_settings_based_directories(nornflow: NornFlow) -> None:
 
 def setup_sample_content(nornflow: NornFlow) -> None:
     """Set up sample tasks, workflows, and vars files."""
-    if nornflow.settings.local_tasks_dirs:
-        tasks_dir = Path(nornflow.settings.local_tasks_dirs[0])
+    if nornflow.settings.local_tasks:
+        tasks_dir = Path(nornflow.settings.local_tasks[0])
         copy_sample_files_to_dir(
             tasks_dir, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
         )
 
-    if nornflow.settings.local_workflows_dirs:
-        workflows_dir = Path(nornflow.settings.local_workflows_dirs[0])
+    if nornflow.settings.local_workflows:
+        workflows_dir = Path(nornflow.settings.local_workflows[0])
         copy_sample_files_to_dir(
             workflows_dir, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
         )
