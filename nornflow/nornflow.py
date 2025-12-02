@@ -173,7 +173,7 @@ class NornFlow:
 
     def _initialize_hooks(self) -> None:
         """Initialize hooks by importing modules from configured directories."""
-        for dir_path in self.settings.local_hooks_dirs:
+        for dir_path in self.settings.local_hooks:
             dir_path_obj = Path(dir_path)
             if dir_path_obj.exists():
                 import_modules_recursively(dir_path_obj)
@@ -670,14 +670,14 @@ class NornFlow:
 
         Tasks are loaded in two phases:
         1. Built-in tasks from nornflow.builtins.tasks module
-        2. User-defined tasks from local_tasks_dirs
+        2. User-defined tasks from local_tasks
         """
         self._tasks_catalog = self._load_catalog(
             CallableCatalog,
             "tasks",
             builtin_module=builtin_tasks,
             predicate=is_nornir_task,
-            directories=self.settings.local_tasks_dirs,
+            directories=self.settings.local_tasks,
             check_empty=True,
         )
 
@@ -687,7 +687,7 @@ class NornFlow:
 
         Filters are loaded in two phases:
         1. Built-in filters from nornflow.builtins.filters module
-        2. User-defined filters from configured local_filters_dirs
+        2. User-defined filters from configured local_filters
         """
         self._filters_catalog = self._load_catalog(
             CallableCatalog,
@@ -695,7 +695,7 @@ class NornFlow:
             builtin_module=builtin_filters,
             predicate=is_nornir_filter,
             transform_item=process_filter,
-            directories=self.settings.local_filters_dirs,
+            directories=self.settings.local_filters,
         )
 
     def _load_workflows_catalog(self) -> None:
@@ -709,7 +709,7 @@ class NornFlow:
             FileCatalog,
             "workflows",
             predicate=is_workflow_file,
-            directories=self.settings.local_workflows_dirs,
+            directories=self.settings.local_workflows,
             recursive=True,
         )
 
@@ -872,7 +872,7 @@ class NornFlow:
             cli_vars=self.vars,
             inline_workflow_vars=dict(self.workflow.vars) if self.workflow.vars else {},
             workflow_path=self.workflow_path,
-            workflow_roots=self.settings.local_workflows_dirs,
+            workflow_roots=self.settings.local_workflows,
         )
 
     def _apply_processors(self) -> None:
