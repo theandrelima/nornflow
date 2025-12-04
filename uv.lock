@@ -17,6 +17,20 @@ wheels = [
 ]
 
 [[package]]
+name = "anyio"
+version = "4.12.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
+    { name = "idna" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/16/ce/8a777047513153587e5434fd752e89334ac33e379aa3497db860eeb60377/anyio-4.12.0.tar.gz", hash = "sha256:73c693b567b0c55130c104d0b43a9baf3aa6a31fc6110116509f27bf75e21ec0", size = 228266, upload-time = "2025-11-28T23:37:38.911Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7f/9c/36c5c37947ebfb8c7f22e0eb6e4d188ee2d53aa3880f3f2744fb894f0cb1/anyio-4.12.0-py3-none-any.whl", hash = "sha256:dad2376a628f98eeca4881fc56cd06affd18f659b17a747d3ff0307ced94b1bb", size = 113362, upload-time = "2025-11-28T23:36:57.897Z" },
+]
+
+[[package]]
 name = "bcrypt"
 version = "5.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -526,6 +540,44 @@ wheels = [
 ]
 
 [[package]]
+name = "h11"
+version = "0.16.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/ee/02a2c011bdab74c6fb3c75474d40b3052059d95df7e73351460c8588d963/h11-0.16.0.tar.gz", hash = "sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1", size = 101250, upload-time = "2025-04-24T03:35:25.427Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl", hash = "sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86", size = 37515, upload-time = "2025-04-24T03:35:24.344Z" },
+]
+
+[[package]]
+name = "httpcore"
+version = "1.0.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "certifi" },
+    { name = "h11" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/06/94/82699a10bca87a5556c9c59b5963f2d039dbd239f25bc2a63907a05a14cb/httpcore-1.0.9.tar.gz", hash = "sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8", size = 85484, upload-time = "2025-04-24T22:06:22.219Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl", hash = "sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55", size = 78784, upload-time = "2025-04-24T22:06:20.566Z" },
+]
+
+[[package]]
+name = "httpx"
+version = "0.27.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "certifi" },
+    { name = "httpcore" },
+    { name = "idna" },
+    { name = "sniffio" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5c/2d/3da5bdf4408b8b2800061c339f240c1802f2e82d55e50bd39c5a881f47f0/httpx-0.27.0.tar.gz", hash = "sha256:a0cb88a46f32dc874e04ee956e4c2764aba2aa228f650b06788ba6bda2962ab5", size = 126413, upload-time = "2024-02-21T13:07:52.434Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/41/7b/ddacf6dcebb42466abd03f368782142baa82e08fc0c1f8eaa05b4bae87d5/httpx-0.27.0-py3-none-any.whl", hash = "sha256:71d5465162c13681bff01ad59b2cc68dd838ea1f10e51574bac27103f00c91a5", size = 75590, upload-time = "2024-02-21T13:07:50.455Z" },
+]
+
+[[package]]
 name = "idna"
 version = "3.11"
 source = { registry = "https://pypi.org/simple" }
@@ -980,6 +1032,7 @@ dev = [
 ]
 manual-tests = [
     { name = "nornir-napalm" },
+    { name = "nornir-nautobot" },
     { name = "nornir-netbox" },
     { name = "nornir-netmiko" },
 ]
@@ -991,6 +1044,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15.0" },
     { name = "nornir", specifier = ">=3.5.0" },
     { name = "nornir-napalm", marker = "extra == 'manual-tests'", specifier = ">=0.5.0" },
+    { name = "nornir-nautobot", marker = "extra == 'manual-tests'", specifier = ">=4.0.0" },
     { name = "nornir-netbox", marker = "extra == 'manual-tests'", specifier = ">=0.3.0" },
     { name = "nornir-netmiko", marker = "extra == 'manual-tests'", specifier = ">=1.0.1" },
     { name = "nornir-utils", specifier = ">=0.2.0" },
@@ -1033,6 +1087,29 @@ wheels = [
 ]
 
 [[package]]
+name = "nornir-nautobot"
+version = "4.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "napalm" },
+    { name = "netmiko" },
+    { name = "netutils" },
+    { name = "nornir" },
+    { name = "nornir-napalm" },
+    { name = "nornir-netmiko" },
+    { name = "nornir-scrapli" },
+    { name = "nornir-utils" },
+    { name = "pynautobot" },
+    { name = "requests" },
+    { name = "scrapli" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b8/7f/e414a4197557395d92069cd59decb64cc194432b7aa759c66c249dd959a3/nornir_nautobot-4.0.0.tar.gz", hash = "sha256:c90a5999b2278da2a550bc5c4ad436eb2beaf7a36bad36f90539a0e4b0d39031", size = 26133, upload-time = "2025-11-14T18:43:09.007Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/61/d8/d827a4b120f196331ff4f9fc946e1faff31a07d839aa1d91d55fcf2e2e8f/nornir_nautobot-4.0.0-py3-none-any.whl", hash = "sha256:cc542b75a6afde232b2af7eed987504c6abf6cbdcc6e74acee9d8b2a60b40e87", size = 34487, upload-time = "2025-11-14T18:43:07.626Z" },
+]
+
+[[package]]
 name = "nornir-netbox"
 version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1055,6 +1132,25 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/94/00/ddd0b87d3493f7c853798d86f3b37fbb7decc4b5b30bd473e0f4565bc96d/nornir_netmiko-1.0.1.tar.gz", hash = "sha256:498546df001e0e499f10c5646d1356e361ccbb165b1335b89cfe8f19765e24d7", size = 7838, upload-time = "2023-12-07T18:18:34.364Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/13/16/63764c64087f14b2cd66f205da8570dfc13887ec43aa668de0c55a3ff92b/nornir_netmiko-1.0.1-py3-none-any.whl", hash = "sha256:eaee2944ad386b40c0719e8ac393ac63d531f44fb9a07d660bae7de430f12834", size = 11518, upload-time = "2023-12-07T18:18:33.369Z" },
+]
+
+[[package]]
+name = "nornir-scrapli"
+version = "2025.1.30"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nornir" },
+    { name = "nornir-utils" },
+    { name = "ntc-templates" },
+    { name = "scrapli" },
+    { name = "scrapli-cfg" },
+    { name = "scrapli-community" },
+    { name = "scrapli-netconf" },
+    { name = "textfsm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a9/90/39fb7d17ff695c8fd4023f06e004ec76c344ebdc6c4be362423f33c06c7c/nornir_scrapli-2025.1.30.tar.gz", hash = "sha256:b36bbfcf3678e695d54c0df673f9cf662dbd737d9e13170893cd4ed833c7b410", size = 19184, upload-time = "2025-01-31T01:34:56.65Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/11/fb2e8f73b205212c6b4abfbdb66d90d500971582eef2e5afaf295007c387/nornir_scrapli-2025.1.30-py3-none-any.whl", hash = "sha256:be178b13257ece024a01c97c798973622138bc780fa607fe8bed70d0dbf2914a", size = 33234, upload-time = "2025-01-31T01:34:55.451Z" },
 ]
 
 [[package]]
@@ -1358,6 +1454,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pynautobot"
+version = "3.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "requests" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b6/a8/2f9f9d652f35e8f0f09f35fb5d204659515fe2a4385f8c30eecebb5569dc/pynautobot-3.0.0.tar.gz", hash = "sha256:cc0b5ccfd9edc4f7fa9777845ce895bf0f6a6e41610a8bc05c2459463351b0b7", size = 33587, upload-time = "2025-11-14T16:55:18.862Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5b/cd/8c1e495fbe21298dc484fc4a3c294388fda55d9467579885e170895411dc/pynautobot-3.0.0-py3-none-any.whl", hash = "sha256:b24c636517dfdbebdc258d283a99af079e0c278e69d705767db3e8455413590f", size = 41319, upload-time = "2025-11-14T16:55:17.874Z" },
+]
+
+[[package]]
 name = "pyparsing"
 version = "3.2.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1622,6 +1732,52 @@ wheels = [
 ]
 
 [[package]]
+name = "scrapli"
+version = "2025.1.30"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/b0/72fd21e1abdfc0e36f07c56c7aad339bf554771784464980d70249fe0f64/scrapli-2025.1.30.tar.gz", hash = "sha256:3426a38b5dd6a4c67749c30f14102c04a4a43d3da17710b46fec7e53409b340e", size = 104403, upload-time = "2025-01-31T00:47:02.257Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/2d/b7dc63b1ff7d60908843fcee2a8897735a06f18d04654baf83f95a4b1a2f/scrapli-2025.1.30-py3-none-any.whl", hash = "sha256:f71ca4e96b56ad245f34269dc3eedf168aca54eb7b1ba96ad0c965c2b76f807e", size = 145741, upload-time = "2025-01-31T00:47:01.002Z" },
+]
+
+[[package]]
+name = "scrapli-cfg"
+version = "2025.1.30"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "scrapli" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e4/ba/4e475aee50378af7975cd940b21d727040e14175cb065e8b10b65b0b6240/scrapli_cfg-2025.1.30.tar.gz", hash = "sha256:7ed3b5743116d35d7d65f86d06dd7e74fcc509e1c8df6ddebffdeb7cebed13e8", size = 37327, upload-time = "2025-01-31T00:51:01.032Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/fd/33837093aa3cbed2939ad662252f47c37c49787189806ea100c83bca6e36/scrapli_cfg-2025.1.30-py3-none-any.whl", hash = "sha256:aaf0c5f52ed06ba0ffefa860ab947c96b663c98a96f38b90eac567d46906fdf4", size = 61083, upload-time = "2025-01-31T00:50:58.475Z" },
+]
+
+[[package]]
+name = "scrapli-community"
+version = "2025.1.30"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "scrapli" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/92/29/b5df286b9cb143f1e95b7824a8ba1ebb0fc7606b96a0a50a62fc50cf3858/scrapli_community-2025.1.30.tar.gz", hash = "sha256:5357d1e471879203f648948adf114d8155a69ca1242060504d9b92f54f79d119", size = 33083, upload-time = "2025-01-31T00:50:37.445Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/67/c0c0d088a786fcaa3e0584a765f1da00b0560dadc7f0ea8c8755b7d175f3/scrapli_community-2025.1.30-py3-none-any.whl", hash = "sha256:dc4d02193ec3bb14cec9e04ab0d48fc59d575e1ccedac92fb4b8bbd6f3b6726f", size = 93093, upload-time = "2025-01-31T00:50:36.099Z" },
+]
+
+[[package]]
+name = "scrapli-netconf"
+version = "2025.1.30"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "lxml" },
+    { name = "scrapli" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/71/7a/11f5881ae1aa8fe3f102d3c6e6a16e4b3db7c2b9c9558422227f9a2131d4/scrapli_netconf-2025.1.30.tar.gz", hash = "sha256:06813455dda9bd27d99734a3f689b4259ccab625141fc41126495ccad705d248", size = 30362, upload-time = "2025-01-31T00:50:02.72Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/a9/3d722619901cca8ba5cbe0a66ed024292d17e155da3b26260abe227fcbe3/scrapli_netconf-2025.1.30-py3-none-any.whl", hash = "sha256:009041515d9d75d6e3748730bc920b350eb6ab86c6890e44495ca00de3e86cd9", size = 37133, upload-time = "2025-01-31T00:50:01.042Z" },
+]
+
+[[package]]
 name = "setuptools"
 version = "80.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1646,6 +1802,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "sniffio"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372, upload-time = "2024-02-25T23:20:04.057Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235, upload-time = "2024-02-25T23:20:01.196Z" },
 ]
 
 [[package]]
