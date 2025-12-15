@@ -24,7 +24,7 @@ def test_settings_load_successful_load(tmp_path):
     settings_file = tmp_path / "test_settings.yaml"
     settings_data = {
         "nornir_config_file": "config.yaml",
-        "local_tasks_dirs": ["tasks"],
+        "local_tasks": ["tasks"],
         "vars_dir": "vars",
     }
     settings_file.write_text(yaml.dump(settings_data))
@@ -32,7 +32,7 @@ def test_settings_load_successful_load(tmp_path):
     settings = NornFlowSettings.load(str(settings_file))
 
     assert settings.nornir_config_file == str(tmp_path / "config.yaml")
-    assert settings.local_tasks_dirs == [str(tmp_path / "tasks")]
+    assert settings.local_tasks == [str(tmp_path / "tasks")]
     assert settings.vars_dir == str(tmp_path / "vars")
 
 
@@ -55,7 +55,7 @@ def test_settings_load_missing_required_field(tmp_path):
     """Test error when required field is missing."""
     settings_file = tmp_path / "incomplete_settings.yaml"
     settings_data = {
-        "local_tasks_dirs": ["tasks"],
+        "local_tasks": ["tasks"],
     }
     settings_file.write_text(yaml.dump(settings_data))
 
@@ -137,10 +137,10 @@ def test_relative_paths_resolved_via_load(tmp_path):
     settings_file = tmp_path / "test_settings.yaml"
     settings_data = {
         "nornir_config_file": "config.yaml",
-        "local_tasks_dirs": ["tasks", "nested/tasks"],
-        "local_workflows_dirs": ["workflows"],
-        "local_filters_dirs": ["filters"],
-        "local_hooks_dirs": ["hooks"],
+        "local_tasks": ["tasks", "nested/tasks"],
+        "local_workflows": ["workflows"],
+        "local_filters": ["filters"],
+        "local_hooks": ["hooks"],
         "vars_dir": "vars",
     }
     settings_file.write_text(yaml.dump(settings_data))
@@ -148,13 +148,13 @@ def test_relative_paths_resolved_via_load(tmp_path):
     settings = NornFlowSettings.load(str(settings_file))
 
     assert settings.nornir_config_file == str(tmp_path / "config.yaml")
-    assert settings.local_tasks_dirs == [
+    assert settings.local_tasks == [
         str(tmp_path / "tasks"),
         str(tmp_path / "nested/tasks"),
     ]
-    assert settings.local_workflows_dirs == [str(tmp_path / "workflows")]
-    assert settings.local_filters_dirs == [str(tmp_path / "filters")]
-    assert settings.local_hooks_dirs == [str(tmp_path / "hooks")]
+    assert settings.local_workflows == [str(tmp_path / "workflows")]
+    assert settings.local_filters == [str(tmp_path / "filters")]
+    assert settings.local_hooks == [str(tmp_path / "hooks")]
     assert settings.vars_dir == str(tmp_path / "vars")
 
 
@@ -162,13 +162,13 @@ def test_paths_remain_unresolved_with_direct_instantiation():
     """Direct instantiation leaves incoming paths untouched."""
     settings_dict = make_valid_settings_dict()
     settings_dict["nornir_config_file"] = "config.yaml"
-    settings_dict["local_tasks_dirs"] = ["tasks"]
+    settings_dict["local_tasks"] = ["tasks"]
     settings_dict["vars_dir"] = "vars"
 
     settings = NornFlowSettings(**settings_dict)
 
     assert settings.nornir_config_file == "config.yaml"
-    assert settings.local_tasks_dirs == ["tasks"]
+    assert settings.local_tasks == ["tasks"]
     assert settings.vars_dir == "vars"
 
 
@@ -178,7 +178,7 @@ def test_absolute_paths_remain_unchanged(tmp_path):
     abs_tasks_dir = "/absolute/path/to/tasks"
     settings_data = {
         "nornir_config_file": "/absolute/config.yaml",
-        "local_tasks_dirs": [abs_tasks_dir],
+        "local_tasks": [abs_tasks_dir],
         "vars_dir": "/absolute/vars",
     }
     settings_file.write_text(yaml.dump(settings_data))
@@ -186,7 +186,7 @@ def test_absolute_paths_remain_unchanged(tmp_path):
     settings = NornFlowSettings.load(str(settings_file))
 
     assert settings.nornir_config_file == "/absolute/config.yaml"
-    assert settings.local_tasks_dirs == [abs_tasks_dir]
+    assert settings.local_tasks == [abs_tasks_dir]
     assert settings.vars_dir == "/absolute/vars"
 
 
@@ -208,7 +208,7 @@ def test_base_dir_property_set_when_loaded(tmp_path):
     settings_file = tmp_path / "test_settings.yaml"
     settings_data = {
         "nornir_config_file": "config.yaml",
-        "local_tasks_dirs": ["tasks"],
+        "local_tasks": ["tasks"],
         "vars_dir": "vars",
     }
     settings_file.write_text(yaml.dump(settings_data))

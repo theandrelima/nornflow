@@ -64,17 +64,23 @@ class TestNornirManager:
         # Create test kwargs with some NornFlow settings
         kwargs = {
             "runner": "threaded",
-            "local_workflows_dirs": ["/tmp/workflows"],
             "another_setting": "value",
         }
+        
+        # Add all optional NornFlow settings to test they're removed
+        for param in NORNFLOW_SETTINGS_OPTIONAL:
+            kwargs[param] = f"value_{param}"
 
         # Call the method
         manager._remove_optional_nornflow_settings_from_kwargs(kwargs)
 
         # Verify NornFlow settings were removed
         assert "runner" in kwargs
-        assert "local_workflows_dirs" not in kwargs
         assert "another_setting" in kwargs
+        
+        # Verify all NornFlow optional settings were removed
+        for param in NORNFLOW_SETTINGS_OPTIONAL:
+            assert param not in kwargs
 
     def test_apply_filters_with_valid_filters(self, mock_nornir, mock_init_nornir):
         """Test applying valid filters."""
