@@ -158,40 +158,71 @@ def setup_sample_content(nornflow: NornFlow) -> None:
     if nornflow.settings.local_tasks:
         tasks_dir = Path(nornflow.settings.local_tasks[0])
         copy_sample_files_to_dir(
-            tasks_dir, [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE], "Created sample tasks in directory: {}"
+            tasks_dir,
+            [HELLO_WORLD_TASK_FILE, GREET_USER_TASK_FILE],
+            created_msg="Created sample tasks in directory: {}",
+            skipped_msg="Sample tasks already exist in directory: {}",
         )
 
     if nornflow.settings.local_workflows:
         workflows_dir = Path(nornflow.settings.local_workflows[0])
         copy_sample_files_to_dir(
-            workflows_dir, [SAMPLE_WORKFLOW_FILE], "Created a sample 'hello_world' workflow in directory: {}"
+            workflows_dir,
+            [SAMPLE_WORKFLOW_FILE],
+            created_msg="Created sample 'hello_world' workflow in directory: {}",
+            skipped_msg="Sample workflow already exists in directory: {}",
         )
 
     vars_dir = Path(nornflow.settings.vars_dir)
     copy_sample_files_to_dir(
-        vars_dir, [SAMPLE_VARS_FILE], "Created a sample 'defaults.yaml' in vars directory: {}"
+        vars_dir,
+        [SAMPLE_VARS_FILE],
+        created_msg="Created sample 'defaults.yaml' in vars directory: {}",
+        skipped_msg="Sample 'defaults.yaml' already exists in vars directory: {}",
     )
 
 
-def copy_sample_files_to_dir(dir_path: Path, sample_files: list[Path], sample_message: str) -> None:
-    """Copy sample files to an existing directory."""
+def copy_sample_files_to_dir(
+    dir_path: Path,
+    sample_files: list[Path],
+    created_msg: str,
+    skipped_msg: str,
+) -> None:
+    """Copy sample files to an existing directory if they don't exist.
+
+    Args:
+        dir_path: Target directory for the sample files.
+        sample_files: List of sample file paths to copy.
+        created_msg: Message to display when files are created (use {} for dir_path).
+        skipped_msg: Message to display when files already exist (use {} for dir_path).
+    """
+    files_created = False
     for sample_file in sample_files:
         target_file = dir_path / sample_file.name
         if not target_file.exists():
             shutil.copy(sample_file, target_file)
-    typer.secho(sample_message.format(dir_path), fg=typer.colors.GREEN)
+            files_created = True
+
+    if files_created:
+        typer.secho(created_msg.format(dir_path), fg=typer.colors.GREEN)
+    else:
+        typer.secho(skipped_msg.format(dir_path), fg=typer.colors.YELLOW)
 
 
 def create_directory(dir_path: Path) -> bool:
-    """
-    Create a directory if it doesn't exist.
+    """Create a directory if it doesn't exist.
+
+    Args:
+        dir_path: Path to the directory to create.
 
     Returns:
         True if directory was created, False if it already existed.
     """
     if dir_path.exists():
+        typer.secho(f"Directory already exists: {dir_path}", fg=typer.colors.YELLOW)
         return False
     dir_path.mkdir(parents=True, exist_ok=True)
+    typer.secho(f"Created directory: {dir_path}", fg=typer.colors.GREEN)
     return True
 
 
