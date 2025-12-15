@@ -116,7 +116,6 @@ class NornFlow:
         try:
             self._validate_init_kwargs(kwargs)
             self._initialize_settings(nornflow_settings, kwargs)
-            self._initialize_nornir()
             self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, processors)
             self._initialize_hooks()
             self._initialize_catalogs()
@@ -156,6 +155,8 @@ class NornFlow:
         self._processors = processors
         self._workflow = None
         self._workflow_path = None
+        self._nornir_configs = None
+        self._nornir_manager = None
         # System processors are initialized lazily in their property getters
         # when needed during workflow execution, not during __init__
         self._var_processor = None
@@ -1023,6 +1024,7 @@ class NornFlow:
                 "No workflow configured. Set a workflow before calling run().", component="NornFlow"
             )
 
+        self._initialize_nornir()
         self._check_tasks()
         self._apply_filters()
         self._apply_processors()
