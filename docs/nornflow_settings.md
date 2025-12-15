@@ -6,10 +6,10 @@
 - [Mandatory Settings](#mandatory-settings)
   - [`nornir_config_file`](#nornir_config_file)
 - [Optional Settings](#optional-settings)
-  - [`local_tasks_dirs`](#local_tasks_dirs)
-  - [`local_workflows_dirs`](#local_workflows_dirs)
-  - [`local_filters_dirs`](#local_filters_dirs)
-  - [`local_hooks_dirs`](#local_hooks_dirs)
+  - [`local_tasks`](#local_tasks)
+  - [`local_workflows`](#local_workflows)
+  - [`local_filters`](#local_filters)
+  - [`local_hooks`](#local_hooks)
   - [`vars_dir`](#vars_dir)
   - [`dry_run`](#dry_run)
   - [`failure_strategy`](#failure_strategy)
@@ -39,7 +39,7 @@ export NORNFLOW_SETTINGS_NORNIR_CONFIG_FILE="configs/nornir-prod.yaml"
 export NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"
 
 # Override list values (JSON format)
-export NORNFLOW_SETTINGS_LOCAL_TASKS_DIRS='["tasks", "custom_tasks"]'
+export NORNFLOW_SETTINGS_LOCAL_TASKS='["tasks", "custom_tasks"]'
 
 # Override dry run
 export NORNFLOW_SETTINGS_DRY_RUN=true
@@ -77,7 +77,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 
 ## Optional Settings
 
-### `local_tasks_dirs`
+### `local_tasks`
 
 - **Description**: List of paths to directories containing the Nornir tasks to be included in NornFlow's task catalog. The search is recursive, meaning that all subdirectories will be searched as well. Be careful with this. Both absolute and relative paths are supported.
 - **Type**: list[str]
@@ -88,13 +88,14 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   - Absolute paths are used as-is
 - **Example**:
   ```yaml
-  local_tasks_dirs:
+  local_tasks:
     - "tasks"                    # Relative to settings file
     - "/abs/path/to/tasks"       # Absolute path
     - "../shared_tasks"          # Relative to settings file
   ```
+- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_TASKS`
 
-### `local_workflows_dirs`
+### `local_workflows`
 
 - **Description**: List of paths to directories containing the Nornir workflows to be included in NornFlow's workflow catalog. The search is recursive, meaning that all subdirectories will be searched as well. Be aware that all files with a .yaml or .yml extension will be considered workflows. Both absolute and relative paths are supported.
 - **Type**: list[str]
@@ -105,12 +106,13 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   - Absolute paths are used as-is
 - **Example**:
   ```yaml
-  local_workflows_dirs:
+  local_workflows:
     - "workflows"
     - "/shared/workflows"
   ```
+- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_WORKFLOWS`
 
-### `local_filters_dirs`
+### `local_filters`
 
 - **Description**: List of paths to directories containing custom filter functions to be included in NornFlow's filter catalog. These filter functions can be referenced by name in workflow YAML files to perform advanced inventory filtering. The search is recursive, meaning that all subdirectories will be searched as well. Both absolute and relative paths are supported.
 - **Type**: list[str]
@@ -121,27 +123,29 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   - Absolute paths are used as-is
 - **Example**:
   ```yaml
-  local_filters_dirs:
+  local_filters:
     - "filters"
     - "../custom_filters"
   ```
+- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_FILTERS`
 - **Note**: For details on how these filters can be used in workflows, see the Inventory Filtering section in the Workflows documentation.
 
-### `local_hooks_dirs`
+### `local_hooks`
 
 - **Description**: List of paths to directories containing custom hook implementations to be included in NornFlow's hook registry. Hooks extend task behavior without modifying task code. The search is recursive, meaning that all subdirectories will be searched as well. Both absolute and relative paths are supported.
 - **Type**: list[str]
-- **Default**: []
+- **Default**: ["hooks"]
 - **Path Resolution**: 
   - When loaded through `NornFlowSettings.load`, relative paths resolve against the settings file directory
   - Direct instantiation leaves relative paths untouched, so they resolve against the runtime working directory
   - Absolute paths are used as-is
 - **Example**:
   ```yaml
-  local_hooks_dirs:
+  local_hooks:
     - "hooks"
     - "/shared/custom_hooks"
   ```
+- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_HOOKS`
 - **Note**: For details on creating custom hooks, see the Hooks Guide documentation.
 
 ### `vars_dir`

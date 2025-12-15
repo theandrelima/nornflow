@@ -252,15 +252,15 @@ nornflow run --settings nornflow-dev.yaml test_workflow.yaml
 # nornflow-dev.yaml
 nornir_config_file: "configs/nornir-dev.yaml"
 dry_run: true
-local_workflows_dirs: ["workflows", "dev_workflows"]
+local_workflows: ["workflows", "dev_workflows"]
 
 # nornflow-prod.yaml
 nornir_config_file: "configs/nornir-prod.yaml"
 dry_run: false
-local_workflows_dirs: ["workflows"]
-local_tasks_dirs: ["tasks"]
-local_filters_dirs: ["filters"]
-local_hooks_dirs: ["hooks"]
+local_workflows: ["workflows"]
+local_tasks: ["tasks"]
+local_filters: ["filters"]
+local_hooks: ["hooks"]
 ```
 
 ## Catalogs
@@ -272,12 +272,12 @@ NornFlow automatically discovers and builds catalogs of available tasks, workflo
 The task catalog contains all available Nornir tasks that can be used in workflows. Tasks are discovered from:
 
 1. **Built-in tasks** - Always available (e.g., `echo` & `set`)
-2. **Local directories** - Specified in `local_tasks_dirs` setting
+2. **Local directories** - Specified in `local_tasks` setting
 3. **Imported packages** - *(Planned feature, not yet implemented)*
 
 ```yaml
 # nornflow.yaml
-local_tasks_dirs:
+local_tasks:
   - "tasks"
   - "/shared/network_tasks"
 ```
@@ -296,11 +296,11 @@ def my_task(task: Task, **kwargs) -> Result:
 
 ### Workflow Catalog
 
-The workflow catalog contains all discovered workflow YAML files. Workflows are discovered from directories specified in `local_workflows_dirs`:
+The workflow catalog contains all discovered workflow YAML files. Workflows are discovered from directories specified in `local_workflows`:
 
 ```yaml
 # nornflow.yaml
-local_workflows_dirs:
+local_workflows:
   - "workflows"
   - "../shared_workflows"
 ```
@@ -312,11 +312,11 @@ All files with `.yaml` or `.yml` extensions in these directories (including subd
 The filter catalog contains inventory filter functions that can be used in workflow definitions. Filters are discovered from:
 
 1. **Built-in filters** - currently `hosts` and `groups` filters
-2. **Local directories** - Specified in `local_filters_dirs` setting
+2. **Local directories** - Specified in `local_filters` setting
 
 ```yaml
 # nornflow.yaml
-local_filters_dirs:
+local_filters:
   - "filters"
   - "../custom_filters"
 ```
@@ -373,7 +373,7 @@ When using multiple workflow directories:
 
 ```yaml
 # nornflow.yaml
-local_workflows_dirs:
+local_workflows:
   - "core_workflows"
   - "customer_workflows"
 ```
@@ -463,7 +463,7 @@ NornFlow provides powerful and flexible inventory filtering capabilities that de
 - **groups** - List of group names to include (matches any in list)
 
 #### 2. Custom Filter Functions
-NornFlow can use custom filter functions defined by your `local_filters_dirs` setting (configured in nornflow.yaml). These functions provide advanced filtering logic beyond simple attribute matching.
+NornFlow can use custom filter functions defined by your `local_filters` setting (configured in nornflow.yaml). These functions provide advanced filtering logic beyond simple attribute matching.
 
 #### 3. Direct Attribute Filtering
 As it is the case with Nornir, any host attribute can be used as a filter key for simple equality matching:
@@ -514,7 +514,7 @@ inventory_filters:
 ### Creating Custom Filters
 
 Custom filters MUST:
-1. Be defined in python modules within directories specified by `local_filters_dirs`
+1. Be defined in python modules within directories specified by `local_filters`
 2. Contain a `host` keyword as the first parameter
 3. Return a boolean value
 4. Include proper type annotations (for automatic discovery)

@@ -195,10 +195,10 @@ Load settings from a YAML file with automatic resolution and overrides. This cal
 | Property | Type | Description |
 |----------|------|-------------|
 | `nornir_config_file` | `str` | Path to Nornir configuration file (required) |
-| `local_tasks_dirs` | `list[str]` | Directories containing custom tasks |
-| `local_workflows_dirs` | `list[str]` | Directories containing workflow files |
-| `local_filters_dirs` | `list[str]` | Directories containing custom filters |
-| `local_hooks_dirs` | `list[str]` | Directories containing custom hooks |
+| `local_tasks` | `list[str]` | Directories containing custom tasks |
+| `local_workflows` | `list[str]` | Directories containing workflow files |
+| `local_filters` | `list[str]` | Directories containing custom filters |
+| `local_hooks` | `list[str]` | Directories containing custom hooks |
 | `processors` | `list[dict[str, Any]]` | Nornir processor configurations |
 | `vars_dir` | `str` | Directory for variable files |
 | `failure_strategy` | `FailureStrategy` | Task failure handling strategy |
