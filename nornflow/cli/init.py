@@ -6,20 +6,14 @@ import typer
 
 from nornflow import NornFlow, NornFlowBuilder
 from nornflow.cli.constants import (
-    FILTERS_DIR,
     GREET_USER_TASK_FILE,
     HELLO_WORLD_TASK_FILE,
-    HOOKS_DIR,
     INIT_BANNER,
     NORNFLOW_SETTINGS,
-    NORNIR_DEFAULT_CONFIG_DIR,
     SAMPLE_NORNFLOW_FILE,
     SAMPLE_NORNIR_CONFIGS_DIR,
     SAMPLE_VARS_FILE,
     SAMPLE_WORKFLOW_FILE,
-    TASKS_DIR,
-    VARS_DIR,
-    WORKFLOWS_DIR,
 )
 from nornflow.cli.exceptions import CLIInitError
 from nornflow.cli.show import show_catalog, show_nornflow_settings
@@ -39,27 +33,24 @@ def init(ctx: typer.Context) -> None:
         if not get_user_confirmation():
             return
 
-        # Step 1: Copy sample nornir configs directory first
-        setup_nornir_configs()
-
-        # Step 2: Copy sample nornflow.yaml settings file
+        # Step 1: Copy sample nornflow.yaml settings file (must happen first)
         settings_file = ctx.obj.get("settings", "")
         setup_nornflow_settings_file(settings_file)
 
-        # Step 3: Create default directories
-        create_default_directories()
-
-        # Step 4: Build NornFlow from the real settings file that now exists
+        # Step 2: Build NornFlow from the settings file that now exists
         builder = setup_builder(ctx)
         nornflow = builder.build()
 
-        # Step 5: Create any additional directories specified in settings
-        create_settings_based_directories(nornflow)
+        # Step 3: Create nornir configs directory (derived from settings)
+        setup_nornir_configs(nornflow)
 
-        # Step 6: Copy sample content to directories
+        # Step 4: Create all directories from settings
+        create_directories_from_settings(nornflow)
+
+        # Step 5: Copy sample content to directories
         setup_sample_content(nornflow)
 
-        # Step 7: Show info using the real NornFlow object
+        # Step 6: Show info using the real NornFlow object
         show_info_post_init(nornflow)
 
     except NornFlowError as e:
@@ -85,48 +76,24 @@ def get_user_confirmation() -> bool:
     return True
 
 
-def setup_nornir_configs() -> None:
-    """Set up the Nornir configuration directory."""
-    typer.secho(f"NornFlow will be initialized at {NORNIR_DEFAULT_CONFIG_DIR.parent}", fg=typer.colors.GREEN)
+def setup_nornflow_settings_file(settings: str) -> None:
+    """Set up the NornFlow settings file."""
+    if os.getenv("NORNFLOW_SETTINGS"):
+        return
 
-    if NORNIR_DEFAULT_CONFIG_DIR.exists():
+    target_file = Path(settings) if settings else NORNFLOW_SETTINGS
+    if target_file.exists():
         typer.secho(
-            f"Nornir configuration directory already exists: {NORNIR_DEFAULT_CONFIG_DIR}",
+            f"NornFlow settings file already exists: {target_file}",
             fg=typer.colors.YELLOW,
         )
         return
 
-    shutil.copytree(SAMPLE_NORNIR_CONFIGS_DIR, NORNIR_DEFAULT_CONFIG_DIR)
+    shutil.copy(SAMPLE_NORNFLOW_FILE, target_file)
     typer.secho(
-        f"Created Nornir configuration directory: {NORNIR_DEFAULT_CONFIG_DIR}",
+        f"Created NornFlow settings file: {target_file}",
         fg=typer.colors.GREEN,
     )
-
-
-def setup_nornflow_settings_file(settings: str) -> None:
-    """Set up the NornFlow settings file."""
-    if not os.getenv("NORNFLOW_SETTINGS"):
-        target_file = Path(settings) if settings else NORNFLOW_SETTINGS
-        if not target_file.exists():
-            shutil.copy(SAMPLE_NORNFLOW_FILE, target_file)
-            typer.secho(
-                f"Created NornFlow settings file: {target_file}",
-                fg=typer.colors.GREEN,
-            )
-        else:
-            typer.secho(
-                f"NornFlow settings file already exists: {target_file}",
-                fg=typer.colors.YELLOW,
-            )
-
-
-def create_default_directories() -> None:
-    """Create default directories based on constants."""
-    create_directory(TASKS_DIR)
-    create_directory(WORKFLOWS_DIR)
-    create_directory(FILTERS_DIR)
-    create_directory(HOOKS_DIR)
-    create_directory(VARS_DIR)
 
 
 def setup_builder(ctx: typer.Context) -> NornFlowBuilder:
@@ -140,8 +107,37 @@ def setup_builder(ctx: typer.Context) -> NornFlowBuilder:
     return builder
 
 
-def create_settings_based_directories(nornflow: NornFlow) -> None:
-    """Create any additional directories specified in settings that differ from defaults."""
+def setup_nornir_configs(nornflow: NornFlow) -> None:
+    """Set up the Nornir configuration directory derived from settings."""
+    nornir_config_file = Path(nornflow.settings.nornir_config_file)
+    nornir_config_dir = nornir_config_file.parent
+
+    typer.secho(f"NornFlow will be initialized at {Path.cwd()}", fg=typer.colors.GREEN)
+
+    if nornir_config_dir.exists():
+        typer.secho(
+            f"Nornir configuration directory already exists: {nornir_config_dir}",
+            fg=typer.colors.YELLOW,
+        )
+        return
+
+    shutil.copytree(SAMPLE_NORNIR_CONFIGS_DIR, nornir_config_dir)
+    typer.secho(
+        f"Created Nornir configuration directory: {nornir_config_dir}",
+        fg=typer.colors.GREEN,
+    )
+
+
+def create_directories_from_settings(nornflow: NornFlow) -> None:
+    """Create all directories specified in settings.
+
+    This is the single source of truth for directory creation during init.
+    Directories are created based on what's configured in settings, which
+    may be default values or custom paths from the user's nornflow.yaml.
+
+    Args:
+        nornflow: The initialized NornFlow instance with loaded settings.
+    """
     for tasks_dir in nornflow.settings.local_tasks:
         create_directory(Path(tasks_dir))
 
@@ -154,8 +150,7 @@ def create_settings_based_directories(nornflow: NornFlow) -> None:
     for hooks_dir in nornflow.settings.local_hooks:
         create_directory(Path(hooks_dir))
 
-    vars_dir = Path(nornflow.settings.vars_dir)
-    create_directory(vars_dir)
+    create_directory(Path(nornflow.settings.vars_dir))
 
 
 def setup_sample_content(nornflow: NornFlow) -> None:
@@ -194,10 +189,10 @@ def create_directory(dir_path: Path) -> bool:
     Returns:
         True if directory was created, False if it already existed.
     """
-    if not dir_path.exists():
-        dir_path.mkdir(parents=True, exist_ok=True)
-        return True
-    return False
+    if dir_path.exists():
+        return False
+    dir_path.mkdir(parents=True, exist_ok=True)
+    return True
 
 
 def display_banner() -> None:

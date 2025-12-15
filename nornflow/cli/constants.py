@@ -1,25 +1,12 @@
 # ruff: noqa: W291
 from pathlib import Path
 
-from nornflow.constants import (
-    NORNFLOW_DEFAULT_FILTERS_DIR,
-    NORNFLOW_DEFAULT_HOOKS_DIR,
-    NORNFLOW_DEFAULT_TASKS_DIR,
-    NORNFLOW_DEFAULT_VARS_DIR,
-    NORNFLOW_DEFAULT_WORKFLOWS_DIR,
-)
 from nornflow.vars.constants import DEFAULTS_FILENAME
 
 # Directory where the user is running the CLI from
 CWD = Path.cwd()
 
-# Runtime directories and files (relative to user's current working directory)
-NORNIR_DEFAULT_CONFIG_DIR = CWD / "nornir_configs"
-TASKS_DIR = CWD / NORNFLOW_DEFAULT_TASKS_DIR
-WORKFLOWS_DIR = CWD / NORNFLOW_DEFAULT_WORKFLOWS_DIR
-FILTERS_DIR = CWD / NORNFLOW_DEFAULT_FILTERS_DIR
-HOOKS_DIR = CWD / NORNFLOW_DEFAULT_HOOKS_DIR
-VARS_DIR = CWD / NORNFLOW_DEFAULT_VARS_DIR
+# Default location for NornFlow settings file
 NORNFLOW_SETTINGS = CWD / "nornflow.yaml"
 
 # NornFlow's samples directory
