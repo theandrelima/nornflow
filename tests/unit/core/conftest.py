@@ -99,7 +99,7 @@ def basic_settings(tmp_path, task_content):
     (tasks_dir / "task1.py").write_text(task_content)
     return NornFlowSettings(
         nornir_config_file="dummy_config.yaml",
-        local_tasks_dirs=[str(tasks_dir)]
+        local_tasks=[str(tasks_dir)]
     )
 
 

@@ -437,7 +437,7 @@ class MyHook(Hook):
     ...
 ```
 
-After your hook module is imported (via `local_hooks_dirs`), it's immediately available in workflows:
+After your hook module is imported (via `local_hooks`), it's immediately available in workflows:
 
 ```yaml
 tasks:

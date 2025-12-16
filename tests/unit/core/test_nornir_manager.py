@@ -36,8 +36,8 @@ class TestNornirManager:
         # Create a dict with both Nornir and NornFlow params
         params = {
             "runner": "threaded",  # Valid Nornir param
-            "local_workflows_dirs": ["/tmp/workflows"],  # NornFlow-specific param that should be filtered
-            "local_tasks_dirs": ["/tmp/tasks"],  # Another NornFlow-specific param
+            "local_workflows": ["/tmp/workflows"],  # NornFlow-specific param that should be filtered
+            "local_tasks": ["/tmp/tasks"],  # Another NornFlow-specific param
         }
 
         # Add all optional NornFlow settings to test they're filtered
