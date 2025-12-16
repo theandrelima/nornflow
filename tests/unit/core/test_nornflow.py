@@ -344,6 +344,7 @@ class TestNornFlowExecution:
 
         with patch("nornflow.nornflow.load_file_to_dict", return_value={}):
             nf = NornFlow(nornflow_settings=settings, workflow=wf)
+            nf._nornir_manager = mock_mgr
             nf.run()
 
         mock_mgr.__enter__.assert_called_once()
@@ -360,26 +361,34 @@ class TestNornFlowExecution:
         mock_mgr.__enter__.return_value = mock_mgr
         mock_mgr.__exit__.return_value = None
         mock_mgr_cls.return_value = mock_mgr
-
+    
+        # Create a task mock that will raise an error when run() is called
+        task_mock = MagicMock()
+        task_mock.name = "echo"  # Use a builtin task name to pass _check_tasks()
+        task_mock.run.side_effect = RuntimeError("test error")
+    
         wf = MagicMock(spec=WorkflowModel)
         wf.dry_run = False
-        wf.tasks = []
         wf.inventory_filters = {}
         wf.processors = []
         wf.vars = {}
         wf.description = None
         wf.failure_strategy = None
         wf.name = "Test WF"
-
+        wf.tasks = [task_mock]
+    
         settings = NornFlowSettings(
             nornir_config_file="dummy.yaml",
             local_workflows=[]
         )
-
+    
         with patch("nornflow.nornflow.load_file_to_dict", return_value={}):
             nf = NornFlow(nornflow_settings=settings, workflow=wf)
-            nf.run()
-
+            nf._nornir_manager = mock_mgr
+    
+            with pytest.raises(RuntimeError, match="test error"):
+                nf.run()
+    
         mock_mgr.__enter__.assert_called_once()
         mock_mgr.__exit__.assert_called_once()
 
@@ -443,11 +452,11 @@ class TestNornFlowProcessors:
         mock_mgr = MagicMock()
         mock_mgr.nornir = MagicMock()
         mock_mgr.nornir.processors = []
-        
+
         def mock_apply_processors(processors):
             mock_mgr.nornir.processors.extend(processors)
             return mock_mgr.nornir
-        
+
         mock_mgr.apply_processors = mock_apply_processors
         mock_mgr_cls.return_value = mock_mgr
 
@@ -470,8 +479,8 @@ class TestNornFlowProcessors:
             mock_load.return_value = mock_user_proc
 
             nf = NornFlow(nornflow_settings=settings, workflow=wf)
-            # Set the nornir_manager manually since we're mocking initialization
             nf._nornir_manager = mock_mgr
+
             nf._apply_processors()
 
             applied_processors = nf.nornir_manager.nornir.processors
@@ -508,8 +517,8 @@ class TestNornFlowReturnCodes:
         with patch("nornflow.nornflow.NornFlow._create_variable_manager"), \
              patch("nornflow.nornflow.load_file_to_dict", return_value={}):
             nf = NornFlow(nornflow_settings=settings, workflow=wf)
-            # Set the nornir_manager manually since we're mocking initialization
             nf._nornir_manager = mock_mgr
+
             assert nf._get_return_code() == 0
 
     @patch("nornflow.nornflow.NornirManager")
@@ -536,8 +545,8 @@ class TestNornFlowReturnCodes:
         with patch("nornflow.nornflow.NornFlow._create_variable_manager"), \
              patch("nornflow.nornflow.load_file_to_dict", return_value={}):
             nf = NornFlow(nornflow_settings=settings, workflow=wf)
-            # Set the nornir_manager manually since we're mocking initialization
             nf._nornir_manager = mock_mgr
+
             assert nf._get_return_code() == 101
 
 
