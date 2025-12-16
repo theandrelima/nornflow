@@ -18,6 +18,7 @@ from nornflow.cli.constants import (
 from nornflow.cli.exceptions import CLIInitError
 from nornflow.cli.show import show_catalog, show_nornflow_settings
 from nornflow.exceptions import NornFlowError
+from nornflow.settings import NornFlowSettings
 
 app = typer.Typer()
 
@@ -37,20 +38,24 @@ def init(ctx: typer.Context) -> None:
         settings_file = ctx.obj.get("settings", "")
         setup_nornflow_settings_file(settings_file)
 
-        # Step 2: Build NornFlow from the settings file that now exists
+        # Step 2: Load settings to know what directories to create
+        settings_path = Path(settings_file) if settings_file else NORNFLOW_SETTINGS
+        settings = NornFlowSettings.load(settings_path if settings_path.exists() else None)
+
+        # Step 3: Create nornir configs directory (derived from settings)
+        setup_nornir_configs(settings)
+
+        # Step 4: Create all directories from settings BEFORE building NornFlow
+        create_directories_from_settings(settings)
+
+        # Step 5: Build NornFlow from the settings file (now directories exist)
         builder = setup_builder(ctx)
         nornflow = builder.build()
 
-        # Step 3: Create nornir configs directory (derived from settings)
-        setup_nornir_configs(nornflow)
-
-        # Step 4: Create all directories from settings
-        create_directories_from_settings(nornflow)
-
-        # Step 5: Copy sample content to directories
+        # Step 6: Copy sample content to directories
         setup_sample_content(nornflow)
 
-        # Step 6: Show info using the real NornFlow object
+        # Step 7: Show info using the real NornFlow object
         show_info_post_init(nornflow)
 
     except NornFlowError as e:
@@ -107,9 +112,13 @@ def setup_builder(ctx: typer.Context) -> NornFlowBuilder:
     return builder
 
 
-def setup_nornir_configs(nornflow: NornFlow) -> None:
-    """Set up the Nornir configuration directory derived from settings."""
-    nornir_config_file = Path(nornflow.settings.nornir_config_file)
+def setup_nornir_configs(settings: NornFlowSettings) -> None:
+    """Set up the Nornir configuration directory derived from settings.
+    
+    Args:
+        settings: The loaded NornFlowSettings instance.
+    """
+    nornir_config_file = Path(settings.nornir_config_file)
     nornir_config_dir = nornir_config_file.parent
 
     typer.secho(f"NornFlow will be initialized at {Path.cwd()}", fg=typer.colors.GREEN)
@@ -128,7 +137,7 @@ def setup_nornir_configs(nornflow: NornFlow) -> None:
     )
 
 
-def create_directories_from_settings(nornflow: NornFlow) -> None:
+def create_directories_from_settings(settings: NornFlowSettings) -> None:
     """Create all directories specified in settings.
 
     This is the single source of truth for directory creation during init.
@@ -136,21 +145,21 @@ def create_directories_from_settings(nornflow: NornFlow) -> None:
     may be default values or custom paths from the user's nornflow.yaml.
 
     Args:
-        nornflow: The initialized NornFlow instance with loaded settings.
+        settings: The loaded NornFlowSettings instance with resolved paths.
     """
-    for tasks_dir in nornflow.settings.local_tasks:
+    for tasks_dir in settings.local_tasks:
         create_directory(Path(tasks_dir))
 
-    for workflows_dir in nornflow.settings.local_workflows:
+    for workflows_dir in settings.local_workflows:
         create_directory(Path(workflows_dir))
 
-    for filters_dir in nornflow.settings.local_filters:
+    for filters_dir in settings.local_filters:
         create_directory(Path(filters_dir))
 
-    for hooks_dir in nornflow.settings.local_hooks:
+    for hooks_dir in settings.local_hooks:
         create_directory(Path(hooks_dir))
 
-    create_directory(Path(nornflow.settings.vars_dir))
+    create_directory(Path(settings.vars_dir))
 
 
 def setup_sample_content(nornflow: NornFlow) -> None:
