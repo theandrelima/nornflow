@@ -114,7 +114,7 @@ def setup_builder(ctx: typer.Context) -> NornFlowBuilder:
 
 def setup_nornir_configs(settings: NornFlowSettings) -> None:
     """Set up the Nornir configuration directory derived from settings.
-    
+
     Args:
         settings: The loaded NornFlowSettings instance.
     """
