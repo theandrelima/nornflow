@@ -470,6 +470,8 @@ class TestNornFlowProcessors:
             mock_load.return_value = mock_user_proc
 
             nf = NornFlow(nornflow_settings=settings, workflow=wf)
+            # Set the nornir_manager manually since we're mocking initialization
+            nf._nornir_manager = mock_mgr
             nf._apply_processors()
 
             applied_processors = nf.nornir_manager.nornir.processors
@@ -506,6 +508,8 @@ class TestNornFlowReturnCodes:
         with patch("nornflow.nornflow.NornFlow._create_variable_manager"), \
              patch("nornflow.nornflow.load_file_to_dict", return_value={}):
             nf = NornFlow(nornflow_settings=settings, workflow=wf)
+            # Set the nornir_manager manually since we're mocking initialization
+            nf._nornir_manager = mock_mgr
             assert nf._get_return_code() == 0
 
     @patch("nornflow.nornflow.NornirManager")
@@ -532,6 +536,8 @@ class TestNornFlowReturnCodes:
         with patch("nornflow.nornflow.NornFlow._create_variable_manager"), \
              patch("nornflow.nornflow.load_file_to_dict", return_value={}):
             nf = NornFlow(nornflow_settings=settings, workflow=wf)
+            # Set the nornir_manager manually since we're mocking initialization
+            nf._nornir_manager = mock_mgr
             assert nf._get_return_code() == 101
 
 

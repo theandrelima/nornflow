@@ -26,6 +26,7 @@ class MockExit(Exception):
 class TestInitCommand:
     """Tests for the 'init' CLI command."""
 
+    @patch("nornflow.cli.init.NornFlowSettings")
     @patch("nornflow.cli.init.setup_builder")
     @patch("nornflow.cli.init.get_user_confirmation")
     @patch("nornflow.cli.init.setup_nornir_configs")
@@ -42,12 +43,15 @@ class TestInitCommand:
         mock_setup_nornir,
         mock_confirmation,
         mock_setup_builder,
+        mock_settings_class,
     ):
         """Test successful initialization."""
         mock_builder = MagicMock()
         mock_nornflow = MagicMock()
+        mock_settings = MagicMock()
         mock_builder.build.return_value = mock_nornflow
         mock_setup_builder.return_value = mock_builder
+        mock_settings_class.load.return_value = mock_settings
         mock_confirmation.return_value = True
         mock_ctx = MagicMock()
         mock_ctx.obj = {"settings": "test_settings.yaml"}
@@ -56,10 +60,11 @@ class TestInitCommand:
 
         mock_confirmation.assert_called_once()
         mock_setup_settings.assert_called_once_with("test_settings.yaml")
+        mock_settings_class.load.assert_called_once()
+        mock_setup_nornir.assert_called_once_with(mock_settings)
+        mock_create_dirs.assert_called_once_with(mock_settings)
         mock_setup_builder.assert_called_once_with(mock_ctx)
         mock_builder.build.assert_called_once()
-        mock_setup_nornir.assert_called_once_with(mock_nornflow)
-        mock_create_dirs.assert_called_once_with(mock_nornflow)
         mock_setup_sample_content.assert_called_once_with(mock_nornflow)
         mock_show_info.assert_called_once_with(mock_nornflow)
 
@@ -165,8 +170,8 @@ class TestSetupFunctions:
     @patch("nornflow.cli.init.Path")
     def test_setup_nornir_configs_new_directory(self, mock_path_class, mock_secho, mock_copytree):
         """Test setup_nornir_configs when directory doesn't exist."""
-        mock_nornflow = MagicMock()
-        mock_nornflow.settings.nornir_config_file = "/path/to/nornir_configs/config.yaml"
+        mock_settings = MagicMock()
+        mock_settings.nornir_config_file = "/path/to/nornir_configs/config.yaml"
         
         mock_config_path = MagicMock()
         mock_config_dir = MagicMock()
@@ -174,7 +179,7 @@ class TestSetupFunctions:
         mock_config_path.parent = mock_config_dir
         mock_path_class.return_value = mock_config_path
 
-        setup_nornir_configs(mock_nornflow)
+        setup_nornir_configs(mock_settings)
 
         mock_copytree.assert_called_once()
         assert mock_secho.call_count >= 1
@@ -184,8 +189,8 @@ class TestSetupFunctions:
     @patch("nornflow.cli.init.Path")
     def test_setup_nornir_configs_existing_directory(self, mock_path_class, mock_secho, mock_copytree):
         """Test setup_nornir_configs when directory already exists."""
-        mock_nornflow = MagicMock()
-        mock_nornflow.settings.nornir_config_file = "/path/to/nornir_configs/config.yaml"
+        mock_settings = MagicMock()
+        mock_settings.nornir_config_file = "/path/to/nornir_configs/config.yaml"
         
         mock_config_path = MagicMock()
         mock_config_dir = MagicMock()
@@ -193,7 +198,7 @@ class TestSetupFunctions:
         mock_config_path.parent = mock_config_dir
         mock_path_class.return_value = mock_config_path
 
-        setup_nornir_configs(mock_nornflow)
+        setup_nornir_configs(mock_settings)
 
         mock_copytree.assert_not_called()
 
@@ -219,14 +224,14 @@ class TestSetupFunctions:
     @patch("nornflow.cli.init.create_directory")
     def test_create_directories_from_settings(self, mock_create_dir):
         """Test create_directories_from_settings function."""
-        mock_nornflow = MagicMock()
-        mock_nornflow.settings.local_tasks = ["tasks"]
-        mock_nornflow.settings.local_workflows = ["workflows"]
-        mock_nornflow.settings.local_filters = ["filters"]
-        mock_nornflow.settings.local_hooks = ["hooks"]
-        mock_nornflow.settings.vars_dir = "vars"
+        mock_settings = MagicMock()
+        mock_settings.local_tasks = ["tasks"]
+        mock_settings.local_workflows = ["workflows"]
+        mock_settings.local_filters = ["filters"]
+        mock_settings.local_hooks = ["hooks"]
+        mock_settings.vars_dir = "vars"
 
-        create_directories_from_settings(mock_nornflow)
+        create_directories_from_settings(mock_settings)
 
         assert mock_create_dir.call_count == 5
 
