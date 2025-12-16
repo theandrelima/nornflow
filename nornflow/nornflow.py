@@ -181,6 +181,9 @@ class NornFlow:
 
     def _initialize_nornir(self) -> None:
         """Initialize Nornir configurations and manager."""
+        if self._nornir_manager:
+            return
+
         try:
             self._nornir_configs = load_file_to_dict(self.settings.nornir_config_file)
         except Exception as e:
@@ -238,7 +241,9 @@ class NornFlow:
         Returns:
             dict[str, Any]: Dictionary containing the Nornir configurations.
         """
-        return self.nornir_manager.nornir.config.dict()
+        if not self._nornir_manager:
+            self._initialize_nornir()
+        return self._nornir_configs
 
     @nornir_configs.setter
     def nornir_configs(self, value: Any) -> None:
@@ -254,6 +259,8 @@ class NornFlow:
         Returns:
             NornirManager: The Nornir manager instance.
         """
+        if not self._nornir_manager:
+            self._initialize_nornir()
         return self._nornir_manager
 
     @nornir_manager.setter
@@ -1024,8 +1031,8 @@ class NornFlow:
                 "No workflow configured. Set a workflow before calling run().", component="NornFlow"
             )
 
-        self._initialize_nornir()
         self._check_tasks()
+        self._initialize_nornir()
         self._apply_filters()
         self._apply_processors()
         self._print_workflow_overview()
