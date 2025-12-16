@@ -13,6 +13,7 @@
 > **Notes:** 
 > 1. This document is intentionally light on each subject. Much of what's mentioned here (and more) is expanded in the [Core Concepts](./core_concepts.md) documentation.
 > 2. Throughout the whole documentation, we won't go into the details about Nornir's configs and concepts (tasks, inventory, filters, etc). Those are pre-requisites to use NornFlow. You may want to check [Nornir's docs](https://github.com/nornir-automation/nornir).
+
 ## Installation
 
 ```bash
@@ -146,13 +147,13 @@ NornFlow's settings file is created with sensible defaults by running `nornflow 
 
 ```yaml
 nornir_config_file: "nornir_configs/config.yaml"
-local_tasks_dirs:
+local_tasks:
   - "tasks"
-local_workflows_dirs:
+local_workflows:
   - "workflows"
-local_filters_dirs:
+local_filters:
   - "filters"
-local_hooks_dirs:
+local_hooks:
   - "hooks"
 imported_packages: []
 dry_run: False

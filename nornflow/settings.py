@@ -32,7 +32,7 @@ class NornFlowSettings(BaseSettings):
 
     Environment variable examples:
     - NORNFLOW_SETTINGS_VARS_DIR=/custom/vars
-    - NORNFLOW_SETTINGS_LOCAL_TASKS_DIRS=["tasks", "custom_tasks"]
+    - NORNFLOW_SETTINGS_LOCAL_TASKS=["tasks", "custom_tasks"]
     - NORNFLOW_SETTINGS_FAILURE_STRATEGY=fail-fast
     """
 
@@ -45,18 +45,18 @@ class NornFlowSettings(BaseSettings):
 
     nornir_config_file: str = Field(description="Path to Nornir configuration file (required)")
 
-    local_tasks_dirs: list[str] = Field(
+    local_tasks: list[str] = Field(
         default=[NORNFLOW_DEFAULT_TASKS_DIR], description="List of directories containing Nornir tasks"
     )
-    local_workflows_dirs: list[str] = Field(
+    local_workflows: list[str] = Field(
         default=[NORNFLOW_DEFAULT_WORKFLOWS_DIR],
         description="List of directories containing workflow definitions",
     )
-    local_filters_dirs: list[str] = Field(
+    local_filters: list[str] = Field(
         default=[NORNFLOW_DEFAULT_FILTERS_DIR],
         description="List of directories containing custom filter functions",
     )
-    local_hooks_dirs: list[str] = Field(
+    local_hooks: list[str] = Field(
         default=[NORNFLOW_DEFAULT_HOOKS_DIR], description="List of directories containing custom hook classes"
     )
     imported_packages: list[str] = Field(
@@ -123,22 +123,7 @@ class NornFlowSettings(BaseSettings):
         if not base_dir:
             return self
 
-        for field_name in [
-            "local_tasks_dirs",
-            "local_workflows_dirs",
-            "local_filters_dirs",
-            "local_hooks_dirs",
-        ]:
-            dirs = getattr(self, field_name)
-            if dirs:
-                resolved: list[str] = []
-                for dir_path in dirs:
-                    path = Path(dir_path)
-                    if not path.is_absolute():
-                        resolved.append(str(base_dir / path))
-                    else:
-                        resolved.append(str(path))
-                setattr(self, field_name, resolved)
+        self._resolve_local_directories(base_dir)
 
         vars_path = Path(self.vars_dir)
         if not vars_path.is_absolute():
@@ -150,6 +135,30 @@ class NornFlowSettings(BaseSettings):
                 self.nornir_config_file = str(base_dir / config_path)
 
         return self
+
+    def _resolve_local_directories(self, base_dir: Path) -> None:
+        """Normalize configured local directories relative to the provided base path.
+
+        Args:
+            base_dir: Absolute directory to resolve relative paths against.
+        """
+        for field_name in [
+            "local_tasks",
+            "local_workflows",
+            "local_filters",
+            "local_hooks",
+        ]:
+            dirs = getattr(self, field_name)
+            if not dirs:
+                continue
+            resolved: list[str] = []
+            for dir_path in dirs:
+                path = Path(dir_path)
+                if not path.is_absolute():
+                    resolved.append(str(base_dir / path))
+                else:
+                    resolved.append(str(path))
+            setattr(self, field_name, resolved)
 
     @classmethod
     def load(

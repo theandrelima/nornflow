@@ -116,7 +116,6 @@ class NornFlow:
         try:
             self._validate_init_kwargs(kwargs)
             self._initialize_settings(nornflow_settings, kwargs)
-            self._initialize_nornir()
             self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, processors)
             self._initialize_hooks()
             self._initialize_catalogs()
@@ -156,6 +155,8 @@ class NornFlow:
         self._processors = processors
         self._workflow = None
         self._workflow_path = None
+        self._nornir_configs = None
+        self._nornir_manager = None
         # System processors are initialized lazily in their property getters
         # when needed during workflow execution, not during __init__
         self._var_processor = None
@@ -173,13 +174,16 @@ class NornFlow:
 
     def _initialize_hooks(self) -> None:
         """Initialize hooks by importing modules from configured directories."""
-        for dir_path in self.settings.local_hooks_dirs:
+        for dir_path in self.settings.local_hooks:
             dir_path_obj = Path(dir_path)
             if dir_path_obj.exists():
                 import_modules_recursively(dir_path_obj)
 
     def _initialize_nornir(self) -> None:
         """Initialize Nornir configurations and manager."""
+        if self._nornir_manager:
+            return
+
         try:
             self._nornir_configs = load_file_to_dict(self.settings.nornir_config_file)
         except Exception as e:
@@ -237,7 +241,9 @@ class NornFlow:
         Returns:
             dict[str, Any]: Dictionary containing the Nornir configurations.
         """
-        return self.nornir_manager.nornir.config.dict()
+        if not self._nornir_manager:
+            self._initialize_nornir()
+        return self._nornir_configs
 
     @nornir_configs.setter
     def nornir_configs(self, value: Any) -> None:
@@ -253,6 +259,8 @@ class NornFlow:
         Returns:
             NornirManager: The Nornir manager instance.
         """
+        if not self._nornir_manager:
+            self._initialize_nornir()
         return self._nornir_manager
 
     @nornir_manager.setter
@@ -670,14 +678,14 @@ class NornFlow:
 
         Tasks are loaded in two phases:
         1. Built-in tasks from nornflow.builtins.tasks module
-        2. User-defined tasks from local_tasks_dirs
+        2. User-defined tasks from local_tasks
         """
         self._tasks_catalog = self._load_catalog(
             CallableCatalog,
             "tasks",
             builtin_module=builtin_tasks,
             predicate=is_nornir_task,
-            directories=self.settings.local_tasks_dirs,
+            directories=self.settings.local_tasks,
             check_empty=True,
         )
 
@@ -687,7 +695,7 @@ class NornFlow:
 
         Filters are loaded in two phases:
         1. Built-in filters from nornflow.builtins.filters module
-        2. User-defined filters from configured local_filters_dirs
+        2. User-defined filters from configured local_filters
         """
         self._filters_catalog = self._load_catalog(
             CallableCatalog,
@@ -695,7 +703,7 @@ class NornFlow:
             builtin_module=builtin_filters,
             predicate=is_nornir_filter,
             transform_item=process_filter,
-            directories=self.settings.local_filters_dirs,
+            directories=self.settings.local_filters,
         )
 
     def _load_workflows_catalog(self) -> None:
@@ -709,7 +717,7 @@ class NornFlow:
             FileCatalog,
             "workflows",
             predicate=is_workflow_file,
-            directories=self.settings.local_workflows_dirs,
+            directories=self.settings.local_workflows,
             recursive=True,
         )
 
@@ -872,7 +880,7 @@ class NornFlow:
             cli_vars=self.vars,
             inline_workflow_vars=dict(self.workflow.vars) if self.workflow.vars else {},
             workflow_path=self.workflow_path,
-            workflow_roots=self.settings.local_workflows_dirs,
+            workflow_roots=self.settings.local_workflows,
         )
 
     def _apply_processors(self) -> None:
@@ -1024,6 +1032,7 @@ class NornFlow:
             )
 
         self._check_tasks()
+        self._initialize_nornir()
         self._apply_filters()
         self._apply_processors()
         self._print_workflow_overview()

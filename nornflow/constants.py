@@ -65,10 +65,10 @@ NORNFLOW_DEFAULT_HOOKS_DIR = "hooks"
 NORNFLOW_DEFAULT_VARS_DIR = "vars"
 
 NORNFLOW_SETTINGS_OPTIONAL = {
-    "local_tasks_dirs": [NORNFLOW_DEFAULT_TASKS_DIR],
-    "local_workflows_dirs": [NORNFLOW_DEFAULT_WORKFLOWS_DIR],
-    "local_filters_dirs": [NORNFLOW_DEFAULT_FILTERS_DIR],
-    "local_hooks_dirs": [NORNFLOW_DEFAULT_HOOKS_DIR],
+    "local_tasks": [NORNFLOW_DEFAULT_TASKS_DIR],
+    "local_workflows": [NORNFLOW_DEFAULT_WORKFLOWS_DIR],
+    "local_filters": [NORNFLOW_DEFAULT_FILTERS_DIR],
+    "local_hooks": [NORNFLOW_DEFAULT_HOOKS_DIR],
     "imported_packages": [],
     "processors": [],
     "vars_dir": NORNFLOW_DEFAULT_VARS_DIR,
@@ -80,10 +80,10 @@ NORNFLOW_SETTINGS_OPTIONAL = {
 # These are optional settings (see NORNFLOW_SETTINGS_OPTIONAL), but if customized, use YAML.
 NORNFLOW_INVALID_INIT_KWARGS = (
     "nornir_config_file",
-    "local_tasks_dirs",
-    "local_workflows_dirs",
-    "local_filters_dirs",
-    "local_hooks_dirs",
+    "local_tasks",
+    "local_workflows",
+    "local_filters",
+    "local_hooks",
     "imported_packages",
 )
 
