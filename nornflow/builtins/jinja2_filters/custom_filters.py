@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 import jmespath
+from jinja2 import pass_context
 
 
 def flatten_list(lst: list[Any]) -> list[Any]:
@@ -111,6 +112,86 @@ def random_choice(lst: list[Any]) -> Any:
     return random.choice(lst) if lst else None  # noqa: S311
 
 
+@pass_context
+def is_set(context: dict[str, Any], value: str) -> bool:
+    """
+    Check if a variable is set (not None/undefined) in the current Jinja2 context.
+    
+    Supports namespace-aware checking:
+    - 'x': Checks in NornFlow default namespace (context['x'])
+    - 'host.x': Checks in Nornir host namespace (context['host'].x or context['host']['x'])
+    
+    This filter is particularly useful with the 'if' hook for conditional task execution
+    based on variable existence, allowing workflows to adapt dynamically to runtime state.
+    
+    Args:
+        context: The Jinja2 context dictionary (passed via @pass_context).
+        value: The variable path string to check (e.g., 'my_var' or 'host.platform').
+    
+    Returns:
+        True if the variable is set and not None, False otherwise.
+    
+    Examples:
+        Basic usage in Jinja2 expressions:
+        
+        {{ 'my_var' | is_set }}          # True if my_var exists and is not None
+        {{ 'host.name' | is_set }}       # True if host.name exists and is not None
+        
+        Usage with the 'if' hook for conditional task execution:
+        
+        # Skip task if a required variable is not set
+        tasks:
+          - name: deploy_config
+            if: "{{ 'backup_completed' | is_set }}"
+            # Task only runs if 'backup_completed' variable exists and is not None
+        
+        # Check host-specific data before running task
+        tasks:
+          - name: ios_upgrade
+            if: "{{ 'host.ios_version' | is_set }}"
+            # Task only runs on hosts where ios_version is defined
+        
+        # Combine with other conditions using Jinja2 logic
+        tasks:
+          - name: security_scan
+            if: "{{ ('host.platform' | is_set) and ('scan_enabled' | is_set) }}"
+            # Task runs only if both host.platform and scan_enabled are set
+        
+        # Use in complex expressions with defaults
+        tasks:
+          - name: conditional_backup
+            if: "{{ 'force_backup' | is_set or 'host.needs_backup' | is_set }}"
+            # Task runs if either force_backup OR host.needs_backup is set
+    """
+    if not isinstance(value, str):
+        return False
+    
+    # Split on first dot to separate namespace from key
+    parts = value.split('.', 1)
+    if len(parts) == 1:
+        # No namespace specified, check NornFlow default namespace
+        var_name = parts[0]
+        return var_name in context and context[var_name] is not None
+    else:
+        # Namespace specified
+        namespace, var_name = parts
+        if namespace == 'host':
+            # Check Nornir host namespace
+            host_obj = context.get('host')
+            if host_obj is None:
+                return False
+            # Try attribute access first, then dict access
+            try:
+                val = getattr(host_obj, var_name, None)
+                return val is not None
+            except AttributeError:
+                # Fallback to dict-like access if host supports it
+                return hasattr(host_obj, '__getitem__') and var_name in host_obj and host_obj[var_name] is not None
+        else:
+            # Unknown namespace, treat as not set
+            return False
+
+
 # Registry of custom filters
 CUSTOM_FILTERS = {
     "flatten_list": flatten_list,
@@ -122,4 +203,5 @@ CUSTOM_FILTERS = {
     "json_query": json_query,
     "deep_merge": deep_merge,
     "random_choice": random_choice,
+    "is_set": is_set,
 }

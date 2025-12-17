@@ -33,7 +33,7 @@ def skip_if_condition_flagged(task_func: Callable) -> Callable:
     """
 
     @wraps(task_func)
-    def wrapper(task: Task) -> Result:
+    def wrapper(task: Task, **kwargs: Any) -> Result:
         if task.host.data.get("nornflow_skip_flag", False):
             # Clean up the flag after use to avoid stale state
             task.host.data.pop("nornflow_skip_flag", None)
@@ -44,7 +44,7 @@ def skip_if_condition_flagged(task_func: Callable) -> Callable:
                 failed=False,
                 skipped=True,
             )
-        return task_func(task)
+        return task_func(task, **kwargs)
 
     return wrapper
 
