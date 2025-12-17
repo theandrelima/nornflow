@@ -306,7 +306,7 @@ def convert_lists_to_tuples(dictionary: HashableDict[str, Any] | None) -> Hashab
     Returns:
         A new HashableDict with lists converted to tuples, or None if input was None.
     """
-    if not dictionary:
+    if dictionary is None:
         return None
 
     return HashableDict(
