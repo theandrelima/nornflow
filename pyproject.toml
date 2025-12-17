@@ -52,7 +52,7 @@ manual-tests = [
 [tool.ruff]
 line-length = 110
 target-version = "py310"
-exclude = ["tests/*", "nornflow/cli/tests/*", "nornflow/vars/tests/*"]
+exclude = ["tests/*", "nornflow/cli/tests/*", "nornflow/vars/tests/*", "debug_*.py"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -109,7 +109,7 @@ known-first-party = ["nornflow"]
 
 [tool.black]
 line-length = 110
-extend-exclude = '(^|/)tests/'
+extend-exclude = '(^|/)tests/|(^|/)debug_.*\.py$'
 
 [project.scripts]
 nornflow = "nornflow.cli.entrypoint:app"
