@@ -163,9 +163,25 @@ tasks:
 
 **`random_choice`**
 ```yaml
-# Select random element from list
-{{ ['server1', 'server2', 'server3'] | random_choice }}
-# Result: 'server2' (randomly selected)
+# Pick a random item from a list
+{{ [1, 2, 3, 4, 5] | random_choice }}
+```
+
+**`is_set`**
+```yaml
+# Check if a variable exists and is not None
+# Useful for conditional logic, including usage in 'if' hooks
+
+# Check simple variable
+{{ 'my_var' | is_set }}
+
+# Check host attribute
+{{ 'host.platform' | is_set }}
+
+# Usage in 'if' hook
+tasks:
+  - name: backup_config_task
+    if: "{{ 'running_config' | is_set }}"
 ```
 
 ## NornFlow Python Wrapper Filters
@@ -190,7 +206,7 @@ These provide Python-like functionality not available in standard Jinja2:
 
 ## Filter Chaining
 
-Filters can be chained for complex transformations:
+Filters can be chained to perform complex transformations:
 
 ```yaml
 # Clean and format interface names
@@ -214,6 +230,9 @@ Filters can be chained for complex transformations:
 
 # Handle missing data gracefully
 {{ host.data.get('vlan_id', 1) | int }}
+
+# Check existence before use (using is_set)
+{{ 'variable_name' | is_set }}
 ```
 
 ### List Processing

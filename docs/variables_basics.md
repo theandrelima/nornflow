@@ -2,7 +2,7 @@
 
 ## Table of Contents
 - [Quick Overview](#quick-overview)
-- [Variable Sources](#variable-sources-top-down-priority-order)
+- [Variable Sources (Top-Down Priority Order)](#variable-sources-top-down-priority-order)
 - [Basic Usage](#basic-usage)
   - [1. Environment Variables](#1-environment-variables)
   - [2. Global Variables](#2-global-variables)
@@ -64,9 +64,9 @@ Environment variables are the lowest priority and can be overridden by any other
 
 ### 2. Global Variables
 
-By default, NornFlow looks for global variables in the vars directory, specifically in defaults.yaml.  
+By default, NornFlow looks for global variables in the vars directory, specifically in `defaults.yaml`.  
 
-> **Note:** The vars directory location is set by the `vars_dir` setting in your nornflow.yaml file. NornFlow always looks for global variables in `<vars_dir>/defaults.yaml`. If this file is missing, global variable resolution is skipped.
+> **Note:** The vars directory location is set by the `vars_dir` setting in your `nornflow.yaml` file. NornFlow always looks for global variables in `<vars_dir>/defaults.yaml`. If this file is missing, global variable resolution is skipped.
 
 ```yaml
 # vars/defaults.yaml
@@ -377,6 +377,25 @@ tasks:
   ```yaml
   message: "VLAN: {{ host.data.management_vlan | default('1') }}"
   ```
+- **Checking variable existence**: Use the `is_set` filter to check if a variable exists before using it:
+  ```yaml
+  # Check if variable exists
+  - name: conditional_task
+    if: "{{ 'backup_path' | is_set }}"
+    args:
+      path: "{{ backup_path }}"
+  
+  # Check if host data exists
+  - name: site_specific_task
+    if: "{{ 'host.data.site_code' | is_set }}"
+    args:
+      site: "{{ host.data.site_code }}"
+  
+  # Combine with default for fallback values
+  - name: echo
+    args:
+      msg: "Site: {{ host.data.site_code if 'host.data.site_code' | is_set else 'UNKNOWN' }}"
+  ```
 
 ## Variable Isolation
 
@@ -392,25 +411,34 @@ This isolation is managed by NornFlow's `NornFlowDeviceContext` class, which cre
 
 1. **Use descriptive names**: *`backup_retention_days`* is a lot better than just *`days`*
 2. **Set defaults**: Use `| default()` filter for optional variables
-3. **Group related variables**: Use domain variables for domain-specific settings
-4. **Document variables**: Add comments in your variable files (`<vars_dir>/defaults.yaml` and `<vars_dir>/<domain>/default.yaml`)
-5. **Avoid name conflicts**: Don't start variable names with *`host`* to avoid confusion with the `host.` namespace
-6. **Use `set_to` extraction for cleaner code**: Extract only the data you need upfront instead of storing complete results
-7. **Leverage Jinja2 filters**: Use filters to transform data, especially when working with complex structures
+3. **Check variable existence**: Use `| is_set` filter to safely check if variables exist before using them
+4. **Group related variables**: Use domain variables for domain-specific settings
+5. **Document variables**: Add comments in your variable files (`<vars_dir>/defaults.yaml` and `<vars_dir>/<domain>/default.yaml`)
+6. **Avoid name conflicts**: Don't start variable names with *`host`* to avoid confusion with the `host.` namespace
+7. **Use `set_to` extraction for cleaner code**: Extract only the data you need upfront instead of storing complete results
+8. **Leverage Jinja2 filters**: Use filters to transform data, especially when working with complex structures
 
 ## Quick Reference
 
 | Variable Type      | Location                        | Example                        | Usage                        |
 |--------------------|---------------------------------|--------------------------------|------------------------------|
 | Environment        | System env                      | `token=abc`                    | `{{ token }}`                |
-| Global             | defaults.yaml                   | `timeout: 30`                  | `{{ timeout }}`              |
-| Domain             | vars/{domain}/defaults.yaml     | `retries: 3`                   | `{{ retries }}`              |
+| Global             | `defaults.yaml`                 | `timeout: 30`                  | `{{ timeout }}`              |
+| Domain             | `vars/{domain}/defaults.yaml`   | `retries: 3`                   | `{{ retries }}`              |
 | Workflow           | In workflow YAML                | `vars: {vlan: 100}`            | `{{ vlan }}`                 |
 | CLI                | Command line                    | `--vars "x=1"`                 | `{{ x }}`                    |
 | Runtime            | Set with `set` task             | `status: "done"`               | `{{ status }}`               |
 |                    | Set with `set_to` (simple)      | `set_to: version_output`       | `{{ version_output.result }}`|
 |                    | Set with `set_to` (extraction)  | `set_to: {vendor: "vendor"}`   | `{{ vendor }}`               |
 | Host data          | Nornir Inventory                | `data: {site_code: NYC01}`     | `{{ host.data.site_code }}`  |
+
+**Checking Variable Existence:**
+
+| Check Type         | Syntax                          | Returns                        |
+|--------------------|---------------------------------|--------------------------------|
+| Default namespace  | `{{ 'var_name' \| is_set }}`    | `true` if variable exists      |
+| Host namespace     | `{{ 'host.var_name' \| is_set }}`| `true` if host attribute exists|
+| Host data          | `{{ 'host.data.key' \| is_set }}`| `true` if host data key exists |
 
 
 <div align="center">
