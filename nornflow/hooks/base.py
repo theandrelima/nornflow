@@ -96,11 +96,15 @@ class Hook:
         if not self.run_once_per_task:
             return True
 
-        task_id = id(task)
-        if task_id in self._execution_count:
+        task_model = self.context.get("task_model")
+        if not task_model:
+            return True
+
+        task_model_id = id(task_model)
+        if task_model_id in self._execution_count:
             return False
 
-        self._execution_count[task_id] = 1
+        self._execution_count[task_model_id] = 1
         return True
 
     def task_started(self, task: Task) -> None:

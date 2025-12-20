@@ -47,6 +47,20 @@ class TaskModel(HookableModel):
     name: str
     args: HashableDict[str, Any | None] | None = None
 
+    @property
+    def canonical_id(self) -> str:
+        """
+        Combines the task name with the model ID to create a garanteed always-unique
+        identifier that distinguishes between different instances of the same task
+        function in a workflow execution.
+        
+        Returns:
+            A unique string identifier for this task instance.
+        """
+        if self.id:
+            return f"{self.name}_{self.id}"
+        return self.name
+
     @field_validator("args", mode="before")
     @classmethod
     def validate_args(cls, v: HashableDict[str, Any] | None) -> HashableDict[str, Any] | None:

@@ -59,22 +59,6 @@ class DefaultNornFlowProcessor(Processor):
         # Flag to enable printing workflow summary after each task completion
         self.print_summary_after_each_task = False
 
-        # Current TaskModel id for generating unique suppression keys
-        self._current_task_model_id = None
-
-    def _get_suppression_key(self, task: Task) -> str:
-        """Generate the suppression key matching ShushHook's key format.
-
-        Args:
-            task: The Nornir task to check.
-
-        Returns:
-            The suppression key string.
-        """
-        if self._current_task_model_id is not None:
-            return f"{task.name}_{self._current_task_model_id}"
-        return task.name
-
     def _is_output_suppressed(self, task: Task) -> bool:
         """Check if output should be suppressed for the given task.
 
@@ -87,8 +71,10 @@ class DefaultNornFlowProcessor(Processor):
         if not hasattr(task.nornir, "_nornflow_suppressed_tasks"):
             return False
 
-        suppression_key = self._get_suppression_key(task)
-        return suppression_key in task.nornir._nornflow_suppressed_tasks
+        for proc in task.nornir.processors:
+            if hasattr(proc, "task_specific_context"):
+                nornflow_task_model = proc.task_specific_context.get("task_model")
+                return nornflow_task_model.canonical_id in task.nornir._nornflow_suppressed_tasks
 
     def _format_task_output(self, result: Result, suppress_output: bool) -> str:
         """Format the output section of a task result.
@@ -118,15 +104,6 @@ class DefaultNornFlowProcessor(Processor):
 
         if self.total_hosts is None:
             self.total_hosts = len(task.nornir.inventory.hosts)
-
-        # Extract task_model id from hook processor context for suppression key generation
-        self._current_task_model_id = None
-        for proc in task.nornir.processors:
-            if hasattr(proc, "task_specific_context"):
-                task_model = proc.task_specific_context.get("task_model")
-                if task_model and hasattr(task_model, "id"):
-                    self._current_task_model_id = task_model.id
-                    break
 
         self.task_count += 1
         # Print task header only once per task, not per host
@@ -202,7 +179,6 @@ class DefaultNornFlowProcessor(Processor):
 
     def task_completed(self, task: Task, result: Result) -> None:
         self.tasks_completed += 1
-        self._current_task_model_id = None
 
         # Only print summary at the end if this setting is enabled
         if self.print_summary_after_each_task:
@@ -211,7 +187,6 @@ class DefaultNornFlowProcessor(Processor):
     def task_failed(self, task: Task, result: Result) -> None:
         """Handle task failure across all hosts and update statistics."""
         self.tasks_completed += 1
-        self._current_task_model_id = None
 
         # Only print summary at the end if this setting is enabled
         if self.print_summary_after_each_task:

@@ -1,3 +1,4 @@
+# ruff: noqa: SLF001, T201
 from unittest.mock import MagicMock
 
 import pytest
@@ -44,12 +45,19 @@ class TestHook:
         hook.run_once_per_task = True
         mock_task = MagicMock()
         
+        # Mock the hook's context to include a task_model
+        mock_task_model = MagicMock()
+        hook._current_context = {"task_model": mock_task_model}
+
         assert hook.should_execute(mock_task) is True
         
         assert hook.should_execute(mock_task) is False
         assert hook.should_execute(mock_task) is False
         
         mock_task2 = MagicMock()
+        # Simulate a different task_model for the new task (as the processor would do)
+        mock_task_model2 = MagicMock()
+        hook._current_context = {"task_model": mock_task_model2}
         assert hook.should_execute(mock_task2) is True
 
     def test_get_context_empty(self):
