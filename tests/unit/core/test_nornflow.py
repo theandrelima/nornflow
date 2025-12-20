@@ -5,12 +5,10 @@ import pytest
 from nornflow import NornFlow, NornFlowBuilder
 from nornflow.constants import FailureStrategy
 from nornflow.exceptions import (
-    CatalogError,
     InitializationError,
-    ResourceError,
     WorkflowError,
 )
-from nornflow.models import TaskModel, WorkflowModel
+from nornflow.models import WorkflowModel
 from nornflow.settings import NornFlowSettings
 
 

@@ -1,6 +1,6 @@
 """Tests for failure handling strategies (skip-failed, fail-fast, run-all)."""
 
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 

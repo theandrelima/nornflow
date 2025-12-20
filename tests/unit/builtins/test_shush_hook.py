@@ -1,9 +1,6 @@
+# ruff: noqa: SLF001, T201
 from unittest.mock import MagicMock
-
-import pytest
-
 from nornflow.builtins.hooks import ShushHook
-from nornflow.hooks.exceptions import HookValidationError
 
 
 class TestShushHook:
@@ -94,6 +91,11 @@ class TestShushHook:
         hook = ShushHook(True)
         
         mock_task.nornir.processors = [mock_processor_compatible]
+        
+        # Mock the hook's context to include a task_model with canonical_id
+        mock_task_model = MagicMock()
+        mock_task_model.canonical_id = "test_task"
+        hook._current_context = {"task_model": mock_task_model}
 
         hook.task_started(mock_task)
 
@@ -107,6 +109,11 @@ class TestShushHook:
         
         mock_task.nornir.processors = [mock_processor_compatible]
         mock_task.name = "task1"
+        
+        # Mock the hook's context to include a task_model with canonical_id
+        mock_task_model = MagicMock()
+        mock_task_model.canonical_id = "task1"
+        hook._current_context = {"task_model": mock_task_model}
 
         hook.task_started(mock_task)
 
@@ -120,6 +127,11 @@ class TestShushHook:
         mock_task.nornir._nornflow_suppressed_tasks = {"task1"}
         mock_task.nornir.processors = [mock_processor_compatible]
         mock_task.name = "task2"
+        
+        # Mock the hook's context to include a task_model with canonical_id
+        mock_task_model = MagicMock()
+        mock_task_model.canonical_id = "task2"
+        hook._current_context = {"task_model": mock_task_model}
 
         hook.task_started(mock_task)
 
@@ -131,6 +143,11 @@ class TestShushHook:
         hook = ShushHook(True)
         
         mock_task.nornir.processors = [mock_processor_incompatible, mock_processor_compatible]
+        
+        # Mock the hook's context to include a task_model with canonical_id
+        mock_task_model = MagicMock()
+        mock_task_model.canonical_id = "test_task"
+        hook._current_context = {"task_model": mock_task_model}
 
         hook.task_started(mock_task)
 
@@ -144,6 +161,11 @@ class TestShushHook:
         mock_task.name = "test_task"
         mock_task.nornir = mock_nornir
         mock_task.nornir._nornflow_suppressed_tasks = {"test_task", "other_task"}
+        
+        # Mock the hook's context to include a task_model with canonical_id
+        mock_task_model = MagicMock()
+        mock_task_model.canonical_id = "test_task"
+        hook._current_context = {"task_model": mock_task_model}
 
         hook.task_completed(mock_task, MagicMock())
 
@@ -166,6 +188,11 @@ class TestShushHook:
         mock_task.name = "test_task"
         mock_task.nornir = mock_nornir
         mock_task.nornir._nornflow_suppressed_tasks = {"other_task"}
+        
+        # Mock the hook's context to include a task_model with canonical_id
+        mock_task_model = MagicMock()
+        mock_task_model.canonical_id = "test_task"
+        hook._current_context = {"task_model": mock_task_model}
 
         hook.task_completed(mock_task, MagicMock())
 
@@ -215,29 +242,45 @@ class TestShushHook:
         
         assert result is False
 
-    def test_get_resolved_value_with_jinja2_expression_true(self, mock_task, mock_vars_manager, mock_device_context):
+    def test_get_resolved_value_with_jinja2_expression_true(self, mock_task, mock_vars_manager):
         """Test get_resolved_value with Jinja2 expression that evaluates to True."""
         hook = ShushHook("{{ true }}")
         
-        mock_device_context.resolve_value.return_value = "true"
+        # Configure vars_manager to return "true" string when resolving
+        mock_vars_manager.resolve_string.return_value = "true"
         
+        # Configure hook context
         hook._current_context = {"vars_manager": mock_vars_manager}
+        
+        # Configure mock task inventory for host extraction
+        mock_host = MagicMock()
+        mock_host.name = "test_host"
+        mock_task.nornir.inventory.hosts = {"test_host": mock_host}
         
         result = hook.get_resolved_value(mock_task, as_bool=True, default=False)
         
         assert result is True
+        mock_vars_manager.resolve_string.assert_called_with("{{ true }}", "test_host")
 
-    def test_get_resolved_value_with_jinja2_expression_false(self, mock_task, mock_vars_manager, mock_device_context):
+    def test_get_resolved_value_with_jinja2_expression_false(self, mock_task, mock_vars_manager):
         """Test get_resolved_value with Jinja2 expression that evaluates to False."""
         hook = ShushHook("{{ false }}")
         
-        mock_device_context.resolve_value.return_value = "false"
+        # Configure vars_manager to return "false" string when resolving
+        mock_vars_manager.resolve_string.return_value = "false"
         
+        # Configure hook context
         hook._current_context = {"vars_manager": mock_vars_manager}
+        
+        # Configure mock task inventory for host extraction
+        mock_host = MagicMock()
+        mock_host.name = "test_host"
+        mock_task.nornir.inventory.hosts = {"test_host": mock_host}
         
         result = hook.get_resolved_value(mock_task, as_bool=True, default=False)
         
         assert result is False
+        mock_vars_manager.resolve_string.assert_called_with("{{ false }}", "test_host")
 
     def test_hook_with_truthy_non_boolean_values(self):
         """Test hook handles truthy non-boolean values correctly."""

@@ -7,7 +7,7 @@
   - [Hooks as Nornir Processors](#hooks-as-nornir-processors)
   - [Execution Lifecycle](#execution-lifecycle)
   - [Performance Characteristics](#performance-characteristics)
-- [Built-in Hooks](#built-in-hooks)
+- [Built-in Hooks](#nornflows-built-in-hooks)
   - [The `if` Hook](#the-if-hook)
   - [The `set_to` Hook](#the-set_to-hook)
   - [The `shush` Hook](#the-shush-hook)
@@ -156,6 +156,30 @@ if: "{{ count > 5 }}"
 if: "{{ host.name }}"  # Returns string
 if: "{{ vlans }}"      # Returns list
 ```
+
+##### Template Validation Note
+
+When using the `if` hook, task arguments (`args`) are validated before the `if` condition is evaluated. This means if your args reference a variable that might not exist, the workflow will fail with a template error even when the `if` condition would have been `False`.
+
+**Safe pattern for conditional tasks with potentially-missing variables:**
+
+```yaml
+tasks:
+  # ❌ Unsafe - will fail if 'optional_var' doesn't exist
+  - name: echo
+    if: "{{ 'optional_var' | is_set }}"
+    args:
+      msg: "{{ optional_var }}"
+  
+  # ✅ Safe - uses default filter to handle missing variable
+  - name: echo
+    if: "{{ 'optional_var' | is_set }}"
+    args:
+      msg: "{{ optional_var | default('fallback') }}"
+```
+
+This behavior is intentional - it catches template errors early during development rather than hiding them behind conditional logic.
+
 **Using the `if` Hook with Jinja2 Expressions**
 ```yaml
 tasks:
@@ -167,6 +191,10 @@ tasks:
     
   - name: complex_condition
     if: "{{ host.data.site == 'prod' and maintenance_mode == false }}"
+
+  # Using the is_set filter to check for variable existence
+  - name: run_if_var_exists
+    if: "{{ 'my_runtime_var' | is_set }}"
 ```
 
 ##### Filter Function Details
@@ -272,7 +300,7 @@ You are encouraged to refer to the source code for the `shush` Hook [here](../no
 
 1. **task_started**: Checks for compatible processors with `supports_shush_hook` attribute
 2. Evaluates the configured value (boolean or Jinja2 expression)
-3. If the value evaluates to `True`: Marks task in suppression set on Nornir instance
+3. If the value evaluates to `True`: Marks task in suppression set on Nornir instance. It uses a unique key (combining task name and ID) to correctly handle multiple tasks with the same name.
 4. Output processor checks suppression set and skips output display while preserving all data
 5. **task_completed**: Removes task from suppression set after completion
 
@@ -337,18 +365,32 @@ processors:
     # ⚠️ shush won't work unless MyCustomProcessor supports it
 ```
 
-To support `shush` in a custom processor:
+To support `shush` in a custom processor, your processor's code would have to include something like this:
 
 ```python
 class MyCustomProcessor(Processor):
+    """Custom processor that supports the shush hook for output suppression."""
+    
     supports_shush_hook = True
     
-    def task_instance_completed(self, task: Task, host: Host, result: MultiResult):
-        if hasattr(task.nornir, '_nornflow_suppressed_tasks'):
-            if task.name in task.nornir._nornflow_suppressed_tasks:
-                return
+    def _is_output_suppressed(self, task: Task) -> bool:
+        if not hasattr(task.nornir, "_nornflow_suppressed_tasks"):
+            return False
+
+        for proc in task.nornir.processors:
+            if hasattr(proc, "task_specific_context"):
+                nornflow_task_model = proc.task_specific_context.get("task_model")
+                return nornflow_task_model.canonical_id in task.nornir._nornflow_suppressed_tasks
+    
+    def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
+        """Process task completion and handle output suppression."""
+        suppress_output = self._is_output_suppressed(task)
         
-        print(result)
+        if suppress_output:
+            # Skip printing or handle suppressed output (e.g., print a shushed message)
+            print(f"Task '{task.name}' on '{host.name}' output suppressed.")
+        else:
+            # Normal output logic here ...
 ```
 
 ## Hook Configuration
@@ -586,8 +628,6 @@ class SimpleValidationHook(Hook):
 
 The base `Hook` class already provides default implementations (empty `pass` statements) for all lifecycle methods, so your custom hook only needs to inherit from `Hook` and set `hook_name`.
 
-Here's a clearer rewrite of the "Execution Scopes" section:
-
 ### Execution Scopes
 
 Control whether your hook executes once per task or independently for each host using the `run_once_per_task` class attribute:
@@ -635,7 +675,7 @@ class MyHook(Hook):
 
 ### Jinja2 Template Support
 
-NornFlow provides an optional [`Jinja2ResolvableMixin`](../nornflow/hooks/mixins.py) that makes it easy to add Jinja2 template support to your custom hooks. This mixin handles all the complexity of detecting Jinja2 expressions, validating them during workflow preparation, resolving them through the variable system at runtime, and converting results to the appropriate type.  
+NornFlow provides an optional `Jinja2ResolvableMixin` that makes it easy to add Jinja2 template support to your custom hooks. This mixin handles all the complexity of detecting Jinja2 expressions, validating them during workflow preparation, resolving them through the variable system at runtime, and converting results to the appropriate type.  
 
 #### When to Use the Mixin
 
@@ -826,7 +866,7 @@ class ShushHook(Hook, Jinja2ResolvableMixin):
             ...
 ```
 
-**The `if` hook** (see [source](../nornflow/builtins/hooks/if_hook.py)) uses the mixin for Jinja2 expression support:
+**The `if` hook** (see source) uses the mixin for Jinja2 expression support:
 ```python
 class IfHook(Hook, Jinja2ResolvableMixin):
     hook_name = "if"

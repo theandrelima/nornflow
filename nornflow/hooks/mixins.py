@@ -168,16 +168,9 @@ class Jinja2ResolvableMixin:
         """
         vars_manager = self.context.get("vars_manager")
         if not vars_manager:
-            raise HookError(
-                "vars_manager not available in hook context. "
-                "get_resolved_value() can only be called from hook lifecycle methods "
-                "(task_started, task_instance_started, etc.) where the execution "
-                "framework has populated the context. It cannot be called from "
-                "__init__() or execute_hook_validations()."
-            )
+            raise HookError(f"{self.hook_name or 'Hook'}: Variables manager not available in context.")
 
-        device_context = vars_manager.get_device_context(host.name)
-        return device_context.resolve_value(value)
+        return vars_manager.resolve_string(value, host.name)
 
     def _to_bool(self, value: Any) -> bool:
         """Convert a value to boolean.

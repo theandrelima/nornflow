@@ -163,10 +163,40 @@ tasks:
 
 **`random_choice`**
 ```yaml
-# Select random element from list
-{{ ['server1', 'server2', 'server3'] | random_choice }}
-# Result: 'server2' (randomly selected)
+# Pick a random item from a list
+{{ [1, 2, 3, 4, 5] | random_choice }}
 ```
+
+**`is_set`**
+```yaml
+# Check if a variable exists and is not None
+# Useful for conditional logic, including usage in 'if' hooks
+
+# Check simple variable
+{{ 'my_var' | is_set }}
+
+# Check nested variable path
+{{ 'my_var.nested.key' | is_set }}
+
+# Check host attribute
+{{ 'host.platform' | is_set }}
+
+# Usage in 'if' hook
+tasks:
+  - name: backup_config_task
+    if: "{{ 'running_config' | is_set }}"
+```
+
+> **What counts as "set":** The `is_set` filter returns `True` if a variable exists and is not `None`. Empty values like `""`, `[]`, `{}`, and `0` are considered "set" because they are valid assigned values. Only `None` or undefined variables return `False`.
+
+> **Template validation with `if` hooks:** When using `is_set` with the `if` hook, task arguments (`args`) are validated before the `if` condition is evaluated. If your args reference variables that might not exist, the workflow will fail with a template error even if `if` would have been `False`. To handle potentially-missing variables in args, use the `default` filter:
+> ```yaml
+> tasks:
+>   - name: echo
+>     if: "{{ 'optional_var' | is_set }}"
+>     args:
+>       msg: "{{ optional_var | default('fallback value') }}"
+> ```
 
 ## NornFlow Python Wrapper Filters
 
@@ -190,7 +220,7 @@ These provide Python-like functionality not available in standard Jinja2:
 
 ## Filter Chaining
 
-Filters can be chained for complex transformations:
+Filters can be chained to perform complex transformations:
 
 ```yaml
 # Clean and format interface names
@@ -214,6 +244,9 @@ Filters can be chained for complex transformations:
 
 # Handle missing data gracefully
 {{ host.data.get('vlan_id', 1) | int }}
+
+# Check existence before use (using is_set)
+{{ 'variable_name' | is_set }}
 ```
 
 ### List Processing

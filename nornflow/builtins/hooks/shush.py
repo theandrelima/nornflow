@@ -1,4 +1,6 @@
 # ruff: noqa: SLF001, T201
+from nornir.core.task import AggregatedResult, Task
+
 from nornflow.hooks import Hook, Jinja2ResolvableMixin
 
 
@@ -20,7 +22,7 @@ class ShushHook(Hook, Jinja2ResolvableMixin):
     hook_name = "shush"
     run_once_per_task = True
 
-    def task_started(self, task: "Task") -> None:
+    def task_started(self, task: Task) -> None:
         """Mark task for output suppression if conditions are met."""
         should_suppress = self.get_resolved_value(task, host=None, as_bool=True, default=False)
 
@@ -41,9 +43,12 @@ class ShushHook(Hook, Jinja2ResolvableMixin):
 
         if not hasattr(task.nornir, "_nornflow_suppressed_tasks"):
             task.nornir._nornflow_suppressed_tasks = set()
-        task.nornir._nornflow_suppressed_tasks.add(task.name)
 
-    def task_completed(self, task: "Task", result: "AggregatedResult") -> None:
+        task_model = self.context.get("task_model")
+        task.nornir._nornflow_suppressed_tasks.add(task_model.canonical_id)
+
+    def task_completed(self, task: Task, result: AggregatedResult) -> None:
         """Remove task from suppression set after completion."""
         if hasattr(task.nornir, "_nornflow_suppressed_tasks"):
-            task.nornir._nornflow_suppressed_tasks.discard(task.name)
+            task_model = self.context.get("task_model")
+            task.nornir._nornflow_suppressed_tasks.discard(task_model.canonical_id)

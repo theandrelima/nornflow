@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from nornir.core.inventory import Host, Inventory
+from nornir.core.inventory import Host
 from nornir.core.task import Result, Task
 
 from nornflow.builtins.hooks import IfHook
