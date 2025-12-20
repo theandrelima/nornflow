@@ -75,7 +75,7 @@ class DefaultNornFlowProcessor(Processor):
             if hasattr(proc, "task_specific_context"):
                 nornflow_task_model = proc.task_specific_context.get("task_model")
                 return nornflow_task_model.canonical_id in task.nornir._nornflow_suppressed_tasks
-        
+
         return False
 
     def _format_task_output(self, result: Result, suppress_output: bool) -> str:
