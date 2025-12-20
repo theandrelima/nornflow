@@ -53,7 +53,7 @@ class TaskModel(HookableModel):
         Combines the task name with the model ID to create a garanteed always-unique
         identifier that distinguishes between different instances of the same task
         function in a workflow execution.
-        
+
         Returns:
             A unique string identifier for this task instance.
         """
