@@ -464,7 +464,7 @@ class TestCustomFilters:
     def test_regex_replace_with_groups(self, setup_manager):
         """Test regex_replace with capture groups."""
         result = setup_manager.resolve_string("{{ 'abc123def' | regex_replace('(\\d+)', '[\\1]') }}", "test_device")
-        assert result == 'abc[\x01]def'
+        assert result == "abc[\x01]def"
 
     def test_to_snake_case_mixed_case(self, setup_manager):
         """Test to_snake_case with mixed case and numbers."""
@@ -697,7 +697,7 @@ class TestCustomFilters:
             setup_manager.resolve_string("{{ list | chunk_list(0) }}", "test_device")
 
     def test_enumerate_with_zero_start(self, setup_manager):
-        """Test enumerate with start 0."""
+        """Test enumerate with zero start."""
         setup_manager.set_runtime_variable("items", ["a", "b"], "test_device")
         result = setup_manager.resolve_string("{{ items | enumerate(0) }}", "test_device")
         assert result == "[(0, 'a'), (1, 'b')]"
@@ -778,3 +778,49 @@ class TestCustomFilters:
         result = setup_manager.resolve_string("{{ dict1 | deep_merge(dict2) }}", "test_device")
         expected = "{'a': 1}"
         assert result == expected
+
+    def test_sorted_basic(self, setup_manager):
+        """Test sorted filter."""
+        setup_manager.set_runtime_variable("unsorted", [3, 1, 4, 1, 5], "test_device")
+        result = setup_manager.resolve_string("{{ unsorted | sorted }}", "test_device")
+        assert result == "[1, 1, 3, 4, 5]"
+
+    def test_reversed_basic(self, setup_manager):
+        """Test reversed filter."""
+        setup_manager.set_runtime_variable("list", [1, 2, 3], "test_device")
+        result = setup_manager.resolve_string("{{ list | reversed }}", "test_device")
+        assert result == "[3, 2, 1]"
+
+    def test_strip_basic(self, setup_manager):
+        """Test strip filter."""
+        result = setup_manager.resolve_string("{{ '  hello  ' | strip }}", "test_device")
+        assert result == "hello"
+
+    def test_joinx_basic(self, setup_manager):
+        """Test joinx filter."""
+        setup_manager.set_runtime_variable("list", ["a", "b", "c"], "test_device")
+        result = setup_manager.resolve_string("{{ '-' | joinx(list) }}", "test_device")
+        assert result == "a-b-c"
+
+    def test_type_basic(self, setup_manager):
+        """Test type filter."""
+        result = setup_manager.resolve_string("{{ 'string' | type }}", "test_device")
+        assert result == "str"
+
+    def test_any_basic(self, setup_manager):
+        """Test any filter."""
+        setup_manager.set_runtime_variable("list", [False, True, False], "test_device")
+        result = setup_manager.resolve_string("{{ list | any }}", "test_device")
+        assert result == "True"
+
+    def test_all_basic(self, setup_manager):
+        """Test all filter."""
+        setup_manager.set_runtime_variable("list", [True, True, True], "test_device")
+        result = setup_manager.resolve_string("{{ list | all }}", "test_device")
+        assert result == "True"
+
+    def test_len_basic(self, setup_manager):
+        """Test len filter."""
+        setup_manager.set_runtime_variable("list", [1, 2, 3], "test_device")
+        result = setup_manager.resolve_string("{{ list | len }}", "test_device")
+        assert result == "3"
