@@ -396,6 +396,14 @@ tasks:
     args:
       msg: "Site: {{ host.data.site_code if 'host.data.site_code' | is_set else 'UNKNOWN' }}"
   ```
+- **Template validation with `if` hooks**: When using `is_set` with the `if` hook, task arguments are validated before the condition is evaluated. If your args reference variables that might not exist, use the `default` filter:
+  ```yaml
+  # Safe pattern for potentially-missing variables
+  - name: process_data
+    if: "{{ 'optional_data' | is_set }}"
+    args:
+      data: "{{ optional_data | default({}) }}"
+  ```
 
 ## Variable Isolation
 

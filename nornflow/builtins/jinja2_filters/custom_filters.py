@@ -6,6 +6,7 @@ from typing import Any
 
 import jmespath
 from jinja2 import pass_context
+from jinja2.runtime import Context, Undefined
 
 
 def flatten_list(lst: list[Any]) -> list[Any]:
@@ -112,88 +113,141 @@ def random_choice(lst: list[Any]) -> Any:
     return random.choice(lst) if lst else None  # noqa: S311
 
 
-@pass_context
-def is_set(context: dict[str, Any], value: str) -> bool:
-    """
-    Check if a variable is set (not None/undefined) in the current Jinja2 context.
-
-    Supports namespace-aware checking:
-    - 'x': Checks in NornFlow default namespace (context['x'])
-    - 'host.x': Checks in Nornir host namespace (context['host'].x or context['host']['x'])
-
-    This filter is particularly useful with the 'if' hook for conditional task execution
-    based on variable existence, allowing workflows to adapt dynamically to runtime state.
+def _resolve_from_context(context: Context, key: str) -> tuple[bool, Any]:
+    """Try to resolve a key from Jinja2 context.
 
     Args:
-        context: The Jinja2 context dictionary (passed via @pass_context).
-        value: The variable path string to check (e.g., 'my_var' or 'host.platform').
+        context: The Jinja2 runtime context.
+        key: The key to look up.
+
+    Returns:
+        Tuple of (found, value). If not found, returns (False, None).
+    """
+    try:
+        value = context.resolve(key)
+
+        if isinstance(value, Undefined):
+            return (False, None)
+        return (True, value)
+    except Exception:
+        return (False, None)
+
+
+def _nested_exists(context: Context, path: str) -> bool:
+    """Check if a nested path exists in the Jinja2 context.
+
+    Supports dot-separated paths (e.g., 'data.key.subkey').
+    Uses Jinja2's context.resolve() for the first key, then traverses nested structures.
+    Returns False if any part of the path is missing or inaccessible.
+
+    Args:
+        context: The Jinja2 runtime context.
+        path: Dot-separated path.
+
+    Returns:
+        True if the path exists and the final value is not None, False otherwise.
+    """
+    if not path:
+        return False
+
+    parts = path.split(".")
+
+    found, current = _resolve_from_context(context, parts[0])
+    if not found:
+        return False
+
+    for part in parts[1:]:
+        if current is None:
+            return False
+        if isinstance(current, dict):
+            if part not in current:
+                return False
+            current = current[part]
+        else:
+            try:
+                current = getattr(current, part)
+            except AttributeError:
+                return False
+
+    return current is not None
+
+
+def _nested_exists_in_obj(obj: Any, path: str) -> bool:
+    """Check if a nested path exists in an object or dict.
+
+    Supports dot-separated paths (e.g., 'data.key.subkey').
+    For dicts, uses key access. For objects, uses attribute access.
+    Returns False if any part of the path is missing or inaccessible.
+
+    Args:
+        obj: The object or dict to check.
+        path: Dot-separated path.
+
+    Returns:
+        True if the path exists and the final value is not None, False otherwise.
+    """
+    if not path:
+        return obj is not None
+
+    parts = path.split(".")
+    current = obj
+
+    for part in parts:
+        if current is None:
+            return False
+        if isinstance(current, dict):
+            if part not in current:
+                return False
+            current = current[part]
+        else:
+            try:
+                current = getattr(current, part)
+            except AttributeError:
+                return False
+
+    return current is not None
+
+
+@pass_context
+def is_set(context: Context, value: str) -> bool:
+    """Check if a variable is set (not None/undefined) in the Jinja2 context.
+
+    Supports namespace-aware checking with nested paths using dot notation:
+    - 'x' or 'x.y.z': Checks in NornFlow default namespace.
+    - 'host.x' or 'host.x.y.z': Checks in Nornir host namespace.
+
+    Useful with the 'if' hook for conditional task execution based on variable existence.
+
+    Args:
+        context: The Jinja2 runtime context (passed automatically by @pass_context).
+        value: The variable path string (e.g., 'my_var', 'host.platform', 'my_var.nested.key').
 
     Returns:
         True if the variable is set and not None, False otherwise.
 
     Examples:
-        Basic usage in Jinja2 expressions:
+        {{ 'my_var' | is_set }}              # True if my_var exists and is not None
+        {{ 'my_var.nested.key' | is_set }}   # True if nested path exists
+        {{ 'host.name' | is_set }}           # True if host.name exists and is not None
+        {{ 'host.data.key' | is_set }}       # True if nested host data exists
 
-        {{ 'my_var' | is_set }}          # True if my_var exists and is not None
-        {{ 'host.name' | is_set }}       # True if host.name exists and is not None
-
-        Usage with the 'if' hook for conditional task execution:
-
-        # Skip task if a required variable is not set
+        # With 'if' hook:
         tasks:
           - name: deploy_config
             if: "{{ 'backup_completed' | is_set }}"
-            # Task only runs if 'backup_completed' variable exists and is not None
-
-        # Check host-specific data before running task
-        tasks:
-          - name: ios_upgrade
-            if: "{{ 'host.ios_version' | is_set }}"
-            # Task only runs on hosts where ios_version is defined
-
-        # Combine with other conditions using Jinja2 logic
-        tasks:
-          - name: security_scan
-            if: "{{ ('host.platform' | is_set) and ('scan_enabled' | is_set) }}"
-            # Task runs only if both host.platform and scan_enabled are set
-
-        # Use in complex expressions with defaults
-        tasks:
-          - name: conditional_backup
-            if: "{{ 'force_backup' | is_set or 'host.needs_backup' | is_set }}"
-            # Task runs if either force_backup OR host.needs_backup is set
     """
     if not isinstance(value, str):
         return False
 
-    # Split on first dot to separate namespace from key
-    parts = value.split(".", 1)
-    if len(parts) == 1:
-        # No namespace specified, check NornFlow default namespace
-        var_name = parts[0]
-        return var_name in context and context[var_name] is not None
-    # Namespace specified
-    namespace, var_name = parts
-    if namespace == "host":
-        # Check Nornir host namespace
-        host_obj = context.get("host")
-        if host_obj is None:
+    if value.startswith("host."):
+        path = value[5:]
+        found, host_obj = _resolve_from_context(context, "host")
+        if not found or not host_obj:
             return False
-        # Try attribute access first, then dict access
-        try:
-            val = getattr(host_obj, var_name, None)
-            return val is not None
-        except AttributeError:
-            # Fallback to dict-like access if host supports it
-            return (
-                hasattr(host_obj, "__getitem__") and var_name in host_obj and host_obj[var_name] is not None
-            )
-    else:
-        # Unknown namespace, treat as not set
-        return False
+        return _nested_exists_in_obj(host_obj, path)
+    return _nested_exists(context, value)
 
 
-# Registry of custom filters
 CUSTOM_FILTERS = {
     "flatten_list": flatten_list,
     "unique_list": unique_list,

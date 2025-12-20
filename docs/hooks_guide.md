@@ -156,6 +156,30 @@ if: "{{ count > 5 }}"
 if: "{{ host.name }}"  # Returns string
 if: "{{ vlans }}"      # Returns list
 ```
+
+##### Template Validation Note
+
+When using the `if` hook, task arguments (`args`) are validated before the `if` condition is evaluated. This means if your args reference a variable that might not exist, the workflow will fail with a template error even when the `if` condition would have been `False`.
+
+**Safe pattern for conditional tasks with potentially-missing variables:**
+
+```yaml
+tasks:
+  # ❌ Unsafe - will fail if 'optional_var' doesn't exist
+  - name: echo
+    if: "{{ 'optional_var' | is_set }}"
+    args:
+      msg: "{{ optional_var }}"
+  
+  # ✅ Safe - uses default filter to handle missing variable
+  - name: echo
+    if: "{{ 'optional_var' | is_set }}"
+    args:
+      msg: "{{ optional_var | default('fallback') }}"
+```
+
+This behavior is intentional - it catches template errors early during development rather than hiding them behind conditional logic.
+
 **Using the `if` Hook with Jinja2 Expressions**
 ```yaml
 tasks:

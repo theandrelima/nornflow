@@ -175,6 +175,9 @@ tasks:
 # Check simple variable
 {{ 'my_var' | is_set }}
 
+# Check nested variable path
+{{ 'my_var.nested.key' | is_set }}
+
 # Check host attribute
 {{ 'host.platform' | is_set }}
 
@@ -183,6 +186,17 @@ tasks:
   - name: backup_config_task
     if: "{{ 'running_config' | is_set }}"
 ```
+
+> **What counts as "set":** The `is_set` filter returns `True` if a variable exists and is not `None`. Empty values like `""`, `[]`, `{}`, and `0` are considered "set" because they are valid assigned values. Only `None` or undefined variables return `False`.
+
+> **Template validation with `if` hooks:** When using `is_set` with the `if` hook, task arguments (`args`) are validated before the `if` condition is evaluated. If your args reference variables that might not exist, the workflow will fail with a template error even if `if` would have been `False`. To handle potentially-missing variables in args, use the `default` filter:
+> ```yaml
+> tasks:
+>   - name: echo
+>     if: "{{ 'optional_var' | is_set }}"
+>     args:
+>       msg: "{{ optional_var | default('fallback value') }}"
+> ```
 
 ## NornFlow Python Wrapper Filters
 
