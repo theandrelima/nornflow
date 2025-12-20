@@ -86,7 +86,7 @@ class TestJinjaFilters:
     def test_utility_filters(self, setup_manager):
         """Test utility filters."""
         # Test random_choice with a seed for predictability
-        import random
+        
 
         random.seed(42)  # Set seed for predictable results
 
@@ -377,7 +377,6 @@ class TestCustomFilters:
 
     def test_random_choice_basic(self, setup_manager):
         """Test random choice from list."""
-        import random
         random.seed(42)  # For predictable results
         choices = ["a", "b", "c"]
         setup_manager.set_runtime_variable("choices", choices, "test_device")
@@ -496,7 +495,7 @@ class TestCustomFilters:
 
     def test_random_choice_with_seed(self, setup_manager):
         """Test random_choice predictability with seed."""
-        import random
+        
         random.seed(123)
         choices = ["x", "y", "z"]
         setup_manager.set_runtime_variable("choices", choices, "test_device")
@@ -660,7 +659,7 @@ class TestCustomFilters:
         assert result == "False"
 
     def test_deep_merge_multiple_levels(self, setup_manager):
-        """Test deep_merge with multiple nesting levels."""
+        """Test deep merge with multiple nesting levels."""
         dict1 = {"a": {"b": {"c": 1}}}
         dict2 = {"a": {"b": {"d": 2}, "e": 3}}
         setup_manager.set_runtime_variable("dict1", dict1, "test_device")
