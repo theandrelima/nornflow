@@ -369,18 +369,28 @@ To support `shush` in a custom processor, your processor's code would have to in
 
 ```python
 class MyCustomProcessor(Processor):
+    """Custom processor that supports the shush hook for output suppression."""
+    
     supports_shush_hook = True
     
-    def task_instance_completed(self, task: Task, host: Host, result: MultiResult):
-        suppression_key = f"{task.name}_{task.task_id}"
+    def _is_output_suppressed(self, task: Task) -> bool:
+        if not hasattr(task.nornir, "_nornflow_suppressed_tasks"):
+            return False
+
+        for proc in task.nornir.processors:
+            if hasattr(proc, "task_specific_context"):
+                nornflow_task_model = proc.task_specific_context.get("task_model")
+                return nornflow_task_model.canonical_id in task.nornir._nornflow_suppressed_tasks
+    
+    def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
+        """Process task completion and handle output suppression."""
+        suppress_output = self._is_output_suppressed(task)
         
-        if (
-            hasattr(task.nornir, '_nornflow_suppressed_tasks')
-            and suppression_key in task.nornir._nornflow_suppressed_tasks
-        ):
-            return
-        
-        print(result)
+        if suppress_output:
+            # Skip printing or handle suppressed output (e.g., print a shushed message)
+            print(f"Task '{task.name}' on '{host.name}' output suppressed.")
+        else:
+            # Normal output logic here ...
 ```
 
 ## Hook Configuration
