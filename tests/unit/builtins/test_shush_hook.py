@@ -1,10 +1,6 @@
 # ruff: noqa: SLF001, T201
 from unittest.mock import MagicMock
-
-import pytest
-
 from nornflow.builtins.hooks import ShushHook
-from nornflow.hooks.exceptions import HookValidationError
 
 
 class TestShushHook:

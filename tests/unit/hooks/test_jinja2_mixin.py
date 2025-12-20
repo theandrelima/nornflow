@@ -1,12 +1,10 @@
-from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from nornir.core.inventory import Host
-from nornir.core.task import Task
 
 from nornflow.hooks import Hook, Jinja2ResolvableMixin
-from nornflow.hooks.exceptions import HookError, HookValidationError
+from nornflow.hooks.exceptions import HookError
 
 
 class Jinja2MixinTestHook(Hook, Jinja2ResolvableMixin):
