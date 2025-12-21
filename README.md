@@ -25,9 +25,15 @@ NornFlow bridges the gap between development and operations teams by providing:
 
 NornFlow promotes collaboration between developers and network engineers:
 
-⚡️ **Unlimited Power for Developer**: Write automation logic as pure Python functions with Nornir's task interface. No boilerplate, just clean Python code.
+⚡️ **Unlimited Power for Developers**: Write automation logic as pure Python functions with Nornir's task interface. No boilerplate, just clean Python code.
 
-🚀 **Productivity for Operators**: Define and run workflows with familiar YAML syntax similar to Ansible playbooks, enabling network engineers to be productive regardless of their Python programming background.
+🚀 **Productivity for Operators**: Define and run workflows with familiar YAML syntax, enabling network engineers to be productive regardless of their Python programming background.
+
+🔧 **Advanced Automation Capabilities**: Extends Nornir with powerful features beyond vanilla capabilities, including:
+- Multi-level variable system with precedence (environment, global, domain, workflow, CLI, runtime)
+- Rich Jinja2 filters for advanced templating and data manipulation
+- Hooks system for extending task behavior without modifying task code
+- Flexible failure strategies (skip-failed, fail-fast, run-all) for robust error handling
 
 🧩 **Project-friendly**: Brings predictable structure to Nornir projects with:
 - Standardized directory organization
