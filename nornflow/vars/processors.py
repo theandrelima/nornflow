@@ -77,19 +77,19 @@ class NornFlowVariableProcessor(Processor):
 
     def _requires_deferred_templates(self, task: Task) -> bool:
         """Check if any hook for this task requires deferred template processing.
-        
+
         Uses capability discovery to detect hooks that declare requires_deferred_templates = True.
         """
         for processor in task.nornir.processors:
-            if hasattr(processor, 'task_hooks'):
+            if hasattr(processor, "task_hooks"):
                 for hook in processor.task_hooks:
-                    if getattr(hook, 'requires_deferred_templates', False):
+                    if getattr(hook, "requires_deferred_templates", False):
                         return True
         return False
 
     def task_instance_started(self, task: Task, host: Host) -> None:
         """Set up host context and conditionally defer template resolution.
-        
+
         Processing strategy selection:
         - Deferred mode: Store templates if any hook requires it
         - Immediate mode: Process templates now (backward compatibility)
@@ -115,23 +115,23 @@ class NornFlowVariableProcessor(Processor):
 
     def resolve_deferred_params(self, task: Task, host: Host) -> dict[str, Any]:
         """Resolve stored templates just-in-time for task execution.
-        
+
         Called by hook decorators to convert deferred templates into actual parameter values.
         """
         key = (task.name, host.name)
-        
+
         if key not in self._deferred_params:
             return {}
-            
+
         try:
             if self.vars_manager.nornir_host_proxy.current_host_name != host.name:
                 self.vars_manager.nornir_host_proxy.current_host_name = host.name
-                
+
             original_params = self._deferred_params.pop(key)
             resolved_params = self.vars_manager.resolve_data(original_params, host.name)
             logger.debug(f"Resolved templates for '{host.name}' in task '{task.name}'")
             return resolved_params
-            
+
         except Exception:
             logger.exception(f"Error resolving templates for task '{task.name}' on host '{host.name}'")
             self._deferred_params.pop(key, None)
@@ -141,7 +141,7 @@ class NornFlowVariableProcessor(Processor):
         """Clean up host context and any unresolved deferred parameters."""
         self.vars_manager.nornir_host_proxy.current_host_name = None
         logger.debug(f"Cleared current_host_name after task '{task.name}' on host '{host.name}'.")
-        
+
         key = (task.name, host.name)
         if key in self._deferred_params:
             self._deferred_params.pop(key)

@@ -2,7 +2,7 @@
 NornFlow Conditional Execution Hook
 
 This module implements the IfHook, which provides conditional task execution based on
-filter functions or Jinja2 expressions. 
+filter functions or Jinja2 expressions.
 
 Deferred Template Processing
 ===========================
@@ -61,7 +61,7 @@ def skip_if_condition_flagged(task_func: Callable) -> Callable:
 
         resolved_kwargs = kwargs
         for processor in task.nornir.processors:
-            if hasattr(processor, 'resolve_deferred_params'):
+            if hasattr(processor, "resolve_deferred_params"):
                 resolved_kwargs = processor.resolve_deferred_params(task, task.host)
                 break
 
