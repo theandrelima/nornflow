@@ -1,3 +1,28 @@
+"""
+NornFlow Conditional Execution Hook
+
+This module implements the IfHook, which provides conditional task execution based on
+filter functions or Jinja2 expressions. 
+
+Deferred Template Processing
+===========================
+
+The IfHook uses NornFlow's hook-driven template resolution system by declaring:
+    requires_deferred_templates = True
+
+This enables two-phase processing:
+1. **Phase 1**: Evaluate conditions using variable context (templates not yet resolved)
+2. **Phase 2**: Resolve templates just-in-time only for hosts that pass conditions
+
+This prevents template resolution errors for hosts that would be skipped anyway,
+enabling robust conditional workflows with variables that may not exist on all hosts.
+
+Example:
+    Task with "{{ some_var }}" parameter and if: hosts=['host1']
+    - host1: has 'some_var', passes condition → template resolved → task executes
+    - host2: missing 'some_var', fails condition → skipped, no template resolution
+"""
+
 import logging
 from collections.abc import Callable
 from functools import wraps
@@ -16,20 +41,9 @@ logger = logging.getLogger(__name__)
 
 
 def skip_if_condition_flagged(task_func: Callable) -> Callable:
-    """
-    Decorator that checks for the 'nornflow_skip_flag' in host.data before executing the task.
+    """Decorator that implements deferred template resolution for conditional execution.
 
-    If the flag is set to True, returns a skipped Result without executing the original task.
-    Otherwise, executes the original task normally.
-
-    This decorator is applied dynamically by IfHook when conditions are configured,
-    allowing conditional task execution per host without global overhead.
-
-    Args:
-        task_func: The original Nornir task function to wrap.
-
-    Returns:
-        Wrapped function that checks the skip flag before execution.
+    Checks for skip flag and resolves templates just-in-time for non-skipped hosts.
     """
 
     @wraps(task_func)
@@ -44,7 +58,14 @@ def skip_if_condition_flagged(task_func: Callable) -> Callable:
                 failed=False,
                 skipped=True,
             )
-        return task_func(task, **kwargs)
+
+        resolved_kwargs = kwargs
+        for processor in task.nornir.processors:
+            if hasattr(processor, 'resolve_deferred_params'):
+                resolved_kwargs = processor.resolve_deferred_params(task, task.host)
+                break
+
+        return task_func(task, **resolved_kwargs)
 
     return wrapper
 
@@ -82,34 +103,21 @@ class IfHook(Hook, Jinja2ResolvableMixin):
         # OR
         if: false
 
-    Filter Functions:
-        Filter functions must be registered in the filters catalog and should
-        accept a Host object as the first parameter, followed by any custom
-        parameters. They must return a boolean:
-        - True: Host passes the condition, task will execute
-        - False: Host fails the condition, task will be skipped
-
-    Jinja2 Expressions:
-        Expressions are resolved using NornFlow's variable system and must
-        evaluate to a boolean value. Have access to:
-        - host.* namespace (Nornir inventory data)
-        - All NornFlow variables (runtime, CLI, inline, domain, default, env)
-        - Jinja2 filters and functions
-
     Attributes:
         hook_name: "if"
         run_once_per_task: False (evaluates independently for each host)
+        requires_deferred_templates: True (enables two-phase template processing)
     """
 
     hook_name = "if"
     run_once_per_task = False
+    requires_deferred_templates = True
 
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
         """Validate condition configuration during task preparation."""
         super().execute_hook_validations(task_model)
 
         if isinstance(self.value, dict):
-            # Filter function validation
             if len(self.value) != 1:
                 raise HookValidationError("IfHook", [("value_count", "if must specify exactly one filter")])
         elif isinstance(self.value, str):
@@ -124,9 +132,7 @@ class IfHook(Hook, Jinja2ResolvableMixin):
             )
 
     def task_started(self, task: Task) -> None:
-        """Dynamically decorate the task function to enable per-host skipping."""
-        # here we really need to check for 'None' specifically to not
-        # return (and don't skip) when a falsy value is statically passed
+        """Apply skip decorator to enable per-host conditional execution."""
         if self.value is None:
             return
 
@@ -138,7 +144,7 @@ class IfHook(Hook, Jinja2ResolvableMixin):
         logger.debug(f"Applied skip decorator to task '{task.name}' for condition evaluation")
 
     def task_instance_started(self, task: Task, host: Host) -> None:
-        """Evaluate the filter condition and set skip flag if needed."""
+        """Evaluate condition and set skip flag for hosts that fail."""
         if self.value is None:
             return
 
@@ -146,7 +152,6 @@ class IfHook(Hook, Jinja2ResolvableMixin):
             should_skip = False
 
             if isinstance(self.value, dict):
-                # Filter function evaluation
                 should_skip = not self._evaluate_filter_condition(host)
             else:
                 condition = self.get_resolved_value(task, host=host, as_bool=True, default=True)
