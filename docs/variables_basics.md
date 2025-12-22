@@ -15,6 +15,7 @@
   - [Accessing Host Data](#accessing-host-data)
   - [Important Notes](#important-notes)
 - [Variable Isolation](#variable-isolation)
+- [Advanced: Hook-Driven Template Resolution](#advanced-hook-driven-template-resolution)
 - [Best Practices](#best-practices)
 - [Quick Reference](#quick-reference)
 
@@ -69,7 +70,7 @@ By default, NornFlow looks for global variables in the vars directory, specifica
 > **Note:** The vars directory location is set by the `vars_dir` setting in your `nornflow.yaml` file. NornFlow always looks for global variables in `<vars_dir>/defaults.yaml`. If this file is missing, global variable resolution is skipped.
 
 ```yaml
-# vars/defaults.yaml
+# defaults.yaml
 site_contact: "network-team@company.com"
 backup_server: "10.0.0.100"
 ```
@@ -414,6 +415,16 @@ Each device maintains its own variable context during workflow execution:
 - No cross-contamination between devices
 
 This isolation is managed by NornFlow's `NornFlowDeviceContext` class, which creates separate variable contexts for each device. This ensures that tasks running in parallel don't interfere with each other's variables, even when they're modifying variables with the same names.
+
+## Advanced: Hook-Driven Template Resolution
+
+NornFlow includes an advanced feature called Hook-Driven Template Resolution that allows sophisticated conditional workflows. This feature is primarily used by the built-in `if` hook but can be leveraged by custom hooks.
+
+### What It Does
+
+Normally, NornFlow resolves all Jinja2 templates in task arguments before task execution. With hook-driven template resolution, this process can be deferred and performed just-in-time only for hosts that meet specific criteria.
+
+>> NOTE: For developers creating custom hooks, see the [Hooks Guide](hooks_guide.md#hook-driven-template-resolution) for more about the implementation details.
 
 ## Best Practices
 
