@@ -19,6 +19,10 @@ class TestIfHook:
         """Test that hook evaluates per host, not once per task."""
         assert IfHook.run_once_per_task is False
 
+    def test_requires_deferred_templates_flag(self):
+        """Test that hook declares requirement for deferred template processing."""
+        assert IfHook.requires_deferred_templates is True
+
     def test_init_with_filter_value(self):
         """Test hook initialization with filter configuration."""
         hook = IfHook({"platform": "ios"})
@@ -190,9 +194,13 @@ class TestIfHook:
         """Test skip_if_condition_flagged decorator returns skipped result when flag is set."""
         from nornflow.builtins.hooks.if_hook import skip_if_condition_flagged
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_nornir = MagicMock()
+        mock_nornir.processors = []
+        
         mock_task.host = mock_host
+        mock_task.nornir = mock_nornir
         mock_host.data = {'nornflow_skip_flag': True}
         
         @skip_if_condition_flagged
@@ -211,9 +219,13 @@ class TestIfHook:
         """Test skip_if_condition_flagged decorator executes task when flag is not set."""
         from nornflow.builtins.hooks.if_hook import skip_if_condition_flagged
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_nornir = MagicMock()
+        mock_nornir.processors = []
+        
         mock_task.host = mock_host
+        mock_task.nornir = mock_nornir
         mock_host.data = {}
         
         @skip_if_condition_flagged
@@ -223,6 +235,31 @@ class TestIfHook:
         result = dummy_task(mock_task)
         
         assert result.result == "executed"
+
+    def test_skip_if_condition_flagged_decorator_with_deferred_params(self):
+        """Test skip_if_condition_flagged decorator resolves deferred params when processor available."""
+        from nornflow.builtins.hooks.if_hook import skip_if_condition_flagged
+        
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_processor = MagicMock()
+        mock_nornir = MagicMock()
+        
+        mock_processor.resolve_deferred_params.return_value = {"resolved": "param"}
+        mock_nornir.processors = [mock_processor]
+        
+        mock_task.host = mock_host
+        mock_task.nornir = mock_nornir
+        mock_host.data = {}
+        
+        @skip_if_condition_flagged
+        def dummy_task(task, **kwargs):
+            return Result(host=task.host, result=kwargs)
+        
+        result = dummy_task(mock_task)
+        
+        assert result.result == {"resolved": "param"}
+        mock_processor.resolve_deferred_params.assert_called_once_with(mock_task, mock_host)
 
     def test_should_execute_always_returns_true(self):
         """Test that hook executes for every host (run_once_per_task=False)."""
