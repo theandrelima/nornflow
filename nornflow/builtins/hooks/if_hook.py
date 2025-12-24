@@ -62,7 +62,11 @@ def skip_if_condition_flagged(task_func: Callable) -> Callable:
         resolved_kwargs = kwargs
         for processor in task.nornir.processors:
             if hasattr(processor, "resolve_deferred_params"):
-                resolved_kwargs = processor.resolve_deferred_params(task, task.host)
+                resolved = processor.resolve_deferred_params(task, task.host)
+                # Use resolved params if deferred mode was active
+                # otherwise fall back to original kwargs
+                if resolved is not None:
+                    resolved_kwargs = resolved
                 break
 
         return task_func(task, **resolved_kwargs)

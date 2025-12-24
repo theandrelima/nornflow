@@ -113,7 +113,7 @@ class NornFlowVariableProcessor(Processor):
             logger.exception(f"Error processing variables for task '{task.name}' on host '{host.name}'")
             raise
 
-    def resolve_deferred_params(self, task: Task, host: Host) -> dict[str, Any]:
+    def resolve_deferred_params(self, task: Task, host: Host) -> dict[str, Any] | None:
         """Resolve stored templates just-in-time for task execution.
 
         Called by hook decorators to convert deferred templates into actual parameter values.
@@ -121,7 +121,7 @@ class NornFlowVariableProcessor(Processor):
         key = (task.name, host.name)
 
         if key not in self._deferred_params:
-            return {}
+            return None
 
         try:
             if self.vars_manager.nornir_host_proxy.current_host_name != host.name:

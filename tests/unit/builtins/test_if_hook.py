@@ -261,6 +261,56 @@ class TestIfHook:
         assert result.result == {"resolved": "param"}
         mock_processor.resolve_deferred_params.assert_called_once_with(mock_task, mock_host)
 
+    def test_skip_if_condition_flagged_decorator_immediate_mode(self):
+        """Test skip_if_condition_flagged decorator uses kwargs when no deferred params."""
+        from nornflow.builtins.hooks.if_hook import skip_if_condition_flagged
+        
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_processor = MagicMock()
+        mock_nornir = MagicMock()
+        
+        mock_processor.resolve_deferred_params.return_value = None  # No deferred params
+        mock_nornir.processors = [mock_processor]
+        
+        mock_task.host = mock_host
+        mock_task.nornir = mock_nornir
+        mock_host.data = {}
+        
+        @skip_if_condition_flagged
+        def dummy_task(task, **kwargs):
+            return Result(host=task.host, result=kwargs)
+        
+        result = dummy_task(mock_task, original="param")
+        
+        assert result.result == {"original": "param"}
+        mock_processor.resolve_deferred_params.assert_called_once_with(mock_task, mock_host)
+
+    def test_skip_if_condition_flagged_decorator_with_empty_deferred_params(self):
+        """Test skip_if_condition_flagged decorator uses empty dict when deferred params resolve to empty."""
+        from nornflow.builtins.hooks.if_hook import skip_if_condition_flagged
+        
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_processor = MagicMock()
+        mock_nornir = MagicMock()
+        
+        mock_processor.resolve_deferred_params.return_value = {}  # Empty deferred params
+        mock_nornir.processors = [mock_processor]
+        
+        mock_task.host = mock_host
+        mock_task.nornir = mock_nornir
+        mock_host.data = {}
+        
+        @skip_if_condition_flagged
+        def dummy_task(task, **kwargs):
+            return Result(host=task.host, result=kwargs)
+        
+        result = dummy_task(mock_task, original="param")
+        
+        assert result.result == {}  # Should use empty dict, not kwargs
+        mock_processor.resolve_deferred_params.assert_called_once_with(mock_task, mock_host)
+
     def test_should_execute_always_returns_true(self):
         """Test that hook executes for every host (run_once_per_task=False)."""
         hook = IfHook("{{ true }}")
