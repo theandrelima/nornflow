@@ -151,7 +151,6 @@ class NornFlowVariableProcessor(Processor):
         key = (task.name, host.name)
         if key in self._deferred_params:
             self._deferred_params.pop(key)
-            logger.warning(f"Cleaned up unresolved parameters for '{host.name}' in task '{task.name}'")
 
     def task_completed(self, task: Task, result: MultiResult) -> None:
         pass
