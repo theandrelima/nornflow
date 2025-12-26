@@ -397,14 +397,6 @@ tasks:
     args:
       msg: "Site: {{ host.data.site_code if 'host.data.site_code' | is_set else 'UNKNOWN' }}"
   ```
-- **Template validation with `if` hooks**: When using `is_set` with the `if` hook, task arguments are validated before the condition is evaluated. If your args reference variables that might not exist, use the `default` filter:
-  ```yaml
-  # Safe pattern for potentially-missing variables
-  - name: process_data
-    if: "{{ 'optional_data' | is_set }}"
-    args:
-      data: "{{ optional_data | default({}) }}"
-  ```
 
 ## Variable Isolation
 
@@ -418,13 +410,7 @@ This isolation is managed by NornFlow's `NornFlowDeviceContext` class, which cre
 
 ## Advanced: Hook-Driven Template Resolution
 
-NornFlow includes an advanced feature called Hook-Driven Template Resolution that allows sophisticated conditional workflows. This feature is primarily used by the built-in `if` hook but can be leveraged by custom hooks.
-
-### What It Does
-
-Normally, NornFlow resolves all Jinja2 templates in task arguments before task execution. With hook-driven template resolution, this process can be deferred and performed just-in-time only for hosts that meet specific criteria.
-
-> NOTE: For developers creating custom hooks, see the [Hooks Guide](hooks_guide.md#hook-driven-template-resolution) for more about the implementation details.
+For information on Hook-Driven Template Resolution, which allows deferring variable resolution in task parameters when hooks need to evaluate conditions first, see the [Hooks Guide](hooks_guide.md#hook-driven-template-resolution).
 
 ## Best Practices
 
