@@ -1,12 +1,12 @@
-# Hooks Guide
+# NornFlow Hooks Guide
 
 ## Table of Contents
-- [Introduction](#introduction)
-- [What Are Hooks?](#what-are-hooks)
-- [Hook Architecture](#hook-architecture)
-  - [Hooks as Nornir Processors](#hooks-as-nornir-processors)
-  - [Execution Lifecycle](#execution-lifecycle)
-  - [Performance Characteristics](#performance-characteristics)
+
+- [Overview](#overview)
+- [Hooks as Nornir Processors](#hooks-as-nornir-processors)
+- [Execution Lifecycle](#execution-lifecycle)
+- [Performance Characteristics](#performance-characteristics)
+- [Hook-Driven Template Resolution](#hook-driven-template-resolution)
 - [Built-in Hooks](#nornflows-built-in-hooks)
   - [The `if` Hook](#the-if-hook)
   - [The `set_to` Hook](#the-set_to-hook)
@@ -28,23 +28,17 @@
   - [Hook Processor Integration](#hook-processor-integration)
   - [Flyweight Pattern Implementation](#flyweight-pattern-implementation)
 
-## Introduction
+## Overview
 
-Hooks are NornFlow's primary extension mechanism, allowing you to inject custom behavior into task execution without modifying task code. They provide a clean, declarative way to add functionality at specific points in the task lifecycle.
+Hooks are a powerful extension mechanism provided by NornFlow, allowing you to inject custom behavior into task execution without modifying task code. They provide a clean, declarative way to add functionality at specific points in the task lifecycle.
 
-This guide covers everything you need to know about using and creating hooks in NornFlow.
+### Key Concepts
 
-## What Are Hooks?
-
-Hooks are special components that can intercept and modify task execution behavior. They act as "mini processors", implementing Nornir's Processor protocol while providing a simpler, more focused interface for common automation patterns.
-
-**Key characteristics:**
-- **Declarative**: Configure hooks in YAML alongside tasks
-- **Reusable**: Same hook can be used across multiple tasks
-- **Isolated**: Each task gets its own hook context
-- **Powerful**: Full access to task lifecycle events
-- **Selective**: Activate only when configured on specific tasks, and according to implemented logic.
-- **Automatic**: Registration happens automatically when you define a hook class
+- **Hooks are Nornir Processors**: Hooks are implemented as Nornir processors, giving them access to the full task execution lifecycle.
+- **Lifecycle Integration**: Hooks can execute code before, during, and after task execution.
+- **Configuration-Driven**: Hooks are configured in workflow YAML/dict and applied automatically.
+- **Validation**: Hook configurations are validated during workflow preparation.
+- **Context Awareness**: Hooks have access to variables, inventory data, and execution context.
 
 **Potential use cases:**
 - **Task-level orchestration**: Implement setup or teardown logic that runs once per task across all hosts
@@ -65,7 +59,7 @@ Under the hood, hooks are Nornir processors managed by the [`NornFlowHookProcess
 
 1. **Full lifecycle access**: Hooks can react to any point in task execution
 2. **Processor chain integration**: Hooks work alongside other processors
-3. **Performance optimization**: Hook instances are cached and reused (Flyweight pattern)
+3. **Performance optimization**: Hook instances are cached and reused
 
 ### Execution Lifecycle
 
@@ -113,11 +107,40 @@ Hooks can participate in these task lifecycle events:
 
 ### Performance Characteristics
 
-- **Hook instances**: Created ONCE per unique (hook_class, value) pair via Flyweight pattern
+- **Hook instances**: Created ONCE per unique (hook_class, value) pair 
 - **Memory usage**: O(unique_hooks) - shared instances across tasks
 - **Thread safety**: Guaranteed via execution context isolation
 - **Registration**: Happens at import time via `__init_subclass__`
 - **Validation**: Happens once per task during workflow preparation
+
+### Hook-Driven Template Resolution
+
+Hook-Driven Template Resolution is a mechanism for optimizing variable template resolution when hooks need to evaluate conditions or perform logic before task args templates are processed. This is an **optional capability** that hooks can opt into via the `requires_deferred_templates` class attribute.
+
+#### How It Works
+
+The system operates in two phases when deferred processing is requested:
+
+**Phase 1 - Pre-Execution Logic:**
+1. The Hook class declares `requires_deferred_templates = True`
+2. `NornFlowVariableProcessor` detects this requirement during `task_instance_started()`
+3. **Task parameter templates** are stored without resolution (e.g., `args: {config: "{{ some_var }}"`)
+4. **Hook configuration templates**, if any, are resolved using current variable context (if the hook supports jinja2 templates as input - as is the case with the `if` and `shush` hooks, for example)
+5. Hook performs its pre-execution logic using the resolved hook configurations
+
+**Phase 2 - Just-In-Time Resolution:**
+1. After hook logic completes, the hook triggers `resolve_deferred_params()`
+2. `NornFlowVariableProcessor` resolves stored task parameter templates using the current host context
+3. Task executes with fully resolved parameters
+
+#### Mandatory vs Optional
+
+**This feature is completely optional:**
+- Hooks that don't need deferred processing work normally (immediate resolution)
+- Only hooks that declare `requires_deferred_templates = True` trigger deferred mode
+- The processor automatically selects the appropriate strategy based on hook declarations
+
+> **NOTE FOR DEVELOPERS:** Developers writing their own custom Hooks are strongly encouraged to check the code (and included docstrings) in [nornflow/vars/processors.py](../nornflow/vars/processors.py) and [nornflow/builtins/hooks/if_hook.py](../nornflow/builtins/hooks/if_hook.py) for a deeper understanding and a working example of a Hook that fully takes advantage of this feature.
 
 ## NornFlow's Built-in Hooks
 
@@ -136,16 +159,16 @@ You are encouraged to examine the source code for the `if` Hook [here](../nornfl
 
 #### Configuration Formats
 
-The `if` Hook accepts inputs either as Jinja2 expressions or as Nornir filters in the filters catalogue.
+The `if` Hook accepts inputs either as Jinja2 templates or as Nornir filters in the filters catalogue.
 
 ##### Jinja2 Expression Details
 
 Expressions have access to:
 - `host.*` namespace (Nornir inventory)
-- All NornFlow variables (runtime, CLI, inline, domain, default, env)
-- All Jinja2 filters
+- All NornFlow variables (runtime, CLI, domain, default, env)
+- All Jinja2 filters (defaults, and NornFlow provided)
 
-Must evaluate to boolean:
+Users must ensure that the template input evaluates to boolean:
 ```yaml
 # ✅ Valid
 if: "{{ enabled }}"
@@ -157,46 +180,6 @@ if: "{{ host.name }}"  # Returns string
 if: "{{ vlans }}"      # Returns list
 ```
 
-##### Template Validation Note
-
-When using the `if` hook, task arguments (`args`) are validated before the `if` condition is evaluated. This means if your args reference a variable that might not exist, the workflow will fail with a template error even when the `if` condition would have been `False`.
-
-**Safe pattern for conditional tasks with potentially-missing variables:**
-
-```yaml
-tasks:
-  # ❌ Unsafe - will fail if 'optional_var' doesn't exist
-  - name: echo
-    if: "{{ 'optional_var' | is_set }}"
-    args:
-      msg: "{{ optional_var }}"
-  
-  # ✅ Safe - uses default filter to handle missing variable
-  - name: echo
-    if: "{{ 'optional_var' | is_set }}"
-    args:
-      msg: "{{ optional_var | default('fallback') }}"
-```
-
-This behavior is intentional - it catches template errors early during development rather than hiding them behind conditional logic.
-
-**Using the `if` Hook with Jinja2 Expressions**
-```yaml
-tasks:
-  - name: ios_specific_config
-    if: "{{ host.platform == 'ios' }}"
-    
-  - name: backup_if_changed
-    if: "{{ config_changed | default(false) }}"
-    
-  - name: complex_condition
-    if: "{{ host.data.site == 'prod' and maintenance_mode == false }}"
-
-  # Using the is_set filter to check for variable existence
-  - name: run_if_var_exists
-    if: "{{ 'my_runtime_var' | is_set }}"
-```
-
 ##### Filter Function Details
 
 The Filter functions must:
@@ -205,7 +188,7 @@ The Filter functions must:
 3. Return boolean value
 
 ```python
-# Custom filter example
+# Custom filter hypothetical example
 def platform_filter(host: Host, platform: str) -> bool:
     """Filter hosts by platform."""
     return host.platform == platform
@@ -214,18 +197,44 @@ def platform_filter(host: Host, platform: str) -> bool:
 **Using the `if` Hook with Nornir Filter Functions**
 ```yaml
 tasks:
-  - name: filter_by_platform
+  - name: netmiko_send_command
     if:
-      platform_filter: {platform: "ios"}
-      
-  - name: filter_by_site
-    if:
-      site_filter: ["dc1", "dc2"]
-      
-  - name: simple_filter
-    if:
-      is_production: true
+      platform_filter: "ios" # assuming a 'platform_filter' exists in the catalog
+    args: 
+      command: "show version"
 ```
+
+#### How IfHook Uses Hook-Driven Template Resolution
+
+The IfHook leverages Hook-Driven Template Resolution to evaluate conditions before resolving task argument templates, preventing errors on hosts where variables might not exist.
+
+**Declaration:**
+```python
+class IfHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "if"
+    run_once_per_task = False
+    requires_deferred_templates = True  # Enables two-phase processing
+```
+
+**Usage Flow:**
+1. **Configuration**: User configures `if` condition in workflow YAML
+2. **Declaration Detection**: `NornFlowVariableProcessor` sees `requires_deferred_templates = True`
+3. **Template Storage**: Task parameters with `{{ variables }}` are stored without resolution
+4. **Condition Evaluation**: `IfHook` evaluates the condition using current variable context
+5. **Skip Decision**: Hosts failing the condition get `nornflow_skip_flag` set
+6. **Just-in-Time Resolution**: For passing hosts, `skip_if_condition_flagged` decorator resolves templates via `resolve_deferred_params()` method provided by the `NornFlowVariableProcessor`.
+7. **Task Execution**: Task runs with resolved parameters only on eligible hosts
+
+**Example:**
+```yaml
+tasks:
+  - name: configure_feature
+    if: "{{ host.data.has_feature }}"  # Condition uses host inventory data
+    args:
+      config: "{{ feature_template }}"  # Template uses variable that might not exist on all hosts
+```
+
+Without deferred processing, this would fail on hosts missing `feature_template`. With deferred processing, only hosts that pass the `if` condition have their templates resolved.
 
 ### The `set_to` Hook
 
@@ -310,11 +319,9 @@ You are encouraged to refer to the source code for the `shush` Hook [here](../no
 ```yaml
 tasks:
   - name: netmiko_send_command
-    shush: true  # Always suppress
-    set_to: backup_result
-    
-  - name: verify_config
-    shush: false  # Never suppress
+    shush: true
+    args:
+      command_string: "show version"
 ```
 
 **Jinja2 Expression (dynamic suppression)**
@@ -534,7 +541,7 @@ Project Structure:
 ```
 
 **Registration timing:**
-- Hooks are registered **at import time** when the module is loaded
+- Hooks are registered **at import time** when the `Hook.__init_subclass__` mechanism is triggered
 - This happens **before** any workflow execution
 - The `Hook.__init_subclass__` mechanism adds the hook to the global registry immediately
 

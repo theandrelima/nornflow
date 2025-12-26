@@ -15,6 +15,7 @@
   - [Accessing Host Data](#accessing-host-data)
   - [Important Notes](#important-notes)
 - [Variable Isolation](#variable-isolation)
+- [Advanced: Hook-Driven Template Resolution](#advanced-hook-driven-template-resolution)
 - [Best Practices](#best-practices)
 - [Quick Reference](#quick-reference)
 
@@ -69,7 +70,7 @@ By default, NornFlow looks for global variables in the vars directory, specifica
 > **Note:** The vars directory location is set by the `vars_dir` setting in your `nornflow.yaml` file. NornFlow always looks for global variables in `<vars_dir>/defaults.yaml`. If this file is missing, global variable resolution is skipped.
 
 ```yaml
-# vars/defaults.yaml
+# defaults.yaml
 site_contact: "network-team@company.com"
 backup_server: "10.0.0.100"
 ```
@@ -396,14 +397,6 @@ tasks:
     args:
       msg: "Site: {{ host.data.site_code if 'host.data.site_code' | is_set else 'UNKNOWN' }}"
   ```
-- **Template validation with `if` hooks**: When using `is_set` with the `if` hook, task arguments are validated before the condition is evaluated. If your args reference variables that might not exist, use the `default` filter:
-  ```yaml
-  # Safe pattern for potentially-missing variables
-  - name: process_data
-    if: "{{ 'optional_data' | is_set }}"
-    args:
-      data: "{{ optional_data | default({}) }}"
-  ```
 
 ## Variable Isolation
 
@@ -414,6 +407,10 @@ Each device maintains its own variable context during workflow execution:
 - No cross-contamination between devices
 
 This isolation is managed by NornFlow's `NornFlowDeviceContext` class, which creates separate variable contexts for each device. This ensures that tasks running in parallel don't interfere with each other's variables, even when they're modifying variables with the same names.
+
+## Advanced: Hook-Driven Template Resolution
+
+For information on Hook-Driven Template Resolution, which allows deferring variable resolution in task parameters when hooks need to evaluate conditions first, see the [Hooks Guide](hooks_guide.md#hook-driven-template-resolution).
 
 ## Best Practices
 
