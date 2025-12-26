@@ -27,8 +27,8 @@ Example deferred flow:
 4. Hook decorator calls resolve_deferred_params() for non-skipped hosts
 5. Task executes with resolved parameters
 
-This is particularly useful for hooks that requires evaluating Jinja2 template inputs
-BEFORE anything else is evalauted by the Jinja2 Environment in the same task execution.
+This is particularly useful for hooks that require evaluating Jinja2 template inputs
+BEFORE anything else is evaluated by the Jinja2 Environment in the same task execution.
 """
 
 import logging
@@ -79,6 +79,9 @@ class NornFlowVariableProcessor(Processor):
         """Check if any hook for this task requires deferred template processing.
 
         Uses capability discovery to detect hooks that declare requires_deferred_templates = True.
+
+        Returns:
+            True if any hook requires deferred templates, False otherwise.
         """
         for processor in task.nornir.processors:
             if hasattr(processor, "task_hooks"):
@@ -117,6 +120,9 @@ class NornFlowVariableProcessor(Processor):
         """Resolve stored templates just-in-time for task execution.
 
         Called by hook decorators to convert deferred templates into actual parameter values.
+
+        Returns:
+            Resolved parameters dict if deferred params exist, None otherwise.
         """
         key = (task.name, host.name)
 

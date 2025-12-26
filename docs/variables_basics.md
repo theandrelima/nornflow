@@ -424,7 +424,7 @@ NornFlow includes an advanced feature called Hook-Driven Template Resolution tha
 
 Normally, NornFlow resolves all Jinja2 templates in task arguments before task execution. With hook-driven template resolution, this process can be deferred and performed just-in-time only for hosts that meet specific criteria.
 
->> NOTE: For developers creating custom hooks, see the [Hooks Guide](hooks_guide.md#hook-driven-template-resolution) for more about the implementation details.
+> NOTE: For developers creating custom hooks, see the [Hooks Guide](hooks_guide.md#hook-driven-template-resolution) for more about the implementation details.
 
 ## Best Practices
 
