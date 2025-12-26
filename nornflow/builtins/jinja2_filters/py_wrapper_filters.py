@@ -69,6 +69,11 @@ def filter_join(sep: str, iterable: Iterable[Any]) -> str:
     return sep.join(str(item) for item in iterable)
 
 
+def filter_startswith(string: str, prefix: str, start: int = 0, end: int | None = None) -> bool:
+    """Check if string starts with prefix, optionally within start and end indices."""
+    return string.startswith(prefix, start, end)
+
+
 # Registry of builtin filters
 PY_WRAPPER_FILTERS = {
     "enumerate": filter_enumerate,
@@ -84,4 +89,5 @@ PY_WRAPPER_FILTERS = {
     "reversed": filter_reversed,
     "strip": filter_strip,
     "joinx": filter_join,
+    "startswith": filter_startswith,
 }
