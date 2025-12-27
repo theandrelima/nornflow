@@ -30,6 +30,9 @@ local_filters:
 local_hooks:
   - "hooks"
 
+local_blueprints:
+  - "blueprints"
+
 imported_packages: []
 
 processors:

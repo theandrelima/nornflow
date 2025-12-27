@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from nornflow.constants import (
     FailureStrategy,
+    NORNFLOW_DEFAULT_BLUEPRINTS_DIR,
     NORNFLOW_DEFAULT_FILTERS_DIR,
     NORNFLOW_DEFAULT_HOOKS_DIR,
     NORNFLOW_DEFAULT_TASKS_DIR,
@@ -58,6 +59,9 @@ class NornFlowSettings(BaseSettings):
     )
     local_hooks: list[str] = Field(
         default=[NORNFLOW_DEFAULT_HOOKS_DIR], description="List of directories containing custom hook classes"
+    )
+    local_blueprints: list[str] = Field(
+        default=[NORNFLOW_DEFAULT_BLUEPRINTS_DIR], description="List of directories containing blueprint definitions"
     )
     imported_packages: list[str] = Field(
         default_factory=list, description="List of Python packages to import for additional resources"
@@ -147,6 +151,7 @@ class NornFlowSettings(BaseSettings):
             "local_workflows",
             "local_filters",
             "local_hooks",
+            "local_blueprints",
         ]:
             dirs = getattr(self, field_name)
             if not dirs:
