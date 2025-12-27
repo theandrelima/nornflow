@@ -25,7 +25,7 @@ from nornflow.utils import (
     import_modules_recursively,
     is_nornir_filter,
     is_nornir_task,
-    is_workflow_file,
+    is_yaml_file,
     load_processor,
     print_workflow_overview,
     process_filter,
@@ -168,9 +168,11 @@ class NornFlow:
         self._tasks_catalog = CallableCatalog("tasks")
         self._filters_catalog = CallableCatalog("filters")
         self._workflows_catalog = FileCatalog("workflows")
+        self._blueprints_catalog = FileCatalog("blueprints")
         self._load_tasks_catalog()
         self._load_filters_catalog()
         self._load_workflows_catalog()
+        self._load_blueprints_catalog()
 
     def _initialize_hooks(self) -> None:
         """Initialize hooks by importing modules from configured directories."""
@@ -519,6 +521,26 @@ class NornFlow:
         raise ImmutableAttributeError("Cannot set filters catalog directly.")
 
     @property
+    def blueprints_catalog(self) -> FileCatalog:
+        """
+        Get the blueprints catalog.
+
+        Returns:
+            FileCatalog: Catalog of blueprint names and the corresponding file Path to it.
+        """
+        return self._blueprints_catalog
+
+    @blueprints_catalog.setter
+    def blueprints_catalog(self, _: Any) -> None:
+        """
+        Prevent setting the blueprints catalog directly.
+
+        Raises:
+            ImmutableAttributeError: Always raised to prevent direct setting of the blueprints catalog.
+        """
+        raise ImmutableAttributeError("Cannot set blueprints catalog directly.")
+
+    @property
     def workflow(self) -> WorkflowModel | None:
         """
         Get the workflow model object.
@@ -716,8 +738,22 @@ class NornFlow:
         self._workflows_catalog = self._load_catalog(
             FileCatalog,
             "workflows",
-            predicate=is_workflow_file,
+            predicate=is_yaml_file,
             directories=self.settings.local_workflows,
+            recursive=True,
+        )
+
+    def _load_blueprints_catalog(self) -> None:
+        """
+        Discover and load blueprint files from directories specified in settings.
+
+        This catalogs the available blueprint files for later use.
+        """
+        self._blueprints_catalog = self._load_catalog(
+            FileCatalog,
+            "blueprints",
+            predicate=is_yaml_file,
+            directories=self.settings.local_blueprints,
             recursive=True,
         )
 
