@@ -3,10 +3,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-import jinja2
 import yaml
 
-from nornflow.builtins.jinja2_filters import ALL_FILTERS
 from nornflow.vars.constants import (
     DEFAULTS_FILENAME,
     ENV_VAR_PREFIX,
@@ -14,6 +12,7 @@ from nornflow.vars.constants import (
 )
 from nornflow.vars.context import NornFlowDeviceContext
 from nornflow.vars.exceptions import TemplateError, VariableError
+from nornflow.vars.jinja2_utils import Jinja2EnvironmentManager
 from nornflow.vars.proxy import NornirHostProxy
 
 logger = logging.getLogger(__name__)
@@ -182,16 +181,7 @@ class NornFlowVariablesManager:
             env_vars=self._env_vars,
         )
 
-        self.jinja_env = jinja2.Environment(
-            undefined=jinja2.StrictUndefined,
-            extensions=["jinja2.ext.loopcontrols"],
-            autoescape=False,  # noqa: S701 - Network automation tool, not generating HTML
-        )
-
-        # Register builtin j2 filters
-        for filter_name, filter_func in ALL_FILTERS.items():
-            self.jinja_env.filters[filter_name] = filter_func
-
+        self._jinja2_manager = Jinja2EnvironmentManager()
         self._device_contexts: dict[str, NornFlowDeviceContext] = {}
 
     def _load_environment_variables(self) -> dict[str, Any]:
@@ -426,9 +416,7 @@ class NornFlowVariablesManager:
             raise TemplateError(f"Host name not provided for template resolution: {template_str}")
 
         try:
-            template = self.jinja_env.from_string(template_str)
             device_ctx = self.get_device_context(host_name)
-
             nornflow_default_vars = device_ctx.get_flat_context()
 
             resolution_context_dict = nornflow_default_vars.copy()
@@ -436,18 +424,13 @@ class NornFlowVariablesManager:
                 resolution_context_dict.update(additional_vars)
 
             context_for_jinja = VariableLookupContext(self, host_name, resolution_context_dict)
+            
+            template = self._jinja2_manager.env.from_string(template_str)
             return template.render(context_for_jinja)
 
-        except jinja2.exceptions.UndefinedError as e:
-            logger.exception(f"Jinja2 UndefinedError for host '{host_name}' in template '{template_str}'")
-            raise TemplateError(f"Undefined variable in template '{template_str}': {e}") from e
-        except VariableError as e:
-            logger.exception(f"NornFlow VariableError for host '{host_name}' in template '{template_str}'")
-            raise TemplateError(f"Variable error in template '{template_str}': {e}") from e
         except Exception as e:
             logger.exception(
-                f"Jinja2 TemplateError or unexpected issue for host '{host_name}' "
-                f"in template '{template_str}'"
+                f"Template rendering error for host '{host_name}' in template '{template_str}'"
             )
             raise TemplateError(f"Template rendering error in '{template_str}': {e}") from e
 

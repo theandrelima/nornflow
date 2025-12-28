@@ -623,6 +623,11 @@ class NornFlow:
             "Processors cannot be set directly, but must be loaded from nornflow settings file."
         )
 
+    @property
+    def nornir_config_file(self) -> str:
+        """Get the Nornir config file path from settings."""
+        return self.settings.nornir_config_file
+
     def _load_catalog(
         self,
         catalog_type: type,
@@ -896,7 +901,14 @@ class NornFlow:
         workflow_path = self.workflows_catalog[name]
         try:
             workflow_dict = load_file_to_dict(workflow_path)
-            workflow = WorkflowModel.create(workflow_dict)
+            workflow = WorkflowModel.create(
+                workflow_dict,
+                blueprints_catalog=dict(self.blueprints_catalog),
+                vars_dir=self.settings.vars_dir,
+                workflow_path=workflow_path,
+                workflow_roots=self.settings.local_workflows,
+                cli_vars=self._vars,
+            )
             return workflow, workflow_path
         except Exception as e:
             raise WorkflowError(
@@ -972,7 +984,7 @@ class NornFlow:
     def _orchestrate_execution(self) -> None:
         """Orchestrate the execution of workflow tasks in sequence."""
         with self.nornir_manager:
-            for task in self.workflow.tasks:
+            for i, task in enumerate(self.workflow.tasks):
                 self.nornir_manager.set_dry_run(self.dry_run)
 
                 task.run(

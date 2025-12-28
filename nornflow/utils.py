@@ -481,7 +481,7 @@ def print_workflow_overview(
     console.print(panel)
 
 
-def _get_file_content_hash(file_path: Path) -> str:
+def get_file_content_hash(file_path: Path) -> str:
     """
     Generate a stable hash from file content for identity comparison.
 
