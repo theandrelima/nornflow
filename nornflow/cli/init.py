@@ -159,6 +159,9 @@ def create_directories_from_settings(settings: NornFlowSettings) -> None:
     for hooks_dir in settings.local_hooks:
         create_directory(Path(hooks_dir))
 
+    for blueprints_dir in settings.local_blueprints:
+        create_directory(Path(blueprints_dir))
+
     create_directory(Path(settings.vars_dir))
 
 
