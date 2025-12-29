@@ -10,6 +10,7 @@ organized hierarchically with clear inheritance paths.
 ###############################################################################
 from typing import Any
 
+
 class NornFlowError(Exception):
     """
     Root exception class for all NornFlow errors.
@@ -97,15 +98,11 @@ class FilterError(WorkflowError):
     def __init__(self, message: str = "", filter_name: str = "", **kwargs):
         super().__init__(message, filter_name=filter_name, **kwargs)
 
+
 class BlueprintError(WorkflowError):
     """Base exception for all blueprint-related errors."""
-    
-    def __init__(
-        self, 
-        message: str = "", 
-        blueprint_name: str = "", 
-        details: dict[str, Any] | None = None
-    ):
+
+    def __init__(self, message: str = "", blueprint_name: str = "", details: dict[str, Any] | None = None):
         self.blueprint_name = blueprint_name
         self.details = details or {}
         prefix = f"Blueprint '{blueprint_name}': " if blueprint_name else "Blueprint: "
@@ -114,14 +111,14 @@ class BlueprintError(WorkflowError):
 
 class BlueprintCircularDependencyError(BlueprintError):
     """Raised when circular dependencies are detected in blueprint expansion."""
-    
+
     def __init__(self, blueprint_name: str, dependency_chain: list[str]):
         self.dependency_chain = dependency_chain
         chain_str = " → ".join(dependency_chain)
         super().__init__(
             message=f"Circular dependency detected: {chain_str} → {blueprint_name}",
             blueprint_name=blueprint_name,
-            details={"dependency_chain": dependency_chain}
+            details={"dependency_chain": dependency_chain},
         )
 
 

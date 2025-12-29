@@ -505,6 +505,9 @@ def get_blueprint_description(blueprint_path: Path) -> str:
         with blueprint_path.open() as f:
             blueprint_dict = yaml.safe_load(f)
             # Blueprints may have a description at the top level or under a 'blueprint' key
-            return blueprint_dict.get("description", blueprint_dict.get("blueprint", {}).get("description", "No description available"))
+            return blueprint_dict.get(
+                "description",
+                blueprint_dict.get("blueprint", {}).get("description", "No description available"),
+            )
     except Exception:
         return "Could not load description from file"

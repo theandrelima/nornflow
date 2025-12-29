@@ -61,7 +61,8 @@ class NornFlowSettings(BaseSettings):
         default=[NORNFLOW_DEFAULT_HOOKS_DIR], description="List of directories containing custom hook classes"
     )
     local_blueprints: list[str] = Field(
-        default=[NORNFLOW_DEFAULT_BLUEPRINTS_DIR], description="List of directories containing blueprint definitions"
+        default=[NORNFLOW_DEFAULT_BLUEPRINTS_DIR],
+        description="List of directories containing blueprint definitions",
     )
     imported_packages: list[str] = Field(
         default_factory=list, description="List of Python packages to import for additional resources"

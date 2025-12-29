@@ -504,7 +504,5 @@ def get_file_content_hash(file_path: Path) -> str:
         return hashlib.sha256(normalized.encode()).hexdigest()[:16]
     except Exception as e:
         raise ResourceError(
-            f"Failed to hash file content: {e}",
-            resource_type="file",
-            resource_name=str(file_path)
+            f"Failed to hash file content: {e}", resource_type="file", resource_name=str(file_path)
         ) from e

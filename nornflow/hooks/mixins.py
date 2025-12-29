@@ -68,7 +68,7 @@ class Jinja2ResolvableMixin:
             self._validate_jinja2_string(task_model)
 
         if hasattr(super(), "execute_hook_validations"):
-            super().execute_hook_validations(task_model)  # noqa: PGH003
+            super().execute_hook_validations(task_model)
 
     def _validate_jinja2_string(self, task_model: "TaskModel") -> None:
         """Validate that string value is a proper Jinja2 expression.
