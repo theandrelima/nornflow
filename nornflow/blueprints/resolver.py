@@ -59,7 +59,8 @@ class BlueprintResolver:
         
         context.update(self._load_env_vars())
         
-        defaults_path = vars_dir / DEFAULTS_FILENAME
+        vars_dir_path = Path(vars_dir)
+        defaults_path = vars_dir_path / DEFAULTS_FILENAME
         if defaults_path.exists():
             try:
                 context.update(load_file_to_dict(defaults_path))
@@ -67,7 +68,7 @@ class BlueprintResolver:
                 pass
         
         if workflow_path:
-            domain_defaults = self._load_domain_defaults(vars_dir, workflow_path, workflow_roots)
+            domain_defaults = self._load_domain_defaults(vars_dir_path, workflow_path, workflow_roots)
             context.update(domain_defaults)
         
         if inline_workflow_vars:
