@@ -188,6 +188,9 @@ todo*
 # local filters dir
 /filters/
 
+# local blueprints dir
+/blueprints/
+
 # ruff
 .ruff*/
 
