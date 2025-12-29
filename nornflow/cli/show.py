@@ -29,11 +29,12 @@ def show(  # noqa: PLR0912
         hidden=True,
     ),
     catalogs: bool = typer.Option(
-        False, "--catalogs", help="Display all catalogs: tasks, filters, and workflows"
+        False, "--catalogs", help="Display all catalogs: tasks, filters, workflows, and blueprints"
     ),
     tasks: bool = typer.Option(False, "--tasks", "-t", help="Display the task catalog"),
     filters: bool = typer.Option(False, "--filters", "-f", help="Display the filter catalog"),
     workflows: bool = typer.Option(False, "--workflows", "-w", help="Display the workflow catalog"),
+    blueprints: bool = typer.Option(False, "--blueprints", "-b", help="Display the blueprint catalog"),
     settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
     nornir_configs: bool = typer.Option(
         False, "--nornir-configs", "-n", help="Display current Nornir Configs"
@@ -45,10 +46,10 @@ def show(  # noqa: PLR0912
     """
     show_all_catalogs = catalog or catalogs
 
-    if not any([show_all_catalogs, tasks, filters, workflows, settings, nornir_configs, all]):
+    if not any([show_all_catalogs, tasks, filters, workflows, blueprints, settings, nornir_configs, all]):
         raise typer.BadParameter(
             "You must provide at least one option: --catalogs, --tasks, --filters, --workflows, "
-            "--settings, --nornir-configs, or --all."
+            "--blueprints, --settings, --nornir-configs, or --all."
         )
 
     try:
@@ -64,6 +65,7 @@ def show(  # noqa: PLR0912
             show_tasks_catalog(nornflow)
             show_filters_catalog(nornflow)
             show_workflows_catalog(nornflow)
+            show_blueprints_catalog(nornflow)
             show_nornflow_settings(nornflow)
             show_nornir_configs(nornflow)
         else:
@@ -71,6 +73,7 @@ def show(  # noqa: PLR0912
                 show_tasks_catalog(nornflow)
                 show_filters_catalog(nornflow)
                 show_workflows_catalog(nornflow)
+                show_blueprints_catalog(nornflow)
             else:
                 if tasks:
                     show_tasks_catalog(nornflow)
@@ -78,6 +81,8 @@ def show(  # noqa: PLR0912
                     show_filters_catalog(nornflow)
                 if workflows:
                     show_workflows_catalog(nornflow)
+                if blueprints:
+                    show_blueprints_catalog(nornflow)
 
             if settings:
                 show_nornflow_settings(nornflow)
@@ -126,10 +131,11 @@ def show(  # noqa: PLR0912
 
 
 def show_catalog(nornflow: "NornFlow") -> None:
-    """Display all catalogs: tasks, filters, and workflows."""
+    """Display all catalogs: tasks, filters, workflows, and blueprints."""
     show_tasks_catalog(nornflow)
     show_filters_catalog(nornflow)
     show_workflows_catalog(nornflow)
+    show_blueprints_catalog(nornflow)
 
 
 def show_tasks_catalog(nornflow: "NornFlow") -> None:
@@ -158,6 +164,16 @@ def show_workflows_catalog(nornflow: "NornFlow") -> None:
         "WORKFLOWS CATALOG",
         render_workflows_catalog_table_data,
         ["Workflow Name", "Description", "Source (file path)"],
+        nornflow,
+    )
+
+
+def show_blueprints_catalog(nornflow: "NornFlow") -> None:
+    """Display the blueprints catalog."""
+    show_formatted_table(
+        "BLUEPRINTS CATALOG",
+        render_blueprints_catalog_table_data,
+        ["Blueprint Name", "Description", "Source (file path)"],
         nornflow,
     )
 
@@ -302,6 +318,31 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
     return table_data
 
 
+def render_blueprints_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
+    """Render the blueprints catalog as a list of lists.
+
+    Args:
+        nornflow: The NornFlow object.
+
+    Returns:
+        The table data.
+    """
+    blueprints_catalog = nornflow.blueprints_catalog
+    table_data = []
+
+    for blueprint_name, blueprint_path in sorted(blueprints_catalog.items()):
+        description = get_blueprint_description(blueprint_path)
+        description = textwrap.fill(description, width=60)
+
+        source_path = get_source_from_catalog(blueprints_catalog, blueprint_name)
+
+        colored_blueprint_name = colored(blueprint_name, "cyan", attrs=["bold"])
+        colored_description = colored(description, "yellow")
+        colored_source = colored(source_path, "light_green")
+        table_data.append([colored_blueprint_name, colored_description, colored_source])
+    return table_data
+
+
 def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """Render the filters catalog as a list of lists.
 
@@ -432,3 +473,38 @@ def display_banner(banner_text: str, table: str) -> None:
     centered_banner = banner.center(table_width + 5)
 
     typer.echo("\n\n" + centered_banner)
+
+
+def get_workflow_description(workflow_path: Path) -> str:
+    """Get description from workflow YAML file.
+
+    Args:
+        workflow_path: Path to the workflow file.
+
+    Returns:
+        The workflow description.
+    """
+    try:
+        with workflow_path.open() as f:
+            workflow_dict = yaml.safe_load(f)
+            return workflow_dict["workflow"].get("description", "No description available")
+    except Exception:
+        return "Could not load description from file"
+
+
+def get_blueprint_description(blueprint_path: Path) -> str:
+    """Get description from blueprint YAML file.
+
+    Args:
+        blueprint_path: Path to the blueprint file.
+
+    Returns:
+        The blueprint description.
+    """
+    try:
+        with blueprint_path.open() as f:
+            blueprint_dict = yaml.safe_load(f)
+            # Blueprints may have a description at the top level or under a 'blueprint' key
+            return blueprint_dict.get("description", blueprint_dict.get("blueprint", {}).get("description", "No description available"))
+    except Exception:
+        return "Could not load description from file"
