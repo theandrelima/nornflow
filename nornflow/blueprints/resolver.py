@@ -6,7 +6,7 @@ from typing import Any
 from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.exceptions import BlueprintError
-from nornflow.vars.constants import DEFAULTS_FILENAME, TRUTHY_STRING_VALUES
+from nornflow.vars.constants import DEFAULTS_FILENAME, JINJA2_MARKERS, TRUTHY_STRING_VALUES
 from nornflow.vars.jinja2_utils import Jinja2EnvironmentManager
 
 logger = logging.getLogger(__name__)
@@ -100,8 +100,10 @@ class BlueprintResolver:
                 details={"template": template_str}
             ) from e
     
-    def evaluate_condition(self, condition: str, context: dict[str, Any]) -> bool:
+    def evaluate_condition(self, condition: str | bool, context: dict[str, Any]) -> bool:
         """Evaluate blueprint 'if' condition.
+        
+        Handles YAML-parsed booleans, string literals, and Jinja2 expressions.
         
         Args:
             condition: Conditional expression to evaluate.
@@ -114,8 +116,21 @@ class BlueprintResolver:
             BlueprintError: If condition has undefined variables or syntax errors.
         """
         try:
+            if isinstance(condition, bool):
+                return condition
+            
+            condition_stripped = condition.strip()
+            
+            if not any(condition_stripped.startswith(marker) for marker in JINJA2_MARKERS):
+                return condition_stripped.lower() in TRUTHY_STRING_VALUES
+            
+            if any(condition_stripped.startswith(marker) for marker in JINJA2_MARKERS):
+                template_str = condition_stripped
+            else:
+                template_str = f"{{{{ {condition_stripped} }}}}"
+            
             result = self.jinja2_manager.render_template(
-                f"{{{{ {condition} }}}}",
+                template_str,
                 context,
                 "blueprint condition"
             )

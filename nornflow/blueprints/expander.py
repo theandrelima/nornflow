@@ -53,7 +53,7 @@ class BlueprintExpander:
         Raises:
             BlueprintError: If blueprint expansion fails.
         """
-        if not blueprints_catalog or not vars_dir or not workflow_roots:
+        if blueprints_catalog is None or vars_dir is None or workflow_roots is None:
             return tasks
         
         context = self.resolver.build_context(

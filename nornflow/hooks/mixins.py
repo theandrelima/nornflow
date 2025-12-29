@@ -1,5 +1,6 @@
 from typing import Any, TYPE_CHECKING
 
+from jinja2 import TemplateSyntaxError
 from nornir.core.inventory import Host
 from nornir.core.task import Task
 
@@ -86,11 +87,16 @@ class Jinja2ResolvableMixin:
 
         try:
             manager = Jinja2EnvironmentManager()
-            manager.render_template(self.value, {}, f"hook '{self.hook_name}' validation")
+            manager.env.from_string(self.value)
+        except TemplateSyntaxError as e:
+            raise HookValidationError(
+                self.hook_name,
+                [("jinja2_syntax", f"Task '{task_model.name}': Jinja2 syntax error: {e}")],
+            ) from e
         except Exception as e:
             raise HookValidationError(
                 self.hook_name,
-                [("jinja2_validation", f"Task '{task_model.name}': Jinja2 expression validation failed: {e}")],
+                [("jinja2_validation", f"Task '{task_model.name}': Jinja2 validation failed: {e}")],
             ) from e
 
     def get_resolved_value(
