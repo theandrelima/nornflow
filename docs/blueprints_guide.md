@@ -191,22 +191,81 @@ workflow:
 ```
 Notice the file extension is required, as blueprints are catalogued with their filenames. This means `my_blueprint.yml` and `my_blueprint.yaml` are two different blueprints, since they both use valid but different extensions.
 
-**By path (relative to workflow file):**
+**By path (relative or absolute):**
+
+You can also reference blueprints (that are NOT in the catalog) by using file paths:
+
 ```yaml
 workflow:
   name: "Big Workflow"
   tasks:
-    - blueprint: ../shared_blueprints/common_checks.yml
+    # Relative path - resolved against current working directory
+    - blueprint: ./external_blueprints/common_checks.yaml
+    
+    # Absolute path - used as-is
+    - blueprint: /opt/shared/blueprints/corporate_standard.yaml
+    
     - name: domain_specific_task
 ```
 
-**By absolute path:**
+> ⚠️ **Important: Understanding Relative Path Resolution**
+> 
+> When using **relative paths** for blueprints (not catalog names), the path is resolved against the **current working directory** where the nornflow command is executed — NOT the workflow file location or the blueprint file location.
+> 
+> In practice, you **SHOULD** always run nornflow commands from your project root directory (where n`ornflow.yaml` is located), so relative paths effectively resolve from there.
+> 
+> **BETS PRACTICE:** For blueprints outside your configured `local_blueprints` directories, prefer **absolute paths** to avoid confusion about path resolution.
+
+**Example with uncatalogued blueprints:**
+
+Consider this project structure:
+
+```
+my_project/
+├── nornflow.yaml              # local_blueprints: ["blueprints"]
+├── blueprints/                # Catalogued blueprints
+│   └── standard_checks.yaml
+├── external_blueprints/       # NOT in local_blueprints (not catalogued)
+│   ├── special_audit.yaml
+│   └── vendor_specific.yaml
+└── workflows/
+    └── my_workflow.yaml
+```
+
+In `my_workflow.yaml`:
+
 ```yaml
 workflow:
-  name: "Enterprise Workflow"
+  name: "Mixed Blueprint Sources"
   tasks:
-    - blueprint: /opt/company/blueprints/corporate_standard.yaml
-    - name: site_specific_task
+    # From catalog (discovered in blueprints/)
+    - blueprint: standard_checks.yaml
+    
+    # NOT catalogued - must use path
+    # This works IF you run 'nornflow run' from my_project/
+    - blueprint: ./external_blueprints/special_audit.yaml
+    
+    # Absolute path - always works regardless of where command is run
+    - blueprint: /home/user/my_project/external_blueprints/vendor_specific.yaml
+```
+
+**Within uncatalogued blueprints referencing other blueprints:**
+
+When a blueprint references another blueprint using a relative path, that path is ALSO resolved against the current working directory:
+
+```yaml
+# external_blueprints/special_audit.yaml
+tasks:
+  - name: some_task
+  
+  # Relative path resolves from where 'nornflow' was run, NOT from this file's location
+  - blueprint: external_blueprints/vendor_specific.yaml  # ✅ Works from project root
+  
+  # This would NOT work (resolves to ./vendor_specific.yaml from CWD)
+  - blueprint: ./vendor_specific.yaml  # ❌ Won't find the file
+  
+  # Absolute paths always work
+  - blueprint: /home/user/my_project/external_blueprints/vendor_specific.yaml  # ✅ Always works
 ```
 
 ### Conditional Blueprint Inclusion
