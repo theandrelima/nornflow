@@ -53,7 +53,7 @@ class BlueprintExpander:
         Raises:
             BlueprintError: If blueprint expansion fails.
         """
-        if blueprints_catalog is None or vars_dir is None or workflow_roots is None:
+        if not blueprints_catalog or not vars_dir or not workflow_roots:
             return tasks
 
         context = self.resolver.build_context(
@@ -65,12 +65,13 @@ class BlueprintExpander:
         )
 
         expansion_stack: list[str] = []
+        name_stack: list[str] = []
         content_cache: dict[str, list[dict[str, Any]]] = {}
 
         expanded = []
         for task_dict in tasks:
             processed_tasks = self._process_task_item(
-                task_dict, blueprints_catalog, context, expansion_stack, content_cache
+                task_dict, blueprints_catalog, context, expansion_stack, name_stack, content_cache
             )
             expanded.extend(processed_tasks)
 
@@ -82,6 +83,7 @@ class BlueprintExpander:
         blueprints_catalog: dict[str, Path],
         context: dict[str, Any],
         expansion_stack: list[str],
+        name_stack: list[str],
         content_cache: dict[str, list[dict[str, Any]]],
     ) -> list[dict[str, Any]]:
         """Process a single task item, expanding blueprints or returning regular tasks.
@@ -91,6 +93,7 @@ class BlueprintExpander:
             blueprints_catalog: Catalog mapping blueprint names to file paths.
             context: Variable context for template resolution.
             expansion_stack: Stack of content hashes for circular detection.
+            name_stack: Stack of blueprint names for error reporting.
             content_cache: Cache mapping content hash to parsed tasks.
 
         Returns:
@@ -103,7 +106,7 @@ class BlueprintExpander:
             return []
 
         return self._expand_single_blueprint(
-            task_dict, blueprints_catalog, context, expansion_stack, content_cache
+            task_dict, blueprints_catalog, context, expansion_stack, name_stack, content_cache
         )
 
     def _should_include_blueprint(self, blueprint_ref: dict[str, Any], context: dict[str, Any]) -> bool:
@@ -127,6 +130,7 @@ class BlueprintExpander:
         blueprints_catalog: dict[str, Path],
         context: dict[str, Any],
         expansion_stack: list[str],
+        name_stack: list[str],
         content_cache: dict[str, list[dict[str, Any]]],
     ) -> list[dict[str, Any]]:
         """Expand a single blueprint reference.
@@ -136,6 +140,7 @@ class BlueprintExpander:
             blueprints_catalog: Catalog mapping blueprint names to file paths.
             context: Variable context for template resolution.
             expansion_stack: Stack of content hashes for circular detection.
+            name_stack: Stack of blueprint names for error reporting.
             content_cache: Cache mapping content hash to parsed tasks.
 
         Returns:
@@ -153,9 +158,11 @@ class BlueprintExpander:
         blueprint_path = self._resolve_blueprint_to_path(resolved_name, blueprints_catalog)
         content_hash = get_file_content_hash(blueprint_path)
 
-        self._check_circular_dependency(content_hash, resolved_name, expansion_stack)
+        if content_hash in expansion_stack:
+            raise BlueprintCircularDependencyError(blueprint_path.name, name_stack)
 
         expansion_stack.append(content_hash)
+        name_stack.append(blueprint_path.name)
         try:
             if content_hash not in content_cache:
                 content_cache[content_hash] = self._load_blueprint_tasks(blueprint_path)
@@ -165,30 +172,14 @@ class BlueprintExpander:
             expanded = []
             for task_dict in blueprint_tasks:
                 processed = self._process_task_item(
-                    task_dict, blueprints_catalog, context, expansion_stack, content_cache
+                    task_dict, blueprints_catalog, context, expansion_stack, name_stack, content_cache
                 )
                 expanded.extend(processed)
 
             return expanded
         finally:
             expansion_stack.pop()
-
-    @staticmethod
-    def _check_circular_dependency(
-        content_hash: str, blueprint_name: str, expansion_stack: list[str]
-    ) -> None:
-        """Check for circular blueprint dependencies.
-
-        Args:
-            content_hash: Content hash of the blueprint being expanded.
-            blueprint_name: Name of the blueprint for error reporting.
-            expansion_stack: Current expansion stack of content hashes.
-
-        Raises:
-            BlueprintCircularDependencyError: If circular dependency detected.
-        """
-        if content_hash in expansion_stack:
-            raise BlueprintCircularDependencyError(blueprint_name, expansion_stack.copy())
+            name_stack.pop()
 
     @staticmethod
     def _resolve_blueprint_to_path(blueprint_ref: str, blueprints_catalog: dict[str, Path]) -> Path:
