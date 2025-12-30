@@ -123,10 +123,7 @@ class BlueprintResolver:
             if not any(condition_stripped.startswith(marker) for marker in JINJA2_MARKERS):
                 return condition_stripped.lower() in TRUTHY_STRING_VALUES
 
-            if any(condition_stripped.startswith(marker) for marker in JINJA2_MARKERS):
-                template_str = condition_stripped
-            else:
-                template_str = f"{{{{ {condition_stripped} }}}}"
+            template_str = condition_stripped
 
             result = self.jinja2_manager.render_template(template_str, context, "blueprint condition")
             return result.lower() in TRUTHY_STRING_VALUES
