@@ -984,7 +984,7 @@ class NornFlow:
     def _orchestrate_execution(self) -> None:
         """Orchestrate the execution of workflow tasks in sequence."""
         with self.nornir_manager:
-            for _, task in enumerate(self.workflow.tasks):
+            for task in self.workflow.tasks:
                 self.nornir_manager.set_dry_run(self.dry_run)
 
                 task.run(
