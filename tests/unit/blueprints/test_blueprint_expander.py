@@ -128,7 +128,7 @@ tasks:
         
         expander = BlueprintExpander(blueprint_resolver)
         tasks = [{"blueprint": "this_blueprint_absolutely_does_not_exist_anywhere_xyz123"}]
-        with pytest.raises(BlueprintError, match="Not found in catalog or filesystem"):
+        with pytest.raises(BlueprintError, match="Blueprint not found in catalog or filesystem"):
             expander.expand_blueprints(
                 tasks=tasks,
                 blueprints_catalog={},

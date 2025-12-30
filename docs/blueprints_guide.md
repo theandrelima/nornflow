@@ -42,7 +42,7 @@ Blueprints are YAML files containing a `tasks` list that can be referenced by na
 - Contain **ONLY** a `tasks` root-level key (no workflow metadata like name, description, etc.)
 - Are **referenced** within workflows, **not executed directly**
 - Support **nested composition** (blueprints can reference other blueprints)
-- Have access to a **subset of NonrFlow variables** during expansion (*more about this later*)
+- Have access to a **subset of NornFlow variables** during expansion (*more about this later*)
 - Are **expanded during workflow loading**, not during execution
 
 **Comparison:**
@@ -214,7 +214,7 @@ workflow:
 > 
 > In practice, you **SHOULD** always run nornflow commands from your project root directory (where n`ornflow.yaml` is located), so relative paths effectively resolve from there.
 > 
-> **BETS PRACTICE:** For blueprints outside your configured `local_blueprints` directories, prefer **absolute paths** to avoid confusion about path resolution.
+> **BEST PRACTICE:** For blueprints outside your configured `local_blueprints` directories, prefer **absolute paths** to avoid confusion about path resolution.
 
 **Example with uncatalogued blueprints:**
 

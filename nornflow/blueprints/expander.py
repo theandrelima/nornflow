@@ -216,13 +216,23 @@ class BlueprintExpander:
             return resolved
 
         raise BlueprintError(
-            "Not found in catalog or filesystem",
+            (
+                "Blueprint not found in catalog or filesystem. "
+                f"Note: relative blueprint paths are resolved against the current "
+                f"working directory ({Path.cwd()})."
+            ),
             blueprint_name=blueprint_ref,
             details={
                 "searched_locations": [
                     f"Catalog: {list(blueprints_catalog.keys())[:5]}...",
                     str(Path.cwd() / path),
-                ]
+                ],
+                "current_working_directory": str(Path.cwd()),
+                "note": (
+                    "The provided blueprint reference was interpreted as a path "
+                    "relative to the current working directory. Ensure you run "
+                    "nornflow from the expected directory or provide an absolute path."
+                ),
             },
         )
 

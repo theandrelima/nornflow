@@ -478,7 +478,7 @@ class TestWorkflowModelBlueprintExpansion:
             }
         }
         
-        with pytest.raises(BlueprintError, match="Not found in catalog or filesystem"):
+        with pytest.raises(BlueprintError, match="Blueprint not found in catalog or filesystem"):
             WorkflowModel.create(
                 workflow_dict,
                 blueprints_catalog={},
@@ -602,7 +602,7 @@ class TestWorkflowModelBlueprintExpansion:
         workflow_dict = {
             "workflow": {
                 "name": "env_vars_test",
-                "tasks": [{"blueprint": "env_aware", "if": "{{ enable_feature }}"}]
+                "tasks": [{"blueprint": "env_aware", "if": "{{ ENABLE_FEATURE }}"}]
             }
         }
         

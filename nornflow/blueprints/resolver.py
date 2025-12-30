@@ -120,7 +120,7 @@ class BlueprintResolver:
 
             condition_stripped = condition.strip()
 
-            if not any(condition_stripped.startswith(marker) for marker in JINJA2_MARKERS):
+            if not any(marker in condition_stripped for marker in JINJA2_MARKERS):
                 return condition_stripped.lower() in TRUTHY_STRING_VALUES
 
             template_str = condition_stripped
@@ -143,7 +143,7 @@ class BlueprintResolver:
         prefix = "NORNFLOW_VAR_"
         for key, value in os.environ.items():
             if key.startswith(prefix):
-                var_name = key[len(prefix) :].lower()
+                var_name = key[len(prefix) :]
                 env_vars[var_name] = value
         return env_vars
 
