@@ -190,7 +190,7 @@ class BlueprintExpander:
 
         Resolution order:
         1. Catalog lookup (by name)
-        2. Direct file path (relative or absolute)
+        2. Direct file path (relative or absolute, must include suffix)
 
         Args:
             blueprint_ref: Blueprint name or file path.
@@ -215,12 +215,6 @@ class BlueprintExpander:
         if resolved.exists():
             return resolved
 
-        # Try with .yaml extension
-        if not path.suffix:
-            resolved_yaml = Path.cwd() / f"{path}.yaml"
-            if resolved_yaml.exists():
-                return resolved_yaml
-
         raise BlueprintError(
             "Not found in catalog or filesystem",
             blueprint_name=blueprint_ref,
@@ -228,7 +222,6 @@ class BlueprintExpander:
                 "searched_locations": [
                     f"Catalog: {list(blueprints_catalog.keys())[:5]}...",
                     str(Path.cwd() / path),
-                    str(Path.cwd() / f"{path}.yaml"),
                 ]
             },
         )
