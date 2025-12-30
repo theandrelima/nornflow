@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+import jinja2.exceptions
 import yaml
 
 from nornflow.vars.constants import (
@@ -428,8 +429,17 @@ class NornFlowVariablesManager:
             template = self._jinja2_manager.env.from_string(template_str)
             return template.render(context_for_jinja)
 
+        except jinja2.exceptions.UndefinedError as e:
+            logger.exception(f"Jinja2 UndefinedError for host '{host_name}' in template '{template_str}'")
+            raise TemplateError(f"Undefined variable in template '{template_str}': {e}") from e
+        except VariableError as e:
+            logger.exception(f"NornFlow VariableError for host '{host_name}' in template '{template_str}'")
+            raise TemplateError(f"Variable error in template '{template_str}': {e}") from e
         except Exception as e:
-            logger.exception(f"Template rendering error for host '{host_name}' in template '{template_str}'")
+            logger.exception(
+                f"Jinja2 TemplateError or unexpected issue for host '{host_name}' "
+                f"in template '{template_str}'"
+            )
             raise TemplateError(f"Template rendering error in '{template_str}': {e}") from e
 
     def resolve_data(self, data: Any, host_name: str, additional_vars: dict[str, Any] | None = None) -> Any:
