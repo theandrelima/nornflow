@@ -13,11 +13,13 @@
   - [Task Catalog](#task-catalog)
   - [Workflow Catalog](#workflow-catalog)
   - [Filter Catalog](#filter-catalog)
+  - [Blueprint Catalog](#blueprint-catalog)
   - [Catalog Discovery](#catalog-discovery)
 - [Domains](#domains)
   - [What is a Domain?](#what-is-a-domain)
   - [Domain Variables](#domain-variables)
   - [Multiple Workflow Roots](#multiple-workflow-roots)
+- [Blueprints](#blueprints)
 - [Writing Workflows](#writing-workflows)
   - [Workflow Structure](#workflow-structure)
   - [Task Definition](#task-definition)
@@ -121,7 +123,7 @@ Notice how `Nornir` is the fundamental block where all paths lead to in the abov
 - Serves as the main entry point and controller for the entire system
 - Creates and manages the primary components (WorkflowModel, NornirManager, NornFlowVarsManager)
 - Coordinates the execution flow between components
-- Provides discovery and cataloging of tasks, workflows, and filters
+- Provides discovery and cataloging of tasks, workflows, filters, and blueprints
 - Handles configuration management and variable resolution logic
 
 **WorkflowModel (Pure Data Structure)**
@@ -160,7 +162,7 @@ Notice how `Nornir` is the fundamental block where all paths lead to in the abov
 
 ### Execution Flow
 
-1. **Initialization**: NornFlow loads settings and builds catalogs of tasks, workflows, and filters
+1. **Initialization**: NornFlow loads settings and builds catalogs of tasks, workflows, filters, and blueprints
 2. **Workflow Loading**: A YAML workflow is parsed into a WorkflowModel with nested TaskModel instances
 3. **Component Creation**: NornFlow creates the NornirManager and NornFlowVarsManager
 4. **Inventory Filtering**: NornFlow applies filters through NornirManager to select target devices
@@ -186,6 +188,9 @@ my_project/
 ├── nornflow.yaml           # NornFlow configuration
 ├── nornir_config.yaml      # Nornir configuration
 ├── inventory.yaml          # Device inventory
+├── blueprints/             # Reusable task collections
+│   ├── backup_tasks.yaml
+│   └── validation_tasks.yaml
 ├── workflows/              # Workflow definitions
 │   ├── backup/             # Domain: "backup"
 │   │   └── daily_backup.yaml
@@ -261,11 +266,12 @@ local_workflows: ["workflows"]
 local_tasks: ["tasks"]
 local_filters: ["filters"]
 local_hooks: ["hooks"]
+local_blueprints: ["blueprints"]
 ```
 
 ## Catalogs
 
-NornFlow automatically discovers and builds catalogs of available tasks, workflows, and filters based on your configuration. These catalogs are central to NornFlow's operation, allowing you to reference tasks and filters by name in your workflows.
+NornFlow automatically discovers and builds catalogs of available tasks, workflows, filters, and blueprints based on your configuration. These catalogs are central to NornFlow's operation, allowing you to reference these NornFlow assets with ease throughout workflows.
 
 ### Task Catalog
 
@@ -331,13 +337,26 @@ def site_filter(host: Host, region: str) -> bool:
     return host.data.get("region") == region
 ```
 
+### Blueprint Catalog
+
+The blueprint catalog contains all discovered blueprint YAML files. Blueprints are discovered from directories specified in `local_blueprints`:
+
+```yaml
+# nornflow.yaml
+local_blueprints:
+  - "blueprints"
+  - "../shared_blueprints"
+```
+
+All files with `.yaml` or `.yml` extensions in these directories (including subdirectories) are considered blueprints.
+
 ### Catalog Discovery
 
 NornFlow performs recursive searches in all configured directories:
 
 - **Automatic discovery** happens during NornFlow initialization
 - **Name conflicts** - NornFlow prevents custom or imported tasks/filters to override built-in ones. However later custom or imported discoveries will override earlier ones. 
-- **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters` and `--workflows` options.
+- **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters`, `--workflows`, and `--blueprints` options.
 
 **Discovery order:**
 1. Built-in items are loaded first
@@ -382,6 +401,38 @@ Domain resolution:
 - `core_workflows/backup/daily.yaml` → Domain: "backup"
 - `customer_workflows/backup/custom.yaml` → Domain: "backup" (same domain!)
 - Both share variables from `vars/backup/defaults.yaml`
+
+## Blueprints
+
+Blueprints are reusable collections of tasks that can be referenced within workflows. They enable code reuse, modularity, and maintainability by defining common task sequences once and using them across multiple workflows.
+
+**Key characteristics:**
+- Contain **only** a tasks list (no workflow metadata)
+- Referenced by name or path in workflows
+- Support nesting (blueprints can reference other blueprints)
+- Expanded during workflow loading (assembly-time)
+
+**Basic example:**
+
+```yaml
+# blueprints/pre_checks.yaml
+tasks:
+  - name: netmiko_send_command
+    args:
+      command_string: "show version"
+  - name: netmiko_send_command
+    args:
+      command_string: "show interfaces status"
+
+# workflows/deploy.yaml
+workflow:
+  name: "Deploy Configuration"
+  tasks:
+    - blueprint: pre_checks.yaml
+    - name: apply_config
+```
+
+For comprehensive coverage including conditional inclusion, nested blueprints, dynamic selection, variable resolution, and composition strategies, see the [Blueprints Guide](./blueprints_guide.md).
 
 ## Writing Workflows
 
@@ -779,7 +830,7 @@ See the full Failure Strategies guide for details.
 <td width="33%" align="center" style="border: none;">
 </td>
 <td width="33%" align="right" style="border: none;">
-<a href="./failure_strategies.md">Next: Failure Strategies →</a>
+<a href="./blueprints_guide.md">Next: Blueprints Guide →</a>
 </td>
 </tr>
 </table>

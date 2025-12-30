@@ -10,6 +10,7 @@
   - [`local_workflows`](#local_workflows)
   - [`local_filters`](#local_filters)
   - [`local_hooks`](#local_hooks)
+  - [`local_blueprints`](#local_blueprints)
   - [`vars_dir`](#vars_dir)
   - [`dry_run`](#dry_run)
   - [`failure_strategy`](#failure_strategy)
@@ -147,6 +148,25 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_HOOKS`
 - **Note**: For details on creating custom hooks, see the Hooks Guide documentation.
+
+### `local_blueprints`
+
+- **Description**: List of paths to directories containing blueprint definitions. The search is recursive, meaning all subdirectories will be searched. All files with `.yaml` or `.yml` extensions are considered blueprints. Both absolute and relative paths are supported.
+- **Type**: list[str]
+- **Default**: ["blueprints"]
+- **Path Resolution**: 
+  - When loaded through `NornFlowSettings.load`, relative paths resolve against the settings file directory
+  - Direct instantiation leaves relative paths untouched, so they resolve against the runtime working directory
+  - Absolute paths are used as-is
+- **Example**:
+  ```yaml
+  local_blueprints:
+    - "blueprints"
+    - "../shared_blueprints"
+    - "/opt/company/blueprints"
+  ```
+- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_BLUEPRINTS`
+- **Note**: Blueprints are expanded during workflow loading (assembly-time) and have access to a subset of the variable system. See the Blueprints Guide for details.
 
 ### `vars_dir`
 

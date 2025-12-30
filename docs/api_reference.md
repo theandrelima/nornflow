@@ -29,7 +29,7 @@ The central orchestrator for the entire system. NornFlow manages all aspects of 
 
 ### Responsibilities:
 - Loads and validates settings (via NornFlowSettings)
-- Discovers and catalogs tasks, workflows, and filters from directories
+- Discovers and catalogs tasks, workflows, filters, and blueprints from directories
 - Manages vars and filters with precedence rules
 - Directly orchestrates workflow execution
 - Handles inventory filtering and variable resolution
@@ -73,6 +73,7 @@ def __init__(
 | `tasks_catalog` | `CallableCatalog` | Registry of available tasks |
 | `workflows_catalog` | `FileCatalog` | Registry of workflow files |
 | `filters_catalog` | `CallableCatalog` | Registry of inventory filters |
+| `blueprints_catalog` | `FileCatalog` | Registry of blueprint files |
 | `workflow` | `WorkflowModel \| None` | Current workflow model or None |
 | `workflow_path` | `Path \| None` | Path to workflow file if loaded from file |
 | `processors` | `list` | List of processor instances |
@@ -199,6 +200,7 @@ Load settings from a YAML file with automatic resolution and overrides. This cal
 | `local_workflows` | `list[str]` | Directories containing workflow files |
 | `local_filters` | `list[str]` | Directories containing custom filters |
 | `local_hooks` | `list[str]` | Directories containing custom hooks |
+| `local_blueprints` | `list[str]` | Directories containing blueprint files |
 | `processors` | `list[dict[str, Any]]` | Nornir processor configurations |
 | `vars_dir` | `str` | Directory for variable files |
 | `failure_strategy` | `FailureStrategy` | Task failure handling strategy |
@@ -324,6 +326,33 @@ workflow = WorkflowModel.create({
 - `vars`: Workflow-level variables (optional)
 - `inventory_filters`: Inventory filtering configuration (optional)
 - `processors`: Processor configurations (optional)
+
+**Create Method:**
+
+The `create` class method handles workflow creation with blueprint expansion:
+
+```python
+@classmethod
+def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "WorkflowModel"
+```
+
+**Args:**
+- `dict_args`: Dictionary containing the full workflow data, must include 'workflow' key
+- `*args`: Additional positional arguments passed to parent create method
+- `**kwargs`: Additional keyword arguments:
+  - `blueprints_catalog` (dict[str, Path] | None): Catalog mapping blueprint names to file paths
+  - `vars_dir` (str | None): Directory containing variable files
+  - `workflow_path` (Path | None): Path to the workflow file
+  - `workflow_roots` (list[str] | None): List of workflow root directories
+  - `cli_vars` (dict[str, Any] | None): CLI variables with highest precedence
+
+**Returns:**
+- `WorkflowModel`: The created WorkflowModel instance with expanded blueprints
+
+**Raises:**
+- `WorkflowError`: If 'workflow' key is not present in dict_args
+- `BlueprintError`: If blueprint expansion fails
+- `BlueprintCircularDependencyError`: If circular dependencies detected in blueprint references
 
 ### TaskModel
 

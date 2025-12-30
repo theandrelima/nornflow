@@ -209,7 +209,7 @@ This threading model explains why, even with `fail-fast`, some tasks might compl
 <table width="100%" border="0" style="border-collapse: collapse;">
 <tr>
 <td width="33%" align="left" style="border: none;">
-<a href="./core_concepts.md">← Previous: Core Concepts</a>
+<a href="./blueprints_guide.md">← Previous: Blueprints Guide</a>
 </td>
 <td width="33%" align="center" style="border: none;">
 </td>
