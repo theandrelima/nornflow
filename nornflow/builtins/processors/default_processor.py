@@ -68,10 +68,15 @@ class DefaultNornFlowProcessor(Processor):
         Returns:
             True if output should be suppressed, False otherwise
         """
-        return (
-            hasattr(task.nornir, "_nornflow_suppressed_tasks")
-            and task.name in task.nornir._nornflow_suppressed_tasks
-        )
+        if not hasattr(task.nornir, "_nornflow_suppressed_tasks"):
+            return False
+
+        for proc in task.nornir.processors:
+            if hasattr(proc, "task_specific_context"):
+                nornflow_task_model = proc.task_specific_context.get("task_model")
+                return nornflow_task_model.canonical_id in task.nornir._nornflow_suppressed_tasks
+
+        return False
 
     def _format_task_output(self, result: Result, suppress_output: bool) -> str:
         """Format the output section of a task result.

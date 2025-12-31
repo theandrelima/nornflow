@@ -7,12 +7,14 @@
 - [Running Workflows](#running-workflows)
 - [Working with Real-World Use Case](#working-with-real-world-use-case)
 - [Using Variables](#using-variables)
+- [Using Blueprints](#using-blueprints)
 - [Filtering Inventory](#filtering-inventory)
 - [Useful Commands](#useful-commands)
 
 > **Notes:** 
 > 1. This document is intentionally light on each subject. Much of what's mentioned here (and more) is expanded in the [Core Concepts](./core_concepts.md) documentation.
 > 2. Throughout the whole documentation, we won't go into the details about Nornir's configs and concepts (tasks, inventory, filters, etc). Those are pre-requisites to use NornFlow. You may want to check [Nornir's docs](https://github.com/nornir-automation/nornir).
+
 ## Installation
 
 ```bash
@@ -44,6 +46,7 @@ This creates:
 - 📁 workflows - Holds YAML workflow definitions
 - 📁 filters - Custom Nornir inventory filters
 - 📁 hooks - Custom hook implementations for extending task behavior
+- 📁 blueprints - Reusable task collections
 - 📁 vars - Will contain Global and Domain-specific default variables
 - 📁 nornir_configs - Nornir configuration
 - 📑 nornflow.yaml - NornFlow settings
@@ -54,10 +57,11 @@ This creates:
 nornflow show --catalogs
 ```
 
-You'll see three catalogs:
+You'll see four catalogs:
 - **Tasks**: Individual Nornir tasks, that represent a single automation action.
 - **Workflows**: Sequences of tasks defined in YAML files that describe operations to be executed together.
 - **Filters**: Nornir filters that allow you to select specific devices from the inventory.
+- **Blueprints**: Reusable task collections that can be referenced across workflows.
 
 ## Running Tasks
 
@@ -146,14 +150,16 @@ NornFlow's settings file is created with sensible defaults by running `nornflow 
 
 ```yaml
 nornir_config_file: "nornir_configs/config.yaml"
-local_tasks_dirs:
+local_tasks:
   - "tasks"
-local_workflows_dirs:
+local_workflows:
   - "workflows"
-local_filters_dirs:
+local_filters:
   - "filters"
-local_hooks_dirs:
+local_hooks:
   - "hooks"
+local_blueprints:
+  - "blueprints"
 imported_packages: []
 dry_run: False
 failure_strategy: "skip-failed"
@@ -229,6 +235,44 @@ workflow:
 nornflow run vlan_config.yaml --vars "vlan_id=200,vlan_name='WORKSTATIONS'"
 ```
 
+## Using Blueprints
+
+Blueprints are reusable collections of tasks that you can reference across workflows.
+
+### Create a Blueprint
+
+Create `blueprints/network_checks.yaml`:
+
+```yaml
+tasks:
+  - name: netmiko_send_command
+    args:
+      command_string: "show version"
+    set_to: version_output
+  
+  - name: netmiko_send_command
+    args:
+      command_string: "show interfaces status"
+    set_to: interfaces_output
+```
+
+### Use in Workflow
+
+Reference the blueprint in your workflow:
+
+```yaml
+workflow:
+  name: "Device Health Check"
+  tasks:
+    - blueprint: network_checks.yaml
+    - name: write_file
+      args:
+        filename: "reports/{{ host.name }}_health.txt"
+        content: "{{ version_output }}\n{{ interfaces_output }}"
+```
+
+> **Note:** Blueprint references require the file extension (`.yaml` or `.yml`). See the [Blueprints Guide](blueprints_guide.md) for advanced features like conditional inclusion, nesting, and dynamic selection.
+
 ## Filtering Inventory
 
 ### Built-in Filters
@@ -281,13 +325,14 @@ nornflow run service_check --inventory-filters "filter_by_service={'service': 'b
 ## Useful Commands
 
 ```bash
-# Show available tasks, workflows, and filters (catalog)
+# Show available tasks, workflows, filters, and blueprints (catalog)
 nornflow show --catalogs
 
 # Show specific catalogs
 nornflow show --tasks
 nornflow show --filters
 nornflow show --workflows
+nornflow show --blueprints
 
 # Show current NornFlow settings
 nornflow show --settings

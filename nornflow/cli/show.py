@@ -29,11 +29,12 @@ def show(  # noqa: PLR0912
         hidden=True,
     ),
     catalogs: bool = typer.Option(
-        False, "--catalogs", help="Display all catalogs: tasks, filters, and workflows"
+        False, "--catalogs", help="Display all catalogs: tasks, filters, workflows, and blueprints"
     ),
     tasks: bool = typer.Option(False, "--tasks", "-t", help="Display the task catalog"),
     filters: bool = typer.Option(False, "--filters", "-f", help="Display the filter catalog"),
     workflows: bool = typer.Option(False, "--workflows", "-w", help="Display the workflow catalog"),
+    blueprints: bool = typer.Option(False, "--blueprints", "-b", help="Display the blueprint catalog"),
     settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
     nornir_configs: bool = typer.Option(
         False, "--nornir-configs", "-n", help="Display current Nornir Configs"
@@ -45,10 +46,10 @@ def show(  # noqa: PLR0912
     """
     show_all_catalogs = catalog or catalogs
 
-    if not any([show_all_catalogs, tasks, filters, workflows, settings, nornir_configs, all]):
+    if not any([show_all_catalogs, tasks, filters, workflows, blueprints, settings, nornir_configs, all]):
         raise typer.BadParameter(
             "You must provide at least one option: --catalogs, --tasks, --filters, --workflows, "
-            "--settings, --nornir-configs, or --all."
+            "--blueprints, --settings, --nornir-configs, or --all."
         )
 
     try:
@@ -64,6 +65,7 @@ def show(  # noqa: PLR0912
             show_tasks_catalog(nornflow)
             show_filters_catalog(nornflow)
             show_workflows_catalog(nornflow)
+            show_blueprints_catalog(nornflow)
             show_nornflow_settings(nornflow)
             show_nornir_configs(nornflow)
         else:
@@ -71,6 +73,7 @@ def show(  # noqa: PLR0912
                 show_tasks_catalog(nornflow)
                 show_filters_catalog(nornflow)
                 show_workflows_catalog(nornflow)
+                show_blueprints_catalog(nornflow)
             else:
                 if tasks:
                     show_tasks_catalog(nornflow)
@@ -78,6 +81,8 @@ def show(  # noqa: PLR0912
                     show_filters_catalog(nornflow)
                 if workflows:
                     show_workflows_catalog(nornflow)
+                if blueprints:
+                    show_blueprints_catalog(nornflow)
 
             if settings:
                 show_nornflow_settings(nornflow)
@@ -126,10 +131,11 @@ def show(  # noqa: PLR0912
 
 
 def show_catalog(nornflow: "NornFlow") -> None:
-    """Display all catalogs: tasks, filters, and workflows."""
+    """Display all catalogs: tasks, filters, workflows, and blueprints."""
     show_tasks_catalog(nornflow)
     show_filters_catalog(nornflow)
     show_workflows_catalog(nornflow)
+    show_blueprints_catalog(nornflow)
 
 
 def show_tasks_catalog(nornflow: "NornFlow") -> None:
@@ -158,6 +164,16 @@ def show_workflows_catalog(nornflow: "NornFlow") -> None:
         "WORKFLOWS CATALOG",
         render_workflows_catalog_table_data,
         ["Workflow Name", "Description", "Source (file path)"],
+        nornflow,
+    )
+
+
+def show_blueprints_catalog(nornflow: "NornFlow") -> None:
+    """Display the blueprints catalog."""
+    show_formatted_table(
+        "BLUEPRINTS CATALOG",
+        render_blueprints_catalog_table_data,
+        ["Blueprint Name", "Description", "Source (file path)"],
         nornflow,
     )
 
@@ -256,18 +272,9 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     for task_name in task_names:
         task_func = tasks_catalog[task_name]
         docstring = task_func.__doc__ or "No description available"
-
-        first_sentence = docstring.split(".")[0].strip()
-        if len(first_sentence) > DESCRIPTION_FIRST_SENTENCE_LENGTH:
-            first_sentence = first_sentence[:97] + "..."
-        wrapped_text = textwrap.fill(first_sentence, width=60)
-
+        description = process_task_description(docstring)
         source_path = get_source_from_catalog(tasks_catalog, task_name)
-
-        colored_task_name = colored(task_name, "cyan", attrs=["bold"])
-        colored_docstring = colored(wrapped_text, "yellow")
-        colored_source = colored(source_path, "light_green")
-        table_data.append([colored_task_name, colored_docstring, colored_source])
+        table_data.append(get_colored_row(task_name, description, source_path))
     return table_data
 
 
@@ -280,26 +287,23 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
     Returns:
         The table data.
     """
-    workflows_catalog = nornflow.workflows_catalog
-    table_data = []
+    return render_file_based_catalog_table_data(
+        nornflow.workflows_catalog, get_workflow_description, nornflow
+    )
 
-    for workflow_name, workflow_path in sorted(workflows_catalog.items()):
-        try:
-            with workflow_path.open() as f:
-                workflow_dict = yaml.safe_load(f)
-                description = workflow_dict["workflow"].get("description", "No description available")
-        except Exception:
-            description = "Could not load description from file"
 
-        description = textwrap.fill(description, width=60)
+def render_blueprints_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
+    """Render the blueprints catalog as a list of lists.
 
-        source_path = get_source_from_catalog(workflows_catalog, workflow_name)
+    Args:
+        nornflow: The NornFlow object.
 
-        colored_workflow_name = colored(workflow_name, "cyan", attrs=["bold"])
-        colored_description = colored(description, "yellow")
-        colored_source = colored(source_path, "light_green")
-        table_data.append([colored_workflow_name, colored_description, colored_source])
-    return table_data
+    Returns:
+        The table data.
+    """
+    return render_file_based_catalog_table_data(
+        nornflow.blueprints_catalog, get_blueprint_description, nornflow
+    )
 
 
 def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
@@ -320,24 +324,9 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     for filter_name in filter_names:
         filter_func, param_names = filters_catalog[filter_name]
         docstring = filter_func.__doc__ or "No description available"
-
-        first_sentence = docstring.split(".")[0].strip()
-        if len(first_sentence) > DESCRIPTION_FIRST_SENTENCE_LENGTH:
-            first_sentence = first_sentence[:97] + "..."
-
-        if not param_names:
-            param_info = "Parameters: None (host only)"
-        else:
-            param_info = f"Parameters: {', '.join(param_names)}"
-
-        description = f"{first_sentence}\n{param_info}"
-
+        description = process_filter_description(docstring, param_names)
         source_path = get_source_from_catalog(filters_catalog, filter_name)
-
-        colored_filter_name = colored(filter_name, "cyan", attrs=["bold"])
-        colored_docstring = colored(description, "yellow")
-        colored_source = colored(source_path, "light_green")
-        table_data.append([colored_filter_name, colored_docstring, colored_source])
+        table_data.append(get_colored_row(filter_name, description, source_path))
     return table_data
 
 
@@ -432,3 +421,128 @@ def display_banner(banner_text: str, table: str) -> None:
     centered_banner = banner.center(table_width + 5)
 
     typer.echo("\n\n" + centered_banner)
+
+
+def get_workflow_description(workflow_path: Path) -> str:
+    """Get description from workflow YAML file.
+
+    Args:
+        workflow_path: Path to the workflow file.
+
+    Returns:
+        The workflow description.
+    """
+    try:
+        with workflow_path.open() as f:
+            workflow_dict = yaml.safe_load(f)
+            return workflow_dict["workflow"].get("description", "No description available")
+    except Exception:
+        return "Could not load description from file"
+
+
+def get_blueprint_description(blueprint_path: Path) -> str:
+    """Get description from blueprint YAML file.
+
+    Args:
+        blueprint_path: Path to the blueprint file.
+
+    Returns:
+        The blueprint description.
+    """
+    try:
+        with blueprint_path.open() as f:
+            blueprint_dict = yaml.safe_load(f)
+            # Blueprints may have a description at the top level or under a 'blueprint' key
+            return blueprint_dict.get(
+                "description",
+                blueprint_dict.get("blueprint", {}).get("description", "No description available"),
+            )
+    except Exception:
+        return "Could not load description from file"
+
+
+def render_file_based_catalog_table_data(
+    catalog, description_getter, nornflow: "NornFlow"
+) -> list[list[str]]:
+    """Render a file-based catalog (workflows or blueprints) as a list of lists.
+
+    Args:
+        catalog: The catalog to render.
+        description_getter: Function to get description from file path.
+        nornflow: The NornFlow object.
+
+    Returns:
+        The table data.
+    """
+    table_data = []
+    for item_name, item_path in sorted(catalog.items()):
+        description = description_getter(item_path)
+        description = textwrap.fill(description, width=60)
+        source_path = get_source_from_catalog(catalog, item_name)
+        table_data.append(get_colored_row(item_name, description, source_path))
+    return table_data
+
+
+def get_colored_row(name: str, desc: str, source: str) -> list[str]:
+    """Create a colored table row for catalog items.
+
+    Args:
+        name: The item name.
+        desc: The item description.
+        source: The item source path.
+
+    Returns:
+        The colored row list.
+    """
+    return [
+        colored(name, "cyan", attrs=["bold"]),
+        colored(desc, "yellow"),
+        colored(source, "light_green"),
+    ]
+
+
+def extract_first_sentence(docstring: str) -> str:
+    """Extract and truncate the first sentence from a docstring.
+
+    Args:
+        docstring: The raw docstring.
+
+    Returns:
+        The extracted and possibly truncated first sentence.
+    """
+    first_sentence = docstring.split(".")[0].strip()
+    if len(first_sentence) > DESCRIPTION_FIRST_SENTENCE_LENGTH:
+        first_sentence = first_sentence[:97] + "..."
+    return first_sentence
+
+
+def process_task_description(docstring: str) -> str:
+    """Process task description from docstring.
+
+    Args:
+        docstring: The raw docstring.
+
+    Returns:
+        The processed description.
+    """
+    first_sentence = extract_first_sentence(docstring)
+    return textwrap.fill(first_sentence, width=60)
+
+
+def process_filter_description(docstring: str, param_names: list[str]) -> str:
+    """Process filter description from docstring and parameters.
+
+    Args:
+        docstring: The raw docstring.
+        param_names: List of parameter names.
+
+    Returns:
+        The processed description.
+    """
+    first_sentence = extract_first_sentence(docstring)
+    if not param_names:
+        param_info = "Parameters: None (host only)"
+    else:
+        param_info = f"Parameters: {', '.join(param_names)}"
+    description = f"{first_sentence}\n{param_info}"
+    return textwrap.fill(description, width=60)

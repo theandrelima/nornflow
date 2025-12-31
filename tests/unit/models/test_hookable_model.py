@@ -1,12 +1,10 @@
 from typing import ClassVar
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from nornir.core.task import AggregatedResult
 
 from nornflow.models import HookableModel
-from nornflow.nornir_manager import NornirManager
-from nornflow.vars.manager import NornFlowVariablesManager
 
 
 class TestHookableModel:

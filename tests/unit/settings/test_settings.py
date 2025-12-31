@@ -1,10 +1,9 @@
-from unittest.mock import patch
-
-import yaml
 import pytest
+import yaml
 
-from nornflow.settings import NornFlowSettings, NORNFLOW_SETTINGS_MANDATORY, NORNFLOW_SETTINGS_OPTIONAL
-from nornflow.exceptions import ResourceError, SettingsError, NornFlowError
+from nornflow.constants import NORNFLOW_SETTINGS_MANDATORY, NORNFLOW_SETTINGS_OPTIONAL
+from nornflow.exceptions import SettingsError
+from nornflow.settings import NornFlowSettings
 
 
 def make_valid_settings_dict() -> dict[str, object]:
@@ -13,78 +12,264 @@ def make_valid_settings_dict() -> dict[str, object]:
     for idx, key in enumerate(NORNFLOW_SETTINGS_MANDATORY):
         data[key] = f"value_{idx}"
     for opt_key, opt_default in NORNFLOW_SETTINGS_OPTIONAL.items():
-        data[opt_key] = opt_default
+        if opt_key == "failure_strategy":
+            data[opt_key] = "skip-failed"
+        else:
+            data[opt_key] = opt_default
     return data
 
 
-def test_successful_load_and_optional_override():
+def test_settings_load_successful_load(tmp_path):
+    """Load from YAML and ensure core values are populated."""
+    settings_file = tmp_path / "test_settings.yaml"
+    settings_data = {
+        "nornir_config_file": "config.yaml",
+        "local_tasks": ["tasks"],
+        "vars_dir": "vars",
+    }
+    settings_file.write_text(yaml.dump(settings_data))
+
+    settings = NornFlowSettings.load(str(settings_file))
+
+    assert settings.nornir_config_file == str(tmp_path / "config.yaml")
+    assert settings.local_tasks == [str(tmp_path / "tasks")]
+    assert settings.vars_dir == str(tmp_path / "vars")
+
+
+def test_settings_load_file_not_found():
+    """Test error when settings file doesn't exist."""
+    with pytest.raises(SettingsError, match="Settings file not found"):
+        NornFlowSettings.load("nonexistent.yaml")
+
+
+def test_settings_load_invalid_yaml(tmp_path):
+    """Test error when YAML file is invalid."""
+    settings_file = tmp_path / "bad_settings.yaml"
+    settings_file.write_text("invalid: yaml: content:")
+
+    with pytest.raises(SettingsError, match="Failed to load settings"):
+        NornFlowSettings.load(str(settings_file))
+
+
+def test_settings_load_missing_required_field(tmp_path):
+    """Test error when required field is missing."""
+    settings_file = tmp_path / "incomplete_settings.yaml"
+    settings_data = {
+        "local_tasks": ["tasks"],
+    }
+    settings_file.write_text(yaml.dump(settings_data))
+
+    with pytest.raises(Exception):
+        NornFlowSettings.load(str(settings_file))
+
+
+def test_settings_load_with_overrides(tmp_path):
+    """Ensure overrides passed to load() are respected."""
+    settings_file = tmp_path / "test_settings.yaml"
+    settings_data = {
+        "nornir_config_file": "config.yaml",
+        "vars_dir": "vars",
+    }
+    settings_file.write_text(yaml.dump(settings_data))
+
+    settings = NornFlowSettings.load(str(settings_file), vars_dir="custom_vars")
+
+    assert settings.vars_dir == str(tmp_path / "custom_vars")
+
+
+def test_validate_processors_list():
+    """Test processor validation with list input."""
     settings_dict = make_valid_settings_dict()
-    opt_keys = list(NORNFLOW_SETTINGS_OPTIONAL.keys())
-    override_key = opt_keys[0] if opt_keys else None
+    settings_dict["processors"] = [
+        {"class": "MyProcessor", "args": {}},
+        {"class": "AnotherProcessor", "args": {"key": "value"}},
+    ]
 
-    with patch("nornflow.settings.load_file_to_dict", return_value=settings_dict):
-        if override_key:
-            s = NornFlowSettings(settings_file="ignored", **{override_key: "overridden"})
-            assert s.as_dict[override_key] == "overridden"
-        else:
-            s = NornFlowSettings(settings_file="ignored")
-        for k in NORNFLOW_SETTINGS_MANDATORY:
-            assert k in s.as_dict
-            assert s.as_dict[k] is not None
-        sample_key = NORNFLOW_SETTINGS_MANDATORY[0] if NORNFLOW_SETTINGS_MANDATORY else next(iter(s.as_dict))
-        assert getattr(s, sample_key) == s.as_dict[sample_key]
-        assert isinstance(str(s), str)
-        assert sample_key in str(s)
+    settings = NornFlowSettings(**settings_dict)
+
+    assert len(settings.processors) == 2
+    assert settings.processors[0]["class"] == "MyProcessor"
 
 
-def test_file_not_found_raises_resource_error():
-    with patch("nornflow.settings.load_file_to_dict", side_effect=FileNotFoundError()):
-        with pytest.raises(ResourceError):
-            NornFlowSettings(settings_file="missing.yaml")
+def test_validate_processors_empty():
+    """Test processor validation with empty list."""
+    settings_dict = make_valid_settings_dict()
+    settings_dict["processors"] = []
+
+    settings = NornFlowSettings(**settings_dict)
+
+    assert settings.processors == []
 
 
-def test_permission_error_raises_resource_error():
-    with patch("nornflow.settings.load_file_to_dict", side_effect=PermissionError()):
-        with pytest.raises(ResourceError):
-            NornFlowSettings(settings_file="unreadable.yaml")
+def test_validate_failure_strategy_string():
+    """Test failure strategy validation with string."""
+    settings_dict = make_valid_settings_dict()
+    settings_dict["failure_strategy"] = "fail-fast"
+
+    settings = NornFlowSettings(**settings_dict)
+
+    from nornflow.constants import FailureStrategy
+    assert settings.failure_strategy == FailureStrategy.FAIL_FAST
 
 
-def test_yaml_parse_error_raises_settings_error():
-    with patch("nornflow.settings.load_file_to_dict", side_effect=yaml.YAMLError("bad yaml")):
-        with pytest.raises(SettingsError):
-            NornFlowSettings(settings_file="bad.yaml")
+def test_validate_failure_strategy_underscore():
+    """Test failure strategy validation with underscore format."""
+    settings_dict = make_valid_settings_dict()
+    settings_dict["failure_strategy"] = "skip_failed"
+
+    settings = NornFlowSettings(**settings_dict)
+
+    from nornflow.constants import FailureStrategy
+    assert settings.failure_strategy == FailureStrategy.SKIP_FAILED
 
 
-def test_load_returns_non_dict_raises_nornflow_error():
-    # Current implementation wraps non-dict load result into a NornFlowError
-    with patch("nornflow.settings.load_file_to_dict", return_value=["not", "a", "dict"]):
-        with pytest.raises(NornFlowError):
-            NornFlowSettings(settings_file="weird.yaml")
+def test_validate_failure_strategy_invalid():
+    """Test failure strategy validation with invalid value."""
+    settings_dict = make_valid_settings_dict()
+    settings_dict["failure_strategy"] = "invalid-strategy"
+
+    with pytest.raises(Exception):
+        NornFlowSettings(**settings_dict)
 
 
-def test_load_raises_type_error_is_wrapped_as_settings_error():
-    with patch("nornflow.settings.load_file_to_dict", side_effect=TypeError("type problem")):
-        with pytest.raises(SettingsError):
-            NornFlowSettings(settings_file="type.yaml")
+def test_relative_paths_resolved_via_load(tmp_path):
+    """Resolve all relative directories against the settings file location."""
+    settings_file = tmp_path / "test_settings.yaml"
+    settings_data = {
+        "nornir_config_file": "config.yaml",
+        "local_tasks": ["tasks", "nested/tasks"],
+        "local_workflows": ["workflows"],
+        "local_filters": ["filters"],
+        "local_hooks": ["hooks"],
+        "vars_dir": "vars",
+    }
+    settings_file.write_text(yaml.dump(settings_data))
+
+    settings = NornFlowSettings.load(str(settings_file))
+
+    assert settings.nornir_config_file == str(tmp_path / "config.yaml")
+    assert settings.local_tasks == [
+        str(tmp_path / "tasks"),
+        str(tmp_path / "nested/tasks"),
+    ]
+    assert settings.local_workflows == [str(tmp_path / "workflows")]
+    assert settings.local_filters == [str(tmp_path / "filters")]
+    assert settings.local_hooks == [str(tmp_path / "hooks")]
+    assert settings.vars_dir == str(tmp_path / "vars")
 
 
-def test_missing_mandatory_setting_raises_settings_error():
-    if len(NORNFLOW_SETTINGS_MANDATORY) < 1:
-        pytest.skip("No mandatory settings defined")
-    partial = make_valid_settings_dict()
-    missing_key = NORNFLOW_SETTINGS_MANDATORY[0]
-    partial.pop(missing_key, None)
-    with patch("nornflow.settings.load_file_to_dict", return_value=partial):
-        with pytest.raises(SettingsError):
-            NornFlowSettings(settings_file="missing_mandatory.yaml")
+def test_paths_remain_unresolved_with_direct_instantiation():
+    """Direct instantiation leaves incoming paths untouched."""
+    settings_dict = make_valid_settings_dict()
+    settings_dict["nornir_config_file"] = "config.yaml"
+    settings_dict["local_tasks"] = ["tasks"]
+    settings_dict["vars_dir"] = "vars"
+
+    settings = NornFlowSettings(**settings_dict)
+
+    assert settings.nornir_config_file == "config.yaml"
+    assert settings.local_tasks == ["tasks"]
+    assert settings.vars_dir == "vars"
 
 
-def test_empty_mandatory_setting_raises_settings_error():
-    if len(NORNFLOW_SETTINGS_MANDATORY) < 1:
-        pytest.skip("No mandatory settings defined")
-    data = make_valid_settings_dict()
-    empty_key = NORNFLOW_SETTINGS_MANDATORY[0]
-    data[empty_key] = ""
-    with patch("nornflow.settings.load_file_to_dict", return_value=data):
-        with pytest.raises(SettingsError):
-            NornFlowSettings(settings_file="empty_mandatory.yaml")
+def test_absolute_paths_remain_unchanged(tmp_path):
+    """Absolute input paths should not be modified."""
+    settings_file = tmp_path / "test_settings.yaml"
+    abs_tasks_dir = "/absolute/path/to/tasks"
+    settings_data = {
+        "nornir_config_file": "/absolute/config.yaml",
+        "local_tasks": [abs_tasks_dir],
+        "vars_dir": "/absolute/vars",
+    }
+    settings_file.write_text(yaml.dump(settings_data))
+
+    settings = NornFlowSettings.load(str(settings_file))
+
+    assert settings.nornir_config_file == "/absolute/config.yaml"
+    assert settings.local_tasks == [abs_tasks_dir]
+    assert settings.vars_dir == "/absolute/vars"
+
+
+def test_as_dict_property():
+    """Test as_dict property."""
+    settings_dict = make_valid_settings_dict()
+    settings = NornFlowSettings(**settings_dict)
+
+    result = settings.as_dict
+
+    assert isinstance(result, dict)
+    assert "nornir_config_file" in result
+    assert "_base_dir" not in result
+    assert "_settings_file" not in result
+
+
+def test_base_dir_property_set_when_loaded(tmp_path):
+    """Loading from disk sets base_dir to the settings file directory."""
+    settings_file = tmp_path / "test_settings.yaml"
+    settings_data = {
+        "nornir_config_file": "config.yaml",
+        "local_tasks": ["tasks"],
+        "vars_dir": "vars",
+    }
+    settings_file.write_text(yaml.dump(settings_data))
+
+    settings = NornFlowSettings.load(str(settings_file))
+
+    assert settings.base_dir == tmp_path
+
+
+def test_base_dir_property_none_with_direct_instantiation():
+    """Direct instantiation leaves base_dir unset."""
+    settings_dict = make_valid_settings_dict()
+    settings = NornFlowSettings(**settings_dict)
+
+    assert settings.base_dir is None
+
+
+def test_loaded_settings_property():
+    """Test loaded_settings backward compatibility property."""
+    settings_dict = make_valid_settings_dict()
+    settings = NornFlowSettings(**settings_dict)
+
+    result = settings.loaded_settings
+
+    assert isinstance(result, dict)
+    assert result == settings.as_dict
+
+
+def test_local_blueprints_default_value():
+    """Test local_blueprints default value."""
+    settings_dict = make_valid_settings_dict()
+    settings = NornFlowSettings(**settings_dict)
+
+    assert settings.local_blueprints == ["blueprints"]
+
+
+def test_local_blueprints_single_directory(tmp_path):
+    """Test local_blueprints with single custom directory."""
+    settings_file = tmp_path / "test_settings.yaml"
+    settings_data = {
+        "nornir_config_file": "config.yaml",
+        "local_blueprints": ["custom_blueprints"],
+    }
+    settings_file.write_text(yaml.dump(settings_data))
+
+    settings = NornFlowSettings.load(str(settings_file))
+
+    assert settings.local_blueprints == [str(tmp_path / "custom_blueprints")]
+
+
+def test_local_blueprints_multiple_directories(tmp_path):
+    """Test local_blueprints with multiple directories."""
+    settings_file = tmp_path / "test_settings.yaml"
+    settings_data = {
+        "nornir_config_file": "config.yaml",
+        "local_blueprints": ["blueprints1", "blueprints2"],
+    }
+    settings_file.write_text(yaml.dump(settings_data))
+
+    settings = NornFlowSettings.load(str(settings_file))
+
+    assert len(settings.local_blueprints) == 2
+    assert str(tmp_path / "blueprints1") in settings.local_blueprints
+    assert str(tmp_path / "blueprints2") in settings.local_blueprints

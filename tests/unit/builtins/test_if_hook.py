@@ -19,6 +19,10 @@ class TestIfHook:
         """Test that hook evaluates per host, not once per task."""
         assert IfHook.run_once_per_task is False
 
+    def test_requires_deferred_templates_flag(self):
+        """Test that hook declares requirement for deferred template processing."""
+        assert IfHook.requires_deferred_templates is True
+
     def test_init_with_filter_value(self):
         """Test hook initialization with filter configuration."""
         hook = IfHook({"platform": "ios"})
@@ -39,7 +43,6 @@ class TestIfHook:
         hook = IfHook({"platform": "ios"})
         mock_task_model = MagicMock()
 
-        # Should not raise
         hook.execute_hook_validations(mock_task_model)
 
     def test_execute_hook_validations_valid_jinja_string(self):
@@ -47,7 +50,6 @@ class TestIfHook:
         hook = IfHook("{{ host.platform == 'ios' }}")
         mock_task_model = MagicMock()
 
-        # Should not raise
         hook.execute_hook_validations(mock_task_model)
 
     def test_execute_hook_validations_invalid_multiple_filters(self):
@@ -58,20 +60,13 @@ class TestIfHook:
         with pytest.raises(HookValidationError, match="if must specify exactly one filter"):
             hook.execute_hook_validations(mock_task_model)
 
-    def test_execute_hook_validations_invalid_empty_jinja(self):
-        """Test validation fails for empty Jinja2 expression."""
+    def test_execute_hook_validations_invalid_empty_string(self):
+        """Test validation fails for empty string."""
         hook = IfHook("")
         mock_task_model = MagicMock()
+        mock_task_model.name = "test_task"
 
-        with pytest.raises(HookValidationError, match="if expression cannot be empty"):
-            hook.execute_hook_validations(mock_task_model)
-
-    def test_execute_hook_validations_invalid_no_jinja_markers(self):
-        """Test validation fails for string without Jinja2 markers."""
-        hook = IfHook("host.platform == 'ios'")
-        mock_task_model = MagicMock()
-
-        with pytest.raises(HookValidationError, match="if expression must be a valid Jinja2 template"):
+        with pytest.raises(HookValidationError, match="Task 'test_task': if value cannot be empty string"):
             hook.execute_hook_validations(mock_task_model)
 
     def test_execute_hook_validations_invalid_type(self):
@@ -79,7 +74,7 @@ class TestIfHook:
         hook = IfHook(123)
         mock_task_model = MagicMock()
 
-        with pytest.raises(HookValidationError, match="if value must be a dict \\(filter\\) or string \\(expression\\)"):
+        with pytest.raises(HookValidationError, match="if value must be a dict \\(Nornir filter\\) or string \\(Jinja2 expression\\)"):
             hook.execute_hook_validations(mock_task_model)
 
     def test_task_started_applies_decorator(self):
@@ -92,9 +87,7 @@ class TestIfHook:
 
         hook.task_started(mock_task)
 
-        # The task function should be wrapped
         assert mock_task.task != original_func
-        # The wrapper should be the skip_if_condition_flagged decorated version
         assert hasattr(mock_task.task, '__wrapped__')
 
     def test_task_started_no_value_does_nothing(self):
@@ -107,24 +100,17 @@ class TestIfHook:
 
         hook.task_started(mock_task)
 
-        # Task function should remain unchanged
         assert mock_task.task == original_func
 
     @patch('nornflow.builtins.hooks.if_hook.logger')
-    def test_task_instance_started_filter_condition_skip(self, mock_logger):
+    def test_task_instance_started_filter_condition_skip(self, mock_logger, mock_task, mock_host, mock_filters_catalog):
         """Test task_instance_started sets skip flag when filter condition fails."""
         hook = IfHook({"platform": "ios"})
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
-        mock_host.name = "router1"
-        mock_host.data = {}
-        
-        # Mock filter that returns False (should skip)
         mock_filter_func = MagicMock(return_value=False)
-        filters_catalog = {"platform": (mock_filter_func, ["value"])}
+        mock_filters_catalog["platform"] = (mock_filter_func, ["value"])
         
-        hook._current_context = {"filters_catalog": filters_catalog}
+        hook._current_context = {"filters_catalog": mock_filters_catalog}
 
         hook.task_instance_started(mock_task, mock_host)
 
@@ -132,131 +118,89 @@ class TestIfHook:
         mock_filter_func.assert_called_once_with(mock_host, value="ios")
 
     @patch('nornflow.builtins.hooks.if_hook.logger')
-    def test_task_instance_started_filter_condition_continue(self, mock_logger):
+    def test_task_instance_started_filter_condition_continue(self, mock_logger, mock_task, mock_host, mock_filters_catalog):
         """Test task_instance_started doesn't set skip flag when filter condition passes."""
         hook = IfHook({"platform": "ios"})
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
-        mock_host.name = "router1"
-        mock_host.data = {}
-        
-        # Mock filter that returns True (should continue)
         mock_filter_func = MagicMock(return_value=True)
-        filters_catalog = {"platform": (mock_filter_func, ["value"])}
+        mock_filters_catalog["platform"] = (mock_filter_func, ["value"])
         
-        hook._current_context = {"filters_catalog": filters_catalog}
+        hook._current_context = {"filters_catalog": mock_filters_catalog}
 
         hook.task_instance_started(mock_task, mock_host)
 
         assert 'nornflow_skip_flag' not in mock_host.data
         mock_filter_func.assert_called_once_with(mock_host, value="ios")
 
-    def test_task_instance_started_filter_missing_catalog_raises_error(self):
+    def test_task_instance_started_filter_missing_catalog_raises_error(self, mock_task, mock_host):
         """Test task_instance_started raises error when filters_catalog is missing."""
         hook = IfHook({"platform": "ios"})
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
-        mock_host.name = "router1"
-        
-        hook._current_context = {}  # No filters_catalog
+        hook._current_context = {}
 
         with pytest.raises(HookValidationError, match="Failed to evaluate condition"):
             hook.task_instance_started(mock_task, mock_host)
 
-    def test_task_instance_started_filter_unknown_filter_raises_error(self):
+    def test_task_instance_started_filter_unknown_filter_raises_error(self, mock_task, mock_host, mock_filters_catalog):
         """Test task_instance_started raises error when filter is not in catalog."""
         hook = IfHook({"unknown_filter": "value"})
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
-        mock_host.name = "router1"
-        
-        filters_catalog = {"platform": (MagicMock(), ["value"])}
-        hook._current_context = {"filters_catalog": filters_catalog}
+        mock_filters_catalog["platform"] = (MagicMock(), ["value"])
+        hook._current_context = {"filters_catalog": mock_filters_catalog}
 
         with pytest.raises(HookValidationError, match="Filter 'unknown_filter' not found"):
             hook.task_instance_started(mock_task, mock_host)
 
     @patch('nornflow.builtins.hooks.if_hook.logger')
-    def test_task_instance_started_jinja_condition_skip(self, mock_logger):
+    def test_task_instance_started_jinja_condition_skip(self, mock_logger, mock_task, mock_host, mock_vars_manager, mock_device_context):
         """Test task_instance_started sets skip flag when Jinja2 condition evaluates to False."""
         hook = IfHook("{{ host.platform == 'ios' }}")
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
-        mock_host.name = "router1"
-        mock_host.data = {}
-        
-        # Mock vars_manager that resolves to "False"
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.resolve_string.return_value = "False"
-        
-        hook._current_context = {"vars_manager": mock_vars_manager}
-
-        hook.task_instance_started(mock_task, mock_host)
-
-        assert mock_host.data['nornflow_skip_flag'] is True
-        mock_vars_manager.resolve_string.assert_called_once_with("{{ host.platform == 'ios' }}", "router1")
+        with patch.object(hook, 'get_resolved_value', return_value=False):
+            hook.task_instance_started(mock_task, mock_host)
+            
+            assert mock_host.data['nornflow_skip_flag'] is True
 
     @patch('nornflow.builtins.hooks.if_hook.logger')
-    def test_task_instance_started_jinja_condition_continue(self, mock_logger):
+    def test_task_instance_started_jinja_condition_continue(self, mock_logger, mock_task, mock_host, mock_vars_manager, mock_device_context):
         """Test task_instance_started doesn't set skip flag when Jinja2 condition evaluates to True."""
         hook = IfHook("{{ host.platform == 'ios' }}")
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
-        mock_host.name = "router1"
-        mock_host.data = {}
-        
-        # Mock vars_manager that resolves to "True"
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.resolve_string.return_value = "True"
-        
-        hook._current_context = {"vars_manager": mock_vars_manager}
+        with patch.object(hook, 'get_resolved_value', return_value=True):
+            hook.task_instance_started(mock_task, mock_host)
+            
+            assert 'nornflow_skip_flag' not in mock_host.data
 
-        hook.task_instance_started(mock_task, mock_host)
-
-        assert 'nornflow_skip_flag' not in mock_host.data
-        mock_vars_manager.resolve_string.assert_called_once_with("{{ host.platform == 'ios' }}", "router1")
-
-    def test_task_instance_started_jinja_missing_vars_manager_raises_error(self):
+    def test_task_instance_started_jinja_missing_vars_manager_raises_error(self, mock_task, mock_host):
         """Test task_instance_started raises error when vars_manager is missing."""
         hook = IfHook("{{ true }}")
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
-        mock_host.name = "router1"
-        
-        hook._current_context = {}  # No vars_manager
+        hook._current_context = {}
 
-        with pytest.raises(HookValidationError, match="vars_manager not available"):
-            hook.task_instance_started(mock_task, mock_host)
+        with patch.object(hook, 'get_resolved_value', side_effect=Exception("vars_manager not available")):
+            with pytest.raises(HookValidationError, match="Failed to evaluate condition.*vars_manager not available"):
+                hook.task_instance_started(mock_task, mock_host)
 
-    def test_task_instance_started_jinja_invalid_expression_raises_error(self):
-        """Test task_instance_started raises error when Jinja2 expression doesn't evaluate to boolean."""
+    def test_task_instance_started_jinja_invalid_expression_raises_error(self, mock_task, mock_host, mock_vars_manager, mock_device_context):
+        """Test task_instance_started handles non-boolean Jinja2 expression results."""
         hook = IfHook("{{ not_boolean }}")
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
-        mock_host.name = "router1"
-        
-        mock_vars_manager = MagicMock()
-        mock_vars_manager.resolve_string.return_value = "not_boolean"
-        
-        hook._current_context = {"vars_manager": mock_vars_manager}
-
-        with pytest.raises(HookValidationError, match="Failed to evaluate condition"):
+        with patch.object(hook, 'get_resolved_value', return_value=True):
             hook.task_instance_started(mock_task, mock_host)
+            
+            assert 'nornflow_skip_flag' not in mock_host.data
 
     def test_skip_if_condition_flagged_decorator_skip(self):
         """Test skip_if_condition_flagged decorator returns skipped result when flag is set."""
         from nornflow.builtins.hooks.if_hook import skip_if_condition_flagged
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_nornir = MagicMock()
+        mock_nornir.processors = []
+        
         mock_task.host = mock_host
+        mock_task.nornir = mock_nornir
         mock_host.data = {'nornflow_skip_flag': True}
         
         @skip_if_condition_flagged
@@ -269,17 +213,20 @@ class TestIfHook:
         assert result.result is None
         assert result.changed is False
         assert result.failed is False
-        # Flag should be cleaned up
         assert 'nornflow_skip_flag' not in mock_host.data
 
     def test_skip_if_condition_flagged_decorator_continue(self):
         """Test skip_if_condition_flagged decorator executes task when flag is not set."""
         from nornflow.builtins.hooks.if_hook import skip_if_condition_flagged
         
-        mock_task = MagicMock(spec=Task)
-        mock_host = MagicMock(spec=Host)
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_nornir = MagicMock()
+        mock_nornir.processors = []
+        
         mock_task.host = mock_host
-        mock_host.data = {}  # No skip flag
+        mock_task.nornir = mock_nornir
+        mock_host.data = {}
         
         @skip_if_condition_flagged
         def dummy_task(task):
@@ -289,12 +236,86 @@ class TestIfHook:
         
         assert result.result == "executed"
 
+    def test_skip_if_condition_flagged_decorator_with_deferred_params(self):
+        """Test skip_if_condition_flagged decorator resolves deferred params when processor available."""
+        from nornflow.builtins.hooks.if_hook import skip_if_condition_flagged
+        
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_processor = MagicMock()
+        mock_nornir = MagicMock()
+        
+        mock_processor.resolve_deferred_params.return_value = {"resolved": "param"}
+        mock_nornir.processors = [mock_processor]
+        
+        mock_task.host = mock_host
+        mock_task.nornir = mock_nornir
+        mock_host.data = {}
+        
+        @skip_if_condition_flagged
+        def dummy_task(task, **kwargs):
+            return Result(host=task.host, result=kwargs)
+        
+        result = dummy_task(mock_task)
+        
+        assert result.result == {"resolved": "param"}
+        mock_processor.resolve_deferred_params.assert_called_once_with(mock_task, mock_host)
+
+    def test_skip_if_condition_flagged_decorator_immediate_mode(self):
+        """Test skip_if_condition_flagged decorator uses kwargs when no deferred params."""
+        from nornflow.builtins.hooks.if_hook import skip_if_condition_flagged
+        
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_processor = MagicMock()
+        mock_nornir = MagicMock()
+        
+        mock_processor.resolve_deferred_params.return_value = None  # No deferred params
+        mock_nornir.processors = [mock_processor]
+        
+        mock_task.host = mock_host
+        mock_task.nornir = mock_nornir
+        mock_host.data = {}
+        
+        @skip_if_condition_flagged
+        def dummy_task(task, **kwargs):
+            return Result(host=task.host, result=kwargs)
+        
+        result = dummy_task(mock_task, original="param")
+        
+        assert result.result == {"original": "param"}
+        mock_processor.resolve_deferred_params.assert_called_once_with(mock_task, mock_host)
+
+    def test_skip_if_condition_flagged_decorator_with_empty_deferred_params(self):
+        """Test skip_if_condition_flagged decorator uses empty dict when deferred params resolve to empty."""
+        from nornflow.builtins.hooks.if_hook import skip_if_condition_flagged
+        
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_processor = MagicMock()
+        mock_nornir = MagicMock()
+        
+        mock_processor.resolve_deferred_params.return_value = {}  # Empty deferred params
+        mock_nornir.processors = [mock_processor]
+        
+        mock_task.host = mock_host
+        mock_task.nornir = mock_nornir
+        mock_host.data = {}
+        
+        @skip_if_condition_flagged
+        def dummy_task(task, **kwargs):
+            return Result(host=task.host, result=kwargs)
+        
+        result = dummy_task(mock_task, original="param")
+        
+        assert result.result == {}  # Should use empty dict, not kwargs
+        mock_processor.resolve_deferred_params.assert_called_once_with(mock_task, mock_host)
+
     def test_should_execute_always_returns_true(self):
         """Test that hook executes for every host (run_once_per_task=False)."""
         hook = IfHook("{{ true }}")
         mock_task = MagicMock()
 
-        # Should always return True since run_once_per_task is False
         assert hook.should_execute(mock_task) is True
         assert hook.should_execute(mock_task) is True
 
@@ -312,7 +333,6 @@ class TestIfHook:
         mock_host = MagicMock()
         mock_result = MagicMock()
 
-        # These should not raise any exceptions
         hook.task_completed(mock_task, mock_result)
         hook.task_instance_completed(mock_task, mock_host, mock_result)
         hook.subtask_instance_started(mock_task, mock_host)

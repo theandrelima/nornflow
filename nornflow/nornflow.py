@@ -25,7 +25,7 @@ from nornflow.utils import (
     import_modules_recursively,
     is_nornir_filter,
     is_nornir_task,
-    is_workflow_file,
+    is_yaml_file,
     load_processor,
     print_workflow_overview,
     process_filter,
@@ -85,6 +85,7 @@ class NornFlow:
         vars: dict[str, Any] | None = None,
         filters: dict[str, Any] | None = None,
         failure_strategy: FailureStrategy | None = None,
+        dry_run: bool | None = None,
         **kwargs: Any,
     ):
         """
@@ -105,6 +106,8 @@ class NornFlow:
                 any inventory filters defined in the workflow YAML.
             failure_strategy: Failure strategy with highest precedence. This overrides any failure
                 strategy defined in the workflow YAML.
+            dry_run: Dry run mode with highest precedence. This overrides any dry_run
+                setting defined in the workflow YAML or settings.
             **kwargs: Additional keyword arguments passed to NornFlowSettings
 
         Raises:
@@ -113,14 +116,11 @@ class NornFlow:
         try:
             self._validate_init_kwargs(kwargs)
             self._initialize_settings(nornflow_settings, kwargs)
-            self._initialize_nornir()
-            self._initialize_instance_vars(vars, filters, failure_strategy, processors)
+            self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, processors)
             self._initialize_hooks()
             self._initialize_catalogs()
             self._initialize_processors()
-            # Workflow is optional; not always do we want a NornFlow instance with
-            # an executable workflow (e.g., for informational commands like 'show')
-            if workflow is not None:
+            if workflow:
                 self.workflow = workflow
         except CoreError:
             raise
@@ -144,15 +144,19 @@ class NornFlow:
         vars: dict[str, Any] | None,
         filters: dict[str, Any] | None,
         failure_strategy: FailureStrategy | None,
+        dry_run: bool | None,
         processors: list[dict[str, Any]] | None,
     ) -> None:
         """Initialize core instance variables."""
         self._vars = vars or {}
         self._filters = filters or {}
         self._failure_strategy = failure_strategy
+        self._dry_run = dry_run
         self._processors = processors
         self._workflow = None
         self._workflow_path = None
+        self._nornir_configs = None
+        self._nornir_manager = None
         # System processors are initialized lazily in their property getters
         # when needed during workflow execution, not during __init__
         self._var_processor = None
@@ -164,19 +168,24 @@ class NornFlow:
         self._tasks_catalog = CallableCatalog("tasks")
         self._filters_catalog = CallableCatalog("filters")
         self._workflows_catalog = FileCatalog("workflows")
+        self._blueprints_catalog = FileCatalog("blueprints")
         self._load_tasks_catalog()
         self._load_filters_catalog()
         self._load_workflows_catalog()
+        self._load_blueprints_catalog()
 
     def _initialize_hooks(self) -> None:
         """Initialize hooks by importing modules from configured directories."""
-        for dir_path in self.settings.local_hooks_dirs:
+        for dir_path in self.settings.local_hooks:
             dir_path_obj = Path(dir_path)
             if dir_path_obj.exists():
                 import_modules_recursively(dir_path_obj)
 
     def _initialize_nornir(self) -> None:
         """Initialize Nornir configurations and manager."""
+        if self._nornir_manager:
+            return
+
         try:
             self._nornir_configs = load_file_to_dict(self.settings.nornir_config_file)
         except Exception as e:
@@ -205,7 +214,7 @@ class NornFlow:
         2. They have fixed positions in the processor chain (first, second, last)
         3. They are always present and cannot be overridden by users
 
-        System processors are added later in _with_processors() when a workflow
+        System processors are added later in _apply_processors() when a workflow
         is being executed and all necessary context is available.
 
         Precedence for user-configurable processors:
@@ -234,7 +243,9 @@ class NornFlow:
         Returns:
             dict[str, Any]: Dictionary containing the Nornir configurations.
         """
-        return self.nornir_manager.nornir.config.dict()
+        if not self._nornir_manager:
+            self._initialize_nornir()
+        return self._nornir_configs
 
     @nornir_configs.setter
     def nornir_configs(self, value: Any) -> None:
@@ -250,6 +261,8 @@ class NornFlow:
         Returns:
             NornirManager: The Nornir manager instance.
         """
+        if not self._nornir_manager:
+            self._initialize_nornir()
         return self._nornir_manager
 
     @nornir_manager.setter
@@ -352,17 +365,15 @@ class NornFlow:
         1. Failure strategy passed to the NornFlow constructor
         2. Workflow failure strategy
         3. Settings failure strategy
-        4. Default (SKIP_FAILED)
 
         Returns:
             FailureStrategy: The effective failure strategy.
         """
-        return (
-            self._failure_strategy
-            or (self.workflow.failure_strategy if self.workflow else None)
-            or self.settings.failure_strategy
-            or FailureStrategy.SKIP_FAILED
-        )
+        if self._failure_strategy:
+            return self._failure_strategy
+        if self.workflow and self.workflow.failure_strategy:
+            return self.workflow.failure_strategy
+        return self.settings.failure_strategy
 
     @failure_strategy.setter
     def failure_strategy(self, value: FailureStrategy) -> None:
@@ -382,6 +393,25 @@ class NornFlow:
             )
         self._failure_strategy = value
         self._failure_strategy_processor = None
+
+    @property
+    def dry_run(self) -> bool:
+        """
+        Get the effective dry_run value based on precedence chain.
+
+        Precedence (highest to lowest):
+        1. dry_run passed to NornFlow constructor
+        2. Workflow dry_run setting
+        3. Settings dry_run
+
+        Returns:
+            bool: The effective dry_run value.
+        """
+        if self._dry_run is not None:
+            return self._dry_run
+        if self.workflow and self.workflow.dry_run is not None:
+            return self.workflow.dry_run
+        return self.settings.dry_run
 
     @property
     def var_processor(self) -> NornFlowVariableProcessor | None:
@@ -407,7 +437,7 @@ class NornFlow:
         Returns:
             NornFlowFailureStrategyProcessor: The failure strategy processor instance.
         """
-        if self._failure_strategy_processor is None:
+        if not self._failure_strategy_processor:
             self._failure_strategy_processor = NornFlowFailureStrategyProcessor(self.failure_strategy)
         return self._failure_strategy_processor
 
@@ -491,6 +521,26 @@ class NornFlow:
         raise ImmutableAttributeError("Cannot set filters catalog directly.")
 
     @property
+    def blueprints_catalog(self) -> FileCatalog:
+        """
+        Get the blueprints catalog.
+
+        Returns:
+            FileCatalog: Catalog of blueprint names and the corresponding file Path to it.
+        """
+        return self._blueprints_catalog
+
+    @blueprints_catalog.setter
+    def blueprints_catalog(self, _: Any) -> None:
+        """
+        Prevent setting the blueprints catalog directly.
+
+        Raises:
+            ImmutableAttributeError: Always raised to prevent direct setting of the blueprints catalog.
+        """
+        raise ImmutableAttributeError("Cannot set blueprints catalog directly.")
+
+    @property
     def workflow(self) -> WorkflowModel | None:
         """
         Get the workflow model object.
@@ -511,7 +561,7 @@ class NornFlow:
         Raises:
             WorkflowError: If value is invalid or workflow cannot be loaded.
         """
-        if value is None:
+        if not value:
             self._workflow = None
             self._workflow_path = None
         elif isinstance(value, WorkflowModel):
@@ -572,6 +622,11 @@ class NornFlow:
         raise ImmutableAttributeError(
             "Processors cannot be set directly, but must be loaded from nornflow settings file."
         )
+
+    @property
+    def nornir_config_file(self) -> str:
+        """Get the Nornir config file path from settings."""
+        return self.settings.nornir_config_file
 
     def _load_catalog(
         self,
@@ -650,14 +705,14 @@ class NornFlow:
 
         Tasks are loaded in two phases:
         1. Built-in tasks from nornflow.builtins.tasks module
-        2. User-defined tasks from local_tasks_dirs
+        2. User-defined tasks from local_tasks
         """
         self._tasks_catalog = self._load_catalog(
             CallableCatalog,
             "tasks",
             builtin_module=builtin_tasks,
             predicate=is_nornir_task,
-            directories=self.settings.local_tasks_dirs,
+            directories=self.settings.local_tasks,
             check_empty=True,
         )
 
@@ -667,7 +722,7 @@ class NornFlow:
 
         Filters are loaded in two phases:
         1. Built-in filters from nornflow.builtins.filters module
-        2. User-defined filters from configured local_filters_dirs
+        2. User-defined filters from configured local_filters
         """
         self._filters_catalog = self._load_catalog(
             CallableCatalog,
@@ -675,7 +730,7 @@ class NornFlow:
             builtin_module=builtin_filters,
             predicate=is_nornir_filter,
             transform_item=process_filter,
-            directories=self.settings.local_filters_dirs,
+            directories=self.settings.local_filters,
         )
 
     def _load_workflows_catalog(self) -> None:
@@ -688,8 +743,22 @@ class NornFlow:
         self._workflows_catalog = self._load_catalog(
             FileCatalog,
             "workflows",
-            predicate=is_workflow_file,
-            directories=self.settings.local_workflows_dirs,
+            predicate=is_yaml_file,
+            directories=self.settings.local_workflows,
+            recursive=True,
+        )
+
+    def _load_blueprints_catalog(self) -> None:
+        """
+        Discover and load blueprint files from directories specified in settings.
+
+        This catalogs the available blueprint files for later use.
+        """
+        self._blueprints_catalog = self._load_catalog(
+            FileCatalog,
+            "blueprints",
+            predicate=is_yaml_file,
+            directories=self.settings.local_blueprints,
             recursive=True,
         )
 
@@ -728,17 +797,12 @@ class NornFlow:
                 f"Available tasks: {available_tasks}"
             )
 
-    def _apply_filters(self, nornir_manager: NornirManager) -> None:
-        """
-        Apply inventory filters to the Nornir manager.
-
-        Args:
-            nornir_manager: The Nornir manager to apply filters to.
-        """
+    def _apply_filters(self) -> None:
+        """Apply inventory filters to the Nornir manager."""
         filter_kwargs_list = self._get_filtering_kwargs()
 
         for filter_kwargs in filter_kwargs_list:
-            nornir_manager.apply_filters(**filter_kwargs)
+            self.nornir_manager.apply_filters(**filter_kwargs)
 
     def _get_filtering_kwargs(self) -> list[dict[str, Any]]:
         """
@@ -837,7 +901,14 @@ class NornFlow:
         workflow_path = self.workflows_catalog[name]
         try:
             workflow_dict = load_file_to_dict(workflow_path)
-            workflow = WorkflowModel.create(workflow_dict)
+            workflow = WorkflowModel.create(
+                workflow_dict,
+                blueprints_catalog=dict(self.blueprints_catalog),
+                vars_dir=self.settings.vars_dir,
+                workflow_path=workflow_path,
+                workflow_roots=self.settings.local_workflows,
+                cli_vars=self._vars,
+            )
             return workflow, workflow_path
         except Exception as e:
             raise WorkflowError(
@@ -857,14 +928,10 @@ class NornFlow:
             cli_vars=self.vars,
             inline_workflow_vars=dict(self.workflow.vars) if self.workflow.vars else {},
             workflow_path=self.workflow_path,
-            workflow_roots=self.settings.local_workflows_dirs,
+            workflow_roots=self.settings.local_workflows,
         )
 
-    def _with_processors(
-        self,
-        nornir_manager: NornirManager,
-        processors: list | None = None,
-    ) -> None:
+    def _apply_processors(self) -> None:
         """
         Apply processors to the Nornir instance based on configuration.
 
@@ -877,7 +944,6 @@ class NornFlow:
 
         2. USER-CONFIGURABLE PROCESSORS (optional, middle position):
            - From workflow definition (self._workflow.processors)
-           - From passed parameter (processors)
            - From NornFlow settings (self._processors initialized in _initialize_processors)
 
         System processors are initialized lazily via their properties when first accessed.
@@ -888,10 +954,6 @@ class NornFlow:
         2. NornFlowHookProcessor (system - hook execution)
         3. User-configurable processors (custom business logic)
         4. NornFlowFailureStrategyProcessor (system - error handling)
-
-        Args:
-            nornir_manager: The NornirManager instance to apply processors to
-            processors: List of processors to apply if no workflow-specific processors defined
         """
         # Build processor chain with system processors at fixed positions
         # The var_processor property will handle lazy initialization if needed
@@ -912,29 +974,18 @@ class NornFlow:
                     all_processors.extend(workflow_processors)
             except ProcessorError as e:
                 raise WorkflowError(f"Failed to initialize workflow processors: {e}") from e
-        elif processors:
-            all_processors.extend(processors)
         elif self.processors:
             all_processors.extend(self.processors)
 
-        # Add failure strategy processor last
         all_processors.append(self.failure_strategy_processor)
 
-        nornir_manager.apply_processors(all_processors)
+        self.nornir_manager.apply_processors(all_processors)
 
-    def _orchestrate_execution(self, effective_dry_run: bool) -> None:
-        """
-        Orchestrate the execution of workflow tasks in sequence.
-
-        This method handles the core workflow execution logic, including setting
-        the dry-run mode and running each task with the necessary context.
-
-        Args:
-            effective_dry_run: Whether to execute in dry-run mode.
-        """
+    def _orchestrate_execution(self) -> None:
+        """Orchestrate the execution of workflow tasks in sequence."""
         with self.nornir_manager:
             for task in self.workflow.tasks:
-                self.nornir_manager.set_dry_run(effective_dry_run)
+                self.nornir_manager.set_dry_run(self.dry_run)
 
                 task.run(
                     nornir_manager=self.nornir_manager,
@@ -942,18 +993,11 @@ class NornFlow:
                     tasks_catalog=dict(self.tasks_catalog),
                 )
 
-    def _print_workflow_overview(self, effective_dry_run: bool) -> None:
-        """
-        Print the workflow overview before execution.
-        This just wraps around print_workflow_overview for improved
-        readability in self.run()
-
-        Args:
-            effective_dry_run: Whether to execute in dry-run mode.
-        """
+    def _print_workflow_overview(self) -> None:
+        """Print the workflow overview before execution."""
         print_workflow_overview(
             workflow_model=self.workflow,
-            effective_dry_run=effective_dry_run,
+            effective_dry_run=self.dry_run,
             hosts_count=len(self.nornir_manager.nornir.inventory.hosts),
             inventory_filters=self.filters or self.workflow.inventory_filters or {},
             workflow_vars=dict(self.workflow.vars) if self.workflow.vars else {},
@@ -1002,7 +1046,7 @@ class NornFlow:
 
         return 0
 
-    def run(self, dry_run: bool = False) -> int:
+    def run(self) -> int:
         """
         Execute the configured workflow with the current NornFlow settings.
 
@@ -1027,21 +1071,19 @@ class NornFlow:
         back to the caller of NornFlow.run(). This is to allow the caller the flexibility
         to process and handle it as fits.
 
-        Args:
-            dry_run: Whether to execute in dry-run mode.
-
         Returns:
             int: Exit code representing execution status.
         """
-        effective_dry_run = dry_run or self.workflow.dry_run
         if not self.workflow:
             raise WorkflowError(
                 "No workflow configured. Set a workflow before calling run().", component="NornFlow"
             )
+
         self._check_tasks()
-        self._apply_filters(self.nornir_manager)
-        self._with_processors(self.nornir_manager)
-        self._print_workflow_overview(effective_dry_run)
-        self._orchestrate_execution(effective_dry_run)
+        self._initialize_nornir()
+        self._apply_filters()
+        self._apply_processors()
+        self._print_workflow_overview()
+        self._orchestrate_execution()
         self._print_workflow_summary()
         return self._get_return_code()

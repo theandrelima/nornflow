@@ -6,10 +6,12 @@ from pydantic import field_validator
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.utils import convert_to_hashable
 
+from nornflow.blueprints import BlueprintExpander, BlueprintResolver
 from nornflow.constants import FailureStrategy
 from nornflow.exceptions import WorkflowError
 from nornflow.models import NornFlowBaseModel, TaskModel
 from nornflow.utils import normalize_failure_strategy
+from nornflow.vars.jinja2_utils import Jinja2EnvironmentManager
 
 
 class WorkflowModel(NornFlowBaseModel):
@@ -21,49 +23,74 @@ class WorkflowModel(NornFlowBaseModel):
     inventory_filters: HashableDict[str, Any] | None = None
     processors: tuple[HashableDict[str, Any]] | None = None
     tasks: OneToMany[TaskModel, ...]
-    dry_run: bool = False
+    dry_run: bool | None = None
     vars: HashableDict[str, Any] | None = None
-    failure_strategy: FailureStrategy = FailureStrategy.SKIP_FAILED
+    failure_strategy: FailureStrategy | None = None
 
     @classmethod
     def create(cls, dict_args: dict[str, Any], *args: Any, **kwargs: Any) -> "WorkflowModel":
         """
         Create a new WorkflowModel from a workflow dictionary.
 
-        Extracts the 'workflow' key from the input dict and processes tasks into TaskModel instances.
+        Extracts the 'workflow' key from the input dict, expands any blueprint references
+        in the tasks list, and processes tasks into TaskModel instances.
 
         Args:
             dict_args: Dictionary containing the full workflow data, must include 'workflow' key.
             *args: Additional positional arguments passed to parent create method.
             **kwargs: Additional keyword arguments passed to parent create method.
+                blueprints_catalog: Optional catalog mapping blueprint names to file paths.
+                vars_dir: Optional directory containing variable files.
+                workflow_path: Optional path to the workflow file.
+                workflow_roots: Optional list of workflow root directories.
+                cli_vars: Optional CLI variables with highest precedence.
 
         Returns:
             The created WorkflowModel instance.
 
         Raises:
             WorkflowError: If 'workflow' key is not present in dict_args.
+            BlueprintError: If blueprint expansion fails.
         """
-        try:
-            dict_args = dict_args.pop("workflow")
-        except KeyError as e:
-            raise WorkflowError("Workflow file must have 'workflow' as a root-level key.") from e
+        if "workflow" not in dict_args:
+            raise WorkflowError("Workflow file must have 'workflow' as a root-level key.")
 
-        # Tasks should already be in dict_args from the workflow definition
-        if "tasks" not in dict_args:
-            dict_args["tasks"] = []  # Default to empty list if no tasks defined
+        workflow_dict = dict_args["workflow"]
 
-        # Create TaskModels from the tasks in dict_args
+        if "tasks" not in workflow_dict:
+            workflow_dict["tasks"] = []
+
+        jinja2_manager = Jinja2EnvironmentManager()
+        resolver = BlueprintResolver(jinja2_manager)
+        expander = BlueprintExpander(resolver)
+
+        # Pop blueprint-specific kwargs to consume them and remove them from the dict.
+        blueprints_catalog = kwargs.pop("blueprints_catalog", None)
+        vars_dir = kwargs.pop("vars_dir", None)
+        workflow_path = kwargs.pop("workflow_path", None)
+        workflow_roots = kwargs.pop("workflow_roots", None)
+        cli_vars = kwargs.pop("cli_vars", None)
+
+        expanded_tasks = expander.expand_blueprints(
+            tasks=workflow_dict["tasks"],
+            blueprints_catalog=blueprints_catalog,
+            vars_dir=vars_dir,
+            workflow_path=workflow_path,
+            workflow_roots=workflow_roots,
+            inline_vars=workflow_dict.get("vars"),
+            cli_vars=cli_vars,
+        )
+
         tasks = []
-        for task_dict in dict_args["tasks"]:
+        for task_dict in expanded_tasks:
             task = TaskModel.create(task_dict)
             tasks.append(task)
 
-        # Update tasks in dict_args with the created TaskModels
-        # in the end, it's ok for tasks to be a python list, because PydanticSerdesBaseModel
-        # automatically takes care of converting it to its own OneToMany type
-        dict_args["tasks"] = tasks
+        workflow_dict["tasks"] = tasks
 
-        return super().create(dict_args, *args, **kwargs)
+        # kwargs contains arguments meant for the model itself.
+        result = super().create(workflow_dict, *args, **kwargs)
+        return result
 
     @field_validator("failure_strategy", mode="before")
     @classmethod

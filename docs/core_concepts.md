@@ -13,11 +13,13 @@
   - [Task Catalog](#task-catalog)
   - [Workflow Catalog](#workflow-catalog)
   - [Filter Catalog](#filter-catalog)
+  - [Blueprint Catalog](#blueprint-catalog)
   - [Catalog Discovery](#catalog-discovery)
 - [Domains](#domains)
   - [What is a Domain?](#what-is-a-domain)
   - [Domain Variables](#domain-variables)
   - [Multiple Workflow Roots](#multiple-workflow-roots)
+- [Blueprints](#blueprints)
 - [Writing Workflows](#writing-workflows)
   - [Workflow Structure](#workflow-structure)
   - [Task Definition](#task-definition)
@@ -121,7 +123,7 @@ Notice how `Nornir` is the fundamental block where all paths lead to in the abov
 - Serves as the main entry point and controller for the entire system
 - Creates and manages the primary components (WorkflowModel, NornirManager, NornFlowVarsManager)
 - Coordinates the execution flow between components
-- Provides discovery and cataloging of tasks, workflows, and filters
+- Provides discovery and cataloging of tasks, workflows, filters, and blueprints
 - Handles configuration management and variable resolution logic
 
 **WorkflowModel (Pure Data Structure)**
@@ -160,7 +162,7 @@ Notice how `Nornir` is the fundamental block where all paths lead to in the abov
 
 ### Execution Flow
 
-1. **Initialization**: NornFlow loads settings and builds catalogs of tasks, workflows, and filters
+1. **Initialization**: NornFlow loads settings and builds catalogs of tasks, workflows, filters, and blueprints
 2. **Workflow Loading**: A YAML workflow is parsed into a WorkflowModel with nested TaskModel instances
 3. **Component Creation**: NornFlow creates the NornirManager and NornFlowVarsManager
 4. **Inventory Filtering**: NornFlow applies filters through NornirManager to select target devices
@@ -186,6 +188,9 @@ my_project/
 ├── nornflow.yaml           # NornFlow configuration
 ├── nornir_config.yaml      # Nornir configuration
 ├── inventory.yaml          # Device inventory
+├── blueprints/             # Reusable task collections
+│   ├── backup_tasks.yaml
+│   └── validation_tasks.yaml
 ├── workflows/              # Workflow definitions
 │   ├── backup/             # Domain: "backup"
 │   │   └── daily_backup.yaml
@@ -252,32 +257,33 @@ nornflow run --settings nornflow-dev.yaml test_workflow.yaml
 # nornflow-dev.yaml
 nornir_config_file: "configs/nornir-dev.yaml"
 dry_run: true
-local_workflows_dirs: ["workflows", "dev_workflows"]
+local_workflows: ["workflows", "dev_workflows"]
 
 # nornflow-prod.yaml
 nornir_config_file: "configs/nornir-prod.yaml"
 dry_run: false
-local_workflows_dirs: ["workflows"]
-local_tasks_dirs: ["tasks"]
-local_filters_dirs: ["filters"]
-local_hooks_dirs: ["hooks"]
+local_workflows: ["workflows"]
+local_tasks: ["tasks"]
+local_filters: ["filters"]
+local_hooks: ["hooks"]
+local_blueprints: ["blueprints"]
 ```
 
 ## Catalogs
 
-NornFlow automatically discovers and builds catalogs of available tasks, workflows, and filters based on your configuration. These catalogs are central to NornFlow's operation, allowing you to reference tasks and filters by name in your workflows.
+NornFlow automatically discovers and builds catalogs of available tasks, workflows, filters, and blueprints based on your configuration. These catalogs are central to NornFlow's operation, allowing you to reference these NornFlow assets with ease throughout workflows.
 
 ### Task Catalog
 
 The task catalog contains all available Nornir tasks that can be used in workflows. Tasks are discovered from:
 
 1. **Built-in tasks** - Always available (e.g., `echo` & `set`)
-2. **Local directories** - Specified in `local_tasks_dirs` setting
+2. **Local directories** - Specified in `local_tasks` setting
 3. **Imported packages** - *(Planned feature, not yet implemented)*
 
 ```yaml
 # nornflow.yaml
-local_tasks_dirs:
+local_tasks:
   - "tasks"
   - "/shared/network_tasks"
 ```
@@ -296,11 +302,11 @@ def my_task(task: Task, **kwargs) -> Result:
 
 ### Workflow Catalog
 
-The workflow catalog contains all discovered workflow YAML files. Workflows are discovered from directories specified in `local_workflows_dirs`:
+The workflow catalog contains all discovered workflow YAML files. Workflows are discovered from directories specified in `local_workflows`:
 
 ```yaml
 # nornflow.yaml
-local_workflows_dirs:
+local_workflows:
   - "workflows"
   - "../shared_workflows"
 ```
@@ -312,11 +318,11 @@ All files with `.yaml` or `.yml` extensions in these directories (including subd
 The filter catalog contains inventory filter functions that can be used in workflow definitions. Filters are discovered from:
 
 1. **Built-in filters** - currently `hosts` and `groups` filters
-2. **Local directories** - Specified in `local_filters_dirs` setting
+2. **Local directories** - Specified in `local_filters` setting
 
 ```yaml
 # nornflow.yaml
-local_filters_dirs:
+local_filters:
   - "filters"
   - "../custom_filters"
 ```
@@ -331,13 +337,26 @@ def site_filter(host: Host, region: str) -> bool:
     return host.data.get("region") == region
 ```
 
+### Blueprint Catalog
+
+The blueprint catalog contains all discovered blueprint YAML files. Blueprints are discovered from directories specified in `local_blueprints`:
+
+```yaml
+# nornflow.yaml
+local_blueprints:
+  - "blueprints"
+  - "../shared_blueprints"
+```
+
+All files with `.yaml` or `.yml` extensions in these directories (including subdirectories) are considered blueprints.
+
 ### Catalog Discovery
 
 NornFlow performs recursive searches in all configured directories:
 
 - **Automatic discovery** happens during NornFlow initialization
 - **Name conflicts** - NornFlow prevents custom or imported tasks/filters to override built-in ones. However later custom or imported discoveries will override earlier ones. 
-- **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters` and `--workflows` options.
+- **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters`, `--workflows`, and `--blueprints` options.
 
 **Discovery order:**
 1. Built-in items are loaded first
@@ -373,7 +392,7 @@ When using multiple workflow directories:
 
 ```yaml
 # nornflow.yaml
-local_workflows_dirs:
+local_workflows:
   - "core_workflows"
   - "customer_workflows"
 ```
@@ -382,6 +401,38 @@ Domain resolution:
 - `core_workflows/backup/daily.yaml` → Domain: "backup"
 - `customer_workflows/backup/custom.yaml` → Domain: "backup" (same domain!)
 - Both share variables from `vars/backup/defaults.yaml`
+
+## Blueprints
+
+Blueprints are reusable collections of tasks that can be referenced within workflows. They enable code reuse, modularity, and maintainability by defining common task sequences once and using them across multiple workflows.
+
+**Key characteristics:**
+- Contain **only** a tasks list (no workflow metadata)
+- Referenced by name or path in workflows
+- Support nesting (blueprints can reference other blueprints)
+- Expanded during workflow loading (assembly-time)
+
+**Basic example:**
+
+```yaml
+# blueprints/pre_checks.yaml
+tasks:
+  - name: netmiko_send_command
+    args:
+      command_string: "show version"
+  - name: netmiko_send_command
+    args:
+      command_string: "show interfaces status"
+
+# workflows/deploy.yaml
+workflow:
+  name: "Deploy Configuration"
+  tasks:
+    - blueprint: pre_checks.yaml
+    - name: apply_config
+```
+
+For comprehensive coverage including conditional inclusion, nested blueprints, dynamic selection, variable resolution, and composition strategies, see the [Blueprints Guide](./blueprints_guide.md).
 
 ## Writing Workflows
 
@@ -463,7 +514,7 @@ NornFlow provides powerful and flexible inventory filtering capabilities that de
 - **groups** - List of group names to include (matches any in list)
 
 #### 2. Custom Filter Functions
-NornFlow can use custom filter functions defined by your `local_filters_dirs` setting (configured in nornflow.yaml). These functions provide advanced filtering logic beyond simple attribute matching.
+NornFlow can use custom filter functions defined by your `local_filters` setting (configured in nornflow.yaml). These functions provide advanced filtering logic beyond simple attribute matching.
 
 #### 3. Direct Attribute Filtering
 As it is the case with Nornir, any host attribute can be used as a filter key for simple equality matching:
@@ -514,7 +565,7 @@ inventory_filters:
 ### Creating Custom Filters
 
 Custom filters MUST:
-1. Be defined in python modules within directories specified by `local_filters_dirs`
+1. Be defined in python modules within directories specified by `local_filters`
 2. Contain a `host` keyword as the first parameter
 3. Return a boolean value
 4. Include proper type annotations (for automatic discovery)
@@ -779,7 +830,7 @@ See the full Failure Strategies guide for details.
 <td width="33%" align="center" style="border: none;">
 </td>
 <td width="33%" align="right" style="border: none;">
-<a href="./failure_strategies.md">Next: Failure Strategies →</a>
+<a href="./blueprints_guide.md">Next: Blueprints Guide →</a>
 </td>
 </tr>
 </table>

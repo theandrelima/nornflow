@@ -296,6 +296,7 @@ def get_nornflow_builder(
     processors: list[dict[str, Any]] | None = None,
     vars: dict[str, Any] | None = None,
     failure_strategy: FailureStrategy | None = None,
+    dry_run: bool = False,
 ) -> NornFlowBuilder:
     """
     Build the workflow using the provided target, arguments, inventory filters, and dry-run option.
@@ -308,6 +309,7 @@ def get_nornflow_builder(
         processors (list): The processor configurations.
         vars (dict): Vars with highest precedence.
         failure_strategy (FailureStrategy): Failure strategy with highest precedence.
+        dry_run (bool): Whether to perform a dry run.
 
     Returns:
         NornFlowBuilder: The builder instance with the configured workflow.
@@ -334,6 +336,10 @@ def get_nornflow_builder(
     # Add failure strategy if specified
     if failure_strategy:
         builder.with_failure_strategy(failure_strategy)
+
+    # Add dry_run if specified
+    if dry_run:
+        builder.with_kwargs(dry_run=dry_run)
 
     if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_YAML_EXTENSIONS):
         target_path = Path(target)
@@ -497,12 +503,13 @@ def run(
             parsed_processors,
             parsed_vars,
             parsed_failure_strategy,
+            dry_run,
         )
 
         nornflow = builder.build()
 
         # Capture the exit code from nornflow.run()
-        exit_code = nornflow.run(dry_run=dry_run)
+        exit_code = nornflow.run()
 
         # Exit with the workflow's exit code if non-zero, otherwise return normally
         if exit_code != 0:

@@ -6,12 +6,7 @@ from nornflow.vars.constants import DEFAULTS_FILENAME
 # Directory where the user is running the CLI from
 CWD = Path.cwd()
 
-# Runtime directories and files (relative to user's current working directory)
-NORNIR_DEFAULT_CONFIG_DIR = CWD / "nornir_configs"
-TASKS_DIR = CWD / "tasks"
-WORKFLOWS_DIR = CWD / "workflows"
-FILTERS_DIR = CWD / "filters"
-HOOKS_DIR = CWD / "hooks"
+# Default location for NornFlow settings file
 NORNFLOW_SETTINGS = CWD / "nornflow.yaml"
 
 # NornFlow's samples directory
@@ -29,7 +24,7 @@ SAMPLE_VARS_FILE = NORNFLOW_SAMPLES_DIR / DEFAULTS_FILENAME
 DESCRIPTION_FIRST_SENTENCE_LENGTH = 100
 
 # Banners
-INIT_BANNER = """ ██████   █████                               ███████████ ████                          
+INIT_BANNER = """\n ██████   █████                               ███████████ ████                          
 ░░██████ ░░███                               ░░███░░░░░░█░░███                          
  ░███░███ ░███   ██████  ████████  ████████   ░███   █ ░  ░███   ██████  █████ ███ █████
  ░███░░███░███  ███░░███░░███░░███░░███░░███  ░███████    ░███  ███░░███░░███ ░███░░███ 

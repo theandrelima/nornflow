@@ -1,13 +1,13 @@
-# Hooks Guide
+# NornFlow Hooks Guide
 
 ## Table of Contents
-- [Introduction](#introduction)
-- [What Are Hooks?](#what-are-hooks)
-- [Hook Architecture](#hook-architecture)
-  - [Hooks as Nornir Processors](#hooks-as-nornir-processors)
-  - [Execution Lifecycle](#execution-lifecycle)
-  - [Performance Characteristics](#performance-characteristics)
-- [Built-in Hooks](#built-in-hooks)
+
+- [Overview](#overview)
+- [Hooks as Nornir Processors](#hooks-as-nornir-processors)
+- [Execution Lifecycle](#execution-lifecycle)
+- [Performance Characteristics](#performance-characteristics)
+- [Hook-Driven Template Resolution](#hook-driven-template-resolution)
+- [Built-in Hooks](#nornflows-built-in-hooks)
   - [The `if` Hook](#the-if-hook)
   - [The `set_to` Hook](#the-set_to-hook)
   - [The `shush` Hook](#the-shush-hook)
@@ -21,29 +21,24 @@
   - [Lifecycle Methods](#lifecycle-methods)
   - [Execution Scopes](#execution-scopes)
   - [Context Access](#context-access)
+  - [Jinja2 Template Support](#jinja2-template-support)
   - [Hook Validation](#hook-validation)
   - [Custom Exception Handling](#custom-exception-handling)
 - [Advanced Concepts](#advanced-concepts)
   - [Hook Processor Integration](#hook-processor-integration)
   - [Flyweight Pattern Implementation](#flyweight-pattern-implementation)
 
-## Introduction
+## Overview
 
-Hooks are NornFlow's primary extension mechanism, allowing you to inject custom behavior into task execution without modifying task code. They provide a clean, declarative way to add functionality at specific points in the task lifecycle.
+Hooks are a powerful extension mechanism provided by NornFlow, allowing you to inject custom behavior into task execution without modifying task code. They provide a clean, declarative way to add functionality at specific points in the task lifecycle.
 
-This guide covers everything you need to know about using and creating hooks in NornFlow.
+### Key Concepts
 
-## What Are Hooks?
-
-Hooks are special components that can intercept and modify task execution behavior. They act as "mini processors", implementing Nornir's Processor protocol while providing a simpler, more focused interface for common automation patterns.
-
-**Key characteristics:**
-- **Declarative**: Configure hooks in YAML alongside tasks
-- **Reusable**: Same hook can be used across multiple tasks
-- **Isolated**: Each task gets its own hook context
-- **Powerful**: Full access to task lifecycle events
-- **Selective**: Activate only when configured on specific tasks, and according to implemented logic.
-- **Automatic**: Registration happens automatically when you define a hook class
+- **Hooks are Nornir Processors**: Hooks are implemented as Nornir processors, giving them access to the full task execution lifecycle.
+- **Lifecycle Integration**: Hooks can execute code before, during, and after task execution.
+- **Configuration-Driven**: Hooks are configured in workflow YAML/dict and applied automatically.
+- **Validation**: Hook configurations are validated during workflow preparation.
+- **Context Awareness**: Hooks have access to variables, inventory data, and execution context.
 
 **Potential use cases:**
 - **Task-level orchestration**: Implement setup or teardown logic that runs once per task across all hosts
@@ -64,7 +59,7 @@ Under the hood, hooks are Nornir processors managed by the [`NornFlowHookProcess
 
 1. **Full lifecycle access**: Hooks can react to any point in task execution
 2. **Processor chain integration**: Hooks work alongside other processors
-3. **Performance optimization**: Hook instances are cached and reused (Flyweight pattern)
+3. **Performance optimization**: Hook instances are cached and reused
 
 ### Execution Lifecycle
 
@@ -112,11 +107,40 @@ Hooks can participate in these task lifecycle events:
 
 ### Performance Characteristics
 
-- **Hook instances**: Created ONCE per unique (hook_class, value) pair via Flyweight pattern
+- **Hook instances**: Created ONCE per unique (hook_class, value) pair 
 - **Memory usage**: O(unique_hooks) - shared instances across tasks
 - **Thread safety**: Guaranteed via execution context isolation
 - **Registration**: Happens at import time via `__init_subclass__`
 - **Validation**: Happens once per task during workflow preparation
+
+### Hook-Driven Template Resolution
+
+Hook-Driven Template Resolution is a mechanism for optimizing variable template resolution when hooks need to evaluate conditions or perform logic before task args templates are processed. This is an **optional capability** that hooks can opt into via the `requires_deferred_templates` class attribute.
+
+#### How It Works
+
+The system operates in two phases when deferred processing is requested:
+
+**Phase 1 - Pre-Execution Logic:**
+1. The Hook class declares `requires_deferred_templates = True`
+2. `NornFlowVariableProcessor` detects this requirement during `task_instance_started()`
+3. **Task parameter templates** are stored without resolution (e.g., `args: {config: "{{ some_var }}"`)
+4. **Hook configuration templates**, if any, are resolved using current variable context (if the hook supports jinja2 templates as input - as is the case with the `if` and `shush` hooks, for example)
+5. Hook performs its pre-execution logic using the resolved hook configurations
+
+**Phase 2 - Just-In-Time Resolution:**
+1. After hook logic completes, the hook triggers `resolve_deferred_params()`
+2. `NornFlowVariableProcessor` resolves stored task parameter templates using the current host context
+3. Task executes with fully resolved parameters
+
+#### Mandatory vs Optional
+
+**This feature is completely optional:**
+- Hooks that don't need deferred processing work normally (immediate resolution)
+- Only hooks that declare `requires_deferred_templates = True` trigger deferred mode
+- The processor automatically selects the appropriate strategy based on hook declarations
+
+> **NOTE FOR DEVELOPERS:** Developers writing their own custom Hooks are strongly encouraged to check the code (and included docstrings) in [nornflow/vars/processors.py](../nornflow/vars/processors.py) and [nornflow/builtins/hooks/if_hook.py](../nornflow/builtins/hooks/if_hook.py) for a deeper understanding and a working example of a Hook that fully takes advantage of this feature.
 
 ## NornFlow's Built-in Hooks
 
@@ -135,16 +159,16 @@ You are encouraged to examine the source code for the `if` Hook [here](../nornfl
 
 #### Configuration Formats
 
-The `if` Hook accepts inputs either as Jinja2 expressions or as Nornir filters in the filters catalogue.
+The `if` Hook accepts inputs either as Jinja2 templates or as Nornir filters in the filters catalogue.
 
 ##### Jinja2 Expression Details
 
 Expressions have access to:
 - `host.*` namespace (Nornir inventory)
-- All NornFlow variables (runtime, CLI, inline, domain, default, env)
-- All Jinja2 filters
+- All NornFlow variables (runtime, CLI, domain, default, env)
+- All Jinja2 filters (defaults, and NornFlow provided)
 
-Must evaluate to boolean:
+Users must ensure that the template input evaluates to boolean:
 ```yaml
 # ✅ Valid
 if: "{{ enabled }}"
@@ -155,18 +179,6 @@ if: "{{ count > 5 }}"
 if: "{{ host.name }}"  # Returns string
 if: "{{ vlans }}"      # Returns list
 ```
-**Using the `if` Hook with Jinja2 Expressions**
-```yaml
-tasks:
-  - name: ios_specific_config
-    if: "{{ host.platform == 'ios' }}"
-    
-  - name: backup_if_changed
-    if: "{{ config_changed | default(false) }}"
-    
-  - name: complex_condition
-    if: "{{ host.data.site == 'prod' and maintenance_mode == false }}"
-```
 
 ##### Filter Function Details
 
@@ -176,7 +188,7 @@ The Filter functions must:
 3. Return boolean value
 
 ```python
-# Custom filter example
+# Custom filter hypothetical example
 def platform_filter(host: Host, platform: str) -> bool:
     """Filter hosts by platform."""
     return host.platform == platform
@@ -185,18 +197,44 @@ def platform_filter(host: Host, platform: str) -> bool:
 **Using the `if` Hook with Nornir Filter Functions**
 ```yaml
 tasks:
-  - name: filter_by_platform
+  - name: netmiko_send_command
     if:
-      platform_filter: {platform: "ios"}
-      
-  - name: filter_by_site
-    if:
-      site_filter: ["dc1", "dc2"]
-      
-  - name: simple_filter
-    if:
-      is_production: true
+      platform_filter: "ios" # assuming a 'platform_filter' exists in the catalog
+    args: 
+      command: "show version"
 ```
+
+#### How IfHook Uses Hook-Driven Template Resolution
+
+The IfHook leverages Hook-Driven Template Resolution to evaluate conditions before resolving task argument templates, preventing errors on hosts where variables might not exist.
+
+**Declaration:**
+```python
+class IfHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "if"
+    run_once_per_task = False
+    requires_deferred_templates = True  # Enables two-phase processing
+```
+
+**Usage Flow:**
+1. **Configuration**: User configures `if` condition in workflow YAML
+2. **Declaration Detection**: `NornFlowVariableProcessor` sees `requires_deferred_templates = True`
+3. **Template Storage**: Task parameters with `{{ variables }}` are stored without resolution
+4. **Condition Evaluation**: `IfHook` evaluates the condition using current variable context
+5. **Skip Decision**: Hosts failing the condition get `nornflow_skip_flag` set
+6. **Just-in-Time Resolution**: For passing hosts, `skip_if_condition_flagged` decorator resolves templates via `resolve_deferred_params()` method provided by the `NornFlowVariableProcessor`.
+7. **Task Execution**: Task runs with resolved parameters only on eligible hosts
+
+**Example:**
+```yaml
+tasks:
+  - name: configure_feature
+    if: "{{ host.data.has_feature }}"  # Condition uses host inventory data
+    args:
+      config: "{{ feature_template }}"  # Template uses variable that might not exist on all hosts
+```
+
+Without deferred processing, this would fail on hosts missing `feature_template`. With deferred processing, only hosts that pass the `if` condition have their templates resolved.
 
 ### The `set_to` Hook
 
@@ -271,7 +309,7 @@ You are encouraged to refer to the source code for the `shush` Hook [here](../no
 
 1. **task_started**: Checks for compatible processors with `supports_shush_hook` attribute
 2. Evaluates the configured value (boolean or Jinja2 expression)
-3. If the value evaluates to `True`: Marks task in suppression set on Nornir instance
+3. If the value evaluates to `True`: Marks task in suppression set on Nornir instance. It uses a unique key (combining task name and ID) to correctly handle multiple tasks with the same name.
 4. Output processor checks suppression set and skips output display while preserving all data
 5. **task_completed**: Removes task from suppression set after completion
 
@@ -281,11 +319,9 @@ You are encouraged to refer to the source code for the `shush` Hook [here](../no
 ```yaml
 tasks:
   - name: netmiko_send_command
-    shush: true  # Always suppress
-    set_to: backup_result
-    
-  - name: verify_config
-    shush: false  # Never suppress
+    shush: true
+    args:
+      command_string: "show version"
 ```
 
 **Jinja2 Expression (dynamic suppression)**
@@ -336,18 +372,32 @@ processors:
     # ⚠️ shush won't work unless MyCustomProcessor supports it
 ```
 
-To support `shush` in a custom processor:
+To support `shush` in a custom processor, your processor's code would have to include something like this:
 
 ```python
 class MyCustomProcessor(Processor):
+    """Custom processor that supports the shush hook for output suppression."""
+    
     supports_shush_hook = True
     
-    def task_instance_completed(self, task: Task, host: Host, result: MultiResult):
-        if hasattr(task.nornir, '_nornflow_suppressed_tasks'):
-            if task.name in task.nornir._nornflow_suppressed_tasks:
-                return
+    def _is_output_suppressed(self, task: Task) -> bool:
+        if not hasattr(task.nornir, "_nornflow_suppressed_tasks"):
+            return False
+
+        for proc in task.nornir.processors:
+            if hasattr(proc, "task_specific_context"):
+                nornflow_task_model = proc.task_specific_context.get("task_model")
+                return nornflow_task_model.canonical_id in task.nornir._nornflow_suppressed_tasks
+    
+    def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
+        """Process task completion and handle output suppression."""
+        suppress_output = self._is_output_suppressed(task)
         
-        print(result)
+        if suppress_output:
+            # Skip printing or handle suppressed output (e.g., print a shushed message)
+            print(f"Task '{task.name}' on '{host.name}' output suppressed.")
+        else:
+            # Normal output logic here ...
 ```
 
 ## Hook Configuration
@@ -436,7 +486,7 @@ class MyHook(Hook):
     ...
 ```
 
-After your hook module is imported (via `local_hooks_dirs`), it's immediately available in workflows:
+After your hook module is imported (via `local_hooks`), it's immediately available in workflows:
 
 ```yaml
 tasks:
@@ -491,7 +541,7 @@ Project Structure:
 ```
 
 **Registration timing:**
-- Hooks are registered **at import time** when the module is loaded
+- Hooks are registered **at import time** when the `Hook.__init_subclass__` mechanism is triggered
 - This happens **before** any workflow execution
 - The `Hook.__init_subclass__` mechanism adds the hook to the global registry immediately
 
@@ -585,8 +635,6 @@ class SimpleValidationHook(Hook):
 
 The base `Hook` class already provides default implementations (empty `pass` statements) for all lifecycle methods, so your custom hook only needs to inherit from `Hook` and set `hook_name`.
 
-Here's a clearer rewrite of the "Execution Scopes" section:
-
 ### Execution Scopes
 
 Control whether your hook executes once per task or independently for each host using the `run_once_per_task` class attribute:
@@ -632,6 +680,235 @@ class MyHook(Hook):
         my_var = vars_manager.get_nornflow_variable("my_var", host.name)
 ```
 
+### Jinja2 Template Support
+
+NornFlow provides an optional `Jinja2ResolvableMixin` that makes it easy to add Jinja2 template support to your custom hooks. This mixin handles all the complexity of detecting Jinja2 expressions, validating them during workflow preparation, resolving them through the variable system at runtime, and converting results to the appropriate type.  
+
+#### When to Use the Mixin
+
+The mixin is **entirely optional** and should only be used when:
+
+1. ✅ **Your hook accepts user-provided values** that could benefit from dynamic resolution
+2. ✅ **You want to support both static values AND Jinja2 expressions** seamlessly
+
+**Do NOT use the mixin when:**
+
+1. ❌ **Your hook should NEVER accept Jinja2 expressions**
+2. ❌ **Your hook has complex custom Jinja2 resolution and/or validation logic** that conflicts with standard Jinja2 resolution provided by the Mixin
+
+#### How the Mixin Works
+
+When you use the mixin, it provides a single method `get_resolved_value()` that:
+
+1. Checks if `self.value` contains Jinja2 markers (`{{`, `{%`, `{#`)
+2. If yes: Resolves the template using NornFlow's variable system
+3. If no: Returns the value as-is
+4. Optionally converts the result to boolean or applies a default
+
+**This means your hook automatically accepts BOTH:**
+- Static values: `my_hook: true`, `my_hook: "static_string"`
+- Jinja2 expressions: `my_hook: "{{ some_variable }}"`, `my_hook: "{{ host.platform == 'ios' }}"`
+
+#### Basic Usage
+
+```python
+from nornir.core.task import Task
+from nornir.core.inventory import Host
+from nornflow.hooks import Hook, Jinja2ResolvableMixin
+
+class MyConditionalHook(Hook, Jinja2ResolvableMixin):
+    """Hook that conditionally executes based on static or dynamic values."""
+    
+    hook_name = "my_hook"
+    run_once_per_task = False
+    
+    def execute_hook_validations(self, task_model: "TaskModel") -> None:
+        super().execute_hook_validations(task_model)
+        # your own custom validations here if any...
+        # otherwise, you don't even need to override this method at all
+    
+    def task_instance_started(self, task: Task, host: Host) -> None:
+        condition = self.get_resolved_value(task, host=host, as_bool=True, default=False)
+        
+        if condition:
+            print(f"Executing for {host.name}")
+```
+
+**YAML usage:**
+```yaml
+tasks:
+  # Static boolean value
+  - name: task1
+    my_hook: true
+  
+  # Jinja2 expression
+  - name: task2
+    my_hook: "{{ enabled and host.platform == 'ios' }}"
+  
+  # Static string (evaluated as boolean)
+  - name: task3
+    my_hook: "yes"  # Truthy string value
+```
+
+#### Automatic Validation
+
+When you use the mixin, **validation happens automatically** during workflow preparation for Jinja2 expressions. The mixin validates that strings containing Jinja2 markers (`{{`, `{%`, `{#`) are properly formatted templates.
+
+**What gets validated by the mixin:**
+- **Jinja2 expressions are validated**: `my_hook: "{{ variable }}"` - Template syntax checked
+- **Plain strings are NOT validated**: `my_hook: "plain text"` - Passed through as-is
+- **Empty strings are NOT validated**: `my_hook: ""` - Treated as falsy value
+- **Non-string values skip validation**: `my_hook: true`, `my_hook: {"key": "value"}` - No checks. Returns as-is for your Hook's own processing logic.
+
+**Individual hooks can add stricter validation** if needed:
+
+```python
+from nornflow.hooks import Hook, Jinja2ResolvableMixin
+from nornflow.hooks.exceptions import HookValidationError
+
+class StrictHook(Hook, Jinja2ResolvableMixin):
+    """Hook that rejects empty strings as meaningless configuration."""
+    
+    hook_name = "strict_hook"
+    
+    def execute_hook_validations(self, task_model: "TaskModel") -> None:
+        super().execute_hook_validations(task_model) # ATTENTION: If you don't call super's execute_hook_validations, you loose all the Mixin's validations.
+        
+        if isinstance(self.value, str) and not self.value.strip():
+            raise HookValidationError(
+                "StrictHook",
+                [("empty_string", f"Task '{task_model.name}': strict_hook value cannot be empty")]
+            )
+```
+
+**Example: The `if` hook adds empty string validation** because an empty condition is meaningless:
+
+```python
+class IfHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "if"
+    
+    def execute_hook_validations(self, task_model: "TaskModel") -> None:
+        super().execute_hook_validations(task_model)
+        
+        if isinstance(self.value, str):
+            if not self.value.strip():
+                raise HookValidationError(
+                    "IfHook",
+                    [("empty_string", f"Task '{task_model.name}': if condition cannot be empty string")]
+                )
+```
+
+**Validation responsibility split:**
+- **Mixin validates**: Jinja2 expression syntax (only when markers present)
+- **Individual hooks validate**: Hook-specific constraints (empty strings, value types, etc.)
+
+The mixin uses **cooperative super() calls**, so it works correctly with multiple inheritance. You are **strongly** encouraged to always call `super().execute_hook_validations(task_model)` first in your validation method.
+
+#### The `get_resolved_value()` Method
+
+```python
+def get_resolved_value(
+    self,
+    task: Task,
+    host: Host | None = None,
+    as_bool: bool = False,
+    default: Any = None
+) -> Any:
+    """Get the final resolved value, handling Jinja2 automatically."""
+    ...
+```
+
+**Parameters:**
+- `task`: The current Nornir task (used to extract host for template resolution)
+- `host`: The specific host for per-host resolution (MUST provide in task_instance_started)
+- `as_bool`: Convert the final result to boolean (useful for conditional hooks)
+- `default`: Fallback value if `self.value` is None or empty
+
+**Return value:**
+- If `self.value` is falsy: Returns `default`
+- If `self.value` contains Jinja2: Resolves template and returns result
+- If `self.value` is static: Returns value as-is
+- If `as_bool=True`: Converts final result to boolean
+
+#### Boolean Conversion
+
+When using `as_bool=True`, the mixin converts values to boolean using NornFlow's standard truthy values:
+
+**Truthy strings** (case-insensitive):
+- `"true"`, `"yes"`, `"1"`, `"on"`, `"y"`, `"t"`, `"enabled"`
+
+**Falsy strings:**
+- Any other string value
+
+**Other types:**
+- Booleans: Returned as-is
+- Other values: Converted using Python's `bool()`
+
+```python
+# All these evaluate to True:
+get_resolved_value(task, as_bool=True)  # if self.value = "yes"
+get_resolved_value(task, as_bool=True)  # if self.value = "{{ 'enabled' }}"
+get_resolved_value(task, as_bool=True)  # if self.value = True
+
+# All these evaluate to False:
+get_resolved_value(task, as_bool=True)  # if self.value = "no"
+get_resolved_value(task, as_bool=True)  # if self.value = "{{ 'disabled' }}"
+get_resolved_value(task, as_bool=True)  # if self.value = False
+```
+
+#### Examples from Built-in Hooks
+
+**The `shush` hook** (see [source](../nornflow/builtins/hooks/shush.py)):
+```python
+class ShushHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "shush"
+    run_once_per_task = True
+    
+    def task_started(self, task: Task) -> None:
+        # Single line to get resolved boolean value
+        should_suppress = self.get_resolved_value(task, as_bool=True, default=False)
+        
+        if should_suppress:
+            # Mark task for suppression
+            ...
+```
+
+**The `if` hook** (see source) uses the mixin for Jinja2 expression support:
+```python
+class IfHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "if"
+    run_once_per_task = False
+    
+    def task_instance_started(self, task: Task, host: Host) -> None:
+        if isinstance(self.value, str):
+            should_run = self.get_resolved_value(task, host=host, as_bool=True, default=True)
+        else:
+            should_run = self._evaluate_filter_condition(host)
+        
+        if not should_run:
+            host.data["nornflow_skip_flag"] = True
+```
+
+#### Advanced: Custom Type Conversion
+
+If you need custom type conversion beyond boolean, you can use the mixin's resolution and add your own logic:
+
+```python
+class NumericHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "numeric"
+    
+    def task_instance_started(self, task: Task, host: Host) -> None:
+        raw_value = self.get_resolved_value(task, host=host)
+        
+        try:
+            numeric_value = int(raw_value)
+        except (ValueError, TypeError):
+            numeric_value = 0
+        
+        if numeric_value > 10:
+            ...
+```
+
 ### Hook Validation
 
 Validate configuration during task preparation:
@@ -641,7 +918,6 @@ from nornflow.hooks.exceptions import HookValidationError
 
 class MyHook(Hook):
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
-        """Validate hook configuration."""
         
         if not isinstance(self.value, str):
             raise HookValidationError(

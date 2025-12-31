@@ -8,8 +8,6 @@ from pydantic_serdes.custom_collections import HashableDict
 
 from nornflow.exceptions import TaskError
 from nornflow.models import TaskModel
-from nornflow.nornir_manager import NornirManager
-from nornflow.vars.manager import NornFlowVariablesManager
 
 
 class TestTaskModel:

@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from nornflow.constants import NORNFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import ProcessorError
@@ -36,8 +36,8 @@ class TestNornirManager:
         # Create a dict with both Nornir and NornFlow params
         params = {
             "runner": "threaded",  # Valid Nornir param
-            "local_workflows_dirs": ["/tmp/workflows"],  # NornFlow-specific param that should be filtered
-            "local_tasks_dirs": ["/tmp/tasks"],  # Another NornFlow-specific param
+            "local_workflows": ["/tmp/workflows"],  # NornFlow-specific param that should be filtered
+            "local_tasks": ["/tmp/tasks"],  # Another NornFlow-specific param
         }
 
         # Add all optional NornFlow settings to test they're filtered
@@ -64,17 +64,23 @@ class TestNornirManager:
         # Create test kwargs with some NornFlow settings
         kwargs = {
             "runner": "threaded",
-            "local_workflows_dirs": ["/tmp/workflows"],
             "another_setting": "value",
         }
+        
+        # Add all optional NornFlow settings to test they're removed
+        for param in NORNFLOW_SETTINGS_OPTIONAL:
+            kwargs[param] = f"value_{param}"
 
         # Call the method
         manager._remove_optional_nornflow_settings_from_kwargs(kwargs)
 
         # Verify NornFlow settings were removed
         assert "runner" in kwargs
-        assert "local_workflows_dirs" not in kwargs
         assert "another_setting" in kwargs
+        
+        # Verify all NornFlow optional settings were removed
+        for param in NORNFLOW_SETTINGS_OPTIONAL:
+            assert param not in kwargs
 
     def test_apply_filters_with_valid_filters(self, mock_nornir, mock_init_nornir):
         """Test applying valid filters."""
