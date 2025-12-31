@@ -175,7 +175,7 @@ class TestShowCommand:
 
         with pytest.raises(typer.BadParameter):
             show(mock_ctx, catalog=False, catalogs=False, tasks=False, filters=False,
-                 workflows=False, settings=False, nornir_configs=False, all=False)
+                 workflows=False, blueprints=False, settings=False, nornir_configs=False, all=False)
 
     @patch("nornflow.cli.show.NornFlowBuilder")
     @patch("nornflow.cli.show.CLIShowError")
@@ -256,7 +256,7 @@ class TestShowHelpers:
 
         show_catalog(mock_nornflow)
 
-        assert mock_show_table.call_count == 3
+        assert mock_show_table.call_count == 4
         calls = [
             call(
                 "TASKS CATALOG",

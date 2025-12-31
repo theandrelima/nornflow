@@ -1,10 +1,12 @@
 from typing import Any, TYPE_CHECKING
 
+from jinja2 import TemplateSyntaxError
 from nornir.core.inventory import Host
 from nornir.core.task import Task
 
 from nornflow.hooks.exceptions import HookError, HookValidationError
 from nornflow.vars.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
+from nornflow.vars.jinja2_utils import Jinja2EnvironmentManager
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
@@ -75,13 +77,27 @@ class Jinja2ResolvableMixin:
             task_model: The task model being validated
 
         Raises:
-            HookValidationError: If string is empty
+            HookValidationError: If string is empty or has syntax errors
         """
         if not self.value.strip():
             raise HookValidationError(
                 self.hook_name,
                 [("empty_expression", f"Task '{task_model.name}': Jinja2 expression cannot be empty")],
             )
+
+        try:
+            manager = Jinja2EnvironmentManager()
+            manager.env.from_string(self.value)
+        except TemplateSyntaxError as e:
+            raise HookValidationError(
+                self.hook_name,
+                [("jinja2_syntax", f"Task '{task_model.name}': Jinja2 syntax error: {e}")],
+            ) from e
+        except Exception as e:
+            raise HookValidationError(
+                self.hook_name,
+                [("jinja2_validation", f"Task '{task_model.name}': Jinja2 validation failed: {e}")],
+            ) from e
 
     def get_resolved_value(
         self, task: Task, host: Host | None = None, as_bool: bool = False, default: Any = None

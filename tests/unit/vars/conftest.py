@@ -50,7 +50,6 @@ class _SimpleHostProxy:
             return MagicMock(name=item)
 
 
-# --------------------------------------------------------------------------- fixtures
 @pytest.fixture()
 def mock_host() -> MockHost:
     return MockHost()
@@ -118,7 +117,7 @@ def basic_manager(tmp_path) -> NornFlowVariablesManager:
     temp_vars_dir.mkdir()
     manager = NornFlowVariablesManager(vars_dir=str(temp_vars_dir))
     for name, func in ALL_FILTERS.items():
-        manager.jinja_env.filters[name] = func
+        manager._jinja2_manager.env.filters[name] = func
     return manager
 
 
@@ -137,7 +136,7 @@ def setup_manager(
         inline_workflow_vars={
             "backup_type": "full",
             "override_var": "workflow_value",
-            "workflow_var": "workflow_value",        # <- added for precedence test
+            "workflow_var": "workflow_value",
         },
         workflow_path=workflows_dir / "networking" / "config.yaml",
         workflow_roots=[str(workflows_dir)],
@@ -151,7 +150,7 @@ def setup_manager(
     manager.set_runtime_variable("complex_var", {"key": "value", "list": [1, 2, 3]}, "test_device")
 
     for name, func in ALL_FILTERS.items():
-        manager.jinja_env.filters[name] = func
+        manager._jinja2_manager.env.filters[name] = func
 
     with patch.dict(
         "os.environ",

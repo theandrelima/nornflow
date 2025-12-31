@@ -235,3 +235,41 @@ def test_loaded_settings_property():
 
     assert isinstance(result, dict)
     assert result == settings.as_dict
+
+
+def test_local_blueprints_default_value():
+    """Test local_blueprints default value."""
+    settings_dict = make_valid_settings_dict()
+    settings = NornFlowSettings(**settings_dict)
+
+    assert settings.local_blueprints == ["blueprints"]
+
+
+def test_local_blueprints_single_directory(tmp_path):
+    """Test local_blueprints with single custom directory."""
+    settings_file = tmp_path / "test_settings.yaml"
+    settings_data = {
+        "nornir_config_file": "config.yaml",
+        "local_blueprints": ["custom_blueprints"],
+    }
+    settings_file.write_text(yaml.dump(settings_data))
+
+    settings = NornFlowSettings.load(str(settings_file))
+
+    assert settings.local_blueprints == [str(tmp_path / "custom_blueprints")]
+
+
+def test_local_blueprints_multiple_directories(tmp_path):
+    """Test local_blueprints with multiple directories."""
+    settings_file = tmp_path / "test_settings.yaml"
+    settings_data = {
+        "nornir_config_file": "config.yaml",
+        "local_blueprints": ["blueprints1", "blueprints2"],
+    }
+    settings_file.write_text(yaml.dump(settings_data))
+
+    settings = NornFlowSettings.load(str(settings_file))
+
+    assert len(settings.local_blueprints) == 2
+    assert str(tmp_path / "blueprints1") in settings.local_blueprints
+    assert str(tmp_path / "blueprints2") in settings.local_blueprints

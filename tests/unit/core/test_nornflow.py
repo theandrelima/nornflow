@@ -253,7 +253,11 @@ class TestNornFlowBuilder:
             assert nf.workflow == valid_workflow
 
     def test_builder_with_workflow_path(self, basic_settings, valid_workflow_file):
-        with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
+        with patch("nornflow.nornflow.NornFlow._initialize_nornir"), \
+             patch("nornflow.nornflow.NornFlow._load_workflow_from_name") as mock_load:
+            mock_workflow = MagicMock(spec=WorkflowModel)
+            mock_load.return_value = (mock_workflow, valid_workflow_file)
+
             nf = (
                 NornFlowBuilder()
                 .with_settings_object(basic_settings)
@@ -360,9 +364,8 @@ class TestNornFlowExecution:
         mock_mgr.__exit__.return_value = None
         mock_mgr_cls.return_value = mock_mgr
     
-        # Create a task mock that will raise an error when run() is called
         task_mock = MagicMock()
-        task_mock.name = "echo"  # Use a builtin task name to pass _check_tasks()
+        task_mock.name = "echo"
         task_mock.run.side_effect = RuntimeError("test error")
     
         wf = MagicMock(spec=WorkflowModel)
@@ -580,3 +583,13 @@ class TestNornFlowImmutability:
 
             with pytest.raises(Exception):
                 nf.tasks_catalog = {}
+
+    def test_blueprints_catalog_immutable(self):
+        """blueprints_catalog property should not be settable."""
+        settings = NornFlowSettings(nornir_config_file="dummy.yaml")
+
+        with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
+            nf = NornFlow(nornflow_settings=settings)
+
+            with pytest.raises(Exception):
+                nf.blueprints_catalog = {}

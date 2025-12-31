@@ -217,6 +217,7 @@ These provide Python-like functionality not available in standard Jinja2:
 | `reversed` | Return list in reverse order | `{{ [1, 2, 3] \| reversed }}` → `[3, 2, 1]` |
 | `strip` | Remove leading and trailing characters | `{{ " text " \| strip }}` → `"text"` |
 | `joinx` | Join iterable with separator | `{{ [1, 2, 3] \| joinx('-') }}` → `"1-2-3"` |
+| `startswith` | Check if string starts with prefix | `{{ "Router-NYC-001" \| startswith("Router") }}` → `true` |
 
 ## Filter Chaining
 

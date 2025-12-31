@@ -1,3 +1,4 @@
+import hashlib
 import importlib
 import inspect
 import logging
@@ -6,6 +7,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Literal
 
+import yaml
 from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
@@ -27,6 +29,7 @@ from nornflow.constants import (
 from nornflow.exceptions import (
     CoreError,
     ProcessorError,
+    ResourceError,
     WorkflowError,
 )
 
@@ -252,7 +255,7 @@ def process_filter(attr: Callable) -> tuple[Callable, list[str]]:
     return (attr, param_names)
 
 
-def is_workflow_file(file_path: str | Path) -> bool:
+def is_yaml_file(file_path: str | Path) -> bool:
     """
     Check if a file is a valid NornFlow workflow file.
 
@@ -476,3 +479,30 @@ def print_workflow_overview(
     )
 
     console.print(panel)
+
+
+def get_file_content_hash(file_path: Path) -> str:
+    """
+    Generate a stable hash from file content for identity comparison.
+
+    Normalizes YAML content before hashing to ensure equivalent content
+    produces the same hash regardless of formatting differences.
+
+    Args:
+        file_path: Path to the file to hash.
+
+    Returns:
+        A 16-character hex string representing the content hash.
+
+    Raises:
+        ResourceError: If file cannot be read or parsed.
+    """
+    try:
+        content = file_path.read_text(encoding="utf-8")
+        data = yaml.safe_load(content)
+        normalized = yaml.dump(data, sort_keys=True, default_flow_style=False)
+        return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+    except Exception as e:
+        raise ResourceError(
+            f"Failed to hash file content: {e}", resource_type="file", resource_name=str(file_path)
+        ) from e
