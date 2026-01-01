@@ -407,7 +407,7 @@ Domain resolution:
 Blueprints are reusable collections of tasks that can be referenced within workflows. They enable code reuse, modularity, and maintainability by defining common task sequences once and using them across multiple workflows.
 
 **Key characteristics:**
-- Contain **only** a tasks list (no workflow metadata)
+- Contain **only** a MANDATORY `tasks` key and an OPTIONAL `description` key (no other workflow metadata)
 - Referenced by name or path in workflows
 - Support nesting (blueprints can reference other blueprints)
 - Expanded during workflow loading (assembly-time)

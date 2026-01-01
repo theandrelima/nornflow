@@ -122,7 +122,34 @@ tasks:
     if: "{{ 'interfaces' | is_set }}"
 ```
 
-**Important:** Blueprints contain ONLY the tasks key. No `workflow`, `name`, `description`, etc.
+**Important:** Blueprints contain ONLY the `tasks` key and an optional `description` key. No other fields are permitted. Attempting to include additional fields will result in a validation error when the blueprint is loaded during workflow execution.
+
+#### Optional Description Field
+
+Blueprints may optionally include a `description` field at the root level. This field is purely informational and is used for display purposes in the blueprints catalog (e.g., via `nornflow show -b`). If no description is provided, it defaults to "No description available".
+
+```yaml
+# blueprints/network_validation.yaml
+description: "Validates network interfaces and routing"
+tasks:
+  - name: netmiko_send_command
+    args:
+      command_string: "show ip interface brief"
+    set_to: interfaces
+```
+
+**Example output from `nornflow show -b` *(see 'Description' column)* :** 
+
+```nornflow show -b
+
+
+                                       BLUEPRINTS CATALOG                                         
+╭─────────────────────────┬──────────────────────────────────────────┬──────────────────────────────────────╮
+│     Blueprint Name      │ Description                              │ Source (file path)                   │
+├─────────────────────────┼──────────────────────────────────────────┼──────────────────────────────────────┤
+│ network_validation.yaml │ Validates network interfaces and routing │ ./blueprints/network_validation.yaml │
+╰─────────────────────────┴──────────────────────────────────────────┴──────────────────────────────────────╯
+```
 
 ### Blueprint Discovery
 
@@ -158,7 +185,7 @@ my_project/
 
 ### Blueprint Catalog
 
-All discovered blueprints are cataloged by filename (without extension):
+All discovered blueprints are cataloged by their full filename (including extension):
 
 ```bash
 # View discovered blueprints
@@ -166,19 +193,19 @@ nornflow show --blueprints
 ```
 
 **Catalog naming:**
-- `blueprints/validation.yaml` → `validation`
-- `blueprints/backup/full_backup.yaml` → `full_backup`
-- `blueprints/security/compliance_checks.yaml` → `compliance_checks`
+- `blueprints/validation.yaml` → `validation.yaml`
+- `blueprints/backup/full_backup.yaml` → `full_backup.yaml`
+- `blueprints/security/compliance_checks.yaml` → `compliance_checks.yaml`
 
 **Name conflicts:** If multiple blueprints have the same filename, the last discovered one wins. Use unique names.
 
-> **NOTE:** *We understand this is somehow restricting, but a decision was made to keep things simle here, as it shouldn't be too hard to prevent clashes by using different file names. Future releases of NornFlow, may revist this decision and allow blueprints to be ID in the catalogue with a fully qualified name.*
+> **NOTE:** *We understand this is somehow restricting, but a decision was made to keep things simple here, as it shouldn't be too hard to prevent clashes by using different file names. Future releases of NornFlow, may revisit this decision and allow blueprints to be ID in the catalogue with a fully qualified name.*
 
 ## Using Blueprints in Workflows
 
 ### Basic Blueprint Reference
 
-Reference blueprints by name from the catalog:
+Reference blueprints by their full filename from the catalog:
 
 ```yaml
 workflow:

@@ -210,7 +210,6 @@ class BlueprintExpander:
         if path.is_absolute() and path.exists():
             return path
 
-        # Relative to current working directory
         resolved = Path.cwd() / path
         if resolved.exists():
             return resolved
@@ -238,7 +237,7 @@ class BlueprintExpander:
 
     @staticmethod
     def _load_blueprint_tasks(blueprint_path: Path) -> list[dict[str, Any]]:
-        """Load and validate blueprint structure from file.
+        """Load and validate blueprint structure from file using BlueprintModel.
 
         Args:
             blueprint_path: Path to the blueprint file.
@@ -249,33 +248,19 @@ class BlueprintExpander:
         Raises:
             BlueprintError: If blueprint structure is invalid.
         """
+        # Import inside function to avoid circular import:
+        # - Validations must be carried out by custom models;
+        # - models MUST stay in models/ inner package;
+        # - importing BlueprintModel at top here would create cycle during module loading.
+        from nornflow.models import BlueprintModel  # noqa: PLC0415
+
         try:
             blueprint_data = load_file_to_dict(blueprint_path)
+            blueprint_model = BlueprintModel.model_validate(blueprint_data, strict=True)
+            return blueprint_model.tasks
         except Exception as e:
             raise BlueprintError(
-                f"Failed to load blueprint file: {e}",
+                f"Failed to load or validate blueprint file: {e}",
                 blueprint_name=str(blueprint_path.name),
-                details={"path": str(blueprint_path)},
+                details={"path": str(blueprint_path), "error": str(e)},
             ) from e
-
-        actual_keys = set(blueprint_data.keys())
-
-        if actual_keys != {"tasks"}:
-            raise BlueprintError(
-                f"Blueprint must contain ONLY 'tasks' key, found: {', '.join(sorted(actual_keys))}",
-                blueprint_name=str(blueprint_path.name),
-                details={
-                    "path": str(blueprint_path),
-                    "expected": ["tasks"],
-                    "found": sorted(actual_keys),
-                },
-            )
-
-        if not isinstance(blueprint_data["tasks"], list):
-            raise BlueprintError(
-                f"'tasks' must be a list, got {type(blueprint_data['tasks']).__name__}",
-                blueprint_name=str(blueprint_path.name),
-                details={"path": str(blueprint_path)},
-            )
-
-        return blueprint_data["tasks"]
