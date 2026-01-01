@@ -168,7 +168,7 @@ tasks:
 
         expander = BlueprintExpander(blueprint_resolver)
         tasks = [{"blueprint": "invalid"}]
-        with pytest.raises(BlueprintError, match="Blueprint must contain ONLY 'tasks' key"):
+        with pytest.raises(BlueprintError, match=r"(?s)Field required.*Extra inputs are not permitted"):
             expander.expand_blueprints(
                 tasks=tasks,
                 blueprints_catalog=catalog,
@@ -188,7 +188,7 @@ tasks:
 
         expander = BlueprintExpander(blueprint_resolver)
         tasks = [{"blueprint": "invalid"}]
-        with pytest.raises(BlueprintError, match="'tasks' must be a list"):
+        with pytest.raises(BlueprintError, match=r"Input should be a valid list"):
             expander.expand_blueprints(
                 tasks=tasks,
                 blueprints_catalog=catalog,

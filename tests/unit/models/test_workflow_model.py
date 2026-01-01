@@ -508,7 +508,7 @@ class TestWorkflowModelBlueprintExpansion:
             }
         }
         
-        with pytest.raises(BlueprintError, match="Blueprint must contain ONLY 'tasks' key"):
+        with pytest.raises(BlueprintError, match=r"(?s)Field required.*Extra inputs are not permitted"):
             WorkflowModel.create(
                 workflow_dict,
                 blueprints_catalog=blueprints_catalog,
@@ -537,7 +537,7 @@ class TestWorkflowModelBlueprintExpansion:
             }
         }
         
-        with pytest.raises(BlueprintError, match="'tasks' must be a list"):
+        with pytest.raises(BlueprintError, match=r"Input should be a valid list"):
             WorkflowModel.create(
                 workflow_dict,
                 blueprints_catalog=blueprints_catalog,
