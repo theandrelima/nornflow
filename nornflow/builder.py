@@ -64,8 +64,8 @@ class NornFlowBuilder:
         Initialize the NornFlowBuilder with default values.
         """
         # Can hold WorkflowModel (pre-built), dict (in-memory workflow),
-        # str (path or name), or None
-        self._workflow: WorkflowModel | dict[str, Any] | str | None = None
+        # tuple (value, source_type) for str paths/names, or None
+        self._workflow: WorkflowModel | dict[str, Any] | tuple[str, str] | None = None
         self._settings: NornFlowSettings | None = None
         self._processors: list[dict[str, Any]] | None = None
         self._vars: dict[str, Any] | None = None
@@ -116,7 +116,7 @@ class NornFlowBuilder:
         Returns:
             The builder instance for method chaining.
         """
-        self._workflow = str(workflow_path)
+        self._workflow = (str(workflow_path), "path")
         return self
 
     def with_workflow_dict(self, workflow_dict: dict[str, Any]) -> "NornFlowBuilder":
@@ -159,7 +159,7 @@ class NornFlowBuilder:
         Returns:
             The builder instance for method chaining.
         """
-        self._workflow = workflow_name
+        self._workflow = (workflow_name, "name")
         return self
 
     def with_processors(self, processors: list[dict[str, Any]]) -> "NornFlowBuilder":
@@ -274,23 +274,30 @@ class NornFlowBuilder:
             cli_vars=self._vars,
         )
 
-    def _handle_workflow_str(self, nornflow: NornFlow) -> None:
+    def _handle_workflow_path(self, workflow_path: str, nornflow: NornFlow) -> None:
         """
-        Handle workflow configuration when _workflow is a string (path or name).
+        Handle workflow configuration when _workflow is a path.
 
         Args:
+            workflow_path: The workflow file path.
             nornflow: The NornFlow instance to modify.
         """
-        workflow_path = Path(self._workflow)
-        if workflow_path.exists() and workflow_path.is_file():
-            try:
-                workflow_dict = load_file_to_dict(workflow_path)
-                workflow = self._create_workflow_from_source(workflow_dict, workflow_path, nornflow)
-                nornflow.workflow = workflow
-            except Exception as e:
-                raise InitializationError(f"Failed to load workflow from '{self._workflow}': {e}") from e
-        else:
-            nornflow.workflow = self._workflow
+        try:
+            workflow_dict = load_file_to_dict(workflow_path)
+            workflow = self._create_workflow_from_source(workflow_dict, Path(workflow_path), nornflow)
+            nornflow.workflow = workflow
+        except Exception as e:
+            raise InitializationError(f"Failed to load workflow from '{workflow_path}': {e}") from e
+
+    def _handle_workflow_name(self, workflow_name: str, nornflow: NornFlow) -> None:
+        """
+        Handle workflow configuration when _workflow is a name.
+
+        Args:
+            workflow_name: The workflow name.
+            nornflow: The NornFlow instance to modify.
+        """
+        nornflow.workflow = workflow_name
 
     def _handle_workflow_dict(self, nornflow: NornFlow) -> None:
         """
@@ -332,8 +339,12 @@ class NornFlowBuilder:
             **self._kwargs,
         )
 
-        if isinstance(self._workflow, str):
-            self._handle_workflow_str(nornflow)
+        if isinstance(self._workflow, tuple):
+            value, source_type = self._workflow
+            if source_type == "path":
+                self._handle_workflow_path(value, nornflow)
+            elif source_type == "name":
+                self._handle_workflow_name(value, nornflow)
         elif isinstance(self._workflow, dict):
             self._handle_workflow_dict(nornflow)
         elif isinstance(self._workflow, WorkflowModel):
