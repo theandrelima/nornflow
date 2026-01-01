@@ -24,7 +24,8 @@ class BlueprintModel(BaseModel):
     Blueprints define reusable task collections with optional descriptions.
     They are loaded and validated during workflow expansion.
     """
+
     model_config = ConfigDict(extra="forbid")
-    
+
     description: str | None = None
     tasks: list[dict[str, Any]]

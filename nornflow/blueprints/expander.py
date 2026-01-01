@@ -248,11 +248,11 @@ class BlueprintExpander:
         Raises:
             BlueprintError: If blueprint structure is invalid.
         """
-        # Import inside function to avoid circular import: 
+        # Import inside function to avoid circular import:
         # - Validations must be carried out by custom models;
         # - models MUST stay in models/ inner package;
         # - importing BlueprintModel at top here would create cycle during module loading.
-        from nornflow.models import BlueprintModel
+        from nornflow.models import BlueprintModel  # noqa: PLC0415
 
         try:
             blueprint_data = load_file_to_dict(blueprint_path)
