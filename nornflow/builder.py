@@ -63,8 +63,10 @@ class NornFlowBuilder:
         """
         Initialize the NornFlowBuilder with default values.
         """
+        # Can hold WorkflowModel (pre-built), dict (in-memory workflow),
+        # str (path or name), or None
+        self._workflow: WorkflowModel | dict[str, Any] | str | None = None
         self._settings: NornFlowSettings | None = None
-        self._workflow: WorkflowModel | str | None = None
         self._processors: list[dict[str, Any]] | None = None
         self._vars: dict[str, Any] | None = None
         self._filters: dict[str, Any] | None = None
@@ -114,11 +116,7 @@ class NornFlowBuilder:
         Returns:
             The builder instance for method chaining.
         """
-        try:
-            workflow_dict = load_file_to_dict(workflow_path)
-            self._workflow = WorkflowModel.create(workflow_dict)
-        except Exception as e:
-            raise InitializationError(f"Failed to load workflow from '{workflow_path}': {e}") from e
+        self._workflow = str(workflow_path)
         return self
 
     def with_workflow_dict(self, workflow_dict: dict[str, Any]) -> "NornFlowBuilder":
@@ -131,10 +129,7 @@ class NornFlowBuilder:
         Returns:
             The builder instance for method chaining.
         """
-        try:
-            self._workflow = WorkflowModel.create(workflow_dict)
-        except Exception as e:
-            raise InitializationError(f"Failed to create workflow from dict: {e}") from e
+        self._workflow = workflow_dict
         return self
 
     def with_workflow_model(self, workflow_model: WorkflowModel) -> "NornFlowBuilder":
@@ -256,6 +251,60 @@ class NornFlowBuilder:
         self._kwargs.update(kwargs)
         return self
 
+    def _create_workflow_from_source(
+        self, workflow_dict: dict[str, Any], workflow_path: Path | None, nornflow: NornFlow
+    ) -> WorkflowModel:
+        """
+        Create a WorkflowModel from a workflow dictionary and path.
+
+        Args:
+            workflow_dict: The workflow dictionary.
+            workflow_path: The path to the workflow file, or None.
+            nornflow: The NornFlow instance for accessing catalogs and settings.
+
+        Returns:
+            The created WorkflowModel.
+        """
+        return WorkflowModel.create(
+            workflow_dict,
+            blueprints_catalog=nornflow.blueprints_catalog,
+            vars_dir=nornflow.settings.vars_dir,
+            workflow_path=workflow_path,
+            workflow_roots=nornflow.settings.local_workflows,
+            cli_vars=self._vars,
+        )
+
+    def _handle_workflow_str(self, nornflow: NornFlow) -> None:
+        """
+        Handle workflow configuration when _workflow is a string (path or name).
+
+        Args:
+            nornflow: The NornFlow instance to modify.
+        """
+        workflow_path = Path(self._workflow)
+        if workflow_path.exists() and workflow_path.is_file():
+            try:
+                workflow_dict = load_file_to_dict(workflow_path)
+                workflow = self._create_workflow_from_source(workflow_dict, workflow_path, nornflow)
+                nornflow.workflow = workflow
+            except Exception as e:
+                raise InitializationError(f"Failed to load workflow from '{self._workflow}': {e}") from e
+        else:
+            nornflow.workflow = self._workflow
+
+    def _handle_workflow_dict(self, nornflow: NornFlow) -> None:
+        """
+        Handle workflow configuration when _workflow is a dictionary.
+
+        Args:
+            nornflow: The NornFlow instance to modify.
+        """
+        try:
+            workflow = self._create_workflow_from_source(self._workflow, None, nornflow)
+            nornflow.workflow = workflow
+        except Exception as e:
+            raise InitializationError(f"Failed to create workflow from dict: {e}") from e
+
     def build(self) -> NornFlow:
         """
         Build and return a NornFlow object based on the provided configurations.
@@ -273,12 +322,21 @@ class NornFlowBuilder:
         if not self._settings:
             self._settings = NornFlowSettings.load()
 
-        return NornFlow(
+        nornflow = NornFlow(
             nornflow_settings=self._settings,
-            workflow=self._workflow,
+            workflow=None,
             processors=self._processors,
             vars=self._vars,
             filters=self._filters,
             failure_strategy=self._failure_strategy,
             **self._kwargs,
         )
+
+        if isinstance(self._workflow, str):
+            self._handle_workflow_str(nornflow)
+        elif isinstance(self._workflow, dict):
+            self._handle_workflow_dict(nornflow)
+        elif isinstance(self._workflow, WorkflowModel):
+            nornflow.workflow = self._workflow
+
+        return nornflow
