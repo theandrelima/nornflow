@@ -48,6 +48,14 @@ TYPE_DISPLAY_MAPPING: dict[str, str] = {
 
 NORNIR_RESULT_TYPES: set[type] = {Result, MultiResult, AggregatedResult}
 
+VAR_SOURCE_CONFIG: list[tuple[str, str, str]] = [
+    ("env_vars", "e", "e: environment variable"),
+    ("default_vars", "g", "g: global defaults"),
+    ("domain_vars", "d", "d: domain defaults"),
+    ("inline_workflow_vars", "w", "w: defined in workflow"),
+    ("cli_vars", "c*", "c*: CLI/programmatic override"),
+]
+
 
 def normalize_failure_strategy(
     value: str | FailureStrategy, exception_class: type[Exception]
@@ -383,13 +391,17 @@ def _build_vars_section(vars_manager: "NornFlowVariablesManager | None") -> list
     if not vars_manager:
         return []
 
-    env_vars = vars_manager.env_vars
-    default_vars = vars_manager.default_vars
-    domain_vars = vars_manager.domain_vars
-    inline_workflow_vars = vars_manager.inline_workflow_vars
-    cli_vars = vars_manager.cli_vars
+    sources_used: set[str] = set()
+    all_vars: list[tuple[str, str, Any]] = []
 
-    if not any([env_vars, default_vars, domain_vars, inline_workflow_vars, cli_vars]):
+    for attr_name, source_label, _ in VAR_SOURCE_CONFIG:
+        vars_dict = getattr(vars_manager, attr_name, {})
+        if vars_dict:
+            sources_used.add(source_label)
+            for key, value in vars_dict.items():
+                all_vars.append((source_label, key, value))
+
+    if not all_vars:
         return []
 
     vars_table = Table(show_header=True, box=None)
@@ -397,34 +409,6 @@ def _build_vars_section(vars_manager: "NornFlowVariablesManager | None") -> list
     vars_table.add_column("Name", style="cyan")
     vars_table.add_column("Value", style="yellow")
     vars_table.add_column("Type", style="blue", no_wrap=True)
-
-    sources_used: set[str] = set()
-    all_vars: list[tuple[str, str, Any]] = []
-
-    if env_vars:
-        sources_used.add("e")
-        for key, value in env_vars.items():
-            all_vars.append(("e", key, value))
-
-    if default_vars:
-        sources_used.add("g")
-        for key, value in default_vars.items():
-            all_vars.append(("g", key, value))
-
-    if domain_vars:
-        sources_used.add("d")
-        for key, value in domain_vars.items():
-            all_vars.append(("d", key, value))
-
-    if inline_workflow_vars:
-        sources_used.add("w")
-        for key, value in inline_workflow_vars.items():
-            all_vars.append(("w", key, value))
-
-    if cli_vars:
-        sources_used.add("c*")
-        for key, value in cli_vars.items():
-            all_vars.append(("c*", key, value))
 
     for source, key, value in sorted(all_vars, key=lambda x: x[1]):
         vars_table.add_row(
@@ -434,19 +418,11 @@ def _build_vars_section(vars_manager: "NornFlowVariablesManager | None") -> list
             _get_type_display(value),
         )
 
-    legend_map = {
-        "e": "e: environment variable",
-        "g": "g: global defaults",
-        "d": "d: domain defaults",
-        "w": "w: defined in workflow",
-        "c*": "c*: CLI/programmatic override",
-    }
-
     legend_text = Text()
     legend_text.append("Sources", style="bold dim")
-    for source_key in ["e", "g", "d", "w", "c*"]:
-        if source_key in sources_used:
-            legend_text.append(f"\n{legend_map[source_key]}", style="dim")
+    for _, source_label, legend_desc in VAR_SOURCE_CONFIG:
+        if source_label in sources_used:
+            legend_text.append(f"\n{legend_desc}", style="dim")
 
     return [
         Text("\n"),
