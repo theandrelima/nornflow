@@ -185,6 +185,31 @@ class NornFlowVariablesManager:
         self._jinja2_manager = Jinja2EnvironmentManager()
         self._device_contexts: dict[str, NornFlowDeviceContext] = {}
 
+    @property
+    def cli_vars(self) -> dict[str, Any]:
+        """Get CLI variables (highest precedence assembly-time vars)."""
+        return self._cli_vars.copy()
+
+    @property
+    def inline_workflow_vars(self) -> dict[str, Any]:
+        """Get inline workflow variables."""
+        return self._inline_workflow_vars.copy()
+
+    @property
+    def domain_vars(self) -> dict[str, Any]:
+        """Get domain-specific default variables."""
+        return self._domain_vars.copy()
+
+    @property
+    def default_vars(self) -> dict[str, Any]:
+        """Get global default variables."""
+        return self._default_vars.copy()
+
+    @property
+    def env_vars(self) -> dict[str, Any]:
+        """Get environment variables (lowest precedence assembly-time vars)."""
+        return self._env_vars.copy()
+
     def _load_environment_variables(self) -> dict[str, Any]:
         """
         Loads environment variables that are prefixed with `NORNFLOW_VAR_`.

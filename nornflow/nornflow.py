@@ -1000,8 +1000,7 @@ class NornFlow:
             effective_dry_run=self.dry_run,
             hosts_count=len(self.nornir_manager.nornir.inventory.hosts),
             inventory_filters=self.filters or self.workflow.inventory_filters or {},
-            workflow_vars=dict(self.workflow.vars) if self.workflow.vars else {},
-            vars=self.vars,
+            vars_manager=self.var_processor.vars_manager,
             failure_strategy=self.failure_strategy,
         )
 

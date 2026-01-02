@@ -5,7 +5,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 from nornir.core.inventory import Host
@@ -32,6 +32,9 @@ from nornflow.exceptions import (
     ResourceError,
     WorkflowError,
 )
+
+if TYPE_CHECKING:
+    from nornflow.vars.manager import NornFlowVariablesManager
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +312,7 @@ def convert_lists_to_tuples(dictionary: HashableDict[str, Any] | None) -> Hashab
     Returns:
         A new HashableDict with lists converted to tuples, or None if input was None.
     """
-    if dictionary is None:
+    if not dictionary:
         return None
 
     return HashableDict(
@@ -367,40 +370,26 @@ def _get_type_display(value: Any) -> str:
     return TYPE_DISPLAY_MAPPING.get(type_name, type_name)
 
 
-def _add_vars_to_table(
-    table: Table,
-    vars_dict: dict[str, Any],
-    source_label: str,
-) -> None:
-    """
-    Add variables to a Rich table with consistent formatting.
-
-    Args:
-        table: The Rich Table to add rows to.
-        vars_dict: Dictionary of variable name -> value.
-        source_label: Label for the source column (e.g., 'w', 'c*').
-    """
-    for key, value in sorted(vars_dict.items(), key=lambda item: item[0]):
-        table.add_row(
-            source_label,
-            key,
-            format_variable_value(key, value),
-            _get_type_display(value),
-        )
-
-
-def _build_vars_section(workflow_vars: dict[str, Any], cli_vars: dict[str, Any]) -> list[Any]:
+def _build_vars_section(vars_manager: "NornFlowVariablesManager | None") -> list[Any]:
     """
     Build the variables section for the workflow overview panel.
 
     Args:
-        workflow_vars: Variables defined in the workflow.
-        cli_vars: Variables from CLI/programmatic override.
+        vars_manager: Variables manager for assembly-time vars.
 
     Returns:
         List of Rich renderables for the vars section, or empty list if no vars.
     """
-    if not workflow_vars and not cli_vars:
+    if not vars_manager:
+        return []
+
+    env_vars = vars_manager.env_vars
+    default_vars = vars_manager.default_vars
+    domain_vars = vars_manager.domain_vars
+    inline_workflow_vars = vars_manager.inline_workflow_vars
+    cli_vars = vars_manager.cli_vars
+
+    if not any([env_vars, default_vars, domain_vars, inline_workflow_vars, cli_vars]):
         return []
 
     vars_table = Table(show_header=True, box=None)
@@ -409,15 +398,55 @@ def _build_vars_section(workflow_vars: dict[str, Any], cli_vars: dict[str, Any])
     vars_table.add_column("Value", style="yellow")
     vars_table.add_column("Type", style="blue", no_wrap=True)
 
-    if workflow_vars:
-        _add_vars_to_table(vars_table, workflow_vars, "w")
+    sources_used: set[str] = set()
+    all_vars: list[tuple[str, str, Any]] = []
+
+    if env_vars:
+        sources_used.add("e")
+        for key, value in env_vars.items():
+            all_vars.append(("e", key, value))
+
+    if default_vars:
+        sources_used.add("g")
+        for key, value in default_vars.items():
+            all_vars.append(("g", key, value))
+
+    if domain_vars:
+        sources_used.add("d")
+        for key, value in domain_vars.items():
+            all_vars.append(("d", key, value))
+
+    if inline_workflow_vars:
+        sources_used.add("w")
+        for key, value in inline_workflow_vars.items():
+            all_vars.append(("w", key, value))
+
     if cli_vars:
-        _add_vars_to_table(vars_table, cli_vars, "c*")
+        sources_used.add("c*")
+        for key, value in cli_vars.items():
+            all_vars.append(("c*", key, value))
+
+    for source, key, value in sorted(all_vars, key=lambda x: x[1]):
+        vars_table.add_row(
+            source,
+            key,
+            format_variable_value(key, value),
+            _get_type_display(value),
+        )
+
+    legend_map = {
+        "e": "e: environment variable",
+        "g": "g: global defaults",
+        "d": "d: domain defaults",
+        "w": "w: defined in workflow",
+        "c*": "c*: CLI/programmatic override",
+    }
 
     legend_text = Text()
     legend_text.append("Sources", style="bold dim")
-    legend_text.append("\nw: defined in workflow", style="dim")
-    legend_text.append("\nc*: CLI/programmatic override", style="dim")
+    for source_key in ["e", "g", "d", "w", "c*"]:
+        if source_key in sources_used:
+            legend_text.append(f"\n{legend_map[source_key]}", style="dim")
 
     return [
         Text("\n"),
@@ -431,9 +460,8 @@ def print_workflow_overview(
     effective_dry_run: bool,
     hosts_count: int,
     inventory_filters: dict[str, Any],
-    workflow_vars: dict[str, Any],
-    vars: dict[str, Any],
     failure_strategy: FailureStrategy | None,
+    vars_manager: "NornFlowVariablesManager | None" = None,
 ) -> None:
     """
     Print a comprehensive workflow overview before execution using Rich.
@@ -443,9 +471,8 @@ def print_workflow_overview(
         effective_dry_run: Whether dry-run mode is enabled.
         hosts_count: Number of hosts in the filtered inventory.
         inventory_filters: Dictionary of applied inventory filters.
-        workflow_vars: Workflow-defined variables.
-        vars: Vars with highest precedence (CLI/programmatic).
         failure_strategy: The active failure handling strategy.
+        vars_manager: Variables manager for assembly-time vars.
     """
     console = Console()
 
@@ -453,9 +480,9 @@ def print_workflow_overview(
     table.add_column("Property", style="bold cyan", no_wrap=True)
     table.add_column("Value", style="yellow")
 
-    if workflow_model.name:
+    if workflow_model and hasattr(workflow_model, "name") and workflow_model.name:
         table.add_row("Workflow Name", workflow_model.name)
-    if workflow_model.description:
+    if workflow_model and hasattr(workflow_model, "description") and workflow_model.description:
         table.add_row("Description", workflow_model.description)
     if inventory_filters:
         filters_str = ", ".join(f"{k}={v}" for k, v in inventory_filters.items())
@@ -469,7 +496,7 @@ def print_workflow_overview(
     )
 
     elements: list[Any] = [table]
-    elements.extend(_build_vars_section(workflow_vars, vars))
+    elements.extend(_build_vars_section(vars_manager))
 
     panel = Panel(
         Group(*elements),
