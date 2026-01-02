@@ -5,7 +5,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal, TYPE_CHECKING
 
 import yaml
 from nornir.core.inventory import Host
