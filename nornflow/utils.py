@@ -456,9 +456,9 @@ def print_workflow_overview(
     table.add_column("Property", style="bold cyan", no_wrap=True)
     table.add_column("Value", style="yellow")
 
-    if workflow_model and hasattr(workflow_model, "name") and workflow_model.name:
+    if workflow_model.name:
         table.add_row("Workflow Name", workflow_model.name)
-    if workflow_model and hasattr(workflow_model, "description") and workflow_model.description:
+    if workflow_model.description:
         table.add_row("Description", workflow_model.description)
     if inventory_filters:
         filters_str = ", ".join(f"{k}={v}" for k, v in inventory_filters.items())
