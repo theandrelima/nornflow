@@ -56,6 +56,8 @@ VAR_SOURCE_CONFIG: list[tuple[str, str, str]] = [
     ("cli_vars", "c*", "c*: CLI/programmatic override"),
 ]
 
+VAR_SOURCE_ORDER: dict[str, int] = {label: -idx for idx, (_, label, _) in enumerate(VAR_SOURCE_CONFIG)}
+
 
 def normalize_failure_strategy(
     value: str | FailureStrategy, exception_class: type[Exception]
@@ -410,7 +412,7 @@ def _build_vars_section(vars_manager: "NornFlowVariablesManager | None") -> list
     vars_table.add_column("Value", style="yellow")
     vars_table.add_column("Type", style="blue", no_wrap=True)
 
-    for source, key, value in sorted(all_vars, key=lambda x: x[1]):
+    for source, key, value in sorted(all_vars, key=lambda x: (x[1], VAR_SOURCE_ORDER.get(x[0], 999))):
         vars_table.add_row(
             source,
             key,
@@ -426,7 +428,7 @@ def _build_vars_section(vars_manager: "NornFlowVariablesManager | None") -> list
 
     return [
         Text("\n"),
-        Padding.indent(Text("Variables", style="bold cyan"), 1),
+        Padding.indent(Text("Assembly-Time Variables", style="bold cyan"), 1),
         Padding.indent(Columns([vars_table, Align.right(legend_text)], expand=True), 2),
     ]
 
