@@ -607,12 +607,12 @@ class TestConvertListsToTuples:
         assert result is None
 
     def test_convert_empty_dict(self):
-        """Test converting empty dictionary returns None."""
+        """Test converting empty dictionary returns empty dict."""
         input_dict = HashableDict({})
 
         result = convert_lists_to_tuples(input_dict)
 
-        assert result is None
+        assert result == HashableDict({})
 
     def test_convert_nested_lists(self):
         """Test that nested lists are not converted."""
