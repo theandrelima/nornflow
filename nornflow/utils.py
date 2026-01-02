@@ -5,7 +5,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Literal
+from typing import Any, Literal, TYPE_CHECKING
 
 import yaml
 from nornir.core.inventory import Host
@@ -33,6 +33,9 @@ from nornflow.exceptions import (
     WorkflowError,
 )
 
+if TYPE_CHECKING:
+    from nornflow.vars.manager import NornFlowVariablesManager
+
 logger = logging.getLogger(__name__)
 
 TYPE_DISPLAY_MAPPING: dict[str, str] = {
@@ -44,6 +47,16 @@ TYPE_DISPLAY_MAPPING: dict[str, str] = {
 }
 
 NORNIR_RESULT_TYPES: set[type] = {Result, MultiResult, AggregatedResult}
+
+VAR_SOURCE_CONFIG: list[tuple[str, str, str]] = [
+    ("env_vars", "e", "e: environment variable"),
+    ("default_vars", "g", "g: global defaults"),
+    ("domain_vars", "d", "d: domain defaults"),
+    ("inline_workflow_vars", "w", "w: defined in workflow"),
+    ("cli_vars", "c*", "c*: CLI/programmatic override"),
+]
+
+VAR_SOURCE_ORDER: dict[str, int] = {label: -idx for idx, (_, label, _) in enumerate(VAR_SOURCE_CONFIG)}
 
 
 def normalize_failure_strategy(
@@ -367,40 +380,30 @@ def _get_type_display(value: Any) -> str:
     return TYPE_DISPLAY_MAPPING.get(type_name, type_name)
 
 
-def _add_vars_to_table(
-    table: Table,
-    vars_dict: dict[str, Any],
-    source_label: str,
-) -> None:
-    """
-    Add variables to a Rich table with consistent formatting.
-
-    Args:
-        table: The Rich Table to add rows to.
-        vars_dict: Dictionary of variable name -> value.
-        source_label: Label for the source column (e.g., 'w', 'c*').
-    """
-    for key, value in sorted(vars_dict.items(), key=lambda item: item[0]):
-        table.add_row(
-            source_label,
-            key,
-            format_variable_value(key, value),
-            _get_type_display(value),
-        )
-
-
-def _build_vars_section(workflow_vars: dict[str, Any], cli_vars: dict[str, Any]) -> list[Any]:
+def _build_vars_section(vars_manager: "NornFlowVariablesManager | None") -> list[Any]:
     """
     Build the variables section for the workflow overview panel.
 
     Args:
-        workflow_vars: Variables defined in the workflow.
-        cli_vars: Variables from CLI/programmatic override.
+        vars_manager: Variables manager for assembly-time vars.
 
     Returns:
         List of Rich renderables for the vars section, or empty list if no vars.
     """
-    if not workflow_vars and not cli_vars:
+    if not vars_manager:
+        return []
+
+    sources_used: set[str] = set()
+    all_vars: list[tuple[str, str, Any]] = []
+
+    for attr_name, source_label, _ in VAR_SOURCE_CONFIG:
+        vars_dict = getattr(vars_manager, attr_name, {})
+        if vars_dict:
+            sources_used.add(source_label)
+            for key, value in vars_dict.items():
+                all_vars.append((source_label, key, value))
+
+    if not all_vars:
         return []
 
     vars_table = Table(show_header=True, box=None)
@@ -409,19 +412,23 @@ def _build_vars_section(workflow_vars: dict[str, Any], cli_vars: dict[str, Any])
     vars_table.add_column("Value", style="yellow")
     vars_table.add_column("Type", style="blue", no_wrap=True)
 
-    if workflow_vars:
-        _add_vars_to_table(vars_table, workflow_vars, "w")
-    if cli_vars:
-        _add_vars_to_table(vars_table, cli_vars, "c*")
+    for source, key, value in sorted(all_vars, key=lambda x: (x[1], VAR_SOURCE_ORDER.get(x[0], 999))):
+        vars_table.add_row(
+            source,
+            key,
+            format_variable_value(key, value),
+            _get_type_display(value),
+        )
 
     legend_text = Text()
     legend_text.append("Sources", style="bold dim")
-    legend_text.append("\nw: defined in workflow", style="dim")
-    legend_text.append("\nc*: CLI/programmatic override", style="dim")
+    for _, source_label, legend_desc in VAR_SOURCE_CONFIG:
+        if source_label in sources_used:
+            legend_text.append(f"\n{legend_desc}", style="dim")
 
     return [
         Text("\n"),
-        Padding.indent(Text("Variables", style="bold cyan"), 1),
+        Padding.indent(Text("Assembly-Time Variables", style="bold cyan"), 1),
         Padding.indent(Columns([vars_table, Align.right(legend_text)], expand=True), 2),
     ]
 
@@ -431,9 +438,8 @@ def print_workflow_overview(
     effective_dry_run: bool,
     hosts_count: int,
     inventory_filters: dict[str, Any],
-    workflow_vars: dict[str, Any],
-    vars: dict[str, Any],
     failure_strategy: FailureStrategy | None,
+    vars_manager: "NornFlowVariablesManager | None" = None,
 ) -> None:
     """
     Print a comprehensive workflow overview before execution using Rich.
@@ -443,9 +449,8 @@ def print_workflow_overview(
         effective_dry_run: Whether dry-run mode is enabled.
         hosts_count: Number of hosts in the filtered inventory.
         inventory_filters: Dictionary of applied inventory filters.
-        workflow_vars: Workflow-defined variables.
-        vars: Vars with highest precedence (CLI/programmatic).
         failure_strategy: The active failure handling strategy.
+        vars_manager: Variables manager for assembly-time vars.
     """
     console = Console()
 
@@ -469,7 +474,7 @@ def print_workflow_overview(
     )
 
     elements: list[Any] = [table]
-    elements.extend(_build_vars_section(workflow_vars, vars))
+    elements.extend(_build_vars_section(vars_manager))
 
     panel = Panel(
         Group(*elements),
