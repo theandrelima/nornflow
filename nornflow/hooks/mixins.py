@@ -1,12 +1,12 @@
 from typing import Any, TYPE_CHECKING
 
-from jinja2 import TemplateSyntaxError
 from nornir.core.inventory import Host
 from nornir.core.task import Task
 
 from nornflow.hooks.exceptions import HookError, HookValidationError
-from nornflow.vars.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
-from nornflow.vars.jinja2_utils import Jinja2EnvironmentManager
+from nornflow.j2 import Jinja2Service
+from nornflow.j2.constants import TRUTHY_STRING_VALUES, JINJA2_MARKERS
+from nornflow.j2.exceptions import TemplateValidationError
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
@@ -50,6 +50,11 @@ class Jinja2ResolvableMixin:
                 should_run = self.get_resolved_value(task, host=host, as_bool=True)
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize mixin with Jinja2Service."""
+        super().__init__(*args, **kwargs)
+        self._jinja2 = Jinja2Service()
+
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
         """Validate hook configuration, including automatic Jinja2 validation.
 
@@ -86,9 +91,8 @@ class Jinja2ResolvableMixin:
             )
 
         try:
-            manager = Jinja2EnvironmentManager()
-            manager.env.from_string(self.value)
-        except TemplateSyntaxError as e:
+            self._jinja2.compile_template(self.value)
+        except TemplateValidationError as e:
             raise HookValidationError(
                 self.hook_name,
                 [("jinja2_syntax", f"Task '{task_model.name}': Jinja2 syntax error: {e}")],
@@ -96,7 +100,7 @@ class Jinja2ResolvableMixin:
         except Exception as e:
             raise HookValidationError(
                 self.hook_name,
-                [("jinja2_validation", f"Task '{task_model.name}': Jinja2 validation failed: {e}")],
+                [("jinja2_validation", f"Task '{task_model.name}': Unexpected Jinja2 error: {e}")],
             ) from e
 
     def get_resolved_value(

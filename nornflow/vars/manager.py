@@ -1,19 +1,16 @@
 import logging
+import yaml
 import os
 from pathlib import Path
 from typing import Any
 
-import jinja2.exceptions
-import yaml
-
 from nornflow.vars.constants import (
     DEFAULTS_FILENAME,
     ENV_VAR_PREFIX,
-    JINJA2_MARKERS,
 )
 from nornflow.vars.context import NornFlowDeviceContext
 from nornflow.vars.exceptions import TemplateError, VariableError
-from nornflow.vars.jinja2_utils import Jinja2EnvironmentManager
+from nornflow.j2 import Jinja2Service
 from nornflow.vars.proxy import NornirHostProxy
 
 logger = logging.getLogger(__name__)
@@ -182,8 +179,9 @@ class NornFlowVariablesManager:
             env_vars=self._env_vars,
         )
 
-        self._jinja2_manager = Jinja2EnvironmentManager()
+        self.jinja2 = Jinja2Service()
         self._device_contexts: dict[str, NornFlowDeviceContext] = {}
+        logger.debug(f"Initialized NornFlowVariablesManager with vars_dir: {self.vars_dir}")
 
     @property
     def cli_vars(self) -> dict[str, Any]:
@@ -432,12 +430,6 @@ class NornFlowVariablesManager:
         Raises:
             TemplateError: If template resolution fails or host_name is missing.
         """
-        if not isinstance(template_str, str):
-            return template_str
-
-        if not any(marker in template_str for marker in JINJA2_MARKERS):
-            return template_str
-
         if not host_name:
             raise TemplateError(f"Host name not provided for template resolution: {template_str}")
 
@@ -449,22 +441,12 @@ class NornFlowVariablesManager:
             if additional_vars:
                 resolution_context_dict.update(additional_vars)
 
-            context_for_jinja = VariableLookupContext(self, host_name, resolution_context_dict)
+            context = VariableLookupContext(self, host_name, resolution_context_dict)
 
-            template = self._jinja2_manager.env.from_string(template_str)
-            return template.render(context_for_jinja)
-
-        except jinja2.exceptions.UndefinedError as e:
-            logger.exception(f"Jinja2 UndefinedError for host '{host_name}' in template '{template_str}'")
-            raise TemplateError(f"Undefined variable in template '{template_str}': {e}") from e
-        except VariableError as e:
-            logger.exception(f"NornFlow VariableError for host '{host_name}' in template '{template_str}'")
-            raise TemplateError(f"Variable error in template '{template_str}': {e}") from e
-        except Exception as e:
-            logger.exception(
-                f"Jinja2 TemplateError or unexpected issue for host '{host_name}' "
-                f"in template '{template_str}'"
+            return self.jinja2.resolve_string(
+                template_str, context, error_context=f"variable resolution for host {host_name}"
             )
+        except Exception as e:
             raise TemplateError(f"Template rendering error in '{template_str}': {e}") from e
 
     def resolve_data(self, data: Any, host_name: str, additional_vars: dict[str, Any] | None = None) -> Any:
@@ -479,16 +461,21 @@ class NornFlowVariablesManager:
         Returns:
             The data structure with all templates resolved.
         """
-        if isinstance(data, str):
-            # Check if the string contains Jinja2 markers
-            if any(marker in data for marker in JINJA2_MARKERS):
-                return self.resolve_string(data, host_name, additional_vars)
-            return data
-        if isinstance(data, dict):
-            return {k: self.resolve_data(v, host_name, additional_vars) for k, v in data.items()}
-        if isinstance(data, (list, tuple)):
-            # Convert both lists and tuples to lists after resolving items
-            # This ensures YAML-defined lists remain lists, even if converted to tuples for hashability
-            return [self.resolve_data(item, host_name, additional_vars) for item in data]
-        # Return other types as-is
-        return data
+        if not host_name:
+            raise TemplateError(f"Host name not provided for data resolution")
+
+        try:
+            device_ctx = self.get_device_context(host_name)
+            nornflow_default_vars = device_ctx.get_flat_context()
+
+            resolution_context_dict = nornflow_default_vars.copy()
+            if additional_vars:
+                resolution_context_dict.update(additional_vars)
+
+            context = VariableLookupContext(self, host_name, resolution_context_dict)
+
+            return self.jinja2.resolve_data(
+                data, context, error_context=f"data resolution for host {host_name}"
+            )
+        except Exception as e:
+            raise TemplateError(f"Data resolution error: {e}") from e

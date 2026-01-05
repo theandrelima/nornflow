@@ -18,13 +18,13 @@ class BlueprintExpander:
     task definitions, including nested blueprint support and validation.
     """
 
-    def __init__(self, resolver: BlueprintResolver):
+    def __init__(self, resolver: BlueprintResolver | None = None):
         """Initialize the expander with a resolver.
 
         Args:
             resolver: BlueprintResolver for template resolution and context building.
         """
-        self.resolver = resolver
+        self.resolver = resolver or BlueprintResolver()
 
     def expand_blueprints(
         self,
