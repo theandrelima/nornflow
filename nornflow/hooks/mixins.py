@@ -56,7 +56,7 @@ class Jinja2ResolvableMixin:
         Returns:
             The Jinja2Service instance for template operations.
         """
-        if not hasattr(self, '_jinja2'):
+        if not hasattr(self, "_jinja2"):
             self._jinja2 = Jinja2Service()
         return self._jinja2
 

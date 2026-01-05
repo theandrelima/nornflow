@@ -1,16 +1,17 @@
 import logging
-import yaml
 import os
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+from nornflow.j2 import Jinja2Service
 from nornflow.vars.constants import (
     DEFAULTS_FILENAME,
     ENV_VAR_PREFIX,
 )
 from nornflow.vars.context import NornFlowDeviceContext
 from nornflow.vars.exceptions import TemplateError, VariableError
-from nornflow.j2 import Jinja2Service
 from nornflow.vars.proxy import NornirHostProxy
 
 logger = logging.getLogger(__name__)
@@ -462,7 +463,7 @@ class NornFlowVariablesManager:
             The data structure with all templates resolved.
         """
         if not host_name:
-            raise TemplateError(f"Host name not provided for data resolution")
+            raise TemplateError("Host name not provided for data resolution")
 
         try:
             device_ctx = self.get_device_context(host_name)

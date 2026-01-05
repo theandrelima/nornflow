@@ -24,13 +24,13 @@ class Jinja2Service:
 
     _instance = None
     _lock = Lock()
+    _initialized = False
 
     def __new__(cls):
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
                     cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
         return cls._instance
 
     def __init__(self):
@@ -40,7 +40,9 @@ class Jinja2Service:
         self._environment = Environment(
             undefined=StrictUndefined,
             extensions=["jinja2.ext.loopcontrols"],
-            autoescape=False,
+            # Autoescape disabled as NornFlow generates network configs, not HTML;
+            # escaping would break outputs like XML/JSON.
+            autoescape=False,  # noqa: S701
         )
 
         # Register all NornFlow filters
@@ -54,7 +56,10 @@ class Jinja2Service:
         """Get the cached Jinja2 environment."""
         return self._environment
 
-    @lru_cache(maxsize=256)
+    # @lru_cache is safe here despite B019: as a singleton, only one instance exists,
+    # so no risk of accumulating references that prevent garbage collection. Templates
+    # are cached for the app's lifetime anyway, aligning with singleton behavior.
+    @lru_cache(maxsize=256)  # noqa: B019
     def compile_template(self, template_str: str) -> Any:
         """Compile and cache a template string.
 
@@ -70,7 +75,7 @@ class Jinja2Service:
         try:
             return self._environment.from_string(template_str)
         except Exception as e:
-            raise TemplateValidationError(f"Template compilation failed: {e}", template=template_str)
+            raise TemplateValidationError(f"Template compilation failed: {e}", template=template_str) from e
 
     def resolve_string(self, template_str: str, context: dict[str, Any], error_context: str = "") -> str:
         """Resolve a Jinja2 template string.

@@ -89,9 +89,7 @@ class BlueprintResolver:
             BlueprintError: If template has undefined variables or syntax errors.
         """
         try:
-            return self.jinja2.resolve_string(
-                template_str, context, error_context="blueprint reference"
-            )
+            return self.jinja2.resolve_string(template_str, context, error_context="blueprint reference")
         except Exception as e:
             raise BlueprintError(
                 f"Failed to resolve blueprint template: {e}", details={"template": template_str}
