@@ -119,9 +119,9 @@ class Jinja2Service:
             # Check if it's a template
             if self.is_template(value):
                 resolved = self.resolve_string(value, context)
-                return self._to_bool(resolved)
+                return self.to_bool(resolved)
             # Plain string literal
-            return self._to_bool(value)
+            return self.to_bool(value)
 
         return bool(value)
 
@@ -164,8 +164,15 @@ class Jinja2Service:
         """
         return any(marker in value for marker in JINJA2_MARKERS)
 
-    def _to_bool(self, value: Any) -> bool:
-        """Convert value to boolean using NornFlow conventions."""
+    def to_bool(self, value: Any) -> bool:
+        """Convert value to boolean using NornFlow conventions.
+
+        Args:
+            value: Value to convert
+
+        Returns:
+            Boolean result
+        """
         if isinstance(value, bool):
             return value
         if isinstance(value, str):
@@ -174,12 +181,12 @@ class Jinja2Service:
 
     def _render_data_recursive_impl(self, data: Any, context: dict[str, Any], error_context: str) -> Any:
         """Implementation of recursive data rendering.
-    
+
         Args:
             data: The data to process
             context: Variables for rendering
             error_context: Description for error messages
-    
+
         Returns:
             The processed data
         """

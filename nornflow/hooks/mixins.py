@@ -5,7 +5,6 @@ from nornir.core.task import Task
 
 from nornflow.hooks.exceptions import HookError, HookValidationError
 from nornflow.j2 import Jinja2Service
-from nornflow.j2.constants import TRUTHY_STRING_VALUES, JINJA2_MARKERS
 from nornflow.j2.exceptions import TemplateValidationError
 
 if TYPE_CHECKING:
@@ -50,10 +49,16 @@ class Jinja2ResolvableMixin:
                 should_run = self.get_resolved_value(task, host=host, as_bool=True)
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize mixin with Jinja2Service."""
-        super().__init__(*args, **kwargs)
-        self._jinja2 = Jinja2Service()
+    @property
+    def jinja2(self) -> Jinja2Service:
+        """Get the Jinja2Service instance, creating it lazily if needed.
+
+        Returns:
+            The Jinja2Service instance for template operations.
+        """
+        if not hasattr(self, '_jinja2'):
+            self._jinja2 = Jinja2Service()
+        return self._jinja2
 
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
         """Validate hook configuration, including automatic Jinja2 validation.
@@ -91,7 +96,7 @@ class Jinja2ResolvableMixin:
             )
 
         try:
-            self._jinja2.compile_template(self.value)
+            self.jinja2.compile_template(self.value)
         except TemplateValidationError as e:
             raise HookValidationError(
                 self.hook_name,
@@ -150,7 +155,7 @@ class Jinja2ResolvableMixin:
         if not isinstance(value, str):
             return False
 
-        return any(marker in value for marker in JINJA2_MARKERS)
+        return self.jinja2.is_template(value)
 
     def _extract_host_from_task(self, task: Task) -> Host:
         """Extract a host from task inventory.
@@ -201,10 +206,4 @@ class Jinja2ResolvableMixin:
         Returns:
             Boolean representation of the value.
         """
-        if isinstance(value, bool):
-            return value
-
-        if isinstance(value, str):
-            return value.lower() in TRUTHY_STRING_VALUES
-
-        return bool(value)
+        return self.jinja2._to_bool(value)
