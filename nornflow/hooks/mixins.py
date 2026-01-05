@@ -206,4 +206,4 @@ class Jinja2ResolvableMixin:
         Returns:
             Boolean representation of the value.
         """
-        return self.jinja2._to_bool(value)
+        return self.jinja2.to_bool(value)
