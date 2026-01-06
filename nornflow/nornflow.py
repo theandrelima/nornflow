@@ -96,8 +96,8 @@ class NornFlow:
             workflow: Pre-configured WorkflowModel instance or workflow name string (optional)
             processors: List of processor configurations to override default processors
             vars: Variables with highest precedence in the variable resolution chain.
-                While named "vars" due to their primary source being command-line
-                arguments, these serve as a universal override mechanism that can be:
+                While named "vars" due to their primary use case (command-line arguments), these
+                serve as a universal override mechanism that can be:
                 - Parsed from actual CLI arguments (--vars)
                 - Set programmatically for workflow customization
                 - Updated at runtime for dynamic behavior
@@ -169,10 +169,12 @@ class NornFlow:
         self._filters_catalog = CallableCatalog("filters")
         self._workflows_catalog = FileCatalog("workflows")
         self._blueprints_catalog = FileCatalog("blueprints")
+        self._j2_filters_catalog = CallableCatalog("j2_filters")
         self._load_tasks_catalog()
         self._load_filters_catalog()
         self._load_workflows_catalog()
         self._load_blueprints_catalog()
+        self._load_j2_filters_catalog()
 
     def _initialize_hooks(self) -> None:
         """Initialize hooks by importing modules from configured directories."""
@@ -195,7 +197,7 @@ class NornFlow:
             ) from e
 
         self._nornir_manager = NornirManager(
-            nornir_settings=self.settings.nornir_config_file,
+            nornir_settings=self.nornir_config_file,
             **self._nornir_configs,
         )
 
@@ -541,6 +543,16 @@ class NornFlow:
         raise ImmutableAttributeError("Cannot set blueprints catalog directly.")
 
     @property
+    def j2_filters_catalog(self) -> CallableCatalog:
+        """
+        Get the J2 filters catalog.
+
+        Returns:
+            CallableCatalog: Catalog of J2 filter names and their corresponding functions.
+        """
+        return self._j2_filters_catalog
+
+    @property
     def workflow(self) -> WorkflowModel | None:
         """
         Get the workflow model object.
@@ -761,6 +773,23 @@ class NornFlow:
             directories=self.settings.local_blueprints,
             recursive=True,
         )
+
+    def _load_j2_filters_catalog(self) -> None:
+        """
+        Discover and load J2 filter files from directories specified in settings.
+
+        This catalogs the available J2 filter files for later use.
+        """
+        self._j2_filters_catalog = self._load_catalog(
+            CallableCatalog,
+            "j2_filters",
+            directories=self.settings.local_j2_filters,
+        )
+
+        # Register built-in J2 filters
+        from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
+        for name, func in ALL_BUILTIN_J2_FILTERS.items():
+            self._j2_filters_catalog.register(name, func, module_name="nornflow.builtins.jinja2_filters")
 
     def _validate_init_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
