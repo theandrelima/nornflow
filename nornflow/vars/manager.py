@@ -6,12 +6,13 @@ from typing import Any
 import yaml
 
 from nornflow.j2 import Jinja2Service
+from nornflow.j2.exceptions import TemplateError
 from nornflow.vars.constants import (
     DEFAULTS_FILENAME,
     ENV_VAR_PREFIX,
 )
 from nornflow.vars.context import NornFlowDeviceContext
-from nornflow.vars.exceptions import TemplateError, VariableError
+from nornflow.vars.exceptions import VariableError
 from nornflow.vars.proxy import NornirHostProxy
 
 logger = logging.getLogger(__name__)

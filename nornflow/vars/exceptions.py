@@ -29,22 +29,3 @@ class VariableError(NornFlowError):
         super().__init__(f"{prefix}{message}")
         self.var_name = var_name
         self.host_name = host_name
-
-
-###############################################################################
-# TEMPLATE EXCEPTIONS
-###############################################################################
-
-
-class TemplateError(VariableError):
-    """
-    Base exception class for template rendering errors.
-    """
-
-    def __init__(self, message: str = "", template: str = ""):
-        # Truncate very long templates
-        template_preview = template[:97] + "..." if len(template) > 100 else template  # noqa: PLR2004
-
-        context = f" Template: '{template_preview}'" if template else ""
-        super().__init__(f"{message}{context}")
-        self.template = template

@@ -100,6 +100,11 @@ class Jinja2Service:
         Raises:
             TemplateError: If resolution fails
         """
+        if not isinstance(template_str, str):
+            raise TemplateValidationError(
+                f"Expected string for 'template_str', got {type(template_str).__name__}"
+            )
+
         if not self.is_template(template_str):
             return template_str
 

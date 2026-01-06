@@ -9,7 +9,7 @@ This package provides the variable management functionality for NornFlow, includ
 """
 
 from nornflow.vars.context import NornFlowDeviceContext
-from nornflow.vars.exceptions import TemplateError, VariableError
+from nornflow.vars.exceptions import VariableError
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
 from nornflow.vars.proxy import NornirHostProxy
