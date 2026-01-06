@@ -6,8 +6,8 @@ from typing import Any
 from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.exceptions import BlueprintError
-from nornflow.vars.constants import DEFAULTS_FILENAME, JINJA2_MARKERS, TRUTHY_STRING_VALUES
-from nornflow.vars.jinja2_utils import Jinja2EnvironmentManager
+from nornflow.j2 import Jinja2Service
+from nornflow.vars.constants import DEFAULTS_FILENAME
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +20,9 @@ class BlueprintResolver:
     for blueprint references and conditions.
     """
 
-    def __init__(self, jinja2_manager: Jinja2EnvironmentManager):
-        """Initialize the resolver with a Jinja2 manager.
-
-        Args:
-            jinja2_manager: Manager for Jinja2 template rendering.
-        """
-        self.jinja2_manager = jinja2_manager
+    def __init__(self):
+        """Initialize resolver with Jinja2Service."""
+        self.jinja2 = Jinja2Service()
 
     def build_context(
         self,
@@ -63,12 +59,12 @@ class BlueprintResolver:
         defaults_path = vars_dir_path / DEFAULTS_FILENAME
         if defaults_path.exists():
             try:
-                context.update(load_file_to_dict(defaults_path))
+                context.update(load_file_to_dict(defaults_path) or {})
             except Exception as e:
                 logger.warning(f"Failed to load defaults file {defaults_path}: {e}")
 
         if workflow_path:
-            domain_defaults = self._load_domain_defaults(vars_dir_path, workflow_path, workflow_roots)
+            domain_defaults = self._load_domain_defaults(vars_dir_path, workflow_path, workflow_roots) or {}
             context.update(domain_defaults)
 
         if inline_workflow_vars:
@@ -93,7 +89,7 @@ class BlueprintResolver:
             BlueprintError: If template has undefined variables or syntax errors.
         """
         try:
-            return self.jinja2_manager.render_template(template_str, context, "blueprint reference")
+            return self.jinja2.resolve_string(template_str, context, error_context="blueprint reference")
         except Exception as e:
             raise BlueprintError(
                 f"Failed to resolve blueprint template: {e}", details={"template": template_str}
@@ -115,18 +111,7 @@ class BlueprintResolver:
             BlueprintError: If condition has undefined variables or syntax errors.
         """
         try:
-            if isinstance(condition, bool):
-                return condition
-
-            condition_stripped = condition.strip()
-
-            if not any(marker in condition_stripped for marker in JINJA2_MARKERS):
-                return condition_stripped.lower() in TRUTHY_STRING_VALUES
-
-            template_str = condition_stripped
-
-            result = self.jinja2_manager.render_template(template_str, context, "blueprint condition")
-            return result.lower() in TRUTHY_STRING_VALUES
+            return self.jinja2.resolve_to_bool(condition, context)
         except Exception as e:
             raise BlueprintError(
                 f"Failed to evaluate blueprint condition: {e}", details={"condition": condition}
@@ -193,7 +178,8 @@ class BlueprintResolver:
             return {}
 
         try:
-            return load_file_to_dict(domain_defaults_path)
+            loaded = load_file_to_dict(domain_defaults_path)
+            return loaded or {}
         except Exception as e:
             logger.warning(f"Failed to load domain defaults from {domain_defaults_path}: {e}")
             return {}

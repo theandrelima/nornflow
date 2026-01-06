@@ -1,12 +1,11 @@
 from typing import Any, TYPE_CHECKING
 
-from jinja2 import TemplateSyntaxError
 from nornir.core.inventory import Host
 from nornir.core.task import Task
 
 from nornflow.hooks.exceptions import HookError, HookValidationError
-from nornflow.vars.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
-from nornflow.vars.jinja2_utils import Jinja2EnvironmentManager
+from nornflow.j2 import Jinja2Service
+from nornflow.j2.exceptions import TemplateValidationError
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
@@ -50,6 +49,17 @@ class Jinja2ResolvableMixin:
                 should_run = self.get_resolved_value(task, host=host, as_bool=True)
     """
 
+    @property
+    def jinja2(self) -> Jinja2Service:
+        """Get the Jinja2Service instance, creating it lazily if needed.
+
+        Returns:
+            The Jinja2Service instance for template operations.
+        """
+        if not hasattr(self, "_jinja2"):
+            self._jinja2 = Jinja2Service()
+        return self._jinja2
+
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
         """Validate hook configuration, including automatic Jinja2 validation.
 
@@ -86,9 +96,8 @@ class Jinja2ResolvableMixin:
             )
 
         try:
-            manager = Jinja2EnvironmentManager()
-            manager.env.from_string(self.value)
-        except TemplateSyntaxError as e:
+            self.jinja2.compile_template(self.value)
+        except TemplateValidationError as e:
             raise HookValidationError(
                 self.hook_name,
                 [("jinja2_syntax", f"Task '{task_model.name}': Jinja2 syntax error: {e}")],
@@ -96,7 +105,7 @@ class Jinja2ResolvableMixin:
         except Exception as e:
             raise HookValidationError(
                 self.hook_name,
-                [("jinja2_validation", f"Task '{task_model.name}': Jinja2 validation failed: {e}")],
+                [("jinja2_validation", f"Task '{task_model.name}': Unexpected Jinja2 error: {e}")],
             ) from e
 
     def get_resolved_value(
@@ -146,7 +155,7 @@ class Jinja2ResolvableMixin:
         if not isinstance(value, str):
             return False
 
-        return any(marker in value for marker in JINJA2_MARKERS)
+        return self.jinja2.is_template(value)
 
     def _extract_host_from_task(self, task: Task) -> Host:
         """Extract a host from task inventory.
@@ -197,10 +206,4 @@ class Jinja2ResolvableMixin:
         Returns:
             Boolean representation of the value.
         """
-        if isinstance(value, bool):
-            return value
-
-        if isinstance(value, str):
-            return value.lower() in TRUTHY_STRING_VALUES
-
-        return bool(value)
+        return self.jinja2.to_bool(value)

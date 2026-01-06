@@ -1,22 +1,17 @@
 import pytest
+from pathlib import Path
+
 from nornflow.blueprints.resolver import BlueprintResolver
-from nornflow.vars.jinja2_utils import Jinja2EnvironmentManager
 
 
 @pytest.fixture
-def jinja2_manager():
-    """Provides a Jinja2EnvironmentManager instance for blueprint tests."""
-    return Jinja2EnvironmentManager()
-
-
-@pytest.fixture
-def blueprint_resolver(jinja2_manager):
+def blueprint_resolver() -> BlueprintResolver:
     """Provides a BlueprintResolver instance for blueprint tests."""
-    return BlueprintResolver(jinja2_manager)
+    return BlueprintResolver()
 
 
 @pytest.fixture
-def mock_blueprints_catalog(tmp_path):
+def mock_blueprints_catalog(tmp_path: Path) -> dict[str, Path]:
     """Provides a mock blueprint catalog with sample files."""
     catalog = {}
     # Create a sample blueprint file
@@ -34,7 +29,7 @@ tasks:
 
 
 @pytest.fixture
-def mock_vars_dir(tmp_path):
+def mock_vars_dir(tmp_path: Path) -> Path:
     """Provides a mock vars directory with defaults."""
     vars_dir = tmp_path / "vars"
     vars_dir.mkdir()
@@ -44,7 +39,7 @@ def mock_vars_dir(tmp_path):
 
 
 @pytest.fixture
-def mock_workflow_path(tmp_path):
+def mock_workflow_path(tmp_path: Path) -> Path:
     """Provides a mock workflow path."""
     workflow_file = tmp_path / "workflow.yaml"
     workflow_file.write_text("workflow: {}")
@@ -52,12 +47,12 @@ def mock_workflow_path(tmp_path):
 
 
 @pytest.fixture
-def mock_workflow_roots(tmp_path):
+def mock_workflow_roots(tmp_path: Path) -> list[str]:
     """Provides mock workflow roots."""
     return [str(tmp_path / "workflows")]
 
 
 @pytest.fixture
-def mock_cli_vars():
+def mock_cli_vars() -> dict[str, str]:
     """Provides mock CLI variables."""
     return {"cli_var": "cli_value"}
