@@ -6,7 +6,7 @@ from jinja2 import Environment, StrictUndefined, TemplateSyntaxError, UndefinedE
 
 from nornflow.builtins.jinja2_filters import ALL_FILTERS
 from nornflow.j2.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
-from nornflow.j2.exceptions import TemplateError, TemplateValidationError
+from nornflow.j2.exceptions import Jinja2ServiceError, TemplateError, TemplateValidationError
 
 
 class Jinja2Service:
@@ -26,18 +26,14 @@ class Jinja2Service:
     _lock = Lock()
     _initialized = False
 
-    def __new__(cls):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-        return cls._instance
+    @classmethod
+    def _initialize_environment(cls, instance) -> None:
+        """Initialize the Jinja2 environment and register filters for the instance.
 
-    def __init__(self):
-        if self._initialized:
-            return
-
-        self._environment = Environment(
+        Args:
+            instance: The Jinja2Service instance to initialize.
+        """
+        instance.environment = Environment(
             undefined=StrictUndefined,
             extensions=["jinja2.ext.loopcontrols"],
             # Autoescape disabled as NornFlow generates network configs, not HTML;
@@ -47,14 +43,27 @@ class Jinja2Service:
 
         # Register all NornFlow filters
         for name, func in ALL_FILTERS.items():
-            self._environment.filters[name] = func
+            instance.environment.filters[name] = func
 
-        self._initialized = True
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._initialize_environment(cls._instance)
+                cls._initialized = True
+        return cls._instance
 
     @property
     def environment(self) -> Environment:
         """Get the cached Jinja2 environment."""
         return self._environment
+
+    @environment.setter
+    def environment(self, value: Environment) -> None:
+        """Set the Jinja2 environment."""
+        if not isinstance(value, Environment):
+            raise Jinja2ServiceError(f"Expected Environment instance, got {type(value).__name__}")
+        self._environment = value
 
     # @lru_cache is safe here despite B019: as a singleton, only one instance exists,
     # so no risk of accumulating references that prevent garbage collection. Templates
@@ -201,6 +210,9 @@ class Jinja2Service:
             return data
         if isinstance(data, dict):
             return {k: self._render_data_recursive_impl(v, context, error_context) for k, v in data.items()}
-        if isinstance(data, list):
+        # Handle both lists and tuples, and normalize to list.
+        # This preserves behavior where YAML-defined lists remain lists,
+        # even if converted to tuples for internal use (e.g., hashability).
+        if isinstance(data, (list, tuple)):
             return [self._render_data_recursive_impl(item, context, error_context) for item in data]
         return data

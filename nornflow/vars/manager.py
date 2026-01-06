@@ -447,6 +447,8 @@ class NornFlowVariablesManager:
             return self.jinja2.resolve_string(
                 template_str, context, error_context=f"variable resolution for host {host_name}"
             )
+        except TemplateError:
+            raise
         except Exception as e:
             raise TemplateError(f"Template rendering error in '{template_str}': {e}") from e
 
@@ -478,5 +480,7 @@ class NornFlowVariablesManager:
             return self.jinja2.resolve_data(
                 data, context, error_context=f"data resolution for host {host_name}"
             )
+        except TemplateError:
+            raise
         except Exception as e:
             raise TemplateError(f"Data resolution error: {e}") from e

@@ -3,9 +3,13 @@
 from nornflow.exceptions import NornFlowError
 
 
-class TemplateError(NornFlowError):
+class Jinja2ServiceError(NornFlowError):
+    """Base exception for Jinja2Service-related errors."""
+
+
+class TemplateError(Jinja2ServiceError):
     """
-    Base exception class for template rendering errors.
+    Exception class for template rendering errors.
     """
 
     def __init__(self, message: str = "", template: str = ""):
