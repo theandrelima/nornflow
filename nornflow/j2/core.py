@@ -4,7 +4,7 @@ from typing import Any
 
 from jinja2 import Environment, StrictUndefined, TemplateSyntaxError, UndefinedError
 
-from nornflow.builtins.jinja2_filters import ALL_FILTERS
+from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
 from nornflow.j2.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
 from nornflow.j2.exceptions import Jinja2ServiceError, TemplateError, TemplateValidationError
 
@@ -42,7 +42,7 @@ class Jinja2Service:
         )
 
         # Register all NornFlow filters
-        for name, func in ALL_FILTERS.items():
+        for name, func in ALL_BUILTIN_J2_FILTERS.items():
             instance.environment.filters[name] = func
 
     def __new__(cls):
