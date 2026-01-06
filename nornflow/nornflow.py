@@ -32,6 +32,7 @@ from nornflow.utils import (
 )
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
+from nornflow.j2 import Jinja2Service
 
 
 class NornFlow:
@@ -120,6 +121,7 @@ class NornFlow:
             self._initialize_hooks()
             self._initialize_catalogs()
             self._initialize_processors()
+            self._initialize_j2_service()
             if workflow:
                 self.workflow = workflow
         except CoreError:
@@ -236,6 +238,10 @@ class NornFlow:
                 self._processors.append(processor)
         except ProcessorError as err:
             raise InitializationError(f"Failed to load processor: {err}") from err
+
+    def _initialize_j2_service(self) -> None:
+        """Initialize the Jinja2 service and register custom filters."""
+        Jinja2Service().register_custom_filters(self.settings.local_j2_filters)
 
     @property
     def nornir_configs(self) -> dict[str, Any]:

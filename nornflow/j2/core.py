@@ -7,6 +7,7 @@ from jinja2 import Environment, StrictUndefined, TemplateSyntaxError, UndefinedE
 from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
 from nornflow.j2.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
 from nornflow.j2.exceptions import Jinja2ServiceError, TemplateError, TemplateValidationError
+from nornflow.catalogs import CallableCatalog
 
 
 class Jinja2Service:
@@ -20,11 +21,13 @@ class Jinja2Service:
     - Provides thread-safe template compilation and caching
     - Offers standardized resolution methods
     - Centralizes error handling
+    - Supports registration of custom filters from external directories
     """
 
     _instance = None
     _lock = Lock()
     _initialized = False
+    _custom_filters_registered = False
 
     @classmethod
     def _initialize_environment(cls, instance) -> None:
@@ -42,8 +45,44 @@ class Jinja2Service:
         )
 
         # Register all NornFlow filters
-        for name, func in ALL_BUILTIN_J2_FILTERS.items():
-            instance.environment.filters[name] = func
+        instance.environment.filters.update(ALL_BUILTIN_J2_FILTERS)
+
+    @classmethod
+    def register_custom_filters(cls, local_j2_filters_dirs: list[str]) -> None:
+        """Register custom Jinja2 filters from specified directories.
+
+        This method can be called externally (e.g., from NornFlow initialization)
+        to register custom filters into the Jinja2 environment. It ensures
+        registration happens only once and after the environment is initialized.
+
+        Args:
+            local_j2_filters_dirs: List of directory paths to scan for custom filters.
+        """
+        if cls._custom_filters_registered:
+            return  # Already registered
+
+        instance = cls()  # Ensure environment is initialized
+        catalog = CallableCatalog("custom_j2_filters")
+        
+        for dir_path in local_j2_filters_dirs:
+            catalog.discover_items_in_dir(dir_path, predicate=callable)
+        
+        # Update the environment's filters with discovered items
+        instance.environment.filters.update(catalog)
+
+        cls._custom_filters_registered = True
+
+    @classmethod
+    def get_registered_j2_filters(cls) -> dict[str, Any]:
+        """Retrieve the list of registered Jinja2 filters for display purposes.
+
+        This is used by the CLI show command to list available filters.
+
+        Returns:
+            Dictionary of filter names to their callable functions.
+        """
+        instance = cls()
+        return dict(instance.environment.filters)
 
     def __new__(cls):
         with cls._lock:
