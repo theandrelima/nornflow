@@ -14,6 +14,7 @@ from nornflow.constants import (
     NORNFLOW_DEFAULT_TASKS_DIR,
     NORNFLOW_DEFAULT_VARS_DIR,
     NORNFLOW_DEFAULT_WORKFLOWS_DIR,
+    NORNFLOW_DEFAULT_J2_FILTERS_DIR,
 )
 from nornflow.exceptions import SettingsError
 
@@ -63,6 +64,9 @@ class NornFlowSettings(BaseSettings):
     local_blueprints: list[str] = Field(
         default=[NORNFLOW_DEFAULT_BLUEPRINTS_DIR],
         description="List of directories containing blueprint definitions",
+    )
+    local_j2_filters: list[str] = Field(
+        default=[NORNFLOW_DEFAULT_J2_FILTERS_DIR], description="List of directories containing custom Jinja2 filter functions"
     )
     imported_packages: list[str] = Field(
         default_factory=list, description="List of Python packages to import for additional resources"
@@ -153,6 +157,7 @@ class NornFlowSettings(BaseSettings):
             "local_filters",
             "local_hooks",
             "local_blueprints",
+            "local_j2_filters",
         ]:
             dirs = getattr(self, field_name)
             if not dirs:
