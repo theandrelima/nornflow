@@ -59,7 +59,7 @@ class BlueprintResolver:
         defaults_path = vars_dir_path / DEFAULTS_FILENAME
         if defaults_path.exists():
             try:
-                context.update(load_file_to_dict(defaults_path) or {})
+                context.update(load_file_to_dict(defaults_path))
             except Exception as e:
                 logger.warning(f"Failed to load defaults file {defaults_path}: {e}")
 
@@ -179,7 +179,7 @@ class BlueprintResolver:
 
         try:
             loaded = load_file_to_dict(domain_defaults_path)
-            return loaded or {}
+            return loaded
         except Exception as e:
             logger.warning(f"Failed to load domain defaults from {domain_defaults_path}: {e}")
             return {}
