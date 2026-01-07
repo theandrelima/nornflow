@@ -559,6 +559,16 @@ class NornFlow:
         """
         return Jinja2Service().j2_filters_catalog
 
+    @j2_filters_catalog.setter
+    def j2_filters_catalog(self, _: Any) -> None:
+        """
+        Prevent setting the J2 filters catalog directly.
+
+        Raises:
+            ImmutableAttributeError: Always raised to prevent direct setting of the J2 filters catalog.
+        """
+        raise ImmutableAttributeError("Cannot set J2 filters catalog directly.")
+
     @property
     def workflow(self) -> WorkflowModel | None:
         """
