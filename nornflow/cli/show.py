@@ -35,7 +35,7 @@ def show(  # noqa: PLR0912
     filters: bool = typer.Option(False, "--filters", "-f", help="Display the filter catalog"),
     workflows: bool = typer.Option(False, "--workflows", "-w", help="Display the workflow catalog"),
     blueprints: bool = typer.Option(False, "--blueprints", "-b", help="Display the blueprint catalog"),
-    j2_filters: bool = typer.Option(False, "--j2-filters", help="Display the Jinja2 filters catalog"),
+    j2_filters: bool = typer.Option(False, "--j2-filters", "-j", help="Display the Jinja2 filters catalog"),
     settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
     nornir_configs: bool = typer.Option(
         False, "--nornir-configs", "-n", help="Display current Nornir Configs"
