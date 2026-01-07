@@ -47,6 +47,7 @@ This creates:
 - 📁 filters - Custom Nornir inventory filters
 - 📁 hooks - Custom hook implementations for extending task behavior
 - 📁 blueprints - Reusable task collections
+- 📁 j2_filters - Custom Jinja2 filters for templates
 - 📁 vars - Will contain Global and Domain-specific default variables
 - 📁 nornir_configs - Nornir configuration
 - 📑 nornflow.yaml - NornFlow settings
@@ -57,11 +58,15 @@ This creates:
 nornflow show --catalogs
 ```
 
-You'll see four catalogs:
+You'll see five catalogs:
 - **Tasks**: Individual Nornir tasks, that represent a single automation action.
 - **Workflows**: Sequences of tasks defined in YAML files that describe operations to be executed together.
 - **Filters**: Nornir filters that allow you to select specific devices from the inventory.
 - **Blueprints**: Reusable task collections that can be referenced across workflows.
+- **Jinja2 Filters**: Custom filters for use in Jinja2 templates throughout NornFlow.
+
+> **Notes on catalogs:**
+> - The **Jinja2 Filters** catalog displays only NornFlow's built-in filters and any custom filters you define in your `j2_filters` directory. It does not list Jinja2's native filters (like `upper`, `lower`, `join`, etc.) since those are always available by default.
 
 ## Running Tasks
 
@@ -160,6 +165,8 @@ local_hooks:
   - "hooks"
 local_blueprints:
   - "blueprints"
+local_j2_filters:
+  - "j2_filters"
 imported_packages: []
 dry_run: False
 failure_strategy: "skip-failed"
@@ -325,7 +332,7 @@ nornflow run service_check --inventory-filters "filter_by_service={'service': 'b
 ## Useful Commands
 
 ```bash
-# Show available tasks, workflows, filters, and blueprints (catalog)
+# Show available tasks, workflows, filters, blueprints, and j2 filters (catalog)
 nornflow show --catalogs
 
 # Show specific catalogs
@@ -333,6 +340,7 @@ nornflow show --tasks
 nornflow show --filters
 nornflow show --workflows
 nornflow show --blueprints
+nornflow show --j2-filters
 
 # Show current NornFlow settings
 nornflow show --settings

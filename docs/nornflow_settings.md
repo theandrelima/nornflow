@@ -11,6 +11,7 @@
   - [`local_filters`](#local_filters)
   - [`local_hooks`](#local_hooks)
   - [`local_blueprints`](#local_blueprints)
+  - [`local_j2_filters`](#local_j2_filters)
   - [`vars_dir`](#vars_dir)
   - [`dry_run`](#dry_run)
   - [`failure_strategy`](#failure_strategy)
@@ -168,9 +169,27 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_BLUEPRINTS`
 - **Note**: Blueprints are expanded during workflow loading (assembly-time) and have access to a subset of the variable system. See the Blueprints Guide for details.
 
+### `local_j2_filters`
+
+- **Description**: List of paths to directories containing custom Jinja2 filter functions. These filters extend the built-in Jinja2 filters available in NornFlow templates and can be used throughout workflows, blueprints, and task arguments. The search is recursive, meaning all subdirectories will be searched. All callable functions in Python files are registered as filters. Both absolute and relative paths are supported.
+- **Type**: list[str]
+- **Default**: ["j2_filters"]
+- **Path Resolution**: 
+  - When loaded through `NornFlowSettings.load`, relative paths resolve against the settings file directory
+  - Direct instantiation leaves relative paths untouched, so they resolve against the runtime working directory
+  - Absolute paths are used as-is
+- **Example**:
+  ```yaml
+  local_j2_filters:
+    - "j2_filters"
+    - "/opt/company/shared_filters"
+  ```
+- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_J2_FILTERS`
+- **Note**: Custom filters defined in these directories will be registered with the Jinja2 environment and can be used in any template throughout NornFlow. See the Jinja2 Filters Reference for details on creating custom filters.
+
 ### `vars_dir`
 
-- **Description**: Path to the directory containing variable files for NornFlow's variable system. This directory will store global variables (`defaults.yaml`) and domain-specific variables. Both absolute and relative paths are supported.
+- **Description**: Path to the directory containing variable files for NornFlow's variable system. This directory will store global variables (defaults.yaml) and domain-specific variables. Both absolute and relative paths are supported.
 - **Type**: `str`
 - **Default**: "vars"
 - **Path Resolution**: 

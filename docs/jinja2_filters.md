@@ -11,6 +11,7 @@
 - [NornFlow Python Wrapper Filters](#nornflow-python-wrapper-filters)
 - [Filter Chaining](#filter-chaining)
 - [Common Patterns](#common-patterns)
+- [Creating Custom Filters](#creating-custom-filters)
 
 ## Introduction
 
@@ -293,6 +294,113 @@ tasks:
       msg: "{{ devices | json_query('[*].interfaces[*].vlan') | flatten_list | unique_list }}"
       # Result: [100, 200]
 ```
+
+## Creating Custom Filters
+
+NornFlow allows you to define your own custom Jinja2 filters that can be used throughout your workflows, blueprints, and task arguments.
+
+### Configuration
+
+Custom filters are discovered from directories specified by `local_j2_filters` in your `nornflow.yaml`:
+
+```yaml
+# nornflow.yaml
+local_j2_filters:
+  - "j2_filters"
+  - "/opt/company/shared_filters"
+```
+
+### Writing Custom Filters
+
+Each filter is a Python function that takes at least one argument (the value being filtered) and returns the transformed value. Place your filter functions in `.py` files within the configured directories:
+
+```python
+# j2_filters/my_filters.py
+
+def join_with_separator(items: list, separator: str = "***") -> str:
+    """Joins list elements with a custom separator.
+    
+    Args:
+        items: List of items to join.
+        separator: The separator string (default: "***").
+    
+    Returns:
+        Joined string with separator between elements.
+    """
+    return separator.join(str(item) for item in items)
+
+
+def add_prefix(value: str, prefix: str = "NF_") -> str:
+    """Add a prefix to a string value.
+    
+    Args:
+        value: The string to prefix.
+        prefix: The prefix to add (default: "NF_").
+    
+    Returns:
+        Prefixed string.
+    """
+    return f"{prefix}{value}"
+
+
+def mask_sensitive(value: str, visible_chars: int = 4) -> str:
+    """Mask a sensitive string, showing only the last N characters.
+    
+    Args:
+        value: The string to mask.
+        visible_chars: Number of characters to leave visible at the end.
+    
+    Returns:
+        Masked string with asterisks.
+    """
+    if len(value) <= visible_chars:
+        return "*" * len(value)
+    return "*" * (len(value) - visible_chars) + value[-visible_chars:]
+```
+
+### Using Custom Filters
+
+Once defined, custom filters are automatically discovered at NornFlow initialization and can be used in any Jinja2 template:
+
+```yaml
+workflow:
+  name: "Custom Filter Demo"
+  tasks:
+    - name: echo
+      args:
+        msg: "{{ [1, 2, 3] | join_with_separator }}"  # Output: "1***2***3"
+    
+    - name: echo
+      args:
+        msg: "{{ [1, 2, 3] | join_with_separator(' | ') }}"  # Output: "1 | 2 | 3"
+    
+    - name: echo
+      args:
+        msg: "{{ hostname | add_prefix('DEVICE_') }}"  # Output: "DEVICE_router1"
+    
+    - name: echo
+      args:
+        msg: "{{ api_key | mask_sensitive(4) }}"  # Output: "************abcd"
+```
+
+### Viewing Available Filters
+
+To see all registered Jinja2 filters (both built-in and custom):
+
+```bash
+nornflow show --j2-filters
+```
+
+This displays a table with filter names, descriptions (extracted from docstrings), and their source location.
+
+### Filter Discovery Rules
+
+- All `.py` files in configured directories are scanned recursively
+- All callable functions (not starting with `_`) are registered as filters
+- Filter names match the function names
+- Docstrings are used for descriptions in the catalog display
+- Custom jinja2 filters will override other filters with the same name (use with caution)
+
 
 <div align="center">
   
