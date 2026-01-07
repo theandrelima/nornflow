@@ -294,6 +294,10 @@ local_tasks:
 Tasks must follow Nornir's task signature to be discovered and used in NornFlow.  
 Your task function **must be properly type-annotated**, and the return type should be one of the following Nornir result types: `Result`, `AggregateResult`, or `MultiResult`.
 
+**Discovery rules:**
+- Only callable functions (not starting with '_') are registered as tasks
+- Functions must have proper type annotations for automatic discovery
+
 **Example:**
 ```python
 from nornir.core.task import Task, Result
@@ -332,8 +336,14 @@ local_filters:
 
 Filter functions must accept a `Host` object as the first parameter and return a boolean. Type annotations are required for discovery - the first parameter must be typed as `Host` and the return type must be `bool`:
 
+**Discovery rules:**
+- Only callable functions (not starting with '_') are registered as filters
+- Functions must have proper type annotations for automatic discovery
+
+**Example custom filter:**
+
 ```python
-from nornir.core.inventory import Host  # Import required
+from nornir.core.inventory import Host
 
 def site_filter(host: Host, region: str) -> bool:
     """Filter hosts by region."""
@@ -369,6 +379,10 @@ local_j2_filters:
 
 Custom Jinja2 filters are Python functions that transform values in templates. All callable functions in `.py` files within configured directories are registered as filters:
 
+**Discovery rules:**
+- Only callable functions (not starting with '_') are registered as filters
+
+**Example:**
 ```python
 # j2_filters/my_filters.py
 
@@ -462,7 +476,9 @@ tasks:
   - name: netmiko_send_command
     args:
       command_string: "show interfaces status"
+```
 
+```yaml
 # workflows/deploy.yaml
 workflow:
   name: "Deploy Configuration"

@@ -194,7 +194,7 @@ def is_nornir_task(attr: Callable) -> bool:
     Returns:
         True if the attribute is a properly annotated Nornir task.
     """
-    if not callable(attr) or not hasattr(attr, "__annotations__"):
+    if not is_public_callable(attr) or not hasattr(attr, "__annotations__"):
         return False
 
     annotations = attr.__annotations__
@@ -238,7 +238,7 @@ def is_nornir_filter(attr: Callable) -> bool:
     Returns:
         True if the attribute is a properly annotated Nornir filter.
     """
-    if not callable(attr):
+    if not is_public_callable(attr):
         return False
 
     try:
@@ -280,6 +280,19 @@ def is_yaml_file(file_path: str | Path) -> bool:
     """
     path = Path(file_path)
     return path.is_file() and path.suffix in NORNFLOW_SUPPORTED_YAML_EXTENSIONS
+
+
+def is_public_callable(attr: Any) -> bool:
+    """
+    Check if an attribute is a public callable (not starting with '_').
+
+    Args:
+        attr: The attribute to check.
+
+    Returns:
+        True if the attribute is callable and its name does not start with '_'.
+    """
+    return callable(attr) and not getattr(attr, "__name__", "").startswith("_")
 
 
 def load_processor(processor_config: dict) -> Processor:

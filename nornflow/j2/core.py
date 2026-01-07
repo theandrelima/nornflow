@@ -8,6 +8,7 @@ from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
 from nornflow.catalogs import CallableCatalog
 from nornflow.j2.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
 from nornflow.j2.exceptions import Jinja2ServiceError, TemplateError, TemplateValidationError
+from nornflow.utils import is_public_callable
 
 
 class Jinja2Service:
@@ -65,7 +66,7 @@ class Jinja2Service:
         catalog = CallableCatalog("custom_j2_filters")
 
         for dir_path in local_j2_filters_dirs:
-            catalog.discover_items_in_dir(dir_path, predicate=callable)
+            catalog.discover_items_in_dir(dir_path, predicate=is_public_callable)
 
         # Update the environment's filters with discovered items
         instance.environment.filters.update(catalog)

@@ -27,6 +27,7 @@ from nornflow.utils import (
     import_modules_recursively,
     is_nornir_filter,
     is_nornir_task,
+    is_public_callable,
     is_yaml_file,
     load_processor,
     print_workflow_overview,
@@ -791,6 +792,7 @@ class NornFlow:
             CallableCatalog,
             "j2_filters",
             directories=self.settings.local_j2_filters,
+            predicate=is_public_callable,
         )
 
         for name, func in ALL_BUILTIN_J2_FILTERS.items():
