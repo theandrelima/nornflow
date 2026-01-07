@@ -193,10 +193,10 @@ class NornFlow:
             return
 
         try:
-            self._nornir_configs = load_file_to_dict(self.settings.nornir_config_file)
+            self._nornir_configs = load_file_to_dict(self.nornir_config_file)
         except Exception as e:
             raise CoreError(
-                f"Failed to load Nornir config from '{self.settings.nornir_config_file}': {e}",
+                f"Failed to load Nornir config from '{self.nornir_config_file}': {e}",
                 component="NornFlow",
             ) from e
 
