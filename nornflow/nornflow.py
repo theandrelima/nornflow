@@ -652,6 +652,7 @@ class NornFlow:
         self,
         catalog_type: type,
         name: str,
+        catalog: Any = None,
         builtin_module: Any = None,
         predicate: Any = None,
         transform_item: Any = None,
@@ -665,6 +666,7 @@ class NornFlow:
         Args:
             catalog_type: The catalog class to instantiate (e.g., CallableCatalog, FileCatalog).
             name: Name of the catalog for error messages.
+            catalog: Optional existing catalog instance to update instead of creating a new one.
             builtin_module: Optional module to register builtins from (for CallableCatalog).
             predicate: Predicate function for filtering items during discovery.
             transform_item: Optional transform function for items (for CallableCatalog).
@@ -679,7 +681,8 @@ class NornFlow:
             ResourceError: If directories don't exist or discovery fails.
             CatalogError: If check_empty is True and catalog is empty.
         """
-        catalog = catalog_type(name)
+        if not catalog:
+            catalog = catalog_type(name)
 
         if builtin_module and predicate:
             catalog.register_from_module(builtin_module, predicate=predicate, transform_item=transform_item)
@@ -788,15 +791,18 @@ class NornFlow:
 
         This catalogs the available J2 filter files for later use.
         """
+        # Register built-ins first
+        for name, func in ALL_BUILTIN_J2_FILTERS.items():
+            self._j2_filters_catalog.register(name, func, module_name="nornflow.builtins.jinja2_filters")
+
+        # Then discover custom filters, allowing them to override built-ins
         self._j2_filters_catalog = self._load_catalog(
             CallableCatalog,
             "j2_filters",
-            directories=self.settings.local_j2_filters,
+            catalog=self._j2_filters_catalog,
             predicate=is_public_callable,
+            directories=self.settings.local_j2_filters,
         )
-
-        for name, func in ALL_BUILTIN_J2_FILTERS.items():
-            self._j2_filters_catalog.register(name, func, module_name="nornflow.builtins.jinja2_filters")
 
     def _validate_init_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
