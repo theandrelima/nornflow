@@ -47,7 +47,9 @@ def show(  # noqa: PLR0912
     """
     show_all_catalogs = catalog or catalogs
 
-    if not any([show_all_catalogs, tasks, filters, workflows, blueprints, j2_filters, settings, nornir_configs, all]):
+    if not any(
+        [show_all_catalogs, tasks, filters, workflows, blueprints, j2_filters, settings, nornir_configs, all]
+    ):
         raise typer.BadParameter(
             "You must provide at least one option: --catalogs, --tasks, --filters, --workflows, "
             "--blueprints, --j2-filters, --settings, --nornir-configs, or --all."

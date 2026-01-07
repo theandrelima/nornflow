@@ -5,9 +5,9 @@ from typing import Any
 from jinja2 import Environment, StrictUndefined, TemplateSyntaxError, UndefinedError
 
 from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
+from nornflow.catalogs import CallableCatalog
 from nornflow.j2.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
 from nornflow.j2.exceptions import Jinja2ServiceError, TemplateError, TemplateValidationError
-from nornflow.catalogs import CallableCatalog
 
 
 class Jinja2Service:
@@ -63,10 +63,10 @@ class Jinja2Service:
 
         instance = cls()  # Ensure environment is initialized
         catalog = CallableCatalog("custom_j2_filters")
-        
+
         for dir_path in local_j2_filters_dirs:
             catalog.discover_items_in_dir(dir_path, predicate=callable)
-        
+
         # Update the environment's filters with discovered items
         instance.environment.filters.update(catalog)
 

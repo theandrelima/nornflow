@@ -4,6 +4,7 @@ from typing import Any
 from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
+from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
 from nornflow.builtins.processors import NornFlowFailureStrategyProcessor, NornFlowHookProcessor
 from nornflow.catalogs import CallableCatalog, FileCatalog
 from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
@@ -18,6 +19,7 @@ from nornflow.exceptions import (
     TaskError,
     WorkflowError,
 )
+from nornflow.j2 import Jinja2Service
 from nornflow.models import WorkflowModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
@@ -32,7 +34,6 @@ from nornflow.utils import (
 )
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
-from nornflow.j2 import Jinja2Service
 
 
 class NornFlow:
@@ -792,8 +793,6 @@ class NornFlow:
             directories=self.settings.local_j2_filters,
         )
 
-        # Register built-in J2 filters
-        from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
         for name, func in ALL_BUILTIN_J2_FILTERS.items():
             self._j2_filters_catalog.register(name, func, module_name="nornflow.builtins.jinja2_filters")
 
