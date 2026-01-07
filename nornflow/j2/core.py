@@ -8,6 +8,7 @@ from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
 from nornflow.catalogs import CallableCatalog
 from nornflow.j2.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
 from nornflow.j2.exceptions import Jinja2ServiceError, TemplateError, TemplateValidationError
+from nornflow.settings import NornFlowSettings
 from nornflow.utils import is_public_callable
 
 
@@ -23,16 +24,16 @@ class Jinja2Service:
     - Offers standardized resolution methods
     - Centralizes error handling
     - Supports registration of custom filters from external directories
+    - Assembles and exposes a shared catalog of J2 filters (built-ins + custom)
     """
 
     _instance = None
     _lock = Lock()
     _initialized = False
-    _custom_filters_registered = False
 
     @classmethod
     def _initialize_environment(cls, instance) -> None:
-        """Initialize the Jinja2 environment and register filters for the instance.
+        """Initialize the Jinja2 environment and J2 filters catalog for the instance.
 
         Args:
             instance: The Jinja2Service instance to initialize.
@@ -45,33 +46,45 @@ class Jinja2Service:
             autoescape=False,  # noqa: S701
         )
 
-        # Register all NornFlow filters
-        instance.environment.filters.update(ALL_BUILTIN_J2_FILTERS)
+        instance._j2_filters_catalog = CallableCatalog("j2_filters")  # noqa: SLF001
+
+        # Add ALL_BUILTIN_J2_FILTERS to instances j2_filters_catalog
+        for name, func in ALL_BUILTIN_J2_FILTERS.items():
+            instance.j2_filters_catalog.register(name, func, module_name="nornflow.builtins.jinja2_filters")
+
+        # Update environment filters from catalog to ensure consistency
+        instance.environment.filters.update(instance.j2_filters_catalog)
+
+    @classmethod
+    def initialize_with_settings(cls, settings: NornFlowSettings) -> None:
+        """Initialize the service with NornFlow settings, registering custom filters.
+
+        This method configures the Jinja2Service singleton using the provided settings,
+        ensuring custom filters from local_j2_filters directories are registered.
+
+        Args:
+            settings: NornFlowSettings instance containing configuration.
+        """
+        cls.register_custom_filters(settings.local_j2_filters)
 
     @classmethod
     def register_custom_filters(cls, local_j2_filters_dirs: list[str]) -> None:
-        """Register custom Jinja2 filters from specified directories.
+        """Register custom Jinja2 filters from specified directories into the catalog.
 
-        This method can be called externally (e.g., from NornFlow initialization)
-        to register custom filters into the Jinja2 environment. It ensures
-        registration happens only once and after the environment is initialized.
+        This method can be called to register custom filters into the Jinja2
+        environment and catalog. It allows multiple calls, with later calls overriding
+        previous filters.
 
         Args:
             local_j2_filters_dirs: List of directory paths to scan for custom filters.
         """
-        if cls._custom_filters_registered:
-            return  # Already registered
-
-        instance = cls()  # Ensure environment is initialized
-        catalog = CallableCatalog("custom_j2_filters")
+        instance = cls()
 
         for dir_path in local_j2_filters_dirs:
-            catalog.discover_items_in_dir(dir_path, predicate=is_public_callable)
+            instance._j2_filters_catalog.discover_items_in_dir(dir_path, predicate=is_public_callable)
 
-        # Update the environment's filters with discovered items
-        instance.environment.filters.update(catalog)
-
-        cls._custom_filters_registered = True
+        # Update environment filters from catalog to reflect changes
+        instance.environment.filters.update(instance._j2_filters_catalog)
 
     @classmethod
     def get_registered_j2_filters(cls) -> dict[str, Any]:
@@ -84,6 +97,26 @@ class Jinja2Service:
         """
         instance = cls()
         return dict(instance.environment.filters)
+
+    @property
+    def j2_filters_catalog(self) -> CallableCatalog:
+        """Get the shared J2 filters catalog (built-ins + custom).
+
+        This catalog is assembled internally and cannot be set directly.
+
+        Returns:
+            CallableCatalog: The shared catalog of J2 filters.
+        """
+        return self._j2_filters_catalog
+
+    @j2_filters_catalog.setter
+    def j2_filters_catalog(self, value: Any) -> None:
+        """Prevent setting the J2 filters catalog directly.
+
+        Raises:
+            Jinja2ServiceError: Always raised to prevent direct setting.
+        """
+        raise Jinja2ServiceError("J2 filters catalog cannot be set directly.")
 
     def __new__(cls):
         with cls._lock:

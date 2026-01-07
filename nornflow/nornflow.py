@@ -4,7 +4,6 @@ from typing import Any
 from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
-from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
 from nornflow.builtins.processors import NornFlowFailureStrategyProcessor, NornFlowHookProcessor
 from nornflow.catalogs import CallableCatalog, FileCatalog
 from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
@@ -27,7 +26,6 @@ from nornflow.utils import (
     import_modules_recursively,
     is_nornir_filter,
     is_nornir_task,
-    is_public_callable,
     is_yaml_file,
     load_processor,
     print_workflow_overview,
@@ -173,12 +171,10 @@ class NornFlow:
         self._filters_catalog = CallableCatalog("filters")
         self._workflows_catalog = FileCatalog("workflows")
         self._blueprints_catalog = FileCatalog("blueprints")
-        self._j2_filters_catalog = CallableCatalog("j2_filters")
         self._load_tasks_catalog()
         self._load_filters_catalog()
         self._load_workflows_catalog()
         self._load_blueprints_catalog()
-        self._load_j2_filters_catalog()
 
     def _initialize_hooks(self) -> None:
         """Initialize hooks by importing modules from configured directories."""
@@ -243,7 +239,7 @@ class NornFlow:
 
     def _initialize_j2_service(self) -> None:
         """Initialize the Jinja2 service and register custom filters."""
-        Jinja2Service().register_custom_filters(self.settings.local_j2_filters)
+        Jinja2Service.initialize_with_settings(self.settings)
 
     @property
     def nornir_configs(self) -> dict[str, Any]:
@@ -553,12 +549,15 @@ class NornFlow:
     @property
     def j2_filters_catalog(self) -> CallableCatalog:
         """
-        Get the J2 filters catalog.
+        Get the J2 filters catalog (shared from Jinja2Service).
+
+        This is a reference to the global catalog assembled by Jinja2Service,
+        containing both built-in and custom filters with full metadata.
 
         Returns:
             CallableCatalog: Catalog of J2 filter names and their corresponding functions.
         """
-        return self._j2_filters_catalog
+        return Jinja2Service().j2_filters_catalog
 
     @property
     def workflow(self) -> WorkflowModel | None:
@@ -783,25 +782,6 @@ class NornFlow:
             predicate=is_yaml_file,
             directories=self.settings.local_blueprints,
             recursive=True,
-        )
-
-    def _load_j2_filters_catalog(self) -> None:
-        """
-        Discover and load J2 filter files from directories specified in settings.
-
-        This catalogs the available J2 filter files for later use.
-        """
-        # Register built-ins first
-        for name, func in ALL_BUILTIN_J2_FILTERS.items():
-            self._j2_filters_catalog.register(name, func, module_name="nornflow.builtins.jinja2_filters")
-
-        # Then discover custom filters, allowing them to override built-ins
-        self._j2_filters_catalog = self._load_catalog(
-            CallableCatalog,
-            "j2_filters",
-            catalog=self._j2_filters_catalog,
-            predicate=is_public_callable,
-            directories=self.settings.local_j2_filters,
         )
 
     def _validate_init_kwargs(self, kwargs: dict[str, Any]) -> None:
