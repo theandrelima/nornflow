@@ -74,7 +74,7 @@ def __init__(
 | `workflows_catalog` | `FileCatalog` | Registry of workflow files |
 | `filters_catalog` | `CallableCatalog` | Registry of inventory filters |
 | `blueprints_catalog` | `FileCatalog` | Registry of blueprint files |
-| `j2_filters_catalog` | `dict[str, Any]` | Registry of available Jinja2 filters |
+| `j2_filters_catalog` | `CallableCatalog]` | Registry of available Jinja2 filters |
 | `workflow` | `WorkflowModel \| None` | Current workflow model or None |
 | `workflow_path` | `Path \| None` | Path to workflow file if loaded from file |
 | `processors` | `list` | List of processor instances |
