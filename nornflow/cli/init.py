@@ -162,6 +162,9 @@ def create_directories_from_settings(settings: NornFlowSettings) -> None:
     for blueprints_dir in settings.local_blueprints:
         create_directory(Path(blueprints_dir))
 
+    for j2_filters_dir in settings.local_j2_filters:
+        create_directory(Path(j2_filters_dir))
+
     create_directory(Path(settings.vars_dir))
 
 

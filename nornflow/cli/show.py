@@ -35,6 +35,7 @@ def show(  # noqa: PLR0912
     filters: bool = typer.Option(False, "--filters", "-f", help="Display the filter catalog"),
     workflows: bool = typer.Option(False, "--workflows", "-w", help="Display the workflow catalog"),
     blueprints: bool = typer.Option(False, "--blueprints", "-b", help="Display the blueprint catalog"),
+    j2_filters: bool = typer.Option(False, "--j2-filters", "-j", help="Display the Jinja2 filters catalog"),
     settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
     nornir_configs: bool = typer.Option(
         False, "--nornir-configs", "-n", help="Display current Nornir Configs"
@@ -46,10 +47,12 @@ def show(  # noqa: PLR0912
     """
     show_all_catalogs = catalog or catalogs
 
-    if not any([show_all_catalogs, tasks, filters, workflows, blueprints, settings, nornir_configs, all]):
+    if not any(
+        [show_all_catalogs, tasks, filters, workflows, blueprints, j2_filters, settings, nornir_configs, all]
+    ):
         raise typer.BadParameter(
             "You must provide at least one option: --catalogs, --tasks, --filters, --workflows, "
-            "--blueprints, --settings, --nornir-configs, or --all."
+            "--blueprints, --j2-filters, --settings, --nornir-configs, or --all."
         )
 
     try:
@@ -66,6 +69,7 @@ def show(  # noqa: PLR0912
             show_filters_catalog(nornflow)
             show_workflows_catalog(nornflow)
             show_blueprints_catalog(nornflow)
+            show_j2_filters_catalog(nornflow)
             show_nornflow_settings(nornflow)
             show_nornir_configs(nornflow)
         else:
@@ -74,6 +78,7 @@ def show(  # noqa: PLR0912
                 show_filters_catalog(nornflow)
                 show_workflows_catalog(nornflow)
                 show_blueprints_catalog(nornflow)
+                show_j2_filters_catalog(nornflow)
             else:
                 if tasks:
                     show_tasks_catalog(nornflow)
@@ -83,6 +88,8 @@ def show(  # noqa: PLR0912
                     show_workflows_catalog(nornflow)
                 if blueprints:
                     show_blueprints_catalog(nornflow)
+                if j2_filters:
+                    show_j2_filters_catalog(nornflow)
 
             if settings:
                 show_nornflow_settings(nornflow)
@@ -131,11 +138,12 @@ def show(  # noqa: PLR0912
 
 
 def show_catalog(nornflow: "NornFlow") -> None:
-    """Display all catalogs: tasks, filters, workflows, and blueprints."""
+    """Display all catalogs: tasks, filters, workflows, blueprints, and j2_filters."""
     show_tasks_catalog(nornflow)
     show_filters_catalog(nornflow)
     show_workflows_catalog(nornflow)
     show_blueprints_catalog(nornflow)
+    show_j2_filters_catalog(nornflow)
 
 
 def show_tasks_catalog(nornflow: "NornFlow") -> None:
@@ -174,6 +182,16 @@ def show_blueprints_catalog(nornflow: "NornFlow") -> None:
         "BLUEPRINTS CATALOG",
         render_blueprints_catalog_table_data,
         ["Blueprint Name", "Description", "Source (file path)"],
+        nornflow,
+    )
+
+
+def show_j2_filters_catalog(nornflow: "NornFlow") -> None:
+    """Display the Jinja2 filters catalog."""
+    show_formatted_table(
+        "JINJA2 FILTERS CATALOG",
+        render_j2_filters_catalog_table_data,
+        ["Filter Name", "Description", "Source"],
         nornflow,
     )
 
@@ -326,6 +344,30 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
         docstring = filter_func.__doc__ or "No description available"
         description = process_filter_description(docstring, param_names)
         source_path = get_source_from_catalog(filters_catalog, filter_name)
+        table_data.append(get_colored_row(filter_name, description, source_path))
+    return table_data
+
+
+def render_j2_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
+    """Render the Jinja2 filters catalog as a list of lists.
+
+    Args:
+        nornflow: The NornFlow object.
+
+    Returns:
+        The table data.
+    """
+    j2_filters_catalog = nornflow.j2_filters_catalog
+    table_data = []
+
+    filter_names = sorted(j2_filters_catalog.get_builtin_items())
+    filter_names.extend(sorted(j2_filters_catalog.get_custom_items()))
+
+    for filter_name in filter_names:
+        filter_func = j2_filters_catalog[filter_name]
+        docstring = filter_func.__doc__ or "No description available"
+        description = extract_first_sentence(docstring)
+        source_path = get_source_from_catalog(j2_filters_catalog, filter_name)
         table_data.append(get_colored_row(filter_name, description, source_path))
     return table_data
 

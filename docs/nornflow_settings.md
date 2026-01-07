@@ -11,6 +11,7 @@
   - [`local_filters`](#local_filters)
   - [`local_hooks`](#local_hooks)
   - [`local_blueprints`](#local_blueprints)
+  - [`local_j2_filters`](#local_j2_filters)
   - [`vars_dir`](#vars_dir)
   - [`dry_run`](#dry_run)
   - [`failure_strategy`](#failure_strategy)
@@ -80,7 +81,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 
 ### `local_tasks`
 
-- **Description**: List of paths to directories containing the Nornir tasks to be included in NornFlow's task catalog. The search is recursive, meaning that all subdirectories will be searched as well. Be careful with this. Both absolute and relative paths are supported.
+- **Description**: List of paths to directories containing the Nornir tasks to be included in NornFlow's task catalog. The search is recursive, meaning that all subdirectories will be searched as well. Both absolute and relative paths are supported.
 - **Type**: list[str]
 - **Default**: ["tasks"]
 - **Path Resolution**: 
@@ -95,6 +96,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "../shared_tasks"          # Relative to settings file
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_TASKS`
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_tasks` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `local_workflows`
 
@@ -112,6 +114,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "/shared/workflows"
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_WORKFLOWS`
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_workflows` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `local_filters`
 
@@ -129,7 +132,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "../custom_filters"
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_FILTERS`
-- **Note**: For details on how these filters can be used in workflows, see the Inventory Filtering section in the Workflows documentation.
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_filters` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `local_hooks`
 
@@ -147,7 +150,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "/shared/custom_hooks"
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_HOOKS`
-- **Note**: For details on creating custom hooks, see the Hooks Guide documentation.
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_hooks` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `local_blueprints`
 
@@ -166,11 +169,29 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "/opt/company/blueprints"
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_BLUEPRINTS`
-- **Note**: Blueprints are expanded during workflow loading (assembly-time) and have access to a subset of the variable system. See the Blueprints Guide for details.
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_blueprints` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
+
+### `local_j2_filters`
+
+- **Description**: List of paths to directories containing custom Jinja2 filter functions. These filters extend the built-in Jinja2 filters available in NornFlow templates and can be used throughout workflows, blueprints, and task arguments. The search is recursive, meaning all subdirectories will be searched. All callable functions in Python files are registered as filters. Both absolute and relative paths are supported.
+- **Type**: list[str]
+- **Default**: ["j2_filters"]
+- **Path Resolution**: 
+  - When loaded through `NornFlowSettings.load`, relative paths resolve against the settings file directory
+  - Direct instantiation leaves relative paths untouched, so they resolve against the runtime working directory
+  - Absolute paths are used as-is
+- **Example**:
+  ```yaml
+  local_j2_filters:
+    - "j2_filters"
+    - "/opt/company/shared_filters"
+  ```
+- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_J2_FILTERS`
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_j2_filters` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `vars_dir`
 
-- **Description**: Path to the directory containing variable files for NornFlow's variable system. This directory will store global variables (`defaults.yaml`) and domain-specific variables. Both absolute and relative paths are supported.
+- **Description**: Path to the directory containing variable files for NornFlow's variable system. This directory will store global variables (defaults.yaml) and domain-specific variables. Both absolute and relative paths are supported.
 - **Type**: `str`
 - **Default**: "vars"
 - **Path Resolution**: 

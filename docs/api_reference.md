@@ -74,6 +74,7 @@ def __init__(
 | `workflows_catalog` | `FileCatalog` | Registry of workflow files |
 | `filters_catalog` | `CallableCatalog` | Registry of inventory filters |
 | `blueprints_catalog` | `FileCatalog` | Registry of blueprint files |
+| `j2_filters_catalog` | `CallableCatalog` | Registry of available Jinja2 filters |
 | `workflow` | `WorkflowModel \| None` | Current workflow model or None |
 | `workflow_path` | `Path \| None` | Path to workflow file if loaded from file |
 | `processors` | `list` | List of processor instances |
@@ -201,6 +202,7 @@ Load settings from a YAML file with automatic resolution and overrides. This cal
 | `local_filters` | `list[str]` | Directories containing custom filters |
 | `local_hooks` | `list[str]` | Directories containing custom hooks |
 | `local_blueprints` | `list[str]` | Directories containing blueprint files |
+| `local_j2_filters` | `list[str]` | Directories containing custom Jinja2 filters |
 | `processors` | `list[dict[str, Any]]` | Nornir processor configurations |
 | `vars_dir` | `str` | Directory for variable files |
 | `failure_strategy` | `FailureStrategy` | Task failure handling strategy |

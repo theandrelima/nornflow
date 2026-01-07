@@ -18,6 +18,7 @@ from nornflow.exceptions import (
     TaskError,
     WorkflowError,
 )
+from nornflow.j2 import Jinja2Service
 from nornflow.models import WorkflowModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
@@ -96,8 +97,8 @@ class NornFlow:
             workflow: Pre-configured WorkflowModel instance or workflow name string (optional)
             processors: List of processor configurations to override default processors
             vars: Variables with highest precedence in the variable resolution chain.
-                While named "vars" due to their primary source being command-line
-                arguments, these serve as a universal override mechanism that can be:
+                While named "vars" due to their primary use case (command-line arguments), these
+                serve as a universal override mechanism that can be:
                 - Parsed from actual CLI arguments (--vars)
                 - Set programmatically for workflow customization
                 - Updated at runtime for dynamic behavior
@@ -120,6 +121,7 @@ class NornFlow:
             self._initialize_hooks()
             self._initialize_catalogs()
             self._initialize_processors()
+            self._initialize_j2_service()
             if workflow:
                 self.workflow = workflow
         except CoreError:
@@ -187,15 +189,15 @@ class NornFlow:
             return
 
         try:
-            self._nornir_configs = load_file_to_dict(self.settings.nornir_config_file)
+            self._nornir_configs = load_file_to_dict(self.nornir_config_file)
         except Exception as e:
             raise CoreError(
-                f"Failed to load Nornir config from '{self.settings.nornir_config_file}': {e}",
+                f"Failed to load Nornir config from '{self.nornir_config_file}': {e}",
                 component="NornFlow",
             ) from e
 
         self._nornir_manager = NornirManager(
-            nornir_settings=self.settings.nornir_config_file,
+            nornir_settings=self.nornir_config_file,
             **self._nornir_configs,
         )
 
@@ -234,6 +236,10 @@ class NornFlow:
                 self._processors.append(processor)
         except ProcessorError as err:
             raise InitializationError(f"Failed to load processor: {err}") from err
+
+    def _initialize_j2_service(self) -> None:
+        """Initialize the Jinja2 service and register custom filters."""
+        Jinja2Service.initialize_with_settings(self.settings)
 
     @property
     def nornir_configs(self) -> dict[str, Any]:
@@ -541,6 +547,29 @@ class NornFlow:
         raise ImmutableAttributeError("Cannot set blueprints catalog directly.")
 
     @property
+    def j2_filters_catalog(self) -> CallableCatalog:
+        """
+        Get the J2 filters catalog (shared from Jinja2Service).
+
+        This is a reference to the global catalog assembled by Jinja2Service,
+        containing both built-in and custom filters with full metadata.
+
+        Returns:
+            CallableCatalog: Catalog of J2 filter names and their corresponding functions.
+        """
+        return Jinja2Service().j2_filters_catalog
+
+    @j2_filters_catalog.setter
+    def j2_filters_catalog(self, _: Any) -> None:
+        """
+        Prevent setting the J2 filters catalog directly.
+
+        Raises:
+            ImmutableAttributeError: Always raised to prevent direct setting of the J2 filters catalog.
+        """
+        raise ImmutableAttributeError("Cannot set J2 filters catalog directly.")
+
+    @property
     def workflow(self) -> WorkflowModel | None:
         """
         Get the workflow model object.
@@ -632,6 +661,7 @@ class NornFlow:
         self,
         catalog_type: type,
         name: str,
+        catalog: Any = None,
         builtin_module: Any = None,
         predicate: Any = None,
         transform_item: Any = None,
@@ -645,6 +675,7 @@ class NornFlow:
         Args:
             catalog_type: The catalog class to instantiate (e.g., CallableCatalog, FileCatalog).
             name: Name of the catalog for error messages.
+            catalog: Optional existing catalog instance to update instead of creating a new one.
             builtin_module: Optional module to register builtins from (for CallableCatalog).
             predicate: Predicate function for filtering items during discovery.
             transform_item: Optional transform function for items (for CallableCatalog).
@@ -659,7 +690,8 @@ class NornFlow:
             ResourceError: If directories don't exist or discovery fails.
             CatalogError: If check_empty is True and catalog is empty.
         """
-        catalog = catalog_type(name)
+        if not catalog:
+            catalog = catalog_type(name)
 
         if builtin_module and predicate:
             catalog.register_from_module(builtin_module, predicate=predicate, transform_item=transform_item)

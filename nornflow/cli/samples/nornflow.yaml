@@ -33,6 +33,9 @@ local_hooks:
 local_blueprints:
   - "blueprints"
 
+local_j2_filters:
+  - "j2_filters"
+
 imported_packages: []
 
 processors:
