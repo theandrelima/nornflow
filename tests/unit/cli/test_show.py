@@ -6,7 +6,9 @@ import typer
 import yaml
 
 from nornflow.cli.show import (
+    render_blueprints_catalog_table_data,
     render_filters_catalog_table_data,
+    render_j2_filters_catalog_table_data,
     render_nornir_cfgs_table_data,
     render_settings_table_data,
     render_task_catalog_table_data,
@@ -175,7 +177,7 @@ class TestShowCommand:
 
         with pytest.raises(typer.BadParameter):
             show(mock_ctx, catalog=False, catalogs=False, tasks=False, filters=False,
-                 workflows=False, blueprints=False, settings=False, nornir_configs=False, all=False)
+                 workflows=False, blueprints=False, j2_filters=False, settings=False, nornir_configs=False, all=False)
 
     @patch("nornflow.cli.show.NornFlowBuilder")
     @patch("nornflow.cli.show.CLIShowError")
@@ -256,7 +258,7 @@ class TestShowHelpers:
 
         show_catalog(mock_nornflow)
 
-        assert mock_show_table.call_count == 4
+        assert mock_show_table.call_count == 5
         calls = [
             call(
                 "TASKS CATALOG",
@@ -274,6 +276,18 @@ class TestShowHelpers:
                 "WORKFLOWS CATALOG",
                 render_workflows_catalog_table_data,
                 ["Workflow Name", "Description", "Source (file path)"],
+                mock_nornflow,
+            ),
+            call(
+                "BLUEPRINTS CATALOG",
+                render_blueprints_catalog_table_data,
+                ["Blueprint Name", "Description", "Source (file path)"],
+                mock_nornflow,
+            ),
+            call(
+                "JINJA2 FILTERS CATALOG",
+                render_j2_filters_catalog_table_data,
+                ["Filter Name", "Description", "Source"],
                 mock_nornflow,
             ),
         ]

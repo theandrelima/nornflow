@@ -138,7 +138,7 @@ def show(  # noqa: PLR0912
 
 
 def show_catalog(nornflow: "NornFlow") -> None:
-    """Display all catalogs: tasks, filters, workflows, and blueprints."""
+    """Display all catalogs: tasks, filters, workflows, blueprints, and j2_filters."""
     show_tasks_catalog(nornflow)
     show_filters_catalog(nornflow)
     show_workflows_catalog(nornflow)
