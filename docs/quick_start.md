@@ -52,6 +52,8 @@ This creates:
 - 📁 nornir_configs - Nornir configuration
 - 📑 nornflow.yaml - NornFlow settings
 
+> **Important:** If you delete any automatically created directories without providing alternatives, set the corresponding `local_*` setting to `[]` in `nornflow.yaml` to avoid `ResourceError` exceptions. Example: Delete `blueprints` directory → set `local_blueprints: []`.
+
 ### 2. Check What's Available
 
 ```bash
