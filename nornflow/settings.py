@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-import yaml
 from pydantic import Field, field_validator, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,6 +16,7 @@ from nornflow.constants import (
     NORNFLOW_DEFAULT_WORKFLOWS_DIR,
 )
 from nornflow.exceptions import SettingsError
+from pydantic_serdes.utils import load_file_to_dict
 
 
 class NornFlowSettings(BaseSettings):
@@ -235,8 +235,7 @@ class NornFlowSettings(BaseSettings):
             base_dir = settings_path.parent
 
         try:
-            with settings_path.open() as f:
-                yaml_data = yaml.safe_load(f) or {}
+            yaml_data = load_file_to_dict(settings_path)
         except Exception as e:
             raise SettingsError(f"Failed to load settings from {resolved_file}: {e}") from e
 

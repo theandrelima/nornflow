@@ -14,13 +14,13 @@ from nornflow.catalogs import Catalog
 from nornflow.cli.constants import CWD, DESCRIPTION_FIRST_SENTENCE_LENGTH
 from nornflow.cli.exceptions import CLIShowError
 from nornflow.exceptions import NornFlowError
+from pydantic_serdes.utils import load_file_to_dict
 
 app = typer.Typer()
 
 
 @app.command()
-def show(  # noqa: PLR0912
-    ctx: typer.Context,
+def show(    ctx: typer.Context,
     catalog: bool = typer.Option(
         False,
         "--catalog",
@@ -475,9 +475,10 @@ def get_workflow_description(workflow_path: Path) -> str:
         The workflow description.
     """
     try:
-        with workflow_path.open() as f:
-            workflow_dict = yaml.safe_load(f)
-            return workflow_dict["workflow"].get("description", "No description available")
+        data = load_file_to_dict(workflow_path)
+        if data and "workflow" in data and "description" in data["workflow"]:
+            return data["workflow"]["description"]
+        return ""
     except Exception:
         return "Could not load description from file"
 
@@ -492,13 +493,10 @@ def get_blueprint_description(blueprint_path: Path) -> str:
         The blueprint description.
     """
     try:
-        with blueprint_path.open() as f:
-            blueprint_dict = yaml.safe_load(f)
-            # Blueprints may have a description at the top level or under a 'blueprint' key
-            return blueprint_dict.get(
-                "description",
-                blueprint_dict.get("blueprint", {}).get("description", "No description available"),
-            )
+        data = load_file_to_dict(blueprint_path)
+        if data and "description" in data:
+            return data["description"]
+        return ""
     except Exception:
         return "Could not load description from file"
 

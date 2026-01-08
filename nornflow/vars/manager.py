@@ -14,6 +14,7 @@ from nornflow.vars.constants import (
 from nornflow.vars.context import NornFlowDeviceContext
 from nornflow.vars.exceptions import VariableError
 from nornflow.vars.proxy import NornirHostProxy
+from pydantic_serdes.utils import load_file_to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -320,20 +321,20 @@ class NornFlowVariablesManager:
             return {}
 
         try:
-            with file_path.open(encoding="utf-8") as f:
-                loaded_vars = yaml.safe_load(f)
-                if loaded_vars is None:
+            loaded_vars = load_file_to_dict(file_path)
+            if not loaded_vars:
                     logger.debug(
                         f"{context_description} file '{file_path}' is empty or contains only null values."
                     )
                     return {}
-                if not isinstance(loaded_vars, dict):
-                    raise VariableError(
-                        f"Expected a dictionary from {context_description} file at '{file_path}', "
-                        f"but got {type(loaded_vars).__name__}."
-                    )
-                logger.debug(f"Successfully loaded {context_description} from '{file_path}'.")
-                return loaded_vars
+            #this shouldn't happen as load_file_to_dict should always return dict
+            if not isinstance(loaded_vars, dict):
+                raise VariableError(
+                    f"Expected a dictionary from {context_description} file at '{file_path}', "
+                    f"but got {type(loaded_vars).__name__}."
+                )
+            logger.debug(f"Successfully loaded {context_description} from '{file_path}'.")
+            return loaded_vars
         except yaml.YAMLError as e:
             logger.exception(f"YAML parsing error in {context_description} file '{file_path}'")
             raise VariableError(f"YAML parsing error in {context_description} file '{file_path}': {e}") from e
@@ -485,3 +486,4 @@ class NornFlowVariablesManager:
             raise
         except Exception as e:
             raise TemplateError(f"Data resolution error: {e}") from e
+        

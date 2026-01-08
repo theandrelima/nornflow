@@ -32,6 +32,7 @@ from nornflow.exceptions import (
     ResourceError,
     WorkflowError,
 )
+from pydantic_serdes.utils import load_file_to_dict
 
 if TYPE_CHECKING:
     from nornflow.vars.manager import NornFlowVariablesManager
@@ -516,8 +517,7 @@ def get_file_content_hash(file_path: Path) -> str:
         ResourceError: If file cannot be read or parsed.
     """
     try:
-        content = file_path.read_text(encoding="utf-8")
-        data = yaml.safe_load(content)
+        data = load_file_to_dict(file_path)
         normalized = yaml.dump(data, sort_keys=True, default_flow_style=False)
         return hashlib.sha256(normalized.encode()).hexdigest()[:16]
     except Exception as e:
