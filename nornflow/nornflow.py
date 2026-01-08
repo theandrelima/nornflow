@@ -167,14 +167,12 @@ class NornFlow:
 
     def _initialize_catalogs(self) -> None:
         """Initialize and load catalogs."""
-        self._tasks_catalog = CallableCatalog("tasks")
-        self._filters_catalog = CallableCatalog("filters")
-        self._workflows_catalog = FileCatalog("workflows")
-        self._blueprints_catalog = FileCatalog("blueprints")
         self._load_tasks_catalog()
         self._load_filters_catalog()
         self._load_workflows_catalog()
         self._load_blueprints_catalog()
+        # Note: j2_filters_catalog is handled by Jinja2Service
+        # and doesn't need a separate load method.
 
     def _initialize_hooks(self) -> None:
         """Initialize hooks by importing modules from configured directories."""
