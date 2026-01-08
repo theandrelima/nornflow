@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import Field, field_validator, PrivateAttr
+from pydantic_serdes.utils import load_file_to_dict
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from nornflow.constants import (
@@ -16,7 +17,6 @@ from nornflow.constants import (
     NORNFLOW_DEFAULT_WORKFLOWS_DIR,
 )
 from nornflow.exceptions import SettingsError
-from pydantic_serdes.utils import load_file_to_dict
 
 
 class NornFlowSettings(BaseSettings):

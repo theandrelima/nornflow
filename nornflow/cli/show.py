@@ -6,6 +6,7 @@ from typing import Any
 import typer
 import yaml
 from nornir.core.exceptions import PluginNotRegistered
+from pydantic_serdes.utils import load_file_to_dict
 from tabulate import tabulate
 from termcolor import colored
 
@@ -14,13 +15,13 @@ from nornflow.catalogs import Catalog
 from nornflow.cli.constants import CWD, DESCRIPTION_FIRST_SENTENCE_LENGTH
 from nornflow.cli.exceptions import CLIShowError
 from nornflow.exceptions import NornFlowError
-from pydantic_serdes.utils import load_file_to_dict
 
 app = typer.Typer()
 
 
 @app.command()
-def show(    ctx: typer.Context,
+def show(  # noqa: PLR0912
+    ctx: typer.Context,
     catalog: bool = typer.Option(
         False,
         "--catalog",

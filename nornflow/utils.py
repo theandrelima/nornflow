@@ -12,6 +12,7 @@ from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
+from pydantic_serdes.utils import load_file_to_dict
 from rich.align import Align
 from rich.columns import Columns
 from rich.console import Console, Group
@@ -32,7 +33,6 @@ from nornflow.exceptions import (
     ResourceError,
     WorkflowError,
 )
-from pydantic_serdes.utils import load_file_to_dict
 
 if TYPE_CHECKING:
     from nornflow.vars.manager import NornFlowVariablesManager
