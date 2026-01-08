@@ -6,6 +6,7 @@ from typing import Any
 import typer
 import yaml
 from nornir.core.exceptions import PluginNotRegistered
+from pydantic_serdes.utils import load_file_to_dict
 from tabulate import tabulate
 from termcolor import colored
 
@@ -475,9 +476,8 @@ def get_workflow_description(workflow_path: Path) -> str:
         The workflow description.
     """
     try:
-        with workflow_path.open() as f:
-            workflow_dict = yaml.safe_load(f)
-            return workflow_dict["workflow"].get("description", "No description available")
+        workflow_dict = load_file_to_dict(workflow_path)
+        return workflow_dict["workflow"].get("description", "No description available")
     except Exception:
         return "Could not load description from file"
 
@@ -492,13 +492,8 @@ def get_blueprint_description(blueprint_path: Path) -> str:
         The blueprint description.
     """
     try:
-        with blueprint_path.open() as f:
-            blueprint_dict = yaml.safe_load(f)
-            # Blueprints may have a description at the top level or under a 'blueprint' key
-            return blueprint_dict.get(
-                "description",
-                blueprint_dict.get("blueprint", {}).get("description", "No description available"),
-            )
+        blueprint = load_file_to_dict(blueprint_path)
+        return blueprint.get("description", "No description available")
     except Exception:
         return "Could not load description from file"
 

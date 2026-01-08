@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.j2 import Jinja2Service
 from nornflow.j2.exceptions import TemplateError
@@ -320,20 +321,20 @@ class NornFlowVariablesManager:
             return {}
 
         try:
-            with file_path.open(encoding="utf-8") as f:
-                loaded_vars = yaml.safe_load(f)
-                if loaded_vars is None:
-                    logger.debug(
-                        f"{context_description} file '{file_path}' is empty or contains only null values."
-                    )
-                    return {}
-                if not isinstance(loaded_vars, dict):
-                    raise VariableError(
-                        f"Expected a dictionary from {context_description} file at '{file_path}', "
-                        f"but got {type(loaded_vars).__name__}."
-                    )
-                logger.debug(f"Successfully loaded {context_description} from '{file_path}'.")
-                return loaded_vars
+            loaded_vars = load_file_to_dict(file_path)
+            if not loaded_vars:
+                logger.debug(
+                    f"{context_description} file '{file_path}' is empty or contains only null values."
+                )
+                return {}
+            # this shouldn't happen as load_file_to_dict should always return dict
+            if not isinstance(loaded_vars, dict):
+                raise VariableError(
+                    f"Expected a dictionary from {context_description} file at '{file_path}', "
+                    f"but got {type(loaded_vars).__name__}."
+                )
+            logger.debug(f"Successfully loaded {context_description} from '{file_path}'.")
+            return loaded_vars
         except yaml.YAMLError as e:
             logger.exception(f"YAML parsing error in {context_description} file '{file_path}'")
             raise VariableError(f"YAML parsing error in {context_description} file '{file_path}': {e}") from e

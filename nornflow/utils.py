@@ -12,6 +12,7 @@ from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
+from pydantic_serdes.utils import load_file_to_dict
 from rich.align import Align
 from rich.columns import Columns
 from rich.console import Console, Group
@@ -516,8 +517,7 @@ def get_file_content_hash(file_path: Path) -> str:
         ResourceError: If file cannot be read or parsed.
     """
     try:
-        content = file_path.read_text(encoding="utf-8")
-        data = yaml.safe_load(content)
+        data = load_file_to_dict(file_path)
         normalized = yaml.dump(data, sort_keys=True, default_flow_style=False)
         return hashlib.sha256(normalized.encode()).hexdigest()[:16]
     except Exception as e:
