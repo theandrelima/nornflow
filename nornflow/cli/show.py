@@ -476,10 +476,8 @@ def get_workflow_description(workflow_path: Path) -> str:
         The workflow description.
     """
     try:
-        data = load_file_to_dict(workflow_path)
-        if data and "workflow" in data and "description" in data["workflow"]:
-            return data["workflow"]["description"]
-        return ""
+        workflow_dict = load_file_to_dict(workflow_path)
+        return workflow_dict["workflow"].get("description", "No description available")
     except Exception:
         return "Could not load description from file"
 
@@ -494,10 +492,8 @@ def get_blueprint_description(blueprint_path: Path) -> str:
         The blueprint description.
     """
     try:
-        data = load_file_to_dict(blueprint_path)
-        if data and "description" in data:
-            return data["description"]
-        return ""
+        blueprint = load_file_to_dict(blueprint_path)
+        return blueprint.get("description", "No description available")
     except Exception:
         return "Could not load description from file"
 
