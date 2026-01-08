@@ -1,5 +1,6 @@
 import json
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -208,7 +209,7 @@ def show_nornir_configs(nornflow: "NornFlow") -> None:
 
 
 def show_formatted_table(
-    banner_text: str, table_data_renderer: callable, headers: list[str], nornflow: "NornFlow"
+    banner_text: str, table_data_renderer: Callable, headers: list[str], nornflow: "NornFlow"
 ) -> None:
     """Display information in a formatted table.
 
@@ -273,6 +274,28 @@ def get_source_from_catalog(catalog: Catalog, item_name: str) -> str:  # noqa: P
     return "Unknown"
 
 
+def render_callable_catalog_table_data(
+    catalog, description_processor: Callable[[Any], str]
+) -> list[list[str]]:
+    """Render a callable catalog (tasks, filters, or J2 filters) as a list of lists.
+
+    Args:
+        catalog: The catalog to render.
+        description_processor: Function to process the description from the callable.
+
+    Returns:
+        The table data.
+    """
+    table_data = []
+    item_names = sorted(catalog.get_builtin_items()) + sorted(catalog.get_custom_items())
+    for item_name in item_names:
+        item = catalog[item_name]
+        description = description_processor(item)
+        source_path = get_source_from_catalog(catalog, item_name)
+        table_data.append(get_colored_row(item_name, description, source_path))
+    return table_data
+
+
 def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     """Render the task catalog as a list of lists.
 
@@ -282,19 +305,10 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     Returns:
         The table data.
     """
-    tasks_catalog = nornflow.tasks_catalog
-    table_data = []
-
-    task_names = sorted(tasks_catalog.get_builtin_items())
-    task_names.extend(sorted(tasks_catalog.get_custom_items()))
-
-    for task_name in task_names:
-        task_func = tasks_catalog[task_name]
-        docstring = task_func.__doc__ or "No description available"
-        description = process_task_description(docstring)
-        source_path = get_source_from_catalog(tasks_catalog, task_name)
-        table_data.append(get_colored_row(task_name, description, source_path))
-    return table_data
+    return render_callable_catalog_table_data(
+        nornflow.tasks_catalog,
+        lambda func: process_task_description(func.__doc__ or "No description available"),
+    )
 
 
 def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
@@ -307,7 +321,7 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
         The table data.
     """
     return render_file_based_catalog_table_data(
-        nornflow.workflows_catalog, get_workflow_description, nornflow
+        nornflow.workflows_catalog, lambda path: get_yaml_description(path, "workflow"), nornflow
     )
 
 
@@ -321,7 +335,7 @@ def render_blueprints_catalog_table_data(nornflow: "NornFlow") -> list[list[str]
         The table data.
     """
     return render_file_based_catalog_table_data(
-        nornflow.blueprints_catalog, get_blueprint_description, nornflow
+        nornflow.blueprints_catalog, lambda path: get_yaml_description(path, "description"), nornflow
     )
 
 
@@ -334,19 +348,10 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     Returns:
         The table data.
     """
-    filters_catalog = nornflow.filters_catalog
-    table_data = []
-
-    filter_names = sorted(filters_catalog.get_builtin_items())
-    filter_names.extend(sorted(filters_catalog.get_custom_items()))
-
-    for filter_name in filter_names:
-        filter_func, param_names = filters_catalog[filter_name]
-        docstring = filter_func.__doc__ or "No description available"
-        description = process_filter_description(docstring, param_names)
-        source_path = get_source_from_catalog(filters_catalog, filter_name)
-        table_data.append(get_colored_row(filter_name, description, source_path))
-    return table_data
+    return render_callable_catalog_table_data(
+        nornflow.filters_catalog,
+        lambda item: process_filter_description(item[0].__doc__ or "No description available", item[1]),
+    )
 
 
 def render_j2_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
@@ -358,19 +363,10 @@ def render_j2_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]
     Returns:
         The table data.
     """
-    j2_filters_catalog = nornflow.j2_filters_catalog
-    table_data = []
-
-    filter_names = sorted(j2_filters_catalog.get_builtin_items())
-    filter_names.extend(sorted(j2_filters_catalog.get_custom_items()))
-
-    for filter_name in filter_names:
-        filter_func = j2_filters_catalog[filter_name]
-        docstring = filter_func.__doc__ or "No description available"
-        description = extract_first_sentence(docstring)
-        source_path = get_source_from_catalog(j2_filters_catalog, filter_name)
-        table_data.append(get_colored_row(filter_name, description, source_path))
-    return table_data
+    return render_callable_catalog_table_data(
+        nornflow.j2_filters_catalog,
+        lambda func: extract_first_sentence(func.__doc__ or "No description available"),
+    )
 
 
 def render_settings_table_data(nornflow: "NornFlow") -> list[list[str]]:
@@ -466,40 +462,27 @@ def display_banner(banner_text: str, table: str) -> None:
     typer.echo("\n\n" + centered_banner)
 
 
-def get_workflow_description(workflow_path: Path) -> str:
-    """Get description from workflow YAML file.
+def get_yaml_description(file_path: Path, key: str) -> str:
+    """Get description from a YAML file by key.
 
     Args:
-        workflow_path: Path to the workflow file.
+        file_path: Path to the YAML file.
+        key: The key to extract the description from.
 
     Returns:
-        The workflow description.
+        The description or a fallback.
     """
     try:
-        workflow_dict = load_file_to_dict(workflow_path)
-        return workflow_dict["workflow"].get("description", "No description available")
-    except Exception:
-        return "Could not load description from file"
-
-
-def get_blueprint_description(blueprint_path: Path) -> str:
-    """Get description from blueprint YAML file.
-
-    Args:
-        blueprint_path: Path to the blueprint file.
-
-    Returns:
-        The blueprint description.
-    """
-    try:
-        blueprint = load_file_to_dict(blueprint_path)
-        return blueprint.get("description", "No description available")
+        data = load_file_to_dict(file_path)
+        if key == "workflow":
+            return data.get(key, {}).get("description", "No description available")
+        return data.get(key, "No description available")
     except Exception:
         return "Could not load description from file"
 
 
 def render_file_based_catalog_table_data(
-    catalog, description_getter, nornflow: "NornFlow"
+    catalog, description_getter: Callable[[Path], str], nornflow: "NornFlow"
 ) -> list[list[str]]:
     """Render a file-based catalog (workflows or blueprints) as a list of lists.
 
