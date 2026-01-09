@@ -515,6 +515,7 @@ def run(
             execution_name=target,
             execution_type=execution_type,
             log_dir=nornflow.settings.log_directory,
+            log_level=nornflow.settings.logger["level"],
         )
 
         # Capture the exit code from nornflow.run()

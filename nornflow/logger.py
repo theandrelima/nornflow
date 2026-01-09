@@ -2,12 +2,13 @@
 NornFlow Logging Module
 
 This module provides a centralized logging system for NornFlow applications.
-It implements a singleton logger that supports file-based logging with
+It implements a singleton logger that supports synchronous file-based logging with
 timestamped log files and execution context tracking.
 
 Key Features:
 - Singleton pattern for consistent logging across the application
-- File-based logging with automatic log file creation
+- Synchronous file logging with automatic log file creation
+- Custom formatter for precise timestamps with microseconds
 - Execution context tracking for workflow and task runs
 - Configurable log levels and directories
 
@@ -15,7 +16,7 @@ Usage:
     from nornflow.logger import logger
     
     logger.info("This is an info message")
-    logger.set_execution_context("my_workflow", "workflow", "/path/to/logs")
+    logger.set_execution_context("my_workflow", "workflow", "/path/to/logs", "INFO")
     logger.debug("This will go to the log file")
 """
 
@@ -25,6 +26,19 @@ from pathlib import Path
 from typing import Any
 
 from nornflow.constants import NORNFLOW_DEFAULT_LOGGER
+
+
+class MicrosecondFormatter(logging.Formatter):
+    """Custom formatter to include microseconds in timestamps using datetime."""
+    
+    def formatTime(self, record, datefmt=None):
+        """Format the time with microseconds support."""
+        ct = datetime.fromtimestamp(record.created)
+        if datefmt:
+            s = ct.strftime(datefmt)
+        else:
+            s = ct.isoformat()
+        return s
 
 
 class NornFlowLogger:
@@ -59,7 +73,7 @@ class NornFlowLogger:
         self._execution_context = None
         self._file_handler = None
     
-    def set_execution_context(self, execution_name: str, execution_type: str, log_dir: str | Path | None = None) -> None:
+    def set_execution_context(self, execution_name: str, execution_type: str, log_dir: str | Path | None = None, log_level: str = "INFO") -> None:
         """
         Set the execution context for logging.
         
@@ -69,6 +83,7 @@ class NornFlowLogger:
             execution_name: Name of the execution (workflow name, task name, etc.)
             execution_type: Type of execution ("workflow", "task", etc.)
             log_dir: Directory to store log files. If None, uses default.
+            log_level: Logging level (e.g., "DEBUG", "INFO").
         """
         # Remove existing file handler if present
         if self._file_handler:
@@ -79,6 +94,10 @@ class NornFlowLogger:
         # Use default if log_dir is None
         if not log_dir:
             log_dir = NORNFLOW_DEFAULT_LOGGER["directory"]
+        
+        # Set logger level
+        level = getattr(logging, log_level.upper(), logging.INFO)
+        self._logger.setLevel(level)
         
         # Create log directory if it doesn't exist
         log_path = Path(log_dir)
@@ -91,14 +110,13 @@ class NornFlowLogger:
         
         # Create file handler
         self._file_handler = logging.FileHandler(filepath, encoding="utf-8")
-        self._file_handler.setLevel(logging.DEBUG)
+        self._file_handler.setLevel(level)
         
         # Create formatter
-        formatter = logging.Formatter(
+        formatter = MicrosecondFormatter(
             "%(asctime)s [%(levelname)s] [%(name)s] [%(funcName)s] - %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S.%f"
         )
-        formatter.default_msec_format = "%s.%03d"
         self._file_handler.setFormatter(formatter)
         
         # Add file handler to logger
