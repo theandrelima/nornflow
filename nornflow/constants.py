@@ -65,6 +65,10 @@ NORNFLOW_DEFAULT_HOOKS_DIR = "hooks"
 NORNFLOW_DEFAULT_BLUEPRINTS_DIR = "blueprints"
 NORNFLOW_DEFAULT_VARS_DIR = "vars"
 NORNFLOW_DEFAULT_J2_FILTERS_DIR = "j2_filters"
+NORNFLOW_DEFAULT_LOGGER = {
+    "directory": ".nornflow/logs",
+    "level": "INFO"
+}
 
 NORNFLOW_SETTINGS_OPTIONAL = {
     "local_tasks": [NORNFLOW_DEFAULT_TASKS_DIR],
@@ -77,6 +81,7 @@ NORNFLOW_SETTINGS_OPTIONAL = {
     "vars_dir": NORNFLOW_DEFAULT_VARS_DIR,
     "failure_strategy": FailureStrategy.SKIP_FAILED,
     "dry_run": False,
+    "logger": NORNFLOW_DEFAULT_LOGGER,
 }
 
 # Kwargs that cannot be passed to NornFlow.__init__; they must be set via the settings YAML file.
@@ -89,6 +94,7 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "local_hooks",
     "local_j2_filters",
     "imported_packages",
+    "logger",
 )
 
 # Supported extensions

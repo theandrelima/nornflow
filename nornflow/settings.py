@@ -12,6 +12,7 @@ from nornflow.constants import (
     NORNFLOW_DEFAULT_FILTERS_DIR,
     NORNFLOW_DEFAULT_HOOKS_DIR,
     NORNFLOW_DEFAULT_J2_FILTERS_DIR,
+    NORNFLOW_DEFAULT_LOGGER,
     NORNFLOW_DEFAULT_TASKS_DIR,
     NORNFLOW_DEFAULT_VARS_DIR,
     NORNFLOW_DEFAULT_WORKFLOWS_DIR,
@@ -24,9 +25,10 @@ class NornFlowSettings(BaseSettings):
     NornFlow settings management using Pydantic.
 
     Settings are loaded with the following priority (highest to lowest):
-    1. Environment variables (prefixed with NORNFLOW_SETTINGS_)
+    1. Programmatic overrides (passed directly to NornFlowSettings.load() as **overrides)
     2. Values from settings YAML file
-    3. Default values defined in the model
+    3. Environment variables (prefixed with NORNFLOW_SETTINGS_)
+    4. Default values defined in this class
 
     Note the careful terminology:
     - "Settings" refers to NornFlow's own configuration
@@ -34,7 +36,7 @@ class NornFlowSettings(BaseSettings):
 
     Environment variable examples:
     - NORNFLOW_SETTINGS_VARS_DIR=/custom/vars
-    - NORNFLOW_SETTINGS_LOCAL_TASKS=["tasks", "custom_tasks"]
+    - NORNFLOW_SETTINGS_LOCAL_TASKS=tasks,custom_tasks
     - NORNFLOW_SETTINGS_FAILURE_STRATEGY=fail-fast
     """
 
@@ -82,6 +84,9 @@ class NornFlowSettings(BaseSettings):
         default=FailureStrategy.SKIP_FAILED, description="Strategy for handling task failures"
     )
     dry_run: bool = Field(default=False, description="Whether to run in dry-run mode")
+    logger: dict[str, Any] = Field(
+        default_factory=lambda: NORNFLOW_DEFAULT_LOGGER.copy(), description="Logger configuration dictionary"
+    )
 
     _base_dir: Path | None = PrivateAttr(default=None)
     _settings_file: str | None = PrivateAttr(default=None)
