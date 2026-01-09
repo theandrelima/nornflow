@@ -34,16 +34,20 @@ class NornFlowSettings(BaseSettings):
     - "Settings" refers to NornFlow's own configuration
     - "Configuration/Config" is reserved for Nornir's configuration
 
-    Environment variable examples:
-    - NORNFLOW_SETTINGS_VARS_DIR=/custom/vars
-    - NORNFLOW_SETTINGS_LOCAL_TASKS=tasks,custom_tasks
-    - NORNFLOW_SETTINGS_FAILURE_STRATEGY=fail-fast
+    Environment variables are case-sensitive. Ensure exact prefix and key matching.
+    
+    Examples:
+    - NORNFLOW_SETTINGS_vars_dir=/custom/vars
+    - NORNFLOW_SETTINGS_local_tasks=tasks,custom_tasks
+    - NORNFLOW_SETTINGS_failure_strategy=fail-fast
+    - NORNFLOW_SETTINGS_logger__directory=/custom/logs # notice the '__' for nested keys traversal
+    - NORNFLOW_SETTINGS_logger__level=DEBUG
     """
 
     model_config = SettingsConfigDict(
         env_prefix="NORNFLOW_SETTINGS_",
         env_nested_delimiter="__",
-        case_sensitive=False,
+        case_sensitive=True,
         extra="allow",
     )
 
@@ -99,7 +103,7 @@ class NornFlowSettings(BaseSettings):
             return []
 
         if not isinstance(v, list):
-            raise TypeError("processors must be a list")
+            raise SettingsError("processors must be a list")
 
         validated = []
         for item in v:
@@ -132,6 +136,41 @@ class NornFlowSettings(BaseSettings):
                     ) from e
         return v
 
+    @field_validator("logger", mode="before")
+    @classmethod
+    def validate_logger(cls, v: Any) -> dict[str, Any]:
+        """Validate logger configuration dictionary."""
+        if not isinstance(v, dict):
+            raise SettingsError("logger must be a dictionary")
+        required_keys = {"directory", "level"}
+        if not required_keys.issubset(v.keys()):
+            missing = required_keys - v.keys()
+            raise SettingsError(f"logger configuration missing required keys: {missing}")
+        if not isinstance(v["directory"], str):
+            raise SettingsError("logger.directory must be a string")
+        if not isinstance(v["level"], str):
+            raise SettingsError("logger.level must be a string")
+        return v
+
+    def _resolve_path_field(self, field_name: str, key: str | None, base_dir: Path) -> None:
+        """Resolve a relative path in a field or dict key to an absolute path.
+
+        Args:
+            field_name: Name of the attribute to resolve.
+            key: Key in the dict if the field is a dict, otherwise None.
+            base_dir: Base directory to resolve against.
+        """
+        if key:
+            field_value = getattr(self, field_name)
+            if field_value and key in field_value:
+                path = Path(field_value[key])
+                if not path.is_absolute():
+                    field_value[key] = str(base_dir / path)
+        else:
+            path = Path(getattr(self, field_name))
+            if not path.is_absolute():
+                setattr(self, field_name, str(base_dir / path))
+
     def resolve_relative_paths(self) -> "NornFlowSettings":
         """Resolve relative paths to absolute paths based on base directory."""
         base_dir = self.base_dir
@@ -140,14 +179,9 @@ class NornFlowSettings(BaseSettings):
 
         self._resolve_local_directories(base_dir)
 
-        vars_path = Path(self.vars_dir)
-        if not vars_path.is_absolute():
-            self.vars_dir = str(base_dir / vars_path)
-
-        if self.nornir_config_file:
-            config_path = Path(self.nornir_config_file)
-            if not config_path.is_absolute():
-                self.nornir_config_file = str(base_dir / config_path)
+        self._resolve_path_field("vars_dir", None, base_dir)
+        self._resolve_path_field("nornir_config_file", None, base_dir)
+        self._resolve_path_field("logger", "directory", base_dir)
 
         return self
 
@@ -255,7 +289,13 @@ class NornFlowSettings(BaseSettings):
         instance._base_dir = base_dir
         instance._settings_file = str(settings_path)
 
-        return instance.resolve_relative_paths()
+        resolved_instance = instance.resolve_relative_paths()
+
+        # Create logger directory if it doesn't exist
+        logger_dir = Path(resolved_instance.logger["directory"])
+        logger_dir.mkdir(parents=True, exist_ok=True)
+
+        return resolved_instance
 
     @property
     def as_dict(self) -> dict[str, Any]:
