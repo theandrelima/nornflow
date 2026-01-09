@@ -8,6 +8,7 @@ from typing import Any
 import typer
 
 from nornflow import NornFlowBuilder
+from nornflow.logger import logger
 from nornflow.cli.exceptions import CLIRunError
 from nornflow.constants import (
     FailureStrategy,
@@ -507,6 +508,14 @@ def run(
         )
 
         nornflow = builder.build()
+
+        # Set execution context for logging
+        execution_type = "workflow" if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_YAML_EXTENSIONS) else "task"
+        logger.set_execution_context(
+            execution_name=target,
+            execution_type=execution_type,
+            log_dir=nornflow.settings.log_directory,
+        )
 
         # Capture the exit code from nornflow.run()
         exit_code = nornflow.run()

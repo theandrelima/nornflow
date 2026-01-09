@@ -1,156 +1,169 @@
+"""
+NornFlow Logging Module
+
+This module provides a centralized logging system for NornFlow applications.
+It implements a singleton logger that supports file-based logging with
+timestamped log files and execution context tracking.
+
+Key Features:
+- Singleton pattern for consistent logging across the application
+- File-based logging with automatic log file creation
+- Execution context tracking for workflow and task runs
+- Configurable log levels and directories
+
+Usage:
+    from nornflow.logger import logger
+    
+    logger.info("This is an info message")
+    logger.set_execution_context("my_workflow", "workflow", "/path/to/logs")
+    logger.debug("This will go to the log file")
+"""
+
 import logging
-import logging.handlers
-import queue
-import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from nornflow.constants import NORNFLOW_DEFAULT_LOGGER
 
-# Thread-safe queue for async logging
-_log_queue = queue.Queue()
-_listener = None
-_listener_thread = None
 
 class NornFlowLogger:
     """
-    Singleton logger for NornFlow with lazy initialization and async support.
-
-    This logger manages file-based logging with execution context tracking.
-    It uses a queue-based async approach for performance and supports
-    configuration via NornFlowSettings.
+    Singleton logger class for NornFlow.
+    
+    This class manages a single logger instance that can be configured
+    to write to files based on execution context.
     """
-
+    
     _instance = None
-    _lock = threading.Lock()
-
+    
     def __new__(cls):
         if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
+            cls._instance = super().__new__(cls)
         return cls._instance
-
+    
     def __init__(self):
         if hasattr(self, '_initialized'):
             return
         self._initialized = True
-
+        
         # Core logger
         self._logger = logging.getLogger('nornflow')
-        self._logger.setLevel(logging.DEBUG)  # Set to lowest level, filter via handlers
-
+        self._logger.setLevel(logging.DEBUG)
+        
         # NullHandler as default (no output until context set)
         null_handler = logging.NullHandler()
         self._logger.addHandler(null_handler)
-
+        
         # Execution context
-        self._execution_context = {}
+        self._execution_context = None
         self._file_handler = None
-        self._queue_handler = None
-
-        # Async setup
-        self._setup_async_logging()
-
-    def _setup_async_logging(self):
-        """Set up async logging with queue handler and listener."""
-        global _listener, _listener_thread
-
-        # Queue handler for main thread
-        self._queue_handler = logging.handlers.QueueHandler(_log_queue)
-        self._logger.addHandler(self._queue_handler)
-
-        # Listener in background thread
-        if _listener is None:
-            _listener = logging.handlers.QueueListener(_log_queue)
-            _listener_thread = threading.Thread(target=_listener.start, daemon=True)
-            _listener_thread.start()
-
-    def set_execution_context(self, execution_name: str, execution_type: str, log_dir: str | None = None):
+    
+    def set_execution_context(self, execution_name: str, execution_type: str, log_dir: str | Path | None = None) -> None:
         """
-        Establish execution context and configure file logging.
-
+        Set the execution context for logging.
+        
+        This creates a timestamped log file and configures the logger to write to it.
+        
         Args:
-            execution_name: Name of the execution (workflow/task name).
-            execution_type: Type of execution ('workflow', 'task', etc.).
-            log_dir: Directory for log files (from settings).
+            execution_name: Name of the execution (workflow name, task name, etc.)
+            execution_type: Type of execution ("workflow", "task", etc.)
+            log_dir: Directory to store log files. If None, uses default.
         """
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        log_filename = f"{execution_name}_{timestamp}.log"
-
-        log_dir = log_dir or NORNFLOW_DEFAULT_LOGGER["directory"]
-        log_path = Path(log_dir) / log_filename
-
-        # Create directory if needed
-        try:
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            # Fallback to stderr
-            error_handler = logging.StreamHandler()
-            error_handler.setFormatter(self._get_formatter())
-            self._logger.addHandler(error_handler)
-            self._logger.error(f"Failed to create log directory {log_dir}: {e}")
-            return
-
-        # File handler
-        try:
-            self._file_handler = logging.FileHandler(log_path, encoding='utf-8')
-            self._file_handler.setFormatter(self._get_formatter())
-            _listener.addHandler(self._file_handler)
-        except Exception as e:
-            # Fallback to stderr
-            error_handler = logging.StreamHandler()
-            error_handler.setFormatter(self._get_formatter())
-            self._logger.addHandler(error_handler)
-            self._logger.error(f"Failed to create log file {log_path}: {e}")
-
-        # Update context
-        self._execution_context = {
-            'execution_name': execution_name,
-            'execution_type': execution_type,
-            'log_dir': log_dir,
-            'log_path': str(log_path),
-            'start_time': datetime.now(),
-        }
-
-    def _get_formatter(self) -> logging.Formatter:
-        """Get the standard log formatter."""
-        return logging.Formatter(
-            '[%(asctime)s] [%(levelname)s] [%(name)s] [%(funcName)s] - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S.%f'
-        )
-
-    def get_execution_context(self) -> dict[str, Any]:
-        """Get current execution context."""
-        return self._execution_context.copy()
-
-    def clear_execution_context(self):
-        """Clear execution context and close handlers."""
+        # Remove existing file handler if present
         if self._file_handler:
-            _listener.removeHandler(self._file_handler)
+            self._logger.removeHandler(self._file_handler)
             self._file_handler.close()
             self._file_handler = None
-        self._execution_context = {}
-
-    # Delegate logging methods
-    def debug(self, message: str, *args, **kwargs):
+        
+        # Use default if log_dir is None
+        if not log_dir:
+            log_dir = NORNFLOW_DEFAULT_LOGGER["directory"]
+        
+        # Create log directory if it doesn't exist
+        log_path = Path(log_dir)
+        log_path.mkdir(parents=True, exist_ok=True)
+        
+        # Generate timestamped filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{execution_name}_{timestamp}.log"
+        filepath = log_path / filename
+        
+        # Create file handler
+        self._file_handler = logging.FileHandler(filepath, encoding="utf-8")
+        self._file_handler.setLevel(logging.DEBUG)
+        
+        # Create formatter
+        formatter = logging.Formatter(
+            "%(asctime)s [%(levelname)s] [%(name)s] [%(funcName)s] - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S.%f"
+        )
+        formatter.default_msec_format = "%s.%03d"
+        self._file_handler.setFormatter(formatter)
+        
+        # Add file handler to logger
+        self._logger.addHandler(self._file_handler)
+        
+        # Store execution context
+        self._execution_context = {
+            "execution_name": execution_name,
+            "execution_type": execution_type,
+            "log_dir": str(log_dir),
+            "log_file": str(filepath),
+            "start_time": datetime.now(),
+        }
+        
+        # Log the start of execution
+        self.info(f"Started {execution_type} execution: {execution_name}")
+    
+    def clear_execution_context(self) -> None:
+        """
+        Clear the current execution context and stop file logging.
+        """
+        if self._file_handler:
+            self._logger.removeHandler(self._file_handler)
+            self._file_handler.close()
+            self._file_handler = None
+        
+        if self._execution_context:
+            execution_time = datetime.now() - self._execution_context["start_time"]
+            self.info(f"Completed execution in {execution_time.total_seconds():.2f} seconds")
+        
+        self._execution_context = None
+    
+    def get_execution_context(self) -> dict[str, Any] | None:
+        """
+        Get the current execution context.
+        
+        Returns:
+            Current execution context dict or None if not set
+        """
+        return self._execution_context
+    
+    def debug(self, message: str, *args, **kwargs) -> None:
+        """Log a debug message."""
         self._logger.debug(message, *args, **kwargs)
-
-    def info(self, message: str, *args, **kwargs):
+    
+    def info(self, message: str, *args, **kwargs) -> None:
+        """Log an info message."""
         self._logger.info(message, *args, **kwargs)
-
-    def warning(self, message: str, *args, **kwargs):
+    
+    def warning(self, message: str, *args, **kwargs) -> None:
+        """Log a warning message."""
         self._logger.warning(message, *args, **kwargs)
-
-    def error(self, message: str, *args, **kwargs):
+    
+    def error(self, message: str, *args, **kwargs) -> None:
+        """Log an error message."""
         self._logger.error(message, *args, **kwargs)
-
-    def critical(self, message: str, *args, **kwargs):
+    
+    def critical(self, message: str, *args, **kwargs) -> None:
+        """Log a critical message."""
         self._logger.critical(message, *args, **kwargs)
-
-    def exception(self, message: str, *args, **kwargs):
+    
+    def exception(self, message: str, *args, **kwargs) -> None:
+        """Log an exception with traceback."""
         self._logger.exception(message, *args, **kwargs)
 
-# Global logger instance
+
+# Create the singleton instance
 logger = NornFlowLogger()
