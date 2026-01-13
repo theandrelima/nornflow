@@ -8,6 +8,7 @@ from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
 from nornflow.catalogs import CallableCatalog
 from nornflow.j2.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
 from nornflow.j2.exceptions import Jinja2ServiceError, TemplateError, TemplateValidationError
+from nornflow.logger import logger
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import is_public_callable
 
@@ -155,7 +156,9 @@ class Jinja2Service:
             TemplateValidationError: If template has syntax errors
         """
         try:
-            return self._environment.from_string(template_str)
+            compiled = self._environment.from_string(template_str)
+            logger.debug(f"Compiled template: {template_str[:50]}{'...' if len(template_str) > 50 else ''}")
+            return compiled
         except Exception as e:
             raise TemplateValidationError(f"Template compilation failed: {e}", template=template_str) from e
 
@@ -183,7 +186,9 @@ class Jinja2Service:
 
         try:
             template = self.compile_template(template_str)
-            return template.render(context)
+            result = template.render(context)
+            logger.debug(f"Resolved template string: {template_str[:50]}{'...' if len(template_str) > 50 else ''} -> {result[:50]}{'...' if len(result) > 50 else ''}")
+            return result
         except UndefinedError as e:
             context_info = f" ({error_context})" if error_context else ""
             raise TemplateError(f"Undefined variable in template{context_info}: {e}") from e
@@ -228,7 +233,9 @@ class Jinja2Service:
         Returns:
             Data with all templates resolved
         """
-        return self._render_data_recursive_impl(data, context, error_context)
+        result = self._render_data_recursive_impl(data, context, error_context)
+        logger.debug(f"Resolved data structure with {len(str(data)) if data else 0} chars.")
+        return result
 
     def validate_template(self, template_str: str) -> tuple[bool, str]:
         """Validate template syntax without rendering.

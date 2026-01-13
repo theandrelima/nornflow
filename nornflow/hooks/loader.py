@@ -1,6 +1,7 @@
 from typing import Any, TYPE_CHECKING
 
 from nornflow.hooks.base import HOOK_REGISTRY
+from nornflow.logger import logger
 
 if TYPE_CHECKING:
     from nornflow.hooks import Hook
@@ -27,4 +28,5 @@ def load_hooks(hooks_dict: dict[str, Any]) -> list["Hook"]:
             hook_instance = hook_class(hook_config)
             hooks.append(hook_instance)
 
+    logger.debug(f"Loaded {len(hooks)} hooks from configuration.")
     return hooks

@@ -1,7 +1,6 @@
 import hashlib
 import importlib
 import inspect
-import logging
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -33,11 +32,10 @@ from nornflow.exceptions import (
     ResourceError,
     WorkflowError,
 )
+from nornflow.logger import logger
 
 if TYPE_CHECKING:
     from nornflow.vars.manager import NornFlowVariablesManager
-
-logger = logging.getLogger(__name__)
 
 TYPE_DISPLAY_MAPPING: dict[str, str] = {
     "HashableDict": "map",
@@ -112,8 +110,10 @@ def import_module_from_path(module_name: str, module_path: str | Path) -> Module
         spec = importlib.util.spec_from_file_location(module_name, str(module_path))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        logger.debug(f"Successfully imported module '{module_name}' from '{module_path}'")
         return module
     except Exception as e:
+        logger.error(f"Failed to import module '{module_name}' from '{module_path}': {e}")
         raise CoreError(
             f"Failed to import module '{module_name}' from '{module_path}': {e!s}",
             component="ModuleLoader",
@@ -160,6 +160,7 @@ def import_modules_recursively(dir_path: Path) -> list[str]:
     dir_path = dir_path.resolve()
     cwd = Path.cwd().resolve()
 
+    logger.info(f"Starting recursive import of modules from directory: {dir_path}")
     for py_file in dir_path.rglob("*.py"):
         if py_file.name == "__init__.py":
             continue
@@ -177,6 +178,7 @@ def import_modules_recursively(dir_path: Path) -> list[str]:
         except Exception as e:
             logger.error(f"Failed to import module {py_file}: {e}")
 
+    logger.info(f"Completed recursive import: {len(imported_modules)} modules imported")
     return imported_modules
 
 
@@ -319,7 +321,9 @@ def load_processor(processor_config: dict) -> Processor:
         module_path, class_name = dotted_path.rsplit(".", 1)
         module = importlib.import_module(module_path)
         processor_class = getattr(module, class_name)
-        return processor_class(**args)
+        processor = processor_class(**args)
+        logger.debug(f"Successfully loaded processor '{dotted_path}'")
+        return processor
     except (ImportError, AttributeError) as e:
         raise ProcessorError(f"Failed to load processor '{dotted_path}': {e!s}") from e
     except Exception as e:
@@ -357,6 +361,7 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
     """
     if isinstance(obj, str):
         if JINJA_PATTERN.search(obj):
+            logger.warning(f"Jinja2 code detected in '{path}'; raising error as it's not allowed")
             raise WorkflowError(
                 f"Jinja2 code found in '{path}' which is not allowed. "
                 "Jinja2 expressions are only permitted in specific fields like task args."
@@ -519,7 +524,9 @@ def get_file_content_hash(file_path: Path) -> str:
     try:
         data = load_file_to_dict(file_path)
         normalized = yaml.dump(data, sort_keys=True, default_flow_style=False)
-        return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+        hash_value = hashlib.sha256(normalized.encode()).hexdigest()[:16]
+        logger.debug(f"Generated content hash for '{file_path}': {hash_value}")
+        return hash_value
     except Exception as e:
         raise ResourceError(
             f"Failed to hash file content: {e}", resource_type="file", resource_name=str(file_path)

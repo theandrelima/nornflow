@@ -15,8 +15,6 @@ from nornflow.nornir_manager import NornirManager
 from nornflow.vars.manager import NornFlowVariablesManager
 from .base import NornFlowBaseModel
 
-logger = logging.getLogger(__name__)
-
 
 class HookableModel(NornFlowBaseModel, ABC):
     """Abstract base class for models that support hooks.

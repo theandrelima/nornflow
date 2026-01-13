@@ -1,4 +1,3 @@
-import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -8,6 +7,7 @@ from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.j2 import Jinja2Service
 from nornflow.j2.exceptions import TemplateError
+from nornflow.logger import logger
 from nornflow.vars.constants import (
     DEFAULTS_FILENAME,
     ENV_VAR_PREFIX,
@@ -15,8 +15,6 @@ from nornflow.vars.constants import (
 from nornflow.vars.context import NornFlowDeviceContext
 from nornflow.vars.exceptions import VariableError
 from nornflow.vars.proxy import NornirHostProxy
-
-logger = logging.getLogger(__name__)
 
 # Constants for magic values
 MAX_LOG_VALUE_LENGTH = 80
@@ -336,10 +334,8 @@ class NornFlowVariablesManager:
             logger.debug(f"Successfully loaded {context_description} from '{file_path}'.")
             return loaded_vars
         except yaml.YAMLError as e:
-            logger.exception(f"YAML parsing error in {context_description} file '{file_path}'")
             raise VariableError(f"YAML parsing error in {context_description} file '{file_path}': {e}") from e
         except Exception as e:
-            logger.exception(f"Unexpected error loading {context_description} file '{file_path}'")
             raise VariableError(
                 f"Unexpected error loading {context_description} file '{file_path}': {e}"
             ) from e
@@ -371,13 +367,12 @@ class NornFlowVariablesManager:
             host_name: The name of the host for which this variable is being set.
         """
         if not host_name:
-            logger.error("Cannot set runtime variable: host_name is missing.")
-            return
+            raise VariableError("Cannot set runtime variable: host_name is missing.")
 
         ctx = self.get_device_context(host_name)
         ctx.runtime_vars[name] = value
         value_str = str(value)
-        logger.debug(
+        logger.info(
             f"Runtime variable '{name}' set for host '{host_name}'. Value: "
             f"{value_str[:MAX_LOG_VALUE_LENGTH]}"
             f"{'...' if len(value_str) > MAX_LOG_VALUE_LENGTH else ''}"
@@ -407,6 +402,7 @@ class NornFlowVariablesManager:
         flat_context = device_ctx.get_flat_context()
 
         if var_name in flat_context:
+            logger.debug(f"Retrieved NornFlow variable '{var_name}' for host '{host_name}'.")
             return flat_context[var_name]
 
         raise VariableError(
@@ -446,9 +442,11 @@ class NornFlowVariablesManager:
 
             context = VariableLookupContext(self, host_name, resolution_context_dict)
 
-            return self.jinja2.resolve_string(
+            result = self.jinja2.resolve_string(
                 template_str, context, error_context=f"variable resolution for host {host_name}"
             )
+            logger.debug(f"Resolved template string for host '{host_name}': '{template_str}' -> '{result}'")
+            return result
         except TemplateError:
             raise
         except Exception as e:
@@ -479,9 +477,11 @@ class NornFlowVariablesManager:
 
             context = VariableLookupContext(self, host_name, resolution_context_dict)
 
-            return self.jinja2.resolve_data(
+            result = self.jinja2.resolve_data(
                 data, context, error_context=f"data resolution for host {host_name}"
             )
+            logger.debug(f"Resolved data structure for host '{host_name}'.")
+            return result
         except TemplateError:
             raise
         except Exception as e:

@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 from typing import Any
 
@@ -6,9 +5,8 @@ from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.blueprints.resolver import BlueprintResolver
 from nornflow.exceptions import BlueprintCircularDependencyError, BlueprintError
+from nornflow.logger import logger
 from nornflow.utils import get_file_content_hash
-
-logger = logging.getLogger(__name__)
 
 
 class BlueprintExpander:
@@ -54,11 +52,13 @@ class BlueprintExpander:
             BlueprintError: If blueprint expansion fails.
         """
         if not vars_dir or not workflow_roots:
+            logger.debug("Skipping blueprint expansion: vars_dir or workflow_roots not provided")
             return tasks
 
         if not blueprints_catalog:
             blueprints_catalog = {}
 
+        logger.debug("Building variable context for blueprint expansion")
         context = self.resolver.build_context(
             vars_dir=vars_dir,
             workflow_path=workflow_path,
@@ -78,6 +78,7 @@ class BlueprintExpander:
             )
             expanded.extend(processed_tasks)
 
+        logger.debug(f"Blueprint expansion complete: {len(tasks)} items -> {len(expanded)} tasks")
         return expanded
 
     def _process_task_item(
@@ -106,6 +107,8 @@ class BlueprintExpander:
             return [task_dict]
 
         if not self._should_include_blueprint(task_dict, context):
+            blueprint_name = task_dict.get("blueprint", "unknown")
+            logger.debug(f"Skipping blueprint '{blueprint_name}': condition evaluated to false")
             return []
 
         return self._expand_single_blueprint(
@@ -158,6 +161,8 @@ class BlueprintExpander:
             raise BlueprintError("Blueprint reference missing 'blueprint' field")
 
         resolved_name = self.resolver.resolve_template(blueprint_name, context)
+        logger.debug(f"Expanding blueprint '{resolved_name}'")
+
         blueprint_path = self._resolve_blueprint_to_path(resolved_name, blueprints_catalog)
         content_hash = get_file_content_hash(blueprint_path)
 
@@ -168,7 +173,10 @@ class BlueprintExpander:
         name_stack.append(blueprint_path.name)
         try:
             if content_hash not in content_cache:
+                logger.debug(f"Loading blueprint from '{blueprint_path}'")
                 content_cache[content_hash] = self._load_blueprint_tasks(blueprint_path)
+            else:
+                logger.debug(f"Using cached content for blueprint '{blueprint_path.name}'")
 
             blueprint_tasks = content_cache[content_hash]
 
@@ -179,6 +187,7 @@ class BlueprintExpander:
                 )
                 expanded.extend(processed)
 
+            logger.debug(f"Blueprint '{resolved_name}' expanded to {len(expanded)} tasks")
             return expanded
         finally:
             expansion_stack.pop()
@@ -203,17 +212,21 @@ class BlueprintExpander:
             BlueprintError: If blueprint cannot be found.
         """
         if blueprint_ref in blueprints_catalog:
+            logger.debug(f"Blueprint '{blueprint_ref}' found in catalog")
             return blueprints_catalog[blueprint_ref]
 
         path = Path(blueprint_ref)
 
         if path.is_absolute() and path.exists():
+            logger.debug(f"Blueprint resolved from absolute path: {path}")
             return path
 
         resolved = Path.cwd() / path
         if resolved.exists():
+            logger.debug(f"Blueprint resolved from relative path: {resolved}")
             return resolved
 
+        logger.error(f"Blueprint '{blueprint_ref}' not found in catalog or filesystem")
         raise BlueprintError(
             (
                 "Blueprint not found in catalog or filesystem. "
@@ -257,8 +270,10 @@ class BlueprintExpander:
         try:
             blueprint_data = load_file_to_dict(blueprint_path)
             blueprint_model = BlueprintModel.model_validate(blueprint_data, strict=True)
+            logger.debug(f"Blueprint '{blueprint_path.name}' loaded with {len(blueprint_model.tasks)} tasks")
             return blueprint_model.tasks
         except Exception as e:
+            logger.error(f"Failed to load blueprint '{blueprint_path.name}': {e}")
             raise BlueprintError(
                 f"Failed to load or validate blueprint file: {e}",
                 blueprint_name=str(blueprint_path.name),

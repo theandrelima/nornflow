@@ -4,9 +4,8 @@ from typing import Any
 from nornir.core import Nornir
 from nornir.core.inventory import Host
 
+from nornflow.logger import logger
 from nornflow.vars.exceptions import VariableError
-
-logger = logging.getLogger(__name__)
 
 
 class NornirHostProxy:

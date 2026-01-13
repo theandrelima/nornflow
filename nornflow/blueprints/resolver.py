@@ -1,4 +1,3 @@
-import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -7,9 +6,8 @@ from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.exceptions import BlueprintError
 from nornflow.j2 import Jinja2Service
+from nornflow.logger import logger
 from nornflow.vars.constants import DEFAULTS_FILENAME
-
-logger = logging.getLogger(__name__)
 
 
 class BlueprintResolver:
@@ -51,28 +49,39 @@ class BlueprintResolver:
         Returns:
             Dictionary containing merged variables with proper precedence.
         """
+        logger.debug("Building blueprint variable context")
         context = {}
 
-        context.update(self._load_env_vars())
+        env_vars = self._load_env_vars()
+        if env_vars:
+            logger.debug(f"Loaded {len(env_vars)} environment variables")
+        context.update(env_vars)
 
         vars_dir_path = Path(vars_dir)
         defaults_path = vars_dir_path / DEFAULTS_FILENAME
         if defaults_path.exists():
             try:
-                context.update(load_file_to_dict(defaults_path))
+                defaults = load_file_to_dict(defaults_path)
+                logger.debug(f"Loaded default variables from '{defaults_path}'")
+                context.update(defaults)
             except Exception as e:
-                logger.warning(f"Failed to load defaults file {defaults_path}: {e}")
+                logger.warning(f"Failed to load defaults from '{defaults_path}': {e}")
 
         if workflow_path:
             domain_defaults = self._load_domain_defaults(vars_dir_path, workflow_path, workflow_roots) or {}
+            if domain_defaults:
+                logger.debug(f"Loaded {len(domain_defaults)} domain-specific variables")
             context.update(domain_defaults)
 
         if inline_workflow_vars:
+            logger.debug(f"Merging {len(inline_workflow_vars)} inline workflow variables")
             context.update(inline_workflow_vars)
 
         if cli_vars:
+            logger.debug(f"Merging {len(cli_vars)} CLI variables")
             context.update(cli_vars)
 
+        logger.debug(f"Blueprint context built with {len(context)} total variables")
         return context
 
     def resolve_template(self, template_str: str, context: dict[str, Any]) -> str:
@@ -89,7 +98,10 @@ class BlueprintResolver:
             BlueprintError: If template has undefined variables or syntax errors.
         """
         try:
-            return self.jinja2.resolve_string(template_str, context, error_context="blueprint reference")
+            resolved = self.jinja2.resolve_string(template_str, context, error_context="blueprint reference")
+            if template_str != resolved:
+                logger.debug(f"Resolved template '{template_str}' -> '{resolved}'")
+            return resolved
         except Exception as e:
             raise BlueprintError(
                 f"Failed to resolve blueprint template: {e}", details={"template": template_str}
@@ -111,7 +123,9 @@ class BlueprintResolver:
             BlueprintError: If condition has undefined variables or syntax errors.
         """
         try:
-            return self.jinja2.resolve_to_bool(condition, context)
+            result = self.jinja2.resolve_to_bool(condition, context)
+            logger.debug(f"Evaluated condition '{condition}' -> {result}")
+            return result
         except Exception as e:
             raise BlueprintError(
                 f"Failed to evaluate blueprint condition: {e}", details={"condition": condition}
@@ -150,7 +164,9 @@ class BlueprintResolver:
 
             relative_path = workflow_path.relative_to(root_path)
             if len(relative_path.parts) > 1:
-                return relative_path.parts[0]
+                domain = relative_path.parts[0]
+                logger.debug(f"Found domain '{domain}' for workflow '{workflow_path.name}'")
+                return domain
             break
 
         return None
@@ -175,11 +191,13 @@ class BlueprintResolver:
 
         domain_defaults_path = vars_dir / domain / DEFAULTS_FILENAME
         if not domain_defaults_path.exists():
+            logger.debug(f"No domain defaults found at '{domain_defaults_path}'")
             return {}
 
         try:
             loaded = load_file_to_dict(domain_defaults_path)
+            logger.debug(f"Loaded domain defaults from '{domain_defaults_path}'")
             return loaded
         except Exception as e:
-            logger.warning(f"Failed to load domain defaults from {domain_defaults_path}: {e}")
+            logger.warning(f"Failed to load domain defaults from '{domain_defaults_path}': {e}")
             return {}

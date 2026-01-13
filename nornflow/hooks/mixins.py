@@ -6,6 +6,7 @@ from nornir.core.task import Task
 from nornflow.hooks.exceptions import HookError, HookValidationError
 from nornflow.j2 import Jinja2Service
 from nornflow.j2.exceptions import TemplateValidationError
+from nornflow.logger import logger
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
@@ -97,6 +98,7 @@ class Jinja2ResolvableMixin:
 
         try:
             self.jinja2.compile_template(self.value)
+            logger.debug(f"Validated Jinja2 expression for hook '{self.hook_name}' in task '{task_model.name}'.")
         except TemplateValidationError as e:
             raise HookValidationError(
                 self.hook_name,
@@ -135,6 +137,7 @@ class Jinja2ResolvableMixin:
             if not host:
                 host = self._extract_host_from_task(task)
             resolved = self._resolve_jinja2(self.value, host)
+            logger.debug(f"Resolved Jinja2 value for hook '{self.hook_name}' on host '{host.name}'.")
         else:
             resolved = self.value
 

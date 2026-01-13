@@ -4,6 +4,8 @@ from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Task
 
+from nornflow.logger import logger
+
 from .decorators import hook_delegator
 
 if TYPE_CHECKING:
@@ -88,6 +90,7 @@ class NornFlowHookProcessor(Processor):
             value: The task-specific context containing task_model and hooks
         """
         self._task_specific_context = value
+        logger.debug(f"Set task-specific context for task with {len(value)} items.")
 
     @property
     def context(self) -> dict[str, Any]:
@@ -115,6 +118,7 @@ class NornFlowHookProcessor(Processor):
     def task_completed(self, task: Task, result: AggregatedResult) -> None:
         """Delegate to hooks' task_completed methods."""
         self.task_specific_context = {}
+        logger.debug(f"Cleared task-specific context after task '{task.name}'.")
 
     @hook_delegator
     def task_instance_started(self, task: Task, host: Host) -> None:

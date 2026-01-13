@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from nornflow.exceptions import CatalogError, CoreError, ResourceError
+from nornflow.logger import logger
 from nornflow.utils import import_module_from_path
 
 
@@ -50,6 +51,7 @@ class Catalog(ABC, dict[str, Any]):
             The registered value.
         """
         self.__setitem__(name, item, **kwargs)
+        logger.debug(f"Registered item '{name}' in {self.name} catalog")
         return item
 
     @property
@@ -136,8 +138,10 @@ class Catalog(ABC, dict[str, Any]):
         Raises:
             ResourceError: If directory doesn't exist.
         """
+        logger.info(f"Starting discovery of {self.name} items in directory: {dir_path}")
         path = Path(dir_path)
         if not path.is_dir():
+            logger.error(f"Directory not found for {self.name} discovery: {dir_path}")
             raise ResourceError(
                 f"Directory not found: {dir_path}. Couldn't load {self.name}.",
                 resource_type=self.name,
@@ -146,11 +150,13 @@ class Catalog(ABC, dict[str, Any]):
 
         total_items = 0
         files = self._get_files_to_process(path, **kwargs)
+        logger.debug(f"Found {len(files)} files to process in {dir_path}")
 
         for file_path in files:
             items_added = self._process_file(file_path, **kwargs)
             total_items += items_added
 
+        logger.info(f"Completed {self.name} discovery: {total_items} items registered from {len(files)} files")
         return total_items
 
     @abstractmethod
@@ -211,13 +217,16 @@ class CallableCatalog(Catalog):
         is_builtin = bool(module_name and module_name.startswith("nornflow.builtins"))
 
         if name in self and self.sources.get(name, {}).get("is_builtin", False):
+            logger.warning(f"Attempted to override built-in '{name}' in {self.name} catalog")
             raise CatalogError(
                 f"Cannot override built-in '{name}' with a custom implementation", catalog_name=self.name
             )
 
-        return super().register(
+        result = super().register(
             name, item, module_path=module_path, module_name=module_name, is_builtin=is_builtin, **kwargs
         )
+        logger.debug(f"Registered callable '{name}' from module '{module_name}' in {self.name} catalog")
+        return result
 
     def register_from_module(
         self,
@@ -252,6 +261,7 @@ class CallableCatalog(Catalog):
             self.register(name, obj, module_path=module_path, module_name=module_name)
             count += 1
 
+        logger.debug(f"Registered {count} items from module '{module_name}'")
         return count
 
     def _get_files_to_process(self, dir_path: Path, **kwargs) -> list[Path]:
@@ -286,8 +296,11 @@ class CallableCatalog(Catalog):
 
         try:
             module = import_module_from_path(module_name, module_path)
-            return self.register_from_module(module, predicate, transform_item)
+            count = self.register_from_module(module, predicate, transform_item)
+            logger.debug(f"Processed file '{file_path}': {count} items registered")
+            return count
         except Exception as e:
+            logger.error(f"Failed to process file '{file_path}': {e}")
             raise CoreError(
                 f"Failed to import module '{module_name}' from '{module_path}': {e!s}",
                 component="ItemDiscovery",
@@ -376,6 +389,7 @@ class FileCatalog(Catalog):
 
         if file_path.is_file() and predicate and predicate(file_path):
             self.register(name=file_path.name, item=file_path, file_path=str(file_path))
+            logger.debug(f"Registered file '{file_path}' in {self.name} catalog")
             return 1
         return 0
 
