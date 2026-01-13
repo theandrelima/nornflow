@@ -206,7 +206,6 @@ class NornFlow:
             nornir_settings=self.nornir_config_file,
             **self._nornir_configs,
         )
-        logger.info("Nornir manager initialized")
 
     def _initialize_processors(self) -> None:
         """

@@ -21,6 +21,7 @@ Usage:
 """
 
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -65,9 +66,15 @@ class NornFlowLogger:
         self._logger = logging.getLogger('nornflow')
         self._logger.setLevel(logging.DEBUG)
         
-        # NullHandler as default (no output until context set)
-        null_handler = logging.NullHandler()
-        self._logger.addHandler(null_handler)
+        # Console handler for ERROR level and above (always active for visibility)
+        console_handler = logging.StreamHandler(sys.stderr)
+        console_handler.setLevel(logging.ERROR)
+        console_formatter = logging.Formatter(
+            "%(asctime)s [%(levelname)s] [%(name)s] - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
+        console_handler.setFormatter(console_formatter)
+        self._logger.addHandler(console_handler)
         
         # Execution context
         self._execution_context = None
@@ -112,12 +119,8 @@ class NornFlowLogger:
         self._file_handler = logging.FileHandler(filepath, encoding="utf-8")
         self._file_handler.setLevel(level)
         
-        # Create formatter
-        formatter = MicrosecondFormatter(
-            "%(asctime)s [%(levelname)s] [%(name)s] [%(funcName)s] - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S.%f"
-        )
-        self._file_handler.setFormatter(formatter)
+        # Create file formatter with conditional funcName
+        self._file_handler.setFormatter(ConditionalFuncNameFormatter())
         
         # Add file handler to logger
         self._logger.addHandler(self._file_handler)
@@ -181,6 +184,21 @@ class NornFlowLogger:
     def exception(self, message: str, *args, **kwargs) -> None:
         """Log an exception with traceback."""
         self._logger.exception(message, *args, **kwargs)
+
+
+class ConditionalFuncNameFormatter(MicrosecondFormatter):
+    """
+    Custom formatter that conditionally includes funcName only if it's not a logger wrapper method.
+    """
+    
+    LOGGER_METHODS = {'debug', 'info', 'warning', 'error', 'critical', 'exception'}
+    
+    def format(self, record):
+        if record.funcName in self.LOGGER_METHODS:
+            self._style._fmt = "%(asctime)s [%(levelname)s] [%(name)s] - %(message)s"
+        else:
+            self._style._fmt = "%(asctime)s [%(levelname)s] [%(name)s] [%(funcName)s] - %(message)s"
+        return super().format(record)
 
 
 # Create the singleton instance

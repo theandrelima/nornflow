@@ -4,12 +4,12 @@ NornFlow exception hierarchy.
 This module defines the core exceptions used throughout the NornFlow application,
 organized hierarchically with clear inheritance paths.
 """
+from typing import Any
+from nornflow.logger import logger
 
 ###############################################################################
 # ROOT EXCEPTION
 ###############################################################################
-from typing import Any
-
 
 class NornFlowError(Exception):
     """
@@ -17,7 +17,14 @@ class NornFlowError(Exception):
 
     This exception serves as the base class for the entire exception hierarchy.
     It should never be raised directly but rather inherited from.
+
+    Automatically logs the exception message at ERROR level when instantiated.
     """
+
+    def __init__(self, message: str = ""):
+        super().__init__(message)
+        # Automatically log the exception message at ERROR level
+        logger.error(message)
 
 
 ###############################################################################
