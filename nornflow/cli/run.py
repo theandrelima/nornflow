@@ -8,7 +8,6 @@ from typing import Any
 import typer
 
 from nornflow import NornFlowBuilder
-from nornflow.logger import logger
 from nornflow.cli.exceptions import CLIRunError
 from nornflow.constants import (
     FailureStrategy,
@@ -350,7 +349,7 @@ def get_nornflow_builder(
         else:
             builder.with_workflow_name(target)
     else:
-        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        timestamp = datetime.now().strftime("%d-%m-%Y %H-%M-%S")
         workflow_dict = {
             "workflow": {
                 "name": f"Task {target} - exec {timestamp}",
@@ -508,20 +507,8 @@ def run(
         )
 
         nornflow = builder.build()
-
-        # Set execution context for logging
-        execution_type = "workflow" if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_YAML_EXTENSIONS) else "task"
-        logger.set_execution_context(
-            execution_name=target,
-            execution_type=execution_type,
-            log_dir=nornflow.settings.log_directory,
-            log_level=nornflow.settings.logger["level"],
-        )
-
-        # Capture the exit code from nornflow.run()
         exit_code = nornflow.run()
 
-        # Exit with the workflow's exit code if non-zero, otherwise return normally
         if exit_code != 0:
             sys.exit(exit_code)
 

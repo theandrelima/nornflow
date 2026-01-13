@@ -137,6 +137,52 @@ class NornFlowLogger:
         # Log the start of execution
         self.info(f"Started {execution_type} execution: {execution_name}")
     
+    def update_execution_context(self, execution_name: str | None = None, execution_type: str | None = None, log_dir: str | Path | None = None, log_level: str | None = None) -> None:
+        """Update the execution context for logging by renaming the existing file and updating the handler.
+
+        Args:
+            execution_name: New execution name (optional).
+            execution_type: New execution type (optional).
+            log_dir: New log directory (optional).
+            log_level: New log level (optional).
+        """
+        if not self._file_handler or not self._execution_context:
+            return
+        
+        updated = False
+        old_filepath = Path(self._execution_context["log_file"])
+        
+        if execution_name or execution_type:
+            self._execution_context["execution_name"] = execution_name or self._execution_context.get("execution_name", "unknown")
+            self._execution_context["execution_type"] = execution_type or self._execution_context.get("execution_type", "unknown")
+            updated = True
+        
+        if log_level:
+            level = getattr(logging, log_level.upper(), logging.INFO)
+            self._logger.setLevel(level)
+            self._file_handler.setLevel(level)
+            updated = True
+        
+        if log_dir or updated:
+            new_log_path = Path(log_dir or self._execution_context["log_dir"])
+            new_log_path.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            new_filename = f"{self._execution_context['execution_name']}_{timestamp}.log"
+            new_filepath = new_log_path / new_filename
+            
+            # Close the handler, rename the file, update the handler's baseFilename, and reopen
+            self._file_handler.close()
+            old_filepath.rename(new_filepath)
+            self._file_handler.baseFilename = str(new_filepath)
+            self._file_handler.stream = open(new_filepath, 'a', encoding="utf-8")
+            
+            self._execution_context["log_dir"] = str(new_log_path)
+            self._execution_context["log_file"] = str(new_filepath)
+            updated = True
+        
+        if updated:
+            logger.debug("Updated execution context dynamically.")
+    
     def clear_execution_context(self) -> None:
         """
         Clear the current execution context and stop file logging.

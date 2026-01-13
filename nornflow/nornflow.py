@@ -119,6 +119,14 @@ class NornFlow:
             logger.info("Initializing NornFlow instance")
             self._validate_init_kwargs(kwargs)
             self._initialize_settings(nornflow_settings, kwargs)
+            
+            logger.set_execution_context(
+                execution_name="loading",
+                execution_type="workflow",
+                log_dir=self.settings.logger.get("directory"),
+                log_level=self.settings.logger.get("level", "INFO"),
+            )
+            
             self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, processors)
             self._initialize_hooks()
             self._initialize_catalogs()
@@ -604,8 +612,12 @@ class NornFlow:
         elif isinstance(value, WorkflowModel):
             self._workflow = value
             self._workflow_path = None
+            log_name = self._workflow.name.replace(" ", "_")
+            logger.update_execution_context(execution_name=log_name)
         elif isinstance(value, str):
             self._workflow, self._workflow_path = self._load_workflow_from_name(value)
+            log_name = self._workflow.name.replace(" ", "_")
+            logger.update_execution_context(execution_name=log_name)
         else:
             raise WorkflowError(
                 "Workflow must be a WorkflowModel instance, string name, or None, "
@@ -761,7 +773,7 @@ class NornFlow:
         Load inventory filters from built-ins and from directories specified in settings.
 
         Filters are loaded in two phases:
-        1. Built-in filters from nornflow.builtins.filters module
+        1. Built-in filters from nflow.builtins.filters module
         2. User-defined filters from configured local_filters
         """
         self._filters_catalog = self._load_catalog(
