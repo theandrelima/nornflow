@@ -157,7 +157,9 @@ class Jinja2Service:
         """
         try:
             compiled = self._environment.from_string(template_str)
-            logger.debug(f"Compiled template: {template_str[:50]}{'...' if len(template_str) > 50 else ''}")
+            logger.debug(
+                f"Compiled template: {template_str[:50]}{'...' if len(template_str) > 50 else ''}"  # noqa: PLR2004
+            )
             return compiled
         except Exception as e:
             raise TemplateValidationError(f"Template compilation failed: {e}", template=template_str) from e
@@ -187,7 +189,10 @@ class Jinja2Service:
         try:
             template = self.compile_template(template_str)
             result = template.render(context)
-            logger.debug(f"Resolved template string: {template_str[:50]}{'...' if len(template_str) > 50 else ''} -> {result[:50]}{'...' if len(result) > 50 else ''}")
+            logger.debug(
+                f"Resolved template string: {template_str[:50]}{'...' if len(template_str) > 50 else ''} -> "  # noqa: PLR2004
+                f"{result[:50]}{'...' if len(result) > 50 else ''}"  # noqa: PLR2004
+            )
             return result
         except UndefinedError as e:
             context_info = f" ({error_context})" if error_context else ""

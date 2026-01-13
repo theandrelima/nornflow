@@ -65,10 +65,7 @@ NORNFLOW_DEFAULT_HOOKS_DIR = "hooks"
 NORNFLOW_DEFAULT_BLUEPRINTS_DIR = "blueprints"
 NORNFLOW_DEFAULT_VARS_DIR = "vars"
 NORNFLOW_DEFAULT_J2_FILTERS_DIR = "j2_filters"
-NORNFLOW_DEFAULT_LOGGER = {
-    "directory": ".nornflow/logs",
-    "level": "INFO"
-}
+NORNFLOW_DEFAULT_LOGGER = {"directory": ".nornflow/logs", "level": "INFO"}
 
 NORNFLOW_SETTINGS_OPTIONAL = {
     "local_tasks": [NORNFLOW_DEFAULT_TASKS_DIR],

@@ -98,7 +98,9 @@ class Jinja2ResolvableMixin:
 
         try:
             self.jinja2.compile_template(self.value)
-            logger.debug(f"Validated Jinja2 expression for hook '{self.hook_name}' in task '{task_model.name}'.")
+            logger.debug(
+                f"Validated Jinja2 expression for hook '{self.hook_name}' in task '{task_model.name}'."
+            )
         except TemplateValidationError as e:
             raise HookValidationError(
                 self.hook_name,

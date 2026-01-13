@@ -1,4 +1,3 @@
-import logging
 from abc import ABC
 from collections.abc import Callable
 from typing import Any

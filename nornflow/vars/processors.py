@@ -111,6 +111,7 @@ class NornFlowVariableProcessor(Processor):
                     logger.debug(f"Processed task.params for task '{task.name}' on host '{host.name}'")
 
         except Exception:
+            logger.exception(f"Error processing variables for task '{task.name}' on host '{host.name}'")
             raise
 
     def resolve_deferred_params(self, task: Task, host: Host) -> dict[str, Any] | None:

@@ -5,7 +5,6 @@ from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Task
 
 from nornflow.logger import logger
-
 from .decorators import hook_delegator
 
 if TYPE_CHECKING:

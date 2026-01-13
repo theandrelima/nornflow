@@ -156,7 +156,9 @@ class Catalog(ABC, dict[str, Any]):
             items_added = self._process_file(file_path, **kwargs)
             total_items += items_added
 
-        logger.info(f"Completed {self.name} discovery: {total_items} items registered from {len(files)} files")
+        logger.info(
+            f"Completed {self.name} discovery: {total_items} items registered from {len(files)} files"
+        )
         return total_items
 
     @abstractmethod

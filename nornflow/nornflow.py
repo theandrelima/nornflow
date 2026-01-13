@@ -19,6 +19,7 @@ from nornflow.exceptions import (
     WorkflowError,
 )
 from nornflow.j2 import Jinja2Service
+from nornflow.logger import logger
 from nornflow.models import WorkflowModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
@@ -33,7 +34,6 @@ from nornflow.utils import (
 )
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
-from nornflow.logger import logger
 
 
 class NornFlow:
@@ -119,14 +119,14 @@ class NornFlow:
             logger.info("Initializing NornFlow instance")
             self._validate_init_kwargs(kwargs)
             self._initialize_settings(nornflow_settings, kwargs)
-            
+
             logger.set_execution_context(
                 execution_name="loading",
                 execution_type="workflow",
                 log_dir=self.settings.logger.get("directory"),
                 log_level=self.settings.logger.get("level", "INFO"),
             )
-            
+
             self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, processors)
             self._initialize_hooks()
             self._initialize_catalogs()

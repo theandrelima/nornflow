@@ -35,7 +35,7 @@ class NornFlowSettings(BaseSettings):
     - "Configuration/Config" is reserved for Nornir's configuration
 
     Environment variables are case-sensitive. Ensure exact prefix and key matching.
-    
+
     Examples:
     - NORNFLOW_SETTINGS_vars_dir=/custom/vars
     - NORNFLOW_SETTINGS_local_tasks=tasks,custom_tasks

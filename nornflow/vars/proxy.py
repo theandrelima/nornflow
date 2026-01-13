@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from nornir.core import Nornir
