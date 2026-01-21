@@ -1,3 +1,4 @@
+# filepath: test_processors.py
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -60,6 +61,9 @@ class TestNornFlowProcessors:
         # Mock the nornir config file check to avoid file not found errors
         settings.nornir_config_file = None
 
+        # Configure logger settings to return proper strings
+        settings.logger = {"directory": "/tmp/logs", "level": "INFO"}
+
         # Create kwargs with processors
         kwargs_processors = [
             {
@@ -95,6 +99,9 @@ class TestProcessorPrecedence:
         settings.nornir_config_file = None  # Avoid file not found errors
         settings.dry_run = False
 
+        # Configure logger settings to return proper strings
+        settings.logger = {"directory": "/tmp/logs", "level": "INFO"}
+
         # Create workflow with processors - must include at least one task
         workflow_dict = {
             "workflow": {
@@ -117,6 +124,7 @@ class TestProcessorPrecedence:
                 {"class": "tests.unit.core.test_processors_utils.TestProcessor", "args": {"name": "WorkflowProc"}}
             ]
             workflow_model.dry_run = False
+            workflow_model.name = "Test"
             mock_create.return_value = workflow_model
 
             # Create kwargs processors
