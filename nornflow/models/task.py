@@ -59,7 +59,7 @@ class TaskModel(HookableModel):
             A unique string identifier for this task instance.
         """
         if self.id:
-            return f"{self.canonical_id}_{self.id}"
+            return f"{self.name}_{self.id}"
         return self.name
 
     @field_validator("args", mode="before")

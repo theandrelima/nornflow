@@ -30,6 +30,7 @@ def load_hooks(hooks_dict: dict[str, Any]) -> list["Hook"]:
                 hooks.append(hook_instance)
             except Exception as e:
                 logger.exception(f"Failed to instantiate hook '{hook_name}': {e}")
+                raise
 
     logger.debug(f"Loaded {len(hooks)} hooks from configuration.")
     return hooks

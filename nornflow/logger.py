@@ -210,21 +210,21 @@ class NornFlowLogger:
             new_filename = f"{self._execution_context['execution_name']}_{timestamp}.log"
             new_filepath = new_log_path / new_filename
 
-            # Close the handler, rename the file, update the handler's baseFilename, and reopen
+            # Close the handler, try to rename, then reopen
             self._file_handler.close()
             try:
                 old_filepath.rename(new_filepath)
-            except OSError as e:
-                logger.warning(f"Failed to rename log file from {old_filepath} to {new_filepath}: {e}")
-            self._file_handler.baseFilename = str(new_filepath)
-            self._file_handler.stream = new_filepath.open("a", encoding="utf-8")
+                actual_filepath = new_filepath
+            except OSError:
+                # If rename fails, keep using the old file
+                actual_filepath = old_filepath
+
+            self._file_handler.baseFilename = str(actual_filepath)
+            self._file_handler.stream = actual_filepath.open("a", encoding="utf-8")
 
             self._execution_context["log_dir"] = str(new_log_path)
-            self._execution_context["log_file"] = str(new_filepath)
+            self._execution_context["log_file"] = str(actual_filepath)
             updated = True
-
-        if updated:
-            logger.debug("Updated execution context dynamically.")
 
     def clear_execution_context(self) -> None:
         """
