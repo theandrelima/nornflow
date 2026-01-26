@@ -1,5 +1,7 @@
 from typing import Any, ClassVar
 
+from nornflow.logger import logger
+
 
 class NornFlowDeviceContext:
     """
@@ -61,6 +63,7 @@ class NornFlowDeviceContext:
         cls._initial_default_vars = default_vars.copy()
         cls._initial_env_vars = env_vars.copy()
         cls._shared_state_initialized = True
+        logger.info("NornFlowDeviceContext shared state initialized.")
 
     def __init__(self, host_name: str) -> None:
         """
@@ -207,4 +210,5 @@ class NornFlowDeviceContext:
         for layer in precedence_layers:
             flat_context.update(layer)
 
+        logger.debug(f"Built flat context for host '{self.host_name}' with {len(flat_context)} variables.")
         return flat_context

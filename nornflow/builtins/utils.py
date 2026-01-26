@@ -4,6 +4,7 @@ from typing import Any
 from nornir.core.task import Task
 
 from nornflow.exceptions import ProcessorError
+from nornflow.logger import logger
 from nornflow.vars import NornFlowVariablesManager
 
 
@@ -22,6 +23,7 @@ def get_task_vars_manager(task: Task) -> NornFlowVariablesManager:
     """
     for processor in task.nornir.processors:
         if hasattr(processor, "vars_manager"):
+            logger.debug(f"Found vars_manager in processor for task '{task.name}'.")
             return processor.vars_manager
 
     raise ProcessorError(
@@ -121,4 +123,5 @@ def build_set_task_report(task: Task, kwargs: dict[str, Any]) -> str:
         value_display = format_value_for_display(resolved_value)
         report_lines.append(f"  • {var_name} = {value_display}")
 
+    logger.debug(f"Built set task report for host '{task.host.name}' with {len(kwargs)} variables.")
     return "\n".join(report_lines)

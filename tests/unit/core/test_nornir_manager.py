@@ -86,6 +86,9 @@ class TestNornirManager:
         """Test applying valid filters."""
         manager = NornirManager(nornir_settings="dummy_config.yaml")
 
+        mock_nornir.inventory = MagicMock()
+        mock_nornir.inventory.hosts = {}
+
         # Apply some filters
         result = manager.apply_filters(name="device1", group="routers")
 
@@ -109,6 +112,8 @@ class TestNornirManager:
     def test_apply_processors_with_valid_processors(self, mock_init_nornir, mock_nornir, mock_processor):
         """Test applying valid processors."""
         manager = NornirManager(nornir_settings="dummy_config.yaml")
+
+        mock_nornir.processors = []
 
         # Apply the processor
         result = manager.apply_processors([mock_processor])

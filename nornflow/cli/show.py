@@ -16,6 +16,7 @@ from nornflow.catalogs import Catalog
 from nornflow.cli.constants import CWD, DESCRIPTION_FIRST_SENTENCE_LENGTH
 from nornflow.cli.exceptions import CLIShowError
 from nornflow.exceptions import NornFlowError
+from nornflow.logger import logger
 
 app = typer.Typer()
 
@@ -131,6 +132,7 @@ def show(  # noqa: PLR0912
         raise typer.Exit(code=2) from None
 
     except Exception as e:
+        logger.exception(f"Failed to show requested information: {e}")
         CLIShowError(
             message=f"Failed to show requested information: {e}",
             hint="Check your configuration and try again.",

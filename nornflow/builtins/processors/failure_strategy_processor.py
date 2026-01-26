@@ -8,6 +8,7 @@ from nornir.core.task import Result, Task
 from tabulate import tabulate
 
 from nornflow.constants import FailureStrategy
+from nornflow.logger import logger
 
 # Initialize colorama
 init(autoreset=True)
@@ -62,9 +63,11 @@ class NornFlowFailureStrategyProcessor(Processor):
         """Called after each host completes for a task."""
         if result.failed:
             self.collected_errors.append((task.name, host.name, result))
+            logger.debug(f"Collected error for task '{task.name}' on host '{host.name}'.")
 
             if self.failure_strategy == FailureStrategy.FAIL_FAST and not self.fail_fast_triggered:
                 self.fail_fast_triggered = True
+                logger.debug(f"Fail fast triggered for task '{task.name}' on host '{host.name}'.")
 
                 # Add ALL hosts to failed_hosts immediately
                 # This causes Nornir to skip them in all running threads
