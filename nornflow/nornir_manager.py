@@ -3,6 +3,7 @@ from typing import Any
 from nornir import InitNornir
 from nornir.core import Nornir
 from nornir.core.processor import Processor
+from typing_extensions import Self
 
 from nornflow.constants import NORNFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import CoreError, ProcessorError
@@ -54,7 +55,7 @@ class NornirManager:
         )
         logger.info("NornirManager initialized")
 
-    def __enter__(self) -> "NornirManager":
+    def __enter__(self) -> Self:
         """
         Enter the context manager protocol.
 
