@@ -37,9 +37,9 @@ include = ["nornflow*"]
 
 [project.optional-dependencies]
 dev = [
-    "black>=25.1.0",
+    "black>=25.12.0",
     "mypy>=1.15.0",
-    "ruff>=0.9.4",
+    "ruff>=0.14.10",
     "pytest-cov>=6.0.0",
 ]
 manual-tests = [
