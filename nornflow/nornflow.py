@@ -138,6 +138,7 @@ class NornFlow:
         except CoreError:
             raise
         except Exception as e:
+            logger.exception(f"Failed to initialize NornFlow: {e!s}")
             raise InitializationError(f"Failed to initialize NornFlow: {e!s}", component="NornFlow") from e
 
     def _initialize_settings(
@@ -205,6 +206,7 @@ class NornFlow:
         try:
             self._nornir_configs = load_file_to_dict(self.nornir_config_file)
         except Exception as e:
+            logger.exception(f"Failed to load Nornir config from '{self.nornir_config_file}': {e}")
             raise CoreError(
                 f"Failed to load Nornir config from '{self.nornir_config_file}': {e}",
                 component="NornFlow",
@@ -731,6 +733,7 @@ class NornFlow:
                         dir_path, predicate=predicate, transform_item=transform_item
                     )
             except Exception as e:
+                logger.exception(f"Error loading {name} from {dir_path}: {e!s}")
                 raise ResourceError(
                     f"Error loading {name} from {dir_path}: {e!s}",
                     resource_type=name,
@@ -966,6 +969,7 @@ class NornFlow:
             )
             return workflow, workflow_path
         except Exception as e:
+            logger.exception(f"Failed to load workflow '{name}' from path '{workflow_path}': {e}")
             raise WorkflowError(
                 f"Failed to load workflow '{name}' from path '{workflow_path}': {e}",
                 component="NornFlow",

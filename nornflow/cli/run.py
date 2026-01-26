@@ -15,6 +15,7 @@ from nornflow.constants import (
     NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
 )
 from nornflow.exceptions import NornFlowError
+from nornflow.logger import logger
 from nornflow.utils import normalize_failure_strategy
 
 app = typer.Typer(help="Run NornFlow tasks and workflows")
@@ -536,6 +537,7 @@ def run(
         raise typer.Exit(code=104)  # noqa: B904
 
     except Exception as e:
+        logger.exception(f"Unexpected error while running {target}: {e}")
         CLIRunError(
             message=f"Unexpected error while running {target}: {e}",
             hint="This may be a bug. Please report it if the issue persists.",

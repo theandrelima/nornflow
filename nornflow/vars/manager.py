@@ -336,6 +336,7 @@ class NornFlowVariablesManager:
         except yaml.YAMLError as e:
             raise VariableError(f"YAML parsing error in {context_description} file '{file_path}': {e}") from e
         except Exception as e:
+            logger.exception(f"Unexpected error loading {context_description} file '{file_path}': {e}")
             raise VariableError(
                 f"Unexpected error loading {context_description} file '{file_path}': {e}"
             ) from e
@@ -447,9 +448,11 @@ class NornFlowVariablesManager:
             )
             logger.debug(f"Resolved template string for host '{host_name}': '{template_str}' -> '{result}'")
             return result
-        except TemplateError:
+        except TemplateError as e:
+            logger.error(f"Template error resolving string '{template_str}' for host '{host_name}': {e}")
             raise
         except Exception as e:
+            logger.exception(f"Unexpected error resolving template '{template_str}' for host '{host_name}': {e}")
             raise TemplateError(f"Template rendering error in '{template_str}': {e}") from e
 
     def resolve_data(self, data: Any, host_name: str, additional_vars: dict[str, Any] | None = None) -> Any:
@@ -482,7 +485,9 @@ class NornFlowVariablesManager:
             )
             logger.debug(f"Resolved data structure for host '{host_name}'.")
             return result
-        except TemplateError:
+        except TemplateError as e:
+            logger.error(f"Template error resolving data for host '{host_name}': {e}")
             raise
         except Exception as e:
+            logger.exception(f"Unexpected error resolving data for host '{host_name}': {e}")
             raise TemplateError(f"Data resolution error: {e}") from e

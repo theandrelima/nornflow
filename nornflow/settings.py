@@ -18,6 +18,7 @@ from nornflow.constants import (
     NORNFLOW_DEFAULT_WORKFLOWS_DIR,
 )
 from nornflow.exceptions import SettingsError
+from nornflow.logger import logger
 
 
 class NornFlowSettings(BaseSettings):
@@ -276,6 +277,7 @@ class NornFlowSettings(BaseSettings):
         try:
             yaml_data = load_file_to_dict(settings_path)
         except Exception as e:
+            logger.exception(f"Failed to load settings from {resolved_file}: {e}")
             raise SettingsError(f"Failed to load settings from {resolved_file}: {e}") from e
 
         if not isinstance(yaml_data, dict):

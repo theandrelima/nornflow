@@ -65,7 +65,7 @@ class BlueprintResolver:
                 logger.debug(f"Loaded default variables from '{defaults_path}'")
                 context.update(defaults)
             except Exception as e:
-                logger.warning(f"Failed to load defaults from '{defaults_path}': {e}")
+                logger.exception(f"Failed to load defaults from '{defaults_path}': {e}")
 
         if workflow_path:
             domain_defaults = self._load_domain_defaults(vars_dir_path, workflow_path, workflow_roots) or {}
@@ -103,6 +103,7 @@ class BlueprintResolver:
                 logger.debug(f"Resolved template '{template_str}' -> '{resolved}'")
             return resolved
         except Exception as e:
+            logger.exception(f"Failed to resolve blueprint template: {e}")
             raise BlueprintError(
                 f"Failed to resolve blueprint template: {e}", details={"template": template_str}
             ) from e
@@ -127,6 +128,7 @@ class BlueprintResolver:
             logger.debug(f"Evaluated condition '{condition}' -> {result}")
             return result
         except Exception as e:
+            logger.exception(f"Failed to evaluate blueprint condition: {e}")
             raise BlueprintError(
                 f"Failed to evaluate blueprint condition: {e}", details={"condition": condition}
             ) from e
@@ -199,5 +201,5 @@ class BlueprintResolver:
             logger.debug(f"Loaded domain defaults from '{domain_defaults_path}'")
             return loaded
         except Exception as e:
-            logger.warning(f"Failed to load domain defaults from '{domain_defaults_path}': {e}")
+            logger.exception(f"Failed to load domain defaults from '{domain_defaults_path}': {e}")
             return {}

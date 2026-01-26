@@ -273,7 +273,7 @@ class BlueprintExpander:
             logger.debug(f"Blueprint '{blueprint_path.name}' loaded with {len(blueprint_model.tasks)} tasks")
             return blueprint_model.tasks
         except Exception as e:
-            logger.error(f"Failed to load blueprint '{blueprint_path.name}': {e}")
+            logger.exception(f"Failed to load blueprint '{blueprint_path.name}': {e}")
             raise BlueprintError(
                 f"Failed to load or validate blueprint file: {e}",
                 blueprint_name=str(blueprint_path.name),

@@ -113,7 +113,7 @@ def import_module_from_path(module_name: str, module_path: str | Path) -> Module
         logger.debug(f"Successfully imported module '{module_name}' from '{module_path}'")
         return module
     except Exception as e:
-        logger.error(f"Failed to import module '{module_name}' from '{module_path}': {e}")
+        logger.exception(f"Failed to import module '{module_name}' from '{module_path}': {e}")
         raise CoreError(
             f"Failed to import module '{module_name}' from '{module_path}': {e!s}",
             component="ModuleLoader",
@@ -176,7 +176,7 @@ def import_modules_recursively(dir_path: Path) -> list[str]:
             imported_modules.append(module_name)
             logger.debug(f"Imported module: {module_name}")
         except Exception as e:
-            logger.error(f"Failed to import module {py_file}: {e}")
+            logger.exception(f"Failed to import module {py_file}: {e}")
 
     logger.info(f"Completed recursive import: {len(imported_modules)} modules imported")
     return imported_modules
@@ -528,6 +528,7 @@ def get_file_content_hash(file_path: Path) -> str:
         logger.debug(f"Generated content hash for '{file_path}': {hash_value}")
         return hash_value
     except Exception as e:
+        logger.exception(f"Failed to hash file content: {e}")
         raise ResourceError(
             f"Failed to hash file content: {e}", resource_type="file", resource_name=str(file_path)
         ) from e

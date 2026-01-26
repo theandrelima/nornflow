@@ -25,8 +25,11 @@ def load_hooks(hooks_dict: dict[str, Any]) -> list["Hook"]:
     for hook_name, hook_config in hooks_dict.items():
         hook_class = HOOK_REGISTRY.get(hook_name)
         if hook_class:
-            hook_instance = hook_class(hook_config)
-            hooks.append(hook_instance)
+            try:
+                hook_instance = hook_class(hook_config)
+                hooks.append(hook_instance)
+            except Exception as e:
+                logger.exception(f"Failed to instantiate hook '{hook_name}': {e}")
 
     logger.debug(f"Loaded {len(hooks)} hooks from configuration.")
     return hooks

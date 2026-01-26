@@ -107,6 +107,7 @@ class Jinja2ResolvableMixin:
                 [("jinja2_syntax", f"Task '{task_model.name}': Jinja2 syntax error: {e}")],
             ) from e
         except Exception as e:
+            logger.exception(f"Unexpected error validating Jinja2 for hook '{self.hook_name}' in task '{task_model.name}': {e}")
             raise HookValidationError(
                 self.hook_name,
                 [("jinja2_validation", f"Task '{task_model.name}': Unexpected Jinja2 error: {e}")],

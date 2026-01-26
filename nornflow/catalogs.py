@@ -302,7 +302,7 @@ class CallableCatalog(Catalog):
             logger.debug(f"Processed file '{file_path}': {count} items registered")
             return count
         except Exception as e:
-            logger.error(f"Failed to process file '{file_path}': {e}")
+            logger.exception(f"Failed to process file '{file_path}': {e}")
             raise CoreError(
                 f"Failed to import module '{module_name}' from '{module_path}': {e!s}",
                 component="ItemDiscovery",

@@ -137,6 +137,7 @@ class NornFlowVariableProcessor(Processor):
             return resolved_params
 
         except Exception:
+            logger.exception(f"Error resolving deferred params for task '{task.name}' on host '{host.name}'")
             self._deferred_params.pop(key, None)
             raise
 

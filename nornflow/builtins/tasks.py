@@ -3,6 +3,7 @@ from pathlib import Path
 from nornir.core.task import Result, Task
 
 from nornflow.builtins.utils import build_set_task_report, get_task_vars_manager
+from nornflow.logger import logger
 
 
 def set(task: Task, print_output: bool = True, **kwargs) -> Result:
@@ -124,4 +125,5 @@ def write_file(task: Task, filename: str, content: str, append: bool = False, mk
         return Result(host=task.host, result={"path": str(file_path)}, changed=True)
 
     except Exception as e:
+        logger.exception(f"Failed to write file '{filename}': {e}")
         return Result(host=task.host, failed=True, exception=e)

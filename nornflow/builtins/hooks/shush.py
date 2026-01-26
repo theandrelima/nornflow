@@ -2,6 +2,7 @@
 from nornir.core.task import AggregatedResult, Task
 
 from nornflow.hooks import Hook, Jinja2ResolvableMixin
+from nornflow.logger import logger
 
 
 class ShushHook(Hook, Jinja2ResolvableMixin):
@@ -34,7 +35,7 @@ class ShushHook(Hook, Jinja2ResolvableMixin):
         )
 
         if not has_compatible_processor:
-            print(
+            logger.warning(
                 "Warning: 'shush' hook has no effect - "
                 "no compatible processor found in chain. "
                 "Outputs are not going to be suppressed."

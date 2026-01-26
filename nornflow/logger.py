@@ -20,6 +20,7 @@ Usage:
     logger.debug("This will go to the log file")
 """
 
+import copy
 import logging
 import re
 import sys
@@ -211,9 +212,12 @@ class NornFlowLogger:
 
             # Close the handler, rename the file, update the handler's baseFilename, and reopen
             self._file_handler.close()
-            old_filepath.rename(new_filepath)
+            try:
+                old_filepath.rename(new_filepath)
+            except OSError as e:
+                logger.warning(f"Failed to rename log file from {old_filepath} to {new_filepath}: {e}")
             self._file_handler.baseFilename = str(new_filepath)
-            self._file_handler.stream = Path.open(new_filepath, "a", encoding="utf-8")
+            self._file_handler.stream = new_filepath.open("a", encoding="utf-8")
 
             self._execution_context["log_dir"] = str(new_log_path)
             self._execution_context["log_file"] = str(new_filepath)
@@ -279,20 +283,21 @@ class ConditionalFuncNameFormatter(MicrosecondFormatter):
     LOGGER_METHODS: ClassVar = {"debug", "info", "warning", "error", "critical", "exception"}
 
     def format(self, record) -> str:
-        record.msg = sanitize_log_message(str(record.msg))
-        if record.args:
-            record.args = tuple(
-                sanitize_log_message(arg) if isinstance(arg, str) else arg for arg in record.args
+        # Create a copy to avoid mutating the original record, as it could affect other handlers.
+        record_copy = copy.copy(record)
+        record_copy.msg = sanitize_log_message(str(record_copy.msg))
+        if record_copy.args:
+            record_copy.args = tuple(
+                sanitize_log_message(arg) if isinstance(arg, str) else arg for arg in record_copy.args
             )
 
-        if record.funcName in self.LOGGER_METHODS:
+        if record_copy.funcName in self.LOGGER_METHODS:
             self._style._fmt = "%(asctime)s [%(levelname)s] [%(name)s] - %(message)s"  # noqa: SLF001
         else:
             self._style._fmt = (  # noqa: SLF001
                 "%(asctime)s [%(levelname)s] [%(name)s] [%(funcName)s] - %(message)s"
             )
-        return super().format(record)
-
+        return super().format(record_copy)
 
 # Create the singleton instance
 logger = NornFlowLogger()
