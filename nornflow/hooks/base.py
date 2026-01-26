@@ -50,9 +50,10 @@ class Hook:
         """
         super().__init_subclass__(**kwargs)
 
-        if not hasattr(cls, 'hook_name') or not isinstance(cls.hook_name, str) or not cls.hook_name.strip():
+        if not hasattr(cls, "hook_name") or not isinstance(cls.hook_name, str) or not cls.hook_name.strip():
             raise HookRegistrationError(
-                f"Hook class {cls.__module__}.{cls.__name__} must define a non-empty string 'hook_name' attribute."
+                f"Hook class {cls.__module__}.{cls.__name__} must define a non-empty string "
+                f"'hook_name' attribute."
             )
 
         # Check for duplicate registration

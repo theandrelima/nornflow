@@ -452,7 +452,9 @@ class NornFlowVariablesManager:
             logger.error(f"Template error resolving string '{template_str}' for host '{host_name}': {e}")
             raise
         except Exception as e:
-            logger.exception(f"Unexpected error resolving template '{template_str}' for host '{host_name}': {e}")
+            logger.exception(
+                f"Unexpected error resolving template '{template_str}' for host '{host_name}': {e}"
+            )
             raise TemplateError(f"Template rendering error in '{template_str}': {e}") from e
 
     def resolve_data(self, data: Any, host_name: str, additional_vars: dict[str, Any] | None = None) -> Any:

@@ -1,4 +1,4 @@
-# ruff: noqa: SLF001, T201
+# ruff: noqa: SLF001
 from nornir.core.task import AggregatedResult, Task
 
 from nornflow.hooks import Hook, Jinja2ResolvableMixin

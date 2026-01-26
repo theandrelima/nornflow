@@ -1,3 +1,4 @@
+# ruff: noqa: PLR2004
 from functools import lru_cache
 from threading import Lock
 from typing import Any
@@ -157,12 +158,13 @@ class Jinja2Service:
         """
         try:
             compiled = self._environment.from_string(template_str)
-            logger.debug(
-                f"Compiled template: {template_str[:50]}{'...' if len(template_str) > 50 else ''}"  # noqa: PLR2004
-            )
+            logger.debug(f"Compiled template: {template_str[:50]}{'...' if len(template_str) > 50 else ''}")
             return compiled
         except Exception as e:
-            logger.exception(f"Unexpected error compiling template '{template_str[:50]}{'...' if len(template_str) > 50 else ''}': {e}")
+            logger.exception(
+                f"Unexpected error compiling template "
+                f"'{template_str[:50]}{'...' if len(template_str) > 50 else ''}': {e}"
+            )
             raise TemplateValidationError(f"Template compilation failed: {e}", template=template_str) from e
 
     def resolve_string(self, template_str: str, context: dict[str, Any], error_context: str = "") -> str:
@@ -191,8 +193,8 @@ class Jinja2Service:
             template = self.compile_template(template_str)
             result = template.render(context)
             logger.debug(
-                f"Resolved template string: {template_str[:50]}{'...' if len(template_str) > 50 else ''} -> "  # noqa: PLR2004
-                f"{result[:50]}{'...' if len(result) > 50 else ''}"  # noqa: PLR2004
+                f"Resolved template string: {template_str[:50]}{'...' if len(template_str) > 50 else ''} -> "
+                f"{result[:50]}{'...' if len(result) > 50 else ''}"
             )
             return result
         except UndefinedError as e:
@@ -203,7 +205,10 @@ class Jinja2Service:
             raise TemplateError(f"Template syntax error{context_info}: {e}") from e
         except Exception as e:
             context_info = f" ({error_context})" if error_context else ""
-            logger.exception(f"Unexpected error resolving template '{template_str[:50]}{'...' if len(template_str) > 50 else ''}'{context_info}: {e}")
+            logger.exception(
+                f"Unexpected error resolving template "
+                f"'{template_str[:50]}{'...' if len(template_str) > 50 else ''}'{context_info}: {e}"
+            )
             raise TemplateError(f"Template rendering error{context_info}: {e}") from e
 
     def resolve_to_bool(self, value: Any, context: dict[str, Any]) -> bool:

@@ -299,5 +299,6 @@ class ConditionalFuncNameFormatter(MicrosecondFormatter):
             )
         return super().format(record_copy)
 
+
 # Create the singleton instance
 logger = NornFlowLogger()
