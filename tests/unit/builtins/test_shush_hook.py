@@ -60,7 +60,7 @@ class TestShushHook:
 
         assert not hasattr(mock_task.nornir, '_nornflow_suppressed_tasks')
 
-    def test_task_started_warns_when_no_compatible_processor(self, capsys, mock_task):
+    def test_task_started_warns_when_no_compatible_processor(self, caplog, mock_task):
         """Test task_started warns when no processor supports shush hook."""
         hook = ShushHook(True)
         
@@ -68,12 +68,10 @@ class TestShushHook:
 
         hook.task_started(mock_task)
 
-        captured = capsys.readouterr()
-        assert "Warning" in captured.out
-        assert "no compatible processor found" in captured.out
+        assert "Warning: 'shush' hook has no effect - no compatible processor found in chain. Outputs are not going to be suppressed." in caplog.text
         assert not hasattr(mock_task.nornir, '_nornflow_suppressed_tasks')
 
-    def test_task_started_warns_when_processor_lacks_support(self, capsys, mock_task, mock_processor_incompatible):
+    def test_task_started_warns_when_processor_lacks_support(self, caplog, mock_task, mock_processor_incompatible):
         """Test task_started warns when processor doesn't have supports_shush_hook attribute."""
         hook = ShushHook(True)
         
@@ -81,9 +79,7 @@ class TestShushHook:
 
         hook.task_started(mock_task)
 
-        captured = capsys.readouterr()
-        assert "Warning: 'shush' hook has no effect - " in captured.out
-        assert "no compatible processor found in chain. Outputs are not going to be suppressed." in captured.out
+        assert "Warning: 'shush' hook has no effect - no compatible processor found in chain. Outputs are not going to be suppressed." in caplog.text
         assert not hasattr(mock_task.nornir, '_nornflow_suppressed_tasks')
 
     def test_task_started_sets_suppression_marker_with_compatible_processor(self, mock_task, mock_processor_compatible):
