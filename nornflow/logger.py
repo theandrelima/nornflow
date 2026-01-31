@@ -20,13 +20,12 @@ Usage:
     logger.debug("This will go to the log file")
 """
 
-import copy
 import logging
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from nornflow.constants import NORNFLOW_DEFAULT_LOGGER, PROTECTED_KEYWORDS
 
@@ -58,13 +57,22 @@ def sanitize_log_message(message: str) -> str:
 
 
 class MicrosecondFormatter(logging.Formatter):
-    """Custom formatter to include microseconds in timestamps using datetime."""
+    """Custom formatter with microsecond timestamps and sensitive data sanitization."""
 
     def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:  # noqa: N802
         """Format the time with microseconds support."""
         ct = datetime.fromtimestamp(record.created)  # noqa: DTZ006
         s = ct.strftime(datefmt) if datefmt else ct.isoformat()
         return s
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format the log record with sanitized message."""
+        record.msg = sanitize_log_message(str(record.msg))
+        if record.args:
+            record.args = tuple(
+                sanitize_log_message(arg) if isinstance(arg, str) else arg for arg in record.args
+            )
+        return super().format(record)
 
 
 class NornFlowLogger:
@@ -149,8 +157,10 @@ class NornFlowLogger:
         self._file_handler = logging.FileHandler(filepath, encoding="utf-8")
         self._file_handler.setLevel(level)
 
-        # Create file formatter with conditional funcName
-        self._file_handler.setFormatter(ConditionalFuncNameFormatter())
+        # Create file formatter with microsecond timestamps
+        self._file_handler.setFormatter(
+            MicrosecondFormatter("%(asctime)s [%(levelname)s] [%(name)s] - %(message)s")
+        )
 
         # Add file handler to logger
         self._logger.addHandler(self._file_handler)
@@ -273,31 +283,6 @@ class NornFlowLogger:
     def exception(self, message: str, *args: object, **kwargs) -> None:
         """Log an exception with traceback."""
         self._logger.exception(message, *args, **kwargs)
-
-
-class ConditionalFuncNameFormatter(MicrosecondFormatter):
-    """
-    Custom formatter that conditionally includes funcName only if it's not a logger wrapper method.
-    """
-
-    LOGGER_METHODS: ClassVar = {"debug", "info", "warning", "error", "critical", "exception"}
-
-    def format(self, record) -> str:
-        # Create a copy to avoid mutating the original record, as it could affect other handlers.
-        record_copy = copy.copy(record)
-        record_copy.msg = sanitize_log_message(str(record_copy.msg))
-        if record_copy.args:
-            record_copy.args = tuple(
-                sanitize_log_message(arg) if isinstance(arg, str) else arg for arg in record_copy.args
-            )
-
-        if record_copy.funcName in self.LOGGER_METHODS:
-            self._style._fmt = "%(asctime)s [%(levelname)s] [%(name)s] - %(message)s"  # noqa: SLF001
-        else:
-            self._style._fmt = (  # noqa: SLF001
-                "%(asctime)s [%(levelname)s] [%(name)s] [%(funcName)s] - %(message)s"
-            )
-        return super().format(record_copy)
 
 
 # Create the singleton instance
