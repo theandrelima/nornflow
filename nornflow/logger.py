@@ -56,6 +56,33 @@ def sanitize_log_message(message: str) -> str:
     return _get_sanitize_pattern().sub(rf"\1\2\3{REDACTED}\5", message)
 
 
+def sanitize_filename(name: str) -> str:
+    """Sanitize a string for safe use as a filename.
+
+    Prevents path traversal attacks and invalid filename characters.
+
+    Args:
+        name: The raw name to sanitize.
+
+    Returns:
+        A safe filename string containing only alphanumeric chars, dots,
+        hyphens, and underscores.
+    """
+    if not name:
+        return "unnamed"
+
+    sanitized = name.replace("/", "_").replace("\\", "_")
+    sanitized = sanitized.replace("..", "_")
+    sanitized = re.sub(r"[^A-Za-z0-9._-]", "_", sanitized)
+    sanitized = re.sub(r"_+", "_", sanitized)
+    sanitized = sanitized.strip("_. ")
+
+    if not sanitized:
+        return "unnamed"
+
+    return sanitized
+
+
 class MicrosecondFormatter(logging.Formatter):
     """Custom formatter with microsecond timestamps and sensitive data sanitization."""
 
@@ -148,9 +175,10 @@ class NornFlowLogger:
         log_path = Path(log_dir)
         log_path.mkdir(parents=True, exist_ok=True)
 
-        # Generate timestamped filename
+        # Generate timestamped filename with sanitized execution name
+        safe_name = sanitize_filename(execution_name)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{execution_name}_{timestamp}.log"
+        filename = f"{safe_name}_{timestamp}.log"
         filepath = log_path / filename
 
         # Create file handler
@@ -216,8 +244,9 @@ class NornFlowLogger:
         if log_dir or updated:
             new_log_path = Path(log_dir or self._execution_context["log_dir"])
             new_log_path.mkdir(parents=True, exist_ok=True)
+            safe_name = sanitize_filename(self._execution_context["execution_name"])
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            new_filename = f"{self._execution_context['execution_name']}_{timestamp}.log"
+            new_filename = f"{safe_name}_{timestamp}.log"
             new_filepath = new_log_path / new_filename
 
             # Close the handler, try to rename, then reopen
