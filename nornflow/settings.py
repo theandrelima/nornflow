@@ -140,18 +140,18 @@ class NornFlowSettings(BaseSettings):
     @field_validator("logger", mode="before")
     @classmethod
     def validate_logger(cls, v: Any) -> dict[str, Any]:
-        """Validate logger configuration dictionary."""
+        """Validate logger configuration, merging with defaults for missing keys."""
         if not isinstance(v, dict):
             raise SettingsError("logger must be a dictionary")
-        required_keys = {"directory", "level"}
-        if not required_keys.issubset(v.keys()):
-            missing = required_keys - v.keys()
-            raise SettingsError(f"logger configuration missing required keys: {missing}")
-        if not isinstance(v["directory"], str):
+
+        merged = {**NORNFLOW_DEFAULT_LOGGER, **v}
+
+        if not isinstance(merged["directory"], str):
             raise SettingsError("logger.directory must be a string")
-        if not isinstance(v["level"], str):
+        if not isinstance(merged["level"], str):
             raise SettingsError("logger.level must be a string")
-        return v
+
+        return merged
 
     def _resolve_path_field(self, field_name: str, key: str | None, base_dir: Path) -> None:
         """Resolve a relative path in a field or dict key to an absolute path.

@@ -446,7 +446,10 @@ class NornFlowVariablesManager:
             result = self.jinja2.resolve_string(
                 template_str, context, error_context=f"variable resolution for host {host_name}"
             )
-            logger.debug(f"Resolved template string for host '{host_name}': '{template_str}' -> '{result}'")
+            logger.debug(
+                f"Resolved template string for host '{host_name}': "
+                f"'{template_str}' -> length: '{len(result)}'"
+            )
             return result
         except TemplateError as e:
             logger.error(f"Template error resolving string '{template_str}' for host '{host_name}': {e}")
