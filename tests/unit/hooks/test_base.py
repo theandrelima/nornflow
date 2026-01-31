@@ -112,14 +112,11 @@ class TestHook:
         assert HOOK_REGISTRY["test_auto_hook"] == TestAutoHook
         assert len(HOOK_REGISTRY) == initial_registry_size + 1
 
-    def test_no_registration_without_hook_name(self):
-        """Test that hooks without hook_name are not registered."""
-        initial_registry_size = len(HOOK_REGISTRY)
-        
-        class TestNoNameHook(Hook):
-            pass
-        
-        assert len(HOOK_REGISTRY) == initial_registry_size
+    def test_no_hook_name_raises_error(self):
+        """Test that missing hook_name raises HookRegistrationError."""
+        with pytest.raises(HookRegistrationError):
+            class NoNameHook(Hook):
+                pass
 
     def test_duplicate_registration_same_class(self):
         """Test that re-importing same class doesn't raise error."""

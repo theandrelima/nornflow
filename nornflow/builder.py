@@ -5,6 +5,7 @@ from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.constants import FailureStrategy
 from nornflow.exceptions import InitializationError, ResourceError, SettingsError
+from nornflow.logger import logger
 from nornflow.models import WorkflowModel
 from nornflow.nornflow import NornFlow
 from nornflow.settings import NornFlowSettings
@@ -287,6 +288,7 @@ class NornFlowBuilder:
             workflow = self._create_workflow_from_source(workflow_dict, Path(workflow_path), nornflow)
             nornflow.workflow = workflow
         except Exception as e:
+            logger.exception(f"Failed to load workflow from '{workflow_path}': {e}")
             raise InitializationError(f"Failed to load workflow from '{workflow_path}': {e}") from e
 
     def _handle_workflow_name(self, workflow_name: str, nornflow: NornFlow) -> None:
@@ -310,6 +312,7 @@ class NornFlowBuilder:
             workflow = self._create_workflow_from_source(self._workflow, None, nornflow)
             nornflow.workflow = workflow
         except Exception as e:
+            logger.exception(f"Failed to create workflow from dict: {e}")
             raise InitializationError(f"Failed to create workflow from dict: {e}") from e
 
     def build(self) -> NornFlow:

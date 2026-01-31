@@ -31,16 +31,14 @@ This is particularly useful for hooks that require evaluating Jinja2 template in
 BEFORE anything else is evaluated by the Jinja2 Environment in the same task execution.
 """
 
-import logging
 from typing import Any
 
 from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import MultiResult, Task
 
+from nornflow.logger import logger
 from nornflow.vars.manager import NornFlowVariablesManager
-
-logger = logging.getLogger(__name__)
 
 
 class NornFlowVariableProcessor(Processor):
@@ -139,7 +137,7 @@ class NornFlowVariableProcessor(Processor):
             return resolved_params
 
         except Exception:
-            logger.exception(f"Error resolving templates for task '{task.name}' on host '{host.name}'")
+            logger.exception(f"Error resolving deferred params for task '{task.name}' on host '{host.name}'")
             self._deferred_params.pop(key, None)
             raise
 

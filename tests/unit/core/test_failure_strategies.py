@@ -427,6 +427,7 @@ class TestNornFlowFailureStrategy:
         }
         
         workflow_model = MagicMock(spec=WorkflowModel)
+        workflow_model.name = "test_workflow"
         workflow_model.failure_strategy = FailureStrategy.SKIP_FAILED
         
         settings = NornFlowSettings(nornir_config_file="mock_config.yaml")
@@ -453,6 +454,7 @@ class TestNornFlowFailureStrategy:
         }
         
         workflow_model = MagicMock(spec=WorkflowModel)
+        workflow_model.name = "test_workflow"
         workflow_model.failure_strategy = FailureStrategy.RUN_ALL
         
         settings = NornFlowSettings(nornir_config_file="mock_config.yaml")

@@ -20,6 +20,7 @@ class TestNornirManagerFilters:
         mock = Mock()
         # Setup .filter() to return the mock itself for chaining
         mock.filter.return_value = mock
+        mock.inventory.hosts = {}
         return mock
 
     @pytest.fixture
@@ -52,7 +53,7 @@ class TestNornirManagerFilters:
         test_tuple = ("host1", "host2")
         manager.apply_filters(hosts=test_tuple)
 
-        # Verify filter was called with tuple intact
+        # Verify filter was called with hosts as tuple
         mock_nornir.filter.assert_called_with(hosts=test_tuple)
 
     def test_multiple_filters(self, manager, mock_nornir):
