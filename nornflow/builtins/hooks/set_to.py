@@ -1,6 +1,5 @@
 # ruff: noqa: PERF203
 
-import logging
 from typing import Any, TYPE_CHECKING
 
 from nornir.core.inventory import Host
@@ -8,11 +7,10 @@ from nornir.core.task import MultiResult, Result, Task
 
 from nornflow.hooks import Hook
 from nornflow.hooks.exceptions import HookValidationError
+from nornflow.logger import logger
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
-
-logger = logging.getLogger(__name__)
 
 
 class SetToHook(Hook):
@@ -196,12 +194,12 @@ class SetToHook(Hook):
                             f"for host '{host.name}'"
                         )
                     except Exception as e:
-                        logger.error(
+                        logger.exception(
                             f"Failed to extract '{extraction_path}' for variable '{var_name}' "
                             f"on host '{host.name}': {e}"
                         )
         except Exception as e:
-            logger.error(f"Error in set_to hook for host '{host.name}': {e}")
+            logger.exception(f"Error in set_to hook for host '{host.name}': {e}")
             raise
 
     def _extract_data_from_result(self, result: Result, extraction_path: str) -> Any:

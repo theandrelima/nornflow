@@ -108,7 +108,7 @@ class TestBlueprintResolver:
     def test_resolve_template_syntax_error(self, blueprint_resolver):
         """Test that template with syntax error raises error."""
         context = {}
-        with pytest.raises(BlueprintError, match="Template syntax error"):
+        with pytest.raises(BlueprintError, match="Template rendering error"):
             blueprint_resolver.resolve_template("{{ unclosed", context)
 
     def test_evaluate_condition_true(self, blueprint_resolver):

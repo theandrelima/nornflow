@@ -14,6 +14,7 @@
   - [Workflow Catalog](#workflow-catalog)
   - [Filter Catalog](#filter-catalog)
   - [Blueprint Catalog](#blueprint-catalog)
+  - [Jinja2 Filters Catalog](#jinja2-filters-catalog)
   - [Catalog Discovery](#catalog-discovery)
 - [Domains](#domains)
   - [What is a Domain?](#what-is-a-domain)
@@ -37,6 +38,9 @@
   - [Processor Precedence](#processor-precedence)
 - [Execution Model](#execution-model)
 - [Failure Strategies (Summary)](#failure-strategies-summary)
+- [Logging](#logging)
+  - [Log Files](#log-files)
+  - [Log Levels](#log-levels)
 - [Best Practices](#best-practices)
 
 ## Introduction
@@ -202,6 +206,8 @@ my_project/
 │   └── site_filters.py
 ├── hooks/                  # Custom hooks
 │   └── custom_hook.py
+├── j2_filters/             # Custom Jinja2 filters
+│   └── my_filters.py
 └── vars/                   # Variable files
     ├── defaults.yaml       # Global variables
     ├── backup/             # Domain variables
@@ -291,6 +297,10 @@ local_tasks:
 Tasks must follow Nornir's task signature to be discovered and used in NornFlow.  
 Your task function **must be properly type-annotated**, and the return type should be one of the following Nornir result types: `Result`, `AggregateResult`, or `MultiResult`.
 
+**Discovery rules:**
+- Only callable functions (not starting with '_') are registered as tasks
+- Functions must have proper type annotations for automatic discovery
+
 **Example:**
 ```python
 from nornir.core.task import Task, Result
@@ -329,8 +339,14 @@ local_filters:
 
 Filter functions must accept a `Host` object as the first parameter and return a boolean. Type annotations are required for discovery - the first parameter must be typed as `Host` and the return type must be `bool`:
 
+**Discovery rules:**
+- Only callable functions (not starting with '_') are registered as filters
+- Functions must have proper type annotations for automatic discovery
+
+**Example custom filter:**
+
 ```python
-from nornir.core.inventory import Host  # Import required
+from nornir.core.inventory import Host
 
 def site_filter(host: Host, region: str) -> bool:
     """Filter hosts by region."""
@@ -350,13 +366,53 @@ local_blueprints:
 
 All files with `.yaml` or `.yml` extensions in these directories (including subdirectories) are considered blueprints.
 
+### Jinja2 Filters Catalog
+
+The Jinja2 filters catalog contains all available Jinja2 filters that can be used in templates throughout NornFlow. Filters are discovered from:
+
+1. **Built-in filters** - NornFlow's custom filters and Python wrapper filters (always available)
+2. **Local directories** - Specified in `local_j2_filters` setting
+
+```yaml
+# nornflow.yaml
+local_j2_filters:
+  - "j2_filters"
+  - "/shared/custom_filters"
+```
+
+Custom Jinja2 filters are Python functions that transform values in templates. All callable functions in `.py` files within configured directories are registered as filters:
+
+**Discovery rules:**
+- Only callable functions (not starting with '_') are registered as filters
+
+**Example:**
+```python
+# j2_filters/my_filters.py
+
+def add_prefix(value: str, prefix: str = "NF_") -> str:
+    """Add a prefix to a string value."""
+    return f"{prefix}{value}"
+```
+
+Use in templates:
+```yaml
+tasks:
+  - name: echo
+    args:
+      msg: "{{ hostname | add_prefix('DEVICE_') }}"
+```
+
+View with: `nornflow show --j2-filters`
+
+> **Note:** The Jinja2 Filters catalog displays only NornFlow's built-in filters and custom filters from your `j2_filters` directories. It does not list Jinja2's native filters (like `upper`, `lower`, `join`, etc.).
+
 ### Catalog Discovery
 
 NornFlow performs recursive searches in all configured directories:
 
 - **Automatic discovery** happens during NornFlow initialization
 - **Name conflicts** - NornFlow prevents custom or imported tasks/filters to override built-in ones. However later custom or imported discoveries will override earlier ones. 
-- **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters`, `--workflows`, and `--blueprints` options.
+- **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters`, `--workflows`, `--blueprints`, and `--j2-filters` options.
 
 **Discovery order:**
 1. Built-in items are loaded first
@@ -407,7 +463,7 @@ Domain resolution:
 Blueprints are reusable collections of tasks that can be referenced within workflows. They enable code reuse, modularity, and maintainability by defining common task sequences once and using them across multiple workflows.
 
 **Key characteristics:**
-- Contain **only** a tasks list (no workflow metadata)
+- Contain **only** a MANDATORY `tasks` key and an OPTIONAL `description` key (no other workflow metadata)
 - Referenced by name or path in workflows
 - Support nesting (blueprints can reference other blueprints)
 - Expanded during workflow loading (assembly-time)
@@ -423,7 +479,9 @@ tasks:
   - name: netmiko_send_command
     args:
       command_string: "show interfaces status"
+```
 
+```yaml
 # workflows/deploy.yaml
 workflow:
   name: "Deploy Configuration"
@@ -791,6 +849,38 @@ NornFlow supports three failure handling strategies:
    - Useful for diagnostic or audit workflows
 
 See the full Failure Strategies guide for details.
+
+## Logging
+
+NornFlow provides centralized logging that captures detailed execution information for debugging and auditing purposes.  
+As users run workflows or tasks, nornflow automatically creates a .log file under the folder structure determined by the `logger.directory` setting.
+
+### Log Files
+
+- **Location**: Configured via `logger.directory` setting (default: `.nornflow/logs`)
+- **Naming**: Files are timestamped with the workflow/task name (e.g., `my_workflow_20260115_143022.log`)
+- **Format**: Each log entry includes timestamp, log level, logger name, and message
+
+### Log Levels
+
+Configure verbosity via `logger.level` (defaut: `INFO`) in `nornflow.yaml`:
+
+| Level | Description |
+|-------|-------------|
+| `DEBUG` | Detailed diagnostic information including variable resolution, template compilation |
+| `INFO` | General execution flow, task start/completion, workflow progress |
+| `WARNING` | Potential issues that don't stop execution |
+| `ERROR` | Errors that may affect results (also printed to console) |
+| `CRITICAL` | Severe errors that may halt execution |
+
+### Configuration
+
+```yaml
+# nornflow.yaml
+logger:
+  directory: ".nornflow/logs"
+  level: "INFO"
+```
 
 ## Best Practices
 

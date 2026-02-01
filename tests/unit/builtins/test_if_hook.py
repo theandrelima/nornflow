@@ -49,8 +49,10 @@ class TestIfHook:
         """Test validation passes for valid Jinja2 expression."""
         hook = IfHook("{{ host.platform == 'ios' }}")
         mock_task_model = MagicMock()
-
-        hook.execute_hook_validations(mock_task_model)
+        
+        # Mock the Jinja2Service's compile_template method to avoid actual compilation
+        with patch('nornflow.j2.Jinja2Service.compile_template'):
+            hook.execute_hook_validations(mock_task_model)
 
     def test_execute_hook_validations_invalid_multiple_filters(self):
         """Test validation fails for dict with multiple filter keys."""

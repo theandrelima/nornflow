@@ -6,12 +6,12 @@ from pydantic import field_validator
 from pydantic_serdes.custom_collections import HashableDict, OneToMany
 from pydantic_serdes.utils import convert_to_hashable
 
-from nornflow.blueprints import BlueprintExpander, BlueprintResolver
+from nornflow.blueprints import BlueprintExpander
 from nornflow.constants import FailureStrategy
 from nornflow.exceptions import WorkflowError
+from nornflow.logger import logger
 from nornflow.models import NornFlowBaseModel, TaskModel
 from nornflow.utils import normalize_failure_strategy
-from nornflow.vars.jinja2_utils import Jinja2EnvironmentManager
 
 
 class WorkflowModel(NornFlowBaseModel):
@@ -53,16 +53,13 @@ class WorkflowModel(NornFlowBaseModel):
             BlueprintError: If blueprint expansion fails.
         """
         if "workflow" not in dict_args:
+            logger.error("Workflow creation failed: missing 'workflow' key in dict_args")
             raise WorkflowError("Workflow file must have 'workflow' as a root-level key.")
 
         workflow_dict = dict_args["workflow"]
 
         if "tasks" not in workflow_dict:
             workflow_dict["tasks"] = []
-
-        jinja2_manager = Jinja2EnvironmentManager()
-        resolver = BlueprintResolver(jinja2_manager)
-        expander = BlueprintExpander(resolver)
 
         # Pop blueprint-specific kwargs to consume them and remove them from the dict.
         blueprints_catalog = kwargs.pop("blueprints_catalog", None)
@@ -71,7 +68,7 @@ class WorkflowModel(NornFlowBaseModel):
         workflow_roots = kwargs.pop("workflow_roots", None)
         cli_vars = kwargs.pop("cli_vars", None)
 
-        expanded_tasks = expander.expand_blueprints(
+        expanded_tasks = BlueprintExpander().expand_blueprints(
             tasks=workflow_dict["tasks"],
             blueprints_catalog=blueprints_catalog,
             vars_dir=vars_dir,

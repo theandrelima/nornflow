@@ -1,4 +1,3 @@
-import logging
 from abc import ABC
 from collections.abc import Callable
 from typing import Any
@@ -14,8 +13,6 @@ from nornflow.hooks.loader import load_hooks
 from nornflow.nornir_manager import NornirManager
 from nornflow.vars.manager import NornFlowVariablesManager
 from .base import NornFlowBaseModel
-
-logger = logging.getLogger(__name__)
 
 
 class HookableModel(NornFlowBaseModel, ABC):

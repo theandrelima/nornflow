@@ -64,18 +64,17 @@ class TestVariableManager:
         assert setup_manager.get_nornflow_variable("global_var", "test_device") == "global_value"
 
     def test_jinja2_manager_initialized(self, basic_manager):
-        """Test that Jinja2EnvironmentManager is properly initialized."""
-        assert basic_manager._jinja2_manager is not None
-        assert basic_manager._jinja2_manager.env is not None
+        """Test that Jinja2Service is properly initialized."""
+        assert basic_manager.jinja2 is not None
 
     def test_jinja2_environment_accessible(self, basic_manager):
         """Test that Jinja2 environment is accessible through the manager."""
-        env = basic_manager._jinja2_manager.env
+        env = basic_manager.jinja2.environment
         assert env is not None
         assert hasattr(env, 'filters')
 
     def test_custom_filters_registered(self, basic_manager):
         """Test that NornFlow custom filters are registered in Jinja2 environment."""
-        env = basic_manager._jinja2_manager.env
+        env = basic_manager.jinja2.environment
         assert "is_set" in env.filters
         assert "flatten_list" in env.filters

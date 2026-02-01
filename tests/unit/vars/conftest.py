@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from nornflow.builtins.jinja2_filters import ALL_FILTERS
+from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
 
@@ -116,8 +116,8 @@ def basic_manager(tmp_path) -> NornFlowVariablesManager:
     temp_vars_dir = tmp_path / "temp_vars"
     temp_vars_dir.mkdir()
     manager = NornFlowVariablesManager(vars_dir=str(temp_vars_dir))
-    for name, func in ALL_FILTERS.items():
-        manager._jinja2_manager.env.filters[name] = func
+    for name, func in ALL_BUILTIN_J2_FILTERS.items():
+        manager.jinja2.environment.filters[name] = func
     return manager
 
 
@@ -149,8 +149,8 @@ def setup_manager(
     manager.set_runtime_variable("override_var", "runtime_value", "test_device")
     manager.set_runtime_variable("complex_var", {"key": "value", "list": [1, 2, 3]}, "test_device")
 
-    for name, func in ALL_FILTERS.items():
-        manager._jinja2_manager.env.filters[name] = func
+    for name, func in ALL_BUILTIN_J2_FILTERS.items():
+        manager.jinja2.environment.filters[name] = func
 
     with patch.dict(
         "os.environ",

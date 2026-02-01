@@ -7,6 +7,7 @@ from pydantic_serdes.custom_collections import HashableDict
 from pydantic_serdes.utils import convert_to_hashable
 
 from nornflow.exceptions import TaskError
+from nornflow.logger import logger
 from nornflow.models import HookableModel
 from nornflow.models.validators import run_post_creation_task_validation
 from nornflow.nornir_manager import NornirManager
@@ -85,13 +86,17 @@ class TaskModel(HookableModel):
         tasks_catalog: dict[str, Callable],
     ) -> AggregatedResult:
         """Execute the task using the provided managers and tasks catalog."""
+        logger.info(f"Starting execution of task '{self.canonical_id}'")
         task_func = tasks_catalog.get(self.name)
         if not task_func:
+            logger.error(f"Task function for '{self.name}' not found in tasks catalog")
             raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")
 
         task_args = self.get_task_args()
+        logger.debug(f"Task '{self.canonical_id}' prepared with args: {list(task_args.keys())}")
 
         self.validate_hooks_and_set_task_context(nornir_manager, vars_manager, task_func)
 
         result = nornir_manager.nornir.run(task=task_func, **task_args)
+        logger.info(f"Task '{self.canonical_id}' execution completed")
         return result

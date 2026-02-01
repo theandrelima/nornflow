@@ -361,7 +361,7 @@ If you configure custom processors via the `processors` setting (either globally
 In summary: 
 - **Signal mechanism**: The hook doesn't implement suppression directly - it signals to compatible processors
 - **Data preservation**: Result objects remain intact regardless of suppression
-- **Warning on incompatibility**: Shows warning if no compatible processor is found
+- **Warning on incompatibility**: Logs warningmessage if no compatible processor is found
 
 **Configuring Custom Processors:**
 

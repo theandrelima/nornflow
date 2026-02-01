@@ -18,6 +18,7 @@ from nornflow.cli.constants import (
 from nornflow.cli.exceptions import CLIInitError
 from nornflow.cli.show import show_catalog, show_nornflow_settings
 from nornflow.exceptions import NornFlowError
+from nornflow.logger import logger
 from nornflow.settings import NornFlowSettings
 
 app = typer.Typer()
@@ -65,6 +66,7 @@ def init(ctx: typer.Context) -> None:
             original_exception=e,
         ) from e
     except Exception as e:
+        logger.exception(f"An unexpected error occurred during initialization: {e}")
         raise CLIInitError(
             "An unexpected error occurred during initialization",
             hint=f"Error details: {e!s}",
@@ -161,6 +163,9 @@ def create_directories_from_settings(settings: NornFlowSettings) -> None:
 
     for blueprints_dir in settings.local_blueprints:
         create_directory(Path(blueprints_dir))
+
+    for j2_filters_dir in settings.local_j2_filters:
+        create_directory(Path(j2_filters_dir))
 
     create_directory(Path(settings.vars_dir))
 

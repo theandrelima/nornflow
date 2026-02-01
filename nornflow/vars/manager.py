@@ -1,22 +1,20 @@
-import logging
 import os
 from pathlib import Path
 from typing import Any
 
-import jinja2.exceptions
 import yaml
+from pydantic_serdes.utils import load_file_to_dict
 
+from nornflow.j2 import Jinja2Service
+from nornflow.j2.exceptions import TemplateError
+from nornflow.logger import logger
 from nornflow.vars.constants import (
     DEFAULTS_FILENAME,
     ENV_VAR_PREFIX,
-    JINJA2_MARKERS,
 )
 from nornflow.vars.context import NornFlowDeviceContext
-from nornflow.vars.exceptions import TemplateError, VariableError
-from nornflow.vars.jinja2_utils import Jinja2EnvironmentManager
+from nornflow.vars.exceptions import VariableError
 from nornflow.vars.proxy import NornirHostProxy
-
-logger = logging.getLogger(__name__)
 
 # Constants for magic values
 MAX_LOG_VALUE_LENGTH = 80
@@ -182,8 +180,34 @@ class NornFlowVariablesManager:
             env_vars=self._env_vars,
         )
 
-        self._jinja2_manager = Jinja2EnvironmentManager()
+        self.jinja2 = Jinja2Service()
         self._device_contexts: dict[str, NornFlowDeviceContext] = {}
+        logger.debug(f"Initialized NornFlowVariablesManager with vars_dir: {self.vars_dir}")
+
+    @property
+    def cli_vars(self) -> dict[str, Any]:
+        """Get CLI variables (highest precedence assembly-time vars)."""
+        return self._cli_vars.copy()
+
+    @property
+    def inline_workflow_vars(self) -> dict[str, Any]:
+        """Get inline workflow variables."""
+        return self._inline_workflow_vars.copy()
+
+    @property
+    def domain_vars(self) -> dict[str, Any]:
+        """Get domain-specific default variables."""
+        return self._domain_vars.copy()
+
+    @property
+    def default_vars(self) -> dict[str, Any]:
+        """Get global default variables."""
+        return self._default_vars.copy()
+
+    @property
+    def env_vars(self) -> dict[str, Any]:
+        """Get environment variables (lowest precedence assembly-time vars)."""
+        return self._env_vars.copy()
 
     def _load_environment_variables(self) -> dict[str, Any]:
         """
@@ -295,25 +319,24 @@ class NornFlowVariablesManager:
             return {}
 
         try:
-            with file_path.open(encoding="utf-8") as f:
-                loaded_vars = yaml.safe_load(f)
-                if loaded_vars is None:
-                    logger.debug(
-                        f"{context_description} file '{file_path}' is empty or contains only null values."
-                    )
-                    return {}
-                if not isinstance(loaded_vars, dict):
-                    raise VariableError(
-                        f"Expected a dictionary from {context_description} file at '{file_path}', "
-                        f"but got {type(loaded_vars).__name__}."
-                    )
-                logger.debug(f"Successfully loaded {context_description} from '{file_path}'.")
-                return loaded_vars
+            loaded_vars = load_file_to_dict(file_path)
+            if not loaded_vars:
+                logger.debug(
+                    f"{context_description} file '{file_path}' is empty or contains only null values."
+                )
+                return {}
+            # this shouldn't happen as load_file_to_dict should always return dict
+            if not isinstance(loaded_vars, dict):
+                raise VariableError(
+                    f"Expected a dictionary from {context_description} file at '{file_path}', "
+                    f"but got {type(loaded_vars).__name__}."
+                )
+            logger.debug(f"Successfully loaded {context_description} from '{file_path}'.")
+            return loaded_vars
         except yaml.YAMLError as e:
-            logger.exception(f"YAML parsing error in {context_description} file '{file_path}'")
             raise VariableError(f"YAML parsing error in {context_description} file '{file_path}': {e}") from e
         except Exception as e:
-            logger.exception(f"Unexpected error loading {context_description} file '{file_path}'")
+            logger.exception(f"Unexpected error loading {context_description} file '{file_path}': {e}")
             raise VariableError(
                 f"Unexpected error loading {context_description} file '{file_path}': {e}"
             ) from e
@@ -345,13 +368,12 @@ class NornFlowVariablesManager:
             host_name: The name of the host for which this variable is being set.
         """
         if not host_name:
-            logger.error("Cannot set runtime variable: host_name is missing.")
-            return
+            raise VariableError("Cannot set runtime variable: host_name is missing.")
 
         ctx = self.get_device_context(host_name)
         ctx.runtime_vars[name] = value
         value_str = str(value)
-        logger.debug(
+        logger.info(
             f"Runtime variable '{name}' set for host '{host_name}'. Value: "
             f"{value_str[:MAX_LOG_VALUE_LENGTH]}"
             f"{'...' if len(value_str) > MAX_LOG_VALUE_LENGTH else ''}"
@@ -381,6 +403,7 @@ class NornFlowVariablesManager:
         flat_context = device_ctx.get_flat_context()
 
         if var_name in flat_context:
+            logger.debug(f"Retrieved NornFlow variable '{var_name}' for host '{host_name}'.")
             return flat_context[var_name]
 
         raise VariableError(
@@ -407,12 +430,6 @@ class NornFlowVariablesManager:
         Raises:
             TemplateError: If template resolution fails or host_name is missing.
         """
-        if not isinstance(template_str, str):
-            return template_str
-
-        if not any(marker in template_str for marker in JINJA2_MARKERS):
-            return template_str
-
         if not host_name:
             raise TemplateError(f"Host name not provided for template resolution: {template_str}")
 
@@ -424,21 +441,22 @@ class NornFlowVariablesManager:
             if additional_vars:
                 resolution_context_dict.update(additional_vars)
 
-            context_for_jinja = VariableLookupContext(self, host_name, resolution_context_dict)
+            context = VariableLookupContext(self, host_name, resolution_context_dict)
 
-            template = self._jinja2_manager.env.from_string(template_str)
-            return template.render(context_for_jinja)
-
-        except jinja2.exceptions.UndefinedError as e:
-            logger.exception(f"Jinja2 UndefinedError for host '{host_name}' in template '{template_str}'")
-            raise TemplateError(f"Undefined variable in template '{template_str}': {e}") from e
-        except VariableError as e:
-            logger.exception(f"NornFlow VariableError for host '{host_name}' in template '{template_str}'")
-            raise TemplateError(f"Variable error in template '{template_str}': {e}") from e
+            result = self.jinja2.resolve_string(
+                template_str, context, error_context=f"variable resolution for host {host_name}"
+            )
+            logger.debug(
+                f"Resolved template string for host '{host_name}': "
+                f"'{template_str}' -> length: '{len(result)}'"
+            )
+            return result
+        except TemplateError as e:
+            logger.error(f"Template error resolving string '{template_str}' for host '{host_name}': {e}")
+            raise
         except Exception as e:
             logger.exception(
-                f"Jinja2 TemplateError or unexpected issue for host '{host_name}' "
-                f"in template '{template_str}'"
+                f"Unexpected error resolving template '{template_str}' for host '{host_name}': {e}"
             )
             raise TemplateError(f"Template rendering error in '{template_str}': {e}") from e
 
@@ -454,16 +472,27 @@ class NornFlowVariablesManager:
         Returns:
             The data structure with all templates resolved.
         """
-        if isinstance(data, str):
-            # Check if the string contains Jinja2 markers
-            if any(marker in data for marker in JINJA2_MARKERS):
-                return self.resolve_string(data, host_name, additional_vars)
-            return data
-        if isinstance(data, dict):
-            return {k: self.resolve_data(v, host_name, additional_vars) for k, v in data.items()}
-        if isinstance(data, (list, tuple)):
-            # Convert both lists and tuples to lists after resolving items
-            # This ensures YAML-defined lists remain lists, even if converted to tuples for hashability
-            return [self.resolve_data(item, host_name, additional_vars) for item in data]
-        # Return other types as-is
-        return data
+        if not host_name:
+            raise TemplateError("Host name not provided for data resolution")
+
+        try:
+            device_ctx = self.get_device_context(host_name)
+            nornflow_default_vars = device_ctx.get_flat_context()
+
+            resolution_context_dict = nornflow_default_vars.copy()
+            if additional_vars:
+                resolution_context_dict.update(additional_vars)
+
+            context = VariableLookupContext(self, host_name, resolution_context_dict)
+
+            result = self.jinja2.resolve_data(
+                data, context, error_context=f"data resolution for host {host_name}"
+            )
+            logger.debug(f"Resolved data structure for host '{host_name}'.")
+            return result
+        except TemplateError as e:
+            logger.error(f"Template error resolving data for host '{host_name}': {e}")
+            raise
+        except Exception as e:
+            logger.exception(f"Unexpected error resolving data for host '{host_name}': {e}")
+            raise TemplateError(f"Data resolution error: {e}") from e

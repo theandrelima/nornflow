@@ -607,7 +607,7 @@ class TestConvertListsToTuples:
         assert result is None
 
     def test_convert_empty_dict(self):
-        """Test converting empty dictionary."""
+        """Test converting empty dictionary returns empty dict."""
         input_dict = HashableDict({})
 
         result = convert_lists_to_tuples(input_dict)
@@ -793,6 +793,23 @@ class TestFormatVariableValue:
 class TestPrintWorkflowOverview:
     """Tests for print_workflow_overview function."""
 
+    def _create_mock_vars_manager(
+        self,
+        env_vars: dict | None = None,
+        default_vars: dict | None = None,
+        domain_vars: dict | None = None,
+        inline_workflow_vars: dict | None = None,
+        cli_vars: dict | None = None,
+    ) -> Mock:
+        """Create a mock NornFlowVariablesManager with specified vars."""
+        mock_manager = Mock()
+        mock_manager.env_vars = env_vars or {}
+        mock_manager.default_vars = default_vars or {}
+        mock_manager.domain_vars = domain_vars or {}
+        mock_manager.inline_workflow_vars = inline_workflow_vars or {}
+        mock_manager.cli_vars = cli_vars or {}
+        return mock_manager
+
     @patch("nornflow.utils.Console")
     def test_print_basic_overview(self, mock_console):
         """Test printing basic workflow overview."""
@@ -805,9 +822,8 @@ class TestPrintWorkflowOverview:
             effective_dry_run=False,
             hosts_count=5,
             inventory_filters={},
-            workflow_vars={},
-            vars={},
-            failure_strategy=FailureStrategy.FAIL_FAST
+            failure_strategy=FailureStrategy.FAIL_FAST,
+            vars_manager=None,
         )
 
         mock_console.return_value.print.assert_called_once()
@@ -819,14 +835,18 @@ class TestPrintWorkflowOverview:
         workflow_model.name = "Test"
         workflow_model.description = None
 
+        vars_manager = self._create_mock_vars_manager(
+            inline_workflow_vars={"var1": "value1"},
+            cli_vars={"var2": "value2"},
+        )
+
         print_workflow_overview(
             workflow_model=workflow_model,
             effective_dry_run=True,
             hosts_count=3,
             inventory_filters={"platform": "ios", "groups": ["core"]},
-            workflow_vars={"var1": "value1"},
-            vars={"var2": "value2"},
-            failure_strategy=None
+            failure_strategy=None,
+            vars_manager=vars_manager,
         )
 
         mock_console.return_value.print.assert_called_once()
@@ -838,14 +858,18 @@ class TestPrintWorkflowOverview:
         workflow_model.name = "Test"
         workflow_model.description = None
 
+        vars_manager = self._create_mock_vars_manager(
+            inline_workflow_vars={"workflow_var": "wf_value"},
+            cli_vars={"cli_var": "cli_value"},
+        )
+
         print_workflow_overview(
             workflow_model=workflow_model,
             effective_dry_run=False,
             hosts_count=1,
             inventory_filters={},
-            workflow_vars={"workflow_var": "wf_value"},
-            vars={"cli_var": "cli_value"},
-            failure_strategy=FailureStrategy.SKIP_FAILED
+            failure_strategy=FailureStrategy.SKIP_FAILED,
+            vars_manager=vars_manager,
         )
 
         mock_console.return_value.print.assert_called_once()
@@ -862,9 +886,8 @@ class TestPrintWorkflowOverview:
             effective_dry_run=False,
             hosts_count=10,
             inventory_filters={},
-            workflow_vars={},
-            vars={},
-            failure_strategy=FailureStrategy.FAIL_FAST
+            failure_strategy=FailureStrategy.FAIL_FAST,
+            vars_manager=None,
         )
 
         mock_console.return_value.print.assert_called_once()
@@ -876,6 +899,14 @@ class TestPrintWorkflowOverview:
         workflow_model.name = "Complete Workflow"
         workflow_model.description = "A comprehensive test"
 
+        vars_manager = self._create_mock_vars_manager(
+            env_vars={"env_var": "from_env"},
+            default_vars={"global_var": "from_defaults"},
+            domain_vars={"domain_var": "from_domain"},
+            inline_workflow_vars={"timeout": 30, "retries": 3},
+            cli_vars={"user": "admin", "debug": True},
+        )
+
         print_workflow_overview(
             workflow_model=workflow_model,
             effective_dry_run=True,
@@ -885,15 +916,8 @@ class TestPrintWorkflowOverview:
                 "site": "DC1",
                 "groups": ["core", "edge"]
             },
-            workflow_vars={
-                "timeout": 30,
-                "retries": 3
-            },
-            vars={
-                "user": "admin",
-                "debug": True
-            },
-            failure_strategy=FailureStrategy.SKIP_FAILED
+            failure_strategy=FailureStrategy.SKIP_FAILED,
+            vars_manager=vars_manager,
         )
 
         mock_console.return_value.print.assert_called_once()

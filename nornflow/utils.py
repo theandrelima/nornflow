@@ -1,17 +1,17 @@
 import hashlib
 import importlib
 import inspect
-import logging
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Literal
+from typing import Any, Literal, TYPE_CHECKING
 
 import yaml
 from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import AggregatedResult, MultiResult, Result, Task
 from pydantic_serdes.custom_collections import HashableDict
+from pydantic_serdes.utils import load_file_to_dict
 from rich.align import Align
 from rich.columns import Columns
 from rich.console import Console, Group
@@ -32,8 +32,10 @@ from nornflow.exceptions import (
     ResourceError,
     WorkflowError,
 )
+from nornflow.logger import logger
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from nornflow.vars.manager import NornFlowVariablesManager
 
 TYPE_DISPLAY_MAPPING: dict[str, str] = {
     "HashableDict": "map",
@@ -44,6 +46,16 @@ TYPE_DISPLAY_MAPPING: dict[str, str] = {
 }
 
 NORNIR_RESULT_TYPES: set[type] = {Result, MultiResult, AggregatedResult}
+
+VAR_SOURCE_CONFIG: list[tuple[str, str, str]] = [
+    ("env_vars", "e", "e: environment variable"),
+    ("default_vars", "g", "g: global defaults"),
+    ("domain_vars", "d", "d: domain defaults"),
+    ("inline_workflow_vars", "w", "w: defined in workflow"),
+    ("cli_vars", "c*", "c*: CLI/programmatic override"),
+]
+
+VAR_SOURCE_ORDER: dict[str, int] = {label: -idx for idx, (_, label, _) in enumerate(VAR_SOURCE_CONFIG)}
 
 
 def normalize_failure_strategy(
@@ -98,8 +110,10 @@ def import_module_from_path(module_name: str, module_path: str | Path) -> Module
         spec = importlib.util.spec_from_file_location(module_name, str(module_path))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        logger.debug(f"Successfully imported module '{module_name}' from '{module_path}'")
         return module
     except Exception as e:
+        logger.exception(f"Failed to import module '{module_name}' from '{module_path}': {e}")
         raise CoreError(
             f"Failed to import module '{module_name}' from '{module_path}': {e!s}",
             component="ModuleLoader",
@@ -146,6 +160,7 @@ def import_modules_recursively(dir_path: Path) -> list[str]:
     dir_path = dir_path.resolve()
     cwd = Path.cwd().resolve()
 
+    logger.info(f"Starting recursive import of modules from directory: {dir_path}")
     for py_file in dir_path.rglob("*.py"):
         if py_file.name == "__init__.py":
             continue
@@ -161,8 +176,9 @@ def import_modules_recursively(dir_path: Path) -> list[str]:
             imported_modules.append(module_name)
             logger.debug(f"Imported module: {module_name}")
         except Exception as e:
-            logger.error(f"Failed to import module {py_file}: {e}")
+            logger.exception(f"Failed to import module {py_file}: {e}")
 
+    logger.info(f"Completed recursive import: {len(imported_modules)} modules imported")
     return imported_modules
 
 
@@ -181,7 +197,7 @@ def is_nornir_task(attr: Callable) -> bool:
     Returns:
         True if the attribute is a properly annotated Nornir task.
     """
-    if not callable(attr) or not hasattr(attr, "__annotations__"):
+    if not is_public_callable(attr) or not hasattr(attr, "__annotations__"):
         return False
 
     annotations = attr.__annotations__
@@ -225,7 +241,7 @@ def is_nornir_filter(attr: Callable) -> bool:
     Returns:
         True if the attribute is a properly annotated Nornir filter.
     """
-    if not callable(attr):
+    if not is_public_callable(attr):
         return False
 
     try:
@@ -269,6 +285,19 @@ def is_yaml_file(file_path: str | Path) -> bool:
     return path.is_file() and path.suffix in NORNFLOW_SUPPORTED_YAML_EXTENSIONS
 
 
+def is_public_callable(attr: Any) -> bool:
+    """
+    Check if an attribute is a public callable (not starting with '_').
+
+    Args:
+        attr: The attribute to check.
+
+    Returns:
+        True if the attribute is callable and its name does not start with '_'.
+    """
+    return callable(attr) and not getattr(attr, "__name__", "").startswith("_")
+
+
 def load_processor(processor_config: dict) -> Processor:
     """
     Dynamically load and instantiate a processor from config.
@@ -292,7 +321,9 @@ def load_processor(processor_config: dict) -> Processor:
         module_path, class_name = dotted_path.rsplit(".", 1)
         module = importlib.import_module(module_path)
         processor_class = getattr(module, class_name)
-        return processor_class(**args)
+        processor = processor_class(**args)
+        logger.debug(f"Successfully loaded processor '{dotted_path}'")
+        return processor
     except (ImportError, AttributeError) as e:
         raise ProcessorError(f"Failed to load processor '{dotted_path}': {e!s}") from e
     except Exception as e:
@@ -330,6 +361,7 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
     """
     if isinstance(obj, str):
         if JINJA_PATTERN.search(obj):
+            logger.warning(f"Jinja2 code detected in '{path}'; raising error as it's not allowed")
             raise WorkflowError(
                 f"Jinja2 code found in '{path}' which is not allowed. "
                 "Jinja2 expressions are only permitted in specific fields like task args."
@@ -367,40 +399,30 @@ def _get_type_display(value: Any) -> str:
     return TYPE_DISPLAY_MAPPING.get(type_name, type_name)
 
 
-def _add_vars_to_table(
-    table: Table,
-    vars_dict: dict[str, Any],
-    source_label: str,
-) -> None:
-    """
-    Add variables to a Rich table with consistent formatting.
-
-    Args:
-        table: The Rich Table to add rows to.
-        vars_dict: Dictionary of variable name -> value.
-        source_label: Label for the source column (e.g., 'w', 'c*').
-    """
-    for key, value in sorted(vars_dict.items(), key=lambda item: item[0]):
-        table.add_row(
-            source_label,
-            key,
-            format_variable_value(key, value),
-            _get_type_display(value),
-        )
-
-
-def _build_vars_section(workflow_vars: dict[str, Any], cli_vars: dict[str, Any]) -> list[Any]:
+def _build_vars_section(vars_manager: "NornFlowVariablesManager | None") -> list[Any]:
     """
     Build the variables section for the workflow overview panel.
 
     Args:
-        workflow_vars: Variables defined in the workflow.
-        cli_vars: Variables from CLI/programmatic override.
+        vars_manager: Variables manager for assembly-time vars.
 
     Returns:
         List of Rich renderables for the vars section, or empty list if no vars.
     """
-    if not workflow_vars and not cli_vars:
+    if not vars_manager:
+        return []
+
+    sources_used: set[str] = set()
+    all_vars: list[tuple[str, str, Any]] = []
+
+    for attr_name, source_label, _ in VAR_SOURCE_CONFIG:
+        vars_dict = getattr(vars_manager, attr_name, {})
+        if vars_dict:
+            sources_used.add(source_label)
+            for key, value in vars_dict.items():
+                all_vars.append((source_label, key, value))
+
+    if not all_vars:
         return []
 
     vars_table = Table(show_header=True, box=None)
@@ -409,19 +431,23 @@ def _build_vars_section(workflow_vars: dict[str, Any], cli_vars: dict[str, Any])
     vars_table.add_column("Value", style="yellow")
     vars_table.add_column("Type", style="blue", no_wrap=True)
 
-    if workflow_vars:
-        _add_vars_to_table(vars_table, workflow_vars, "w")
-    if cli_vars:
-        _add_vars_to_table(vars_table, cli_vars, "c*")
+    for source, key, value in sorted(all_vars, key=lambda x: (x[1], VAR_SOURCE_ORDER.get(x[0], 999))):
+        vars_table.add_row(
+            source,
+            key,
+            format_variable_value(key, value),
+            _get_type_display(value),
+        )
 
     legend_text = Text()
     legend_text.append("Sources", style="bold dim")
-    legend_text.append("\nw: defined in workflow", style="dim")
-    legend_text.append("\nc*: CLI/programmatic override", style="dim")
+    for _, source_label, legend_desc in VAR_SOURCE_CONFIG:
+        if source_label in sources_used:
+            legend_text.append(f"\n{legend_desc}", style="dim")
 
     return [
         Text("\n"),
-        Padding.indent(Text("Variables", style="bold cyan"), 1),
+        Padding.indent(Text("Assembly-Time Variables", style="bold cyan"), 1),
         Padding.indent(Columns([vars_table, Align.right(legend_text)], expand=True), 2),
     ]
 
@@ -431,9 +457,8 @@ def print_workflow_overview(
     effective_dry_run: bool,
     hosts_count: int,
     inventory_filters: dict[str, Any],
-    workflow_vars: dict[str, Any],
-    vars: dict[str, Any],
     failure_strategy: FailureStrategy | None,
+    vars_manager: "NornFlowVariablesManager | None" = None,
 ) -> None:
     """
     Print a comprehensive workflow overview before execution using Rich.
@@ -443,9 +468,8 @@ def print_workflow_overview(
         effective_dry_run: Whether dry-run mode is enabled.
         hosts_count: Number of hosts in the filtered inventory.
         inventory_filters: Dictionary of applied inventory filters.
-        workflow_vars: Workflow-defined variables.
-        vars: Vars with highest precedence (CLI/programmatic).
         failure_strategy: The active failure handling strategy.
+        vars_manager: Variables manager for assembly-time vars.
     """
     console = Console()
 
@@ -469,7 +493,7 @@ def print_workflow_overview(
     )
 
     elements: list[Any] = [table]
-    elements.extend(_build_vars_section(workflow_vars, vars))
+    elements.extend(_build_vars_section(vars_manager))
 
     panel = Panel(
         Group(*elements),
@@ -498,11 +522,13 @@ def get_file_content_hash(file_path: Path) -> str:
         ResourceError: If file cannot be read or parsed.
     """
     try:
-        content = file_path.read_text(encoding="utf-8")
-        data = yaml.safe_load(content)
+        data = load_file_to_dict(file_path)
         normalized = yaml.dump(data, sort_keys=True, default_flow_style=False)
-        return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+        hash_value = hashlib.sha256(normalized.encode()).hexdigest()[:16]
+        logger.debug(f"Generated content hash for '{file_path}': {hash_value}")
+        return hash_value
     except Exception as e:
+        logger.exception(f"Failed to hash file content: {e}")
         raise ResourceError(
             f"Failed to hash file content: {e}", resource_type="file", resource_name=str(file_path)
         ) from e

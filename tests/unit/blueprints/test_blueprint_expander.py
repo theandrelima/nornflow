@@ -8,7 +8,7 @@ class TestBlueprintExpander:
 
     def test_expand_blueprints_no_catalog(self, blueprint_resolver):
         """Test expansion with no blueprints catalog."""
-        expander = BlueprintExpander(blueprint_resolver)
+        expander = BlueprintExpander()
         tasks = [{"name": "task1", "task": "echo"}]
         result = expander.expand_blueprints(
             tasks=tasks,
@@ -22,7 +22,7 @@ class TestBlueprintExpander:
 
     def test_expand_blueprints_simple_blueprint(self, blueprint_resolver, mock_blueprints_catalog, mock_vars_dir, mock_workflow_path, mock_workflow_roots, mock_cli_vars):
         """Test expanding a simple blueprint reference."""
-        expander = BlueprintExpander(blueprint_resolver)
+        expander = BlueprintExpander()
         tasks = [{"blueprint": "sample"}]
         result = expander.expand_blueprints(
             tasks=tasks,
@@ -38,7 +38,7 @@ class TestBlueprintExpander:
 
     def test_expand_blueprints_with_condition_true(self, blueprint_resolver, mock_blueprints_catalog, mock_vars_dir, mock_workflow_path, mock_workflow_roots):
         """Test blueprint expansion with a true condition."""
-        expander = BlueprintExpander(blueprint_resolver)
+        expander = BlueprintExpander()
         tasks = [{"blueprint": "sample", "if": "true"}]
         result = expander.expand_blueprints(
             tasks=tasks,
@@ -52,7 +52,7 @@ class TestBlueprintExpander:
 
     def test_expand_blueprints_with_condition_false(self, blueprint_resolver, mock_blueprints_catalog, mock_vars_dir, mock_workflow_path, mock_workflow_roots):
         """Test blueprint expansion with a false condition."""
-        expander = BlueprintExpander(blueprint_resolver)
+        expander = BlueprintExpander()
         tasks = [{"blueprint": "sample", "if": "false"}]
         result = expander.expand_blueprints(
             tasks=tasks,
@@ -81,7 +81,7 @@ tasks:
 """)
         catalog = {"parent": parent_blueprint, "child": child_blueprint}
 
-        expander = BlueprintExpander(blueprint_resolver)
+        expander = BlueprintExpander()
         tasks = [{"blueprint": "parent"}]
         result = expander.expand_blueprints(
             tasks=tasks,
@@ -110,7 +110,7 @@ tasks:
 """)
         catalog = {"a": blueprint_a, "b": blueprint_b}
 
-        expander = BlueprintExpander(blueprint_resolver)
+        expander = BlueprintExpander()
         tasks = [{"blueprint": "a"}]
         with pytest.raises(BlueprintCircularDependencyError):
             expander.expand_blueprints(
@@ -126,7 +126,7 @@ tasks:
         """Test error when blueprint is missing."""
         monkeypatch.chdir(tmp_path)
         
-        expander = BlueprintExpander(blueprint_resolver)
+        expander = BlueprintExpander()
         tasks = [{"blueprint": "this_blueprint_absolutely_does_not_exist_anywhere_xyz123"}]
         with pytest.raises(BlueprintError, match="Blueprint not found in catalog or filesystem"):
             expander.expand_blueprints(
@@ -146,7 +146,7 @@ tasks:
         invalid_blueprint.write_text("invalid: yaml: content: [")
         catalog = {"invalid": invalid_blueprint}
 
-        expander = BlueprintExpander(blueprint_resolver)
+        expander = BlueprintExpander()
         tasks = [{"blueprint": "invalid"}]
         with pytest.raises(ResourceError, match="Failed to hash file content"):
             expander.expand_blueprints(
@@ -166,9 +166,9 @@ tasks:
         invalid_blueprint.write_text("not_tasks: []")
         catalog = {"invalid": invalid_blueprint}
 
-        expander = BlueprintExpander(blueprint_resolver)
+        expander = BlueprintExpander()
         tasks = [{"blueprint": "invalid"}]
-        with pytest.raises(BlueprintError, match="Blueprint must contain ONLY 'tasks' key"):
+        with pytest.raises(BlueprintError, match=r"(?s)Field required.*Extra inputs are not permitted"):
             expander.expand_blueprints(
                 tasks=tasks,
                 blueprints_catalog=catalog,
@@ -186,9 +186,9 @@ tasks:
         invalid_blueprint.write_text("tasks: not_a_list")
         catalog = {"invalid": invalid_blueprint}
 
-        expander = BlueprintExpander(blueprint_resolver)
+        expander = BlueprintExpander()
         tasks = [{"blueprint": "invalid"}]
-        with pytest.raises(BlueprintError, match="'tasks' must be a list"):
+        with pytest.raises(BlueprintError, match=r"Input should be a valid list"):
             expander.expand_blueprints(
                 tasks=tasks,
                 blueprints_catalog=catalog,

@@ -1086,7 +1086,7 @@ wheels = [
 
 [[package]]
 name = "nornflow"
-version = "0.6.0"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "jmespath" },
@@ -1117,7 +1117,7 @@ manual-tests = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=25.1.0" },
+    { name = "black", marker = "extra == 'dev'", specifier = ">=25.12.0" },
     { name = "jmespath", specifier = ">=1.0.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15.0" },
     { name = "nornir", specifier = ">=3.5.0" },
@@ -1126,12 +1126,12 @@ requires-dist = [
     { name = "nornir-netbox", marker = "extra == 'manual-tests'", specifier = ">=0.3.0" },
     { name = "nornir-netmiko", marker = "extra == 'manual-tests'", specifier = ">=1.0.1" },
     { name = "nornir-utils", specifier = ">=0.2.0" },
-    { name = "pydantic-serdes", specifier = ">=1.0.3" },
+    { name = "pydantic-serdes", specifier = ">=1.0.4" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.4" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.10" },
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "termcolor", specifier = ">=2.5.0" },
     { name = "typer", specifier = ">=0.15.1" },
@@ -1451,7 +1451,7 @@ wheels = [
 
 [[package]]
 name = "pydantic-serdes"
-version = "1.0.3"
+version = "1.0.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "email-validator" },
@@ -1461,9 +1461,9 @@ dependencies = [
     { name = "sortedcontainers" },
     { name = "toml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/01/6d/69ef956be3a481545aa6685a936fc35725ce66782e56805b62cc09cabe26/pydantic_serdes-1.0.3.tar.gz", hash = "sha256:16774a8f6728727403c010cca59af54f14369c342db69e2948d09195e192deea", size = 17799, upload-time = "2025-07-30T15:25:19.375Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/dd/1a/d7e35b4169de7f88f44cb17090175bc7806e9eb6d3b903425a9c18af84df/pydantic_serdes-1.0.4.tar.gz", hash = "sha256:f95401ac237941d3e0d404f42123d9013d4e8d7914d02fe36e58c34c4711bc52", size = 17816, upload-time = "2026-01-07T20:49:58.783Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/61/3c/34c82eece029502808401b3bfd0b906038df1a746c03bcb1af522c15b8f1/pydantic_serdes-1.0.3-py3-none-any.whl", hash = "sha256:c77f4fd59f11d2ec24cc3ab93d42bbfc247c12b51cc479dfe8dab13a21c6c4f0", size = 21151, upload-time = "2025-07-30T15:25:18.527Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/95/cfbf366614653817672c315f4acd2fa605bb63113867a7d827f865c13ef4/pydantic_serdes-1.0.4-py3-none-any.whl", hash = "sha256:3d8ce88409734235d42f560b2bf1cf5c6c646d21404aabcbb8cb00ea9497b34f", size = 21160, upload-time = "2026-01-07T20:49:57.626Z" },
 ]
 
 [[package]]

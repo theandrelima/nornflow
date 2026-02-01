@@ -8,6 +8,8 @@ import jmespath
 from jinja2 import pass_context
 from jinja2.runtime import Context, Undefined
 
+from nornflow.logger import logger
+
 
 def flatten_list(lst: list[Any]) -> list[Any]:
     """Flatten nested lists.
@@ -130,6 +132,7 @@ def _resolve_from_context(context: Context, key: str) -> tuple[bool, Any]:
             return (False, None)
         return (True, value)
     except Exception:
+        logger.exception(f"Failed to resolve key '{key}' from context")
         return (False, None)
 
 
@@ -203,6 +206,7 @@ def _nested_exists_in_obj(obj: Any, path: str) -> bool:
             try:
                 current = getattr(current, part)
             except AttributeError:
+                logger.exception(f"Failed to access attribute '{part}' on object")
                 return False
 
     return current is not None

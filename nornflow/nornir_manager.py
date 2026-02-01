@@ -3,9 +3,11 @@ from typing import Any
 from nornir import InitNornir
 from nornir.core import Nornir
 from nornir.core.processor import Processor
+from typing_extensions import Self
 
 from nornflow.constants import NORNFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import CoreError, ProcessorError
+from nornflow.logger import logger
 
 
 class NornirManager:
@@ -36,6 +38,9 @@ class NornirManager:
             nornir_settings: Path to Nornir config file (YAML)
             **kwargs: Additional arguments to pass to InitNornir
         """
+        logger.info("Initializing NornirManager")
+        logger.debug(f"Nornir settings path: {nornir_settings}")
+        logger.debug(f"Additional kwargs count: {len(kwargs)}")
         # Clean up kwargs before passing to InitNornir
         self._remove_optional_nornflow_settings_from_kwargs(kwargs)
 
@@ -48,8 +53,9 @@ class NornirManager:
             config_file=self.nornir_settings,
             **kwargs,
         )
+        logger.info("NornirManager initialized")
 
-    def __enter__(self) -> "NornirManager":
+    def __enter__(self) -> Self:
         """
         Enter the context manager protocol.
 
@@ -80,9 +86,11 @@ class NornirManager:
         This implementation silently closes connections without producing
         task output to keep the user interface clean.
         """
+        logger.info("Closing Nornir connections")
         if hasattr(self, "nornir"):
             # Store original processors
             original_processors = self.nornir.processors.copy()
+            logger.debug(f"Stored {len(original_processors)} original processors during connection closure")
 
             try:
                 # Clear processors to prevent output during connection closure
@@ -93,6 +101,8 @@ class NornirManager:
             finally:
                 # Restore processors
                 self.nornir.processors = original_processors
+                logger.debug("Restored original processors after connection closure")
+        logger.info("Closed Nornir connections")
 
     def _remove_optional_nornflow_settings_from_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
@@ -101,8 +111,12 @@ class NornirManager:
         Args:
             kwargs: The kwargs dictionary to modify in-place
         """
+        removed_keys = []
         for key in NORNFLOW_SETTINGS_OPTIONAL:
-            kwargs.pop(key, None)
+            if key in kwargs:
+                kwargs.pop(key, None)
+                removed_keys.append(key)
+        logger.debug(f"Removed NornFlow settings from kwargs: {removed_keys}")
 
     def apply_filters(self, **kwargs) -> Nornir:
         """
@@ -123,10 +137,12 @@ class NornirManager:
         Raises:
             ProcessorError: If no filters are provided
         """
+        logger.debug(f"Applying filters with kwargs: {kwargs}")
         if not kwargs:
             raise ProcessorError("No filters informed.")
 
         self.nornir = self.nornir.filter(**kwargs)
+        logger.debug(f"Filtered Nornir inventory now has {len(self.nornir.inventory.hosts)} hosts")
         return self.nornir
 
     def apply_processors(self, processors: list[Processor]) -> Nornir:
@@ -145,10 +161,12 @@ class NornirManager:
         Raises:
             ProcessorError: If no processors are provided
         """
+        logger.debug(f"Applying {len(processors)} processors: {[type(p).__name__ for p in processors]}")
         if not processors:
             raise ProcessorError("No processors informed.")
 
         self.nornir = self.nornir.with_processors(processors)
+        logger.debug(f"Nornir now has {len(self.nornir.processors)} total processors")
         return self.nornir
 
     def apply_runner(self, runner: "RunnerPlugin") -> Nornir:
@@ -164,6 +182,7 @@ class NornirManager:
         Returns:
             Nornir: Nornir instance with the runner applied
         """
+        logger.debug(f"Applying runner: {type(runner).__name__}")
         self.nornir = self.nornir.with_runner(runner)
         return self.nornir
 
@@ -181,6 +200,7 @@ class NornirManager:
             manager.set_dry_run(True)   # Enable dry-run mode
             manager.set_dry_run(False)  # Disable dry-run mode (default)
         """
+        logger.debug(f"Setting dry_run to: {value}")
         if not isinstance(value, bool):
             raise CoreError(
                 f"dry_run value must be a boolean, got {type(value).__name__}: {value}",
@@ -202,8 +222,11 @@ class NornirManager:
         Raises:
             ProcessorError: If no processor of the requested type is found
         """
+        logger.debug(f"Searching for processor of type: {processor_type.__name__}")
         for processor in self.nornir.processors:
             if isinstance(processor, processor_type):
+                logger.debug(f"Found processor: {type(processor).__name__}")
                 return processor
 
+        logger.debug(f"No processor of type {processor_type.__name__} found")
         raise ProcessorError(f"No processor of type {processor_type.__name__} found in Nornir instance")

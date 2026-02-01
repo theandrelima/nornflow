@@ -23,7 +23,6 @@ Example:
     - host2: missing 'some_var', fails condition → skipped, no template resolution
 """
 
-import logging
 from collections.abc import Callable
 from functools import wraps
 from typing import Any, TYPE_CHECKING
@@ -33,11 +32,10 @@ from nornir.core.task import Result, Task
 
 from nornflow.hooks import Hook, Jinja2ResolvableMixin
 from nornflow.hooks.exceptions import HookValidationError
+from nornflow.logger import logger
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
-
-logger = logging.getLogger(__name__)
 
 
 def skip_if_condition_flagged(task_func: Callable) -> Callable:
@@ -165,7 +163,7 @@ class IfHook(Hook, Jinja2ResolvableMixin):
                 host.data["nornflow_skip_flag"] = True
 
         except Exception as e:
-            logger.error(f"Error evaluating if condition for host '{host.name}': {e}")
+            logger.exception(f"Error evaluating if condition for host '{host.name}': {e}")
             raise HookValidationError(
                 "IfHook", [("evaluation_error", f"Failed to evaluate condition: {e}")]
             ) from e

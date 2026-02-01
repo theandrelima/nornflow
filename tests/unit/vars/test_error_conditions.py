@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from nornflow.vars.exceptions import TemplateError, VariableError
+from nornflow.j2.exceptions import TemplateError
+from nornflow.vars.exceptions import VariableError
 from nornflow.vars.manager import NornFlowVariablesManager
 
 

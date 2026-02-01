@@ -11,10 +11,12 @@
   - [`local_filters`](#local_filters)
   - [`local_hooks`](#local_hooks)
   - [`local_blueprints`](#local_blueprints)
+  - [`local_j2_filters`](#local_j2_filters)
   - [`vars_dir`](#vars_dir)
   - [`dry_run`](#dry_run)
   - [`failure_strategy`](#failure_strategy)
   - [`processors`](#processors)
+  - [`logger`](#logger)
   - [`imported_packages`](#imported_packages)
 - [NornFlow Settings vs Nornir Configs](#nornflow-settings-vs-nornir-configs)
 
@@ -80,7 +82,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 
 ### `local_tasks`
 
-- **Description**: List of paths to directories containing the Nornir tasks to be included in NornFlow's task catalog. The search is recursive, meaning that all subdirectories will be searched as well. Be careful with this. Both absolute and relative paths are supported.
+- **Description**: List of paths to directories containing the Nornir tasks to be included in NornFlow's task catalog. The search is recursive, meaning that all subdirectories will be searched as well. Both absolute and relative paths are supported.
 - **Type**: list[str]
 - **Default**: ["tasks"]
 - **Path Resolution**: 
@@ -95,6 +97,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "../shared_tasks"          # Relative to settings file
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_TASKS`
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_tasks` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `local_workflows`
 
@@ -112,6 +115,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "/shared/workflows"
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_WORKFLOWS`
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_workflows` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `local_filters`
 
@@ -129,7 +133,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "../custom_filters"
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_FILTERS`
-- **Note**: For details on how these filters can be used in workflows, see the Inventory Filtering section in the Workflows documentation.
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_filters` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `local_hooks`
 
@@ -147,7 +151,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "/shared/custom_hooks"
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_HOOKS`
-- **Note**: For details on creating custom hooks, see the Hooks Guide documentation.
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_hooks` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `local_blueprints`
 
@@ -166,11 +170,29 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "/opt/company/blueprints"
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_BLUEPRINTS`
-- **Note**: Blueprints are expanded during workflow loading (assembly-time) and have access to a subset of the variable system. See the Blueprints Guide for details.
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_blueprints` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
+
+### `local_j2_filters`
+
+- **Description**: List of paths to directories containing custom Jinja2 filter functions. These filters extend the built-in Jinja2 filters available in NornFlow templates and can be used throughout workflows, blueprints, and task arguments. The search is recursive, meaning all subdirectories will be searched. All callable functions in Python files are registered as filters. Both absolute and relative paths are supported.
+- **Type**: list[str]
+- **Default**: ["j2_filters"]
+- **Path Resolution**: 
+  - When loaded through `NornFlowSettings.load`, relative paths resolve against the settings file directory
+  - Direct instantiation leaves relative paths untouched, so they resolve against the runtime working directory
+  - Absolute paths are used as-is
+- **Example**:
+  ```yaml
+  local_j2_filters:
+    - "j2_filters"
+    - "/opt/company/shared_filters"
+  ```
+- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_J2_FILTERS`
+- **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_j2_filters` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `vars_dir`
 
-- **Description**: Path to the directory containing variable files for NornFlow's variable system. This directory will store global variables (`defaults.yaml`) and domain-specific variables. Both absolute and relative paths are supported.
+- **Description**: Path to the directory containing variable files for NornFlow's variable system. This directory will store global variables (defaults.yaml) and domain-specific variables. Both absolute and relative paths are supported.
 - **Type**: `str`
 - **Default**: "vars"
 - **Path Resolution**: 
@@ -236,6 +258,31 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   2. Processors defined in workflow YAML
   3. Processors defined in this settings file
   4. `DefaultNornFlowProcessor` (if no other processors specified)
+
+### `logger`
+
+- **Description**: Configuration for NornFlow's logging system. Controls where log files are written and the logging verbosity level.
+- **Type**: `dict` with keys `directory` and `level`
+- **Default**: `{"directory": ".nornflow/logs", "level": "INFO"}`
+- **Example**:
+  ```yaml
+  logger:
+    directory: ".nornflow/logs"
+    level: "DEBUG"
+  ```
+- **Sub-keys**:
+  - `directory`: Path to the directory where log files will be written. Relative paths resolve against the project root. The directory is created automatically if it doesn't exist.
+  - `level`: Logging verbosity level. Valid values: `"DEBUG"`, `"INFO"`, `"WARNING"`, `"ERROR"`, `"CRITICAL"`
+- **Log Levels**:
+  | Level | Description |
+  |-------|-------------|
+  | `DEBUG` | Detailed diagnostic information including variable resolution, template compilation |
+  | `INFO` | General execution flow, task start/completion, workflow progress |
+  | `WARNING` | Potential issues that don't stop execution |
+  | `ERROR` | Errors that may affect results (also printed to console) |
+  | `CRITICAL` | Severe errors that may halt execution |
+- **Note**: Log files are automatically created with timestamped filenames (e.g., `my_workflow_20260115_143022.log`). Each workflow execution creates a new log file. Errors (`ERROR` level and above) are printed to stderr regardless of the log level setting.
+- **Sensitive Data Protection**: NornFlow will attempt to redact sensitive data in log messages. Values explicitly associated with keys like `password`, `secret`, `token`, `api_key`, and similar are replaced with `***REDACTED***`. However, this is merely a best effort. It is the user's responsibility to avoid logging sensitive data.
 
 ---
 > 🚨 ***NOTE: `imported_packages` is planned, but not yet supported and right now has no effect at all.***

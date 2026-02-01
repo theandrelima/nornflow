@@ -15,6 +15,7 @@ from nornflow.constants import (
     NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
 )
 from nornflow.exceptions import NornFlowError
+from nornflow.logger import logger
 from nornflow.utils import normalize_failure_strategy
 
 app = typer.Typer(help="Run NornFlow tasks and workflows")
@@ -349,7 +350,7 @@ def get_nornflow_builder(
         else:
             builder.with_workflow_name(target)
     else:
-        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        timestamp = datetime.now().strftime("%d-%m-%Y %H-%M-%S")
         workflow_dict = {
             "workflow": {
                 "name": f"Task {target} - exec {timestamp}",
@@ -507,11 +508,8 @@ def run(
         )
 
         nornflow = builder.build()
-
-        # Capture the exit code from nornflow.run()
         exit_code = nornflow.run()
 
-        # Exit with the workflow's exit code if non-zero, otherwise return normally
         if exit_code != 0:
             sys.exit(exit_code)
 
@@ -539,6 +537,7 @@ def run(
         raise typer.Exit(code=104)  # noqa: B904
 
     except Exception as e:
+        logger.exception(f"Unexpected error while running {target}: {e}")
         CLIRunError(
             message=f"Unexpected error while running {target}: {e}",
             hint="This may be a bug. Please report it if the issue persists.",
