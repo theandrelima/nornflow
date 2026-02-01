@@ -9,6 +9,7 @@ from pydantic_serdes.utils import convert_to_hashable
 from nornflow.blueprints import BlueprintExpander
 from nornflow.constants import FailureStrategy
 from nornflow.exceptions import WorkflowError
+from nornflow.logger import logger
 from nornflow.models import NornFlowBaseModel, TaskModel
 from nornflow.utils import normalize_failure_strategy
 
@@ -52,6 +53,7 @@ class WorkflowModel(NornFlowBaseModel):
             BlueprintError: If blueprint expansion fails.
         """
         if "workflow" not in dict_args:
+            logger.error("Workflow creation failed: missing 'workflow' key in dict_args")
             raise WorkflowError("Workflow file must have 'workflow' as a root-level key.")
 
         workflow_dict = dict_args["workflow"]

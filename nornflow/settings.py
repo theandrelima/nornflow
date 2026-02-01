@@ -12,11 +12,13 @@ from nornflow.constants import (
     NORNFLOW_DEFAULT_FILTERS_DIR,
     NORNFLOW_DEFAULT_HOOKS_DIR,
     NORNFLOW_DEFAULT_J2_FILTERS_DIR,
+    NORNFLOW_DEFAULT_LOGGER,
     NORNFLOW_DEFAULT_TASKS_DIR,
     NORNFLOW_DEFAULT_VARS_DIR,
     NORNFLOW_DEFAULT_WORKFLOWS_DIR,
 )
 from nornflow.exceptions import SettingsError
+from nornflow.logger import logger
 
 
 class NornFlowSettings(BaseSettings):
@@ -24,24 +26,29 @@ class NornFlowSettings(BaseSettings):
     NornFlow settings management using Pydantic.
 
     Settings are loaded with the following priority (highest to lowest):
-    1. Environment variables (prefixed with NORNFLOW_SETTINGS_)
+    1. Programmatic overrides (passed directly to NornFlowSettings.load() as **overrides)
     2. Values from settings YAML file
-    3. Default values defined in the model
+    3. Environment variables (prefixed with NORNFLOW_SETTINGS_)
+    4. Default values defined in this class
 
     Note the careful terminology:
     - "Settings" refers to NornFlow's own configuration
     - "Configuration/Config" is reserved for Nornir's configuration
 
-    Environment variable examples:
-    - NORNFLOW_SETTINGS_VARS_DIR=/custom/vars
-    - NORNFLOW_SETTINGS_LOCAL_TASKS=["tasks", "custom_tasks"]
-    - NORNFLOW_SETTINGS_FAILURE_STRATEGY=fail-fast
+    Environment variables are case-sensitive. Ensure exact prefix and key matching.
+
+    Examples:
+    - NORNFLOW_SETTINGS_vars_dir=/custom/vars
+    - NORNFLOW_SETTINGS_local_tasks=tasks,custom_tasks
+    - NORNFLOW_SETTINGS_failure_strategy=fail-fast
+    - NORNFLOW_SETTINGS_logger__directory=/custom/logs # notice the '__' for nested keys traversal
+    - NORNFLOW_SETTINGS_logger__level=DEBUG
     """
 
     model_config = SettingsConfigDict(
         env_prefix="NORNFLOW_SETTINGS_",
         env_nested_delimiter="__",
-        case_sensitive=False,
+        case_sensitive=True,
         extra="allow",
     )
 
@@ -82,6 +89,9 @@ class NornFlowSettings(BaseSettings):
         default=FailureStrategy.SKIP_FAILED, description="Strategy for handling task failures"
     )
     dry_run: bool = Field(default=False, description="Whether to run in dry-run mode")
+    logger: dict[str, Any] = Field(
+        default_factory=lambda: NORNFLOW_DEFAULT_LOGGER.copy(), description="Logger configuration dictionary"
+    )
 
     _base_dir: Path | None = PrivateAttr(default=None)
     _settings_file: str | None = PrivateAttr(default=None)
@@ -94,7 +104,7 @@ class NornFlowSettings(BaseSettings):
             return []
 
         if not isinstance(v, list):
-            raise TypeError("processors must be a list")
+            raise SettingsError("processors must be a list")
 
         validated = []
         for item in v:
@@ -127,6 +137,41 @@ class NornFlowSettings(BaseSettings):
                     ) from e
         return v
 
+    @field_validator("logger", mode="before")
+    @classmethod
+    def validate_logger(cls, v: Any) -> dict[str, Any]:
+        """Validate logger configuration, merging with defaults for missing keys."""
+        if not isinstance(v, dict):
+            raise SettingsError("logger must be a dictionary")
+
+        merged = {**NORNFLOW_DEFAULT_LOGGER, **v}
+
+        if not isinstance(merged["directory"], str):
+            raise SettingsError("logger.directory must be a string")
+        if not isinstance(merged["level"], str):
+            raise SettingsError("logger.level must be a string")
+
+        return merged
+
+    def _resolve_path_field(self, field_name: str, key: str | None, base_dir: Path) -> None:
+        """Resolve a relative path in a field or dict key to an absolute path.
+
+        Args:
+            field_name: Name of the attribute to resolve.
+            key: Key in the dict if the field is a dict, otherwise None.
+            base_dir: Base directory to resolve against.
+        """
+        if key:
+            field_value = getattr(self, field_name)
+            if field_value and key in field_value:
+                path = Path(field_value[key])
+                if not path.is_absolute():
+                    field_value[key] = str(base_dir / path)
+        else:
+            path = Path(getattr(self, field_name))
+            if not path.is_absolute():
+                setattr(self, field_name, str(base_dir / path))
+
     def resolve_relative_paths(self) -> "NornFlowSettings":
         """Resolve relative paths to absolute paths based on base directory."""
         base_dir = self.base_dir
@@ -135,14 +180,9 @@ class NornFlowSettings(BaseSettings):
 
         self._resolve_local_directories(base_dir)
 
-        vars_path = Path(self.vars_dir)
-        if not vars_path.is_absolute():
-            self.vars_dir = str(base_dir / vars_path)
-
-        if self.nornir_config_file:
-            config_path = Path(self.nornir_config_file)
-            if not config_path.is_absolute():
-                self.nornir_config_file = str(base_dir / config_path)
+        self._resolve_path_field("vars_dir", None, base_dir)
+        self._resolve_path_field("nornir_config_file", None, base_dir)
+        self._resolve_path_field("logger", "directory", base_dir)
 
         return self
 
@@ -237,6 +277,7 @@ class NornFlowSettings(BaseSettings):
         try:
             yaml_data = load_file_to_dict(settings_path)
         except Exception as e:
+            logger.exception(f"Failed to load settings from {resolved_file}: {e}")
             raise SettingsError(f"Failed to load settings from {resolved_file}: {e}") from e
 
         if not isinstance(yaml_data, dict):
@@ -250,7 +291,13 @@ class NornFlowSettings(BaseSettings):
         instance._base_dir = base_dir
         instance._settings_file = str(settings_path)
 
-        return instance.resolve_relative_paths()
+        resolved_instance = instance.resolve_relative_paths()
+
+        # Create logger directory if it doesn't exist
+        logger_dir = Path(resolved_instance.logger["directory"])
+        logger_dir.mkdir(parents=True, exist_ok=True)
+
+        return resolved_instance
 
     @property
     def as_dict(self) -> dict[str, Any]:

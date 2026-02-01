@@ -47,3 +47,7 @@ vars_dir: "vars"
 failure_strategy: "skip-failed"
 
 dry_run: false
+
+logger:
+  directory: ".nornflow/logs"
+  level: "INFO"

@@ -3,6 +3,8 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any, TYPE_CHECKING
 
+from nornflow.logger import logger
+
 if TYPE_CHECKING:
     pass
 
@@ -38,6 +40,7 @@ def hook_delegator(func: Callable) -> Callable:
                 try:
                     hook_method(*args, **kwargs)
                 except Exception as e:
+                    logger.exception(f"Exception in hook method '{method_name}': {e}")
                     if hasattr(hook, "exception_handlers") and hook.exception_handlers:
                         for exc_class, handler_name in hook.exception_handlers.items():
                             if isinstance(e, exc_class):

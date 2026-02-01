@@ -19,6 +19,7 @@ from nornflow.exceptions import (
     WorkflowError,
 )
 from nornflow.j2 import Jinja2Service
+from nornflow.logger import logger
 from nornflow.models import WorkflowModel
 from nornflow.nornir_manager import NornirManager
 from nornflow.settings import NornFlowSettings
@@ -115,8 +116,17 @@ class NornFlow:
             InitializationError: If initialization fails due to invalid configuration
         """
         try:
+            logger.info("Initializing NornFlow instance")
             self._validate_init_kwargs(kwargs)
             self._initialize_settings(nornflow_settings, kwargs)
+
+            logger.set_execution_context(
+                execution_name="loading",
+                execution_type="workflow",
+                log_dir=self.settings.logger.get("directory"),
+                log_level=self.settings.logger.get("level", "INFO"),
+            )
+
             self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, processors)
             self._initialize_hooks()
             self._initialize_catalogs()
@@ -124,15 +134,18 @@ class NornFlow:
             self._initialize_j2_service()
             if workflow:
                 self.workflow = workflow
+            logger.info("NornFlow instance initialized successfully")
         except CoreError:
             raise
         except Exception as e:
+            logger.exception(f"Failed to initialize NornFlow: {e!s}")
             raise InitializationError(f"Failed to initialize NornFlow: {e!s}", component="NornFlow") from e
 
     def _initialize_settings(
         self, nornflow_settings: NornFlowSettings | None, kwargs: dict[str, Any]
     ) -> None:
         """Initialize NornFlow settings from provided object or kwargs."""
+        logger.debug("Initializing NornFlow settings")
         if nornflow_settings:
             self._settings = nornflow_settings
         else:
@@ -150,6 +163,7 @@ class NornFlow:
         processors: list[dict[str, Any]] | None,
     ) -> None:
         """Initialize core instance variables."""
+        logger.debug("Initializing instance variables")
         self._vars = vars or {}
         self._filters = filters or {}
         self._failure_strategy = failure_strategy
@@ -167,6 +181,7 @@ class NornFlow:
 
     def _initialize_catalogs(self) -> None:
         """Initialize and load catalogs."""
+        logger.debug("Initializing catalogs")
         self._load_tasks_catalog()
         self._load_filters_catalog()
         self._load_workflows_catalog()
@@ -176,6 +191,7 @@ class NornFlow:
 
     def _initialize_hooks(self) -> None:
         """Initialize hooks by importing modules from configured directories."""
+        logger.debug("Initializing hooks")
         for dir_path in self.settings.local_hooks:
             dir_path_obj = Path(dir_path)
             if dir_path_obj.exists():
@@ -183,12 +199,14 @@ class NornFlow:
 
     def _initialize_nornir(self) -> None:
         """Initialize Nornir configurations and manager."""
+        logger.debug("Initializing Nornir manager")
         if self._nornir_manager:
             return
 
         try:
             self._nornir_configs = load_file_to_dict(self.nornir_config_file)
         except Exception as e:
+            logger.exception(f"Failed to load Nornir config from '{self.nornir_config_file}': {e}")
             raise CoreError(
                 f"Failed to load Nornir config from '{self.nornir_config_file}': {e}",
                 component="NornFlow",
@@ -222,6 +240,7 @@ class NornFlow:
         2. Processors from settings
         3. DefaultNornFlowProcessor
         """
+        logger.debug("Initializing processors")
         processors_list = self.processors or self.settings.processors
         if not processors_list:
             self._processors = [DefaultNornFlowProcessor()]
@@ -237,6 +256,7 @@ class NornFlow:
 
     def _initialize_j2_service(self) -> None:
         """Initialize the Jinja2 service and register custom filters."""
+        logger.debug("Initializing Jinja2 service")
         Jinja2Service.initialize_with_settings(self.settings)
 
     @property
@@ -594,8 +614,12 @@ class NornFlow:
         elif isinstance(value, WorkflowModel):
             self._workflow = value
             self._workflow_path = None
+            log_name = self._workflow.name.replace(" ", "_")
+            logger.update_execution_context(execution_name=log_name)
         elif isinstance(value, str):
             self._workflow, self._workflow_path = self._load_workflow_from_name(value)
+            log_name = self._workflow.name.replace(" ", "_")
+            logger.update_execution_context(execution_name=log_name)
         else:
             raise WorkflowError(
                 "Workflow must be a WorkflowModel instance, string name, or None, "
@@ -709,6 +733,7 @@ class NornFlow:
                         dir_path, predicate=predicate, transform_item=transform_item
                     )
             except Exception as e:
+                logger.exception(f"Error loading {name} from {dir_path}: {e!s}")
                 raise ResourceError(
                     f"Error loading {name} from {dir_path}: {e!s}",
                     resource_type=name,
@@ -751,7 +776,7 @@ class NornFlow:
         Load inventory filters from built-ins and from directories specified in settings.
 
         Filters are loaded in two phases:
-        1. Built-in filters from nornflow.builtins.filters module
+        1. Built-in filters from nflow.builtins.filters module
         2. User-defined filters from configured local_filters
         """
         self._filters_catalog = self._load_catalog(
@@ -816,11 +841,13 @@ class NornFlow:
         Raises:
             TaskError: If any tasks in the workflow are not found in the tasks catalog.
         """
+        logger.debug("Checking tasks in workflow")
         task_names = [task.name for task in self.workflow.tasks]
 
         missing_tasks = [task_name for task_name in task_names if task_name not in self.tasks_catalog]
 
         if missing_tasks:
+            logger.error(f"Missing tasks in catalog: {missing_tasks}")
             available_tasks = ", ".join(sorted(self.tasks_catalog.keys()))
             raise TaskError(
                 f"Task(s) not found in tasks catalog: {', '.join(missing_tasks)}. "
@@ -829,6 +856,7 @@ class NornFlow:
 
     def _apply_filters(self) -> None:
         """Apply inventory filters to the Nornir manager."""
+        logger.debug("Applying inventory filters")
         filter_kwargs_list = self._get_filtering_kwargs()
 
         for filter_kwargs in filter_kwargs_list:
@@ -941,6 +969,7 @@ class NornFlow:
             )
             return workflow, workflow_path
         except Exception as e:
+            logger.exception(f"Failed to load workflow '{name}' from path '{workflow_path}': {e}")
             raise WorkflowError(
                 f"Failed to load workflow '{name}' from path '{workflow_path}': {e}",
                 component="NornFlow",
@@ -985,6 +1014,7 @@ class NornFlow:
         3. User-configurable processors (custom business logic)
         4. NornFlowFailureStrategyProcessor (system - error handling)
         """
+        logger.debug("Applying processors to Nornir instance")
         # Build processor chain with system processors at fixed positions
         # The var_processor property will handle lazy initialization if needed
         all_processors = [
@@ -1013,6 +1043,7 @@ class NornFlow:
 
     def _orchestrate_execution(self) -> None:
         """Orchestrate the execution of workflow tasks in sequence."""
+        logger.info("Starting workflow execution")
         with self.nornir_manager:
             for task in self.workflow.tasks:
                 self.nornir_manager.set_dry_run(self.dry_run)

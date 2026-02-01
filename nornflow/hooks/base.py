@@ -4,6 +4,7 @@ from nornir.core.inventory import Host
 from nornir.core.task import AggregatedResult, MultiResult, Task
 
 from nornflow.hooks.exceptions import HookRegistrationError
+from nornflow.logger import logger
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
@@ -33,7 +34,7 @@ class Hook:
         exception_handlers: Maps exception types to handler method names.
     """
 
-    hook_name: ClassVar[str | None] = None
+    hook_name: ClassVar[str]
     run_once_per_task: bool = False
     exception_handlers: ClassVar[dict[type[Exception], str]] = {}
 
@@ -45,13 +46,15 @@ class Hook:
 
         Raises:
             HookRegistrationError: If a different class already registered
-                                   the same hook_name.
+                                   the same hook_name, or if hook_name is invalid.
         """
         super().__init_subclass__(**kwargs)
 
-        # Only register if hook_name is defined
-        if not hasattr(cls, "hook_name") or not cls.hook_name:
-            return
+        if not hasattr(cls, "hook_name") or not isinstance(cls.hook_name, str) or not cls.hook_name.strip():
+            raise HookRegistrationError(
+                f"Hook class {cls.__module__}.{cls.__name__} must define a non-empty string "
+                f"'hook_name' attribute."
+            )
 
         # Check for duplicate registration
         if cls.hook_name in HOOK_REGISTRY:
@@ -64,6 +67,7 @@ class Hook:
                 )
 
         HOOK_REGISTRY[cls.hook_name] = cls
+        logger.info(f"Hook class {cls.__name__} registered with hook_name '{cls.hook_name}'")
 
     def __init__(self, value: Any = None):
         """Initialize hook with configuration value.

@@ -12,6 +12,7 @@
 - [Built-in Tasks](#built-in-tasks)
 - [Built-in Filters](#built-in-filters)
 - [Built-in Processors](#built-in-processors)
+- [Logging](#logging)
 
 ## Overview
 
@@ -562,6 +563,60 @@ Internally used processor that manages hook execution for tasks.
 ### NornFlowVariableProcessor
 
 Internally used processor that handles variable resolution and template rendering.
+
+## Logging
+
+NornFlow provides a centralized logging system for capturing execution details, debugging, and auditing.
+
+### NornFlowLogger Class
+
+Singleton logger class providing centralized logging for NornFlow.
+
+```python
+from nornflow.logger import logger
+
+logger.info("This is an info message")
+logger.debug("Debug details")
+logger.error("An error occurred")
+```
+
+### Methods
+
+| Method | Description |
+|--------|-------------|
+| `debug(message, *args, **kwargs)` | Log debug message |
+| `info(message, *args, **kwargs)` | Log info message |
+| `warning(message, *args, **kwargs)` | Log warning message |
+| `error(message, *args, **kwargs)` | Log error message |
+| `critical(message, *args, **kwargs)` | Log critical message |
+| `exception(message, *args, **kwargs)` | Log exception with traceback |
+| `set_execution_context(...)` | Configure logging for a workflow execution |
+| `clear_execution_context()` | Stop file logging and clear context |
+| `get_execution_context()` | Get current execution context |
+
+### Execution Context
+
+The logger automatically creates timestamped log files when a workflow starts:
+
+```python
+logger.set_execution_context(
+    execution_name="my_workflow",
+    execution_type="workflow",
+    log_dir=".nornflow/logs",
+    log_level="INFO"
+)
+```
+
+### Sensitive Data Sanitization
+
+NornFlow Logger attempts to saniteze log messages to hid sensitive data. This is a best effort endeavour, and will only work for data explicitly related to what is considered a protected keyword.  
+> Note: `PROTECTED_KEYWORDS` can be found in [constants.py](../nornflow/constants.py)
+```python
+from nornflow.logger import sanitize_log_message
+
+# Values after keywords like 'password', 'secret', 'token' are redacted
+sanitize_log_message("password=secret123")  # "password=***REDACTED***"
+```
 
 <div align="center">
   

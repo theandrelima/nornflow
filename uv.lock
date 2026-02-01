@@ -1117,7 +1117,7 @@ manual-tests = [
 
 [package.metadata]
 requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=25.1.0" },
+    { name = "black", marker = "extra == 'dev'", specifier = ">=25.12.0" },
     { name = "jmespath", specifier = ">=1.0.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15.0" },
     { name = "nornir", specifier = ">=3.5.0" },
@@ -1131,7 +1131,7 @@ requires-dist = [
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.4" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.10" },
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "termcolor", specifier = ">=2.5.0" },
     { name = "typer", specifier = ">=0.15.1" },

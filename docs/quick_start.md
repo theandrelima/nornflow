@@ -175,6 +175,9 @@ failure_strategy: "skip-failed"
 processors:
   - class: "nornflow.builtins.DefaultNornFlowProcessor"
 vars_dir: "vars"
+logger:
+  directory: ".nornflow/logs"
+  level: "INFO"
 ```
 
 ### 4. Create a network automation workflow (`workflows/backup_configs.yaml`):
