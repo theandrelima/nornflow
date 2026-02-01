@@ -223,7 +223,7 @@ class NornFlowLogger:
         if not self._file_handler or not self._execution_context:
             return
 
-        updated = False
+        needs_file_rename = False
         old_filepath = Path(self._execution_context["log_file"])
 
         if execution_name or execution_type:
@@ -233,15 +233,14 @@ class NornFlowLogger:
             self._execution_context["execution_type"] = execution_type or self._execution_context.get(
                 "execution_type", "unknown"
             )
-            updated = True
+            needs_file_rename = True
 
         if log_level:
             level = getattr(logging, log_level.upper(), logging.INFO)
             self._logger.setLevel(level)
             self._file_handler.setLevel(level)
-            updated = True
 
-        if log_dir or updated:
+        if log_dir or needs_file_rename:
             new_log_path = Path(log_dir or self._execution_context["log_dir"])
             new_log_path.mkdir(parents=True, exist_ok=True)
             safe_name = sanitize_filename(self._execution_context["execution_name"])
@@ -263,7 +262,6 @@ class NornFlowLogger:
 
             self._execution_context["log_dir"] = str(new_log_path)
             self._execution_context["log_file"] = str(actual_filepath)
-            updated = True
 
     def clear_execution_context(self) -> None:
         """

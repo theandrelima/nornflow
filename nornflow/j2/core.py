@@ -1,4 +1,3 @@
-# ruff: noqa: PLR2004
 from functools import lru_cache
 from threading import Lock
 from typing import Any
@@ -158,13 +157,10 @@ class Jinja2Service:
         """
         try:
             compiled = self._environment.from_string(template_str)
-            logger.debug(f"Compiled template: {template_str[:50]}{'...' if len(template_str) > 50 else ''}")
+            logger.debug(f"Compiled template (length={len(template_str)})")
             return compiled
         except Exception as e:
-            logger.exception(
-                f"Unexpected error compiling template "
-                f"'{template_str[:50]}{'...' if len(template_str) > 50 else ''}': {e}"
-            )
+            logger.exception(f"Unexpected error compiling template (length={len(template_str)}): {e}")
             raise TemplateValidationError(f"Template compilation failed: {e}", template=template_str) from e
 
     def resolve_string(self, template_str: str, context: dict[str, Any], error_context: str = "") -> str:
@@ -192,10 +188,7 @@ class Jinja2Service:
         try:
             template = self.compile_template(template_str)
             result = template.render(context)
-            logger.debug(
-                f"Resolved template string: {template_str[:50]}{'...' if len(template_str) > 50 else ''} -> "
-                f"{result[:50]}{'...' if len(result) > 50 else ''}"
-            )
+            logger.debug(f"Resolved template: input_len={len(template_str)}, output_len={len(result)}")
             return result
         except UndefinedError as e:
             context_info = f" ({error_context})" if error_context else ""
@@ -206,8 +199,7 @@ class Jinja2Service:
         except Exception as e:
             context_info = f" ({error_context})" if error_context else ""
             logger.exception(
-                f"Unexpected error resolving template "
-                f"'{template_str[:50]}{'...' if len(template_str) > 50 else ''}'{context_info}: {e}"
+                f"Unexpected error resolving template (length={len(template_str)}){context_info}: {e}"
             )
             raise TemplateError(f"Template rendering error{context_info}: {e}") from e
 
