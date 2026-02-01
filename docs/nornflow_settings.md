@@ -16,6 +16,7 @@
   - [`dry_run`](#dry_run)
   - [`failure_strategy`](#failure_strategy)
   - [`processors`](#processors)
+  - [`logger`](#logger)
   - [`imported_packages`](#imported_packages)
 - [NornFlow Settings vs Nornir Configs](#nornflow-settings-vs-nornir-configs)
 
@@ -257,6 +258,31 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   2. Processors defined in workflow YAML
   3. Processors defined in this settings file
   4. `DefaultNornFlowProcessor` (if no other processors specified)
+
+### `logger`
+
+- **Description**: Configuration for NornFlow's logging system. Controls where log files are written and the logging verbosity level.
+- **Type**: `dict` with keys `directory` and `level`
+- **Default**: `{"directory": ".nornflow/logs", "level": "INFO"}`
+- **Example**:
+  ```yaml
+  logger:
+    directory: ".nornflow/logs"
+    level: "DEBUG"
+  ```
+- **Sub-keys**:
+  - `directory`: Path to the directory where log files will be written. Relative paths resolve against the project root. The directory is created automatically if it doesn't exist.
+  - `level`: Logging verbosity level. Valid values: `"DEBUG"`, `"INFO"`, `"WARNING"`, `"ERROR"`, `"CRITICAL"`
+- **Log Levels**:
+  | Level | Description |
+  |-------|-------------|
+  | `DEBUG` | Detailed diagnostic information including variable resolution, template compilation |
+  | `INFO` | General execution flow, task start/completion, workflow progress |
+  | `WARNING` | Potential issues that don't stop execution |
+  | `ERROR` | Errors that may affect results (also printed to console) |
+  | `CRITICAL` | Severe errors that may halt execution |
+- **Note**: Log files are automatically created with timestamped filenames (e.g., `my_workflow_20260115_143022.log`). Each workflow execution creates a new log file. Errors (`ERROR` level and above) are printed to stderr regardless of the log level setting.
+- **Sensitive Data Protection**: NornFlow will attempt to redact sensitive data in log messages. Values explicitly associated with keys like `password`, `secret`, `token`, `api_key`, and similar are replaced with `***REDACTED***`. However, this is merely a best effort. It is the user's responsibility to avoid logging sensitive data.
 
 ---
 > 🚨 ***NOTE: `imported_packages` is planned, but not yet supported and right now has no effect at all.***

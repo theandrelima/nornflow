@@ -38,6 +38,9 @@
   - [Processor Precedence](#processor-precedence)
 - [Execution Model](#execution-model)
 - [Failure Strategies (Summary)](#failure-strategies-summary)
+- [Logging](#logging)
+  - [Log Files](#log-files)
+  - [Log Levels](#log-levels)
 - [Best Practices](#best-practices)
 
 ## Introduction
@@ -846,6 +849,38 @@ NornFlow supports three failure handling strategies:
    - Useful for diagnostic or audit workflows
 
 See the full Failure Strategies guide for details.
+
+## Logging
+
+NornFlow provides centralized logging that captures detailed execution information for debugging and auditing purposes.  
+As users run workflows or tasks, nornflow automatically creates a .log file under the folder structure determined by the `logger.directory` setting.
+
+### Log Files
+
+- **Location**: Configured via `logger.directory` setting (default: `.nornflow/logs`)
+- **Naming**: Files are timestamped with the workflow/task name (e.g., `my_workflow_20260115_143022.log`)
+- **Format**: Each log entry includes timestamp, log level, logger name, and message
+
+### Log Levels
+
+Configure verbosity via `logger.level` (defaut: `INFO`) in `nornflow.yaml`:
+
+| Level | Description |
+|-------|-------------|
+| `DEBUG` | Detailed diagnostic information including variable resolution, template compilation |
+| `INFO` | General execution flow, task start/completion, workflow progress |
+| `WARNING` | Potential issues that don't stop execution |
+| `ERROR` | Errors that may affect results (also printed to console) |
+| `CRITICAL` | Severe errors that may halt execution |
+
+### Configuration
+
+```yaml
+# nornflow.yaml
+logger:
+  directory: ".nornflow/logs"
+  level: "INFO"
+```
 
 ## Best Practices
 
