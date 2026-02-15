@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from nornflow.builtins.constants import SILENT_SKIP_FLAG
 from nornflow.builtins.hooks import SingleHook
 from nornflow.hooks.exceptions import HookValidationError
 
@@ -134,7 +135,7 @@ class TestSingleHook:
 
         hook.task_instance_started(mock_task, mock_host)
 
-        assert mock_host.data["nornflow_silent_skip_flag"] is True
+        assert mock_host.data[SILENT_SKIP_FLAG] is True
 
     def test_task_instance_started_inactive_does_nothing(self, mock_host):
         """Test task_instance_started does nothing when hook is inactive."""
@@ -145,7 +146,7 @@ class TestSingleHook:
         hook.task_instance_started(mock_task, mock_host)
 
         assert hook._delegate_host is None
-        assert "nornflow_silent_skip_flag" not in mock_host.data
+        assert SILENT_SKIP_FLAG not in mock_host.data
 
     def test_task_completed_resets_state(self):
         """Test task_completed resets hook state."""
@@ -169,14 +170,14 @@ class TestSingleHook:
         from nornir.core.task import Result
 
         mock_task = MagicMock()
-        mock_task.host.data = {"nornflow_silent_skip_flag": True}
+        mock_task.host.data = {SILENT_SKIP_FLAG: True}
 
         decorated_func = skip_if_silent_flagged(lambda task: Result(host=task.host, result="should not run"))
         result = decorated_func(mock_task)
 
         assert result.skipped is True
         assert result.result is None
-        assert mock_task.host.data.get("nornflow_silent_skip_flag") is True
+        assert mock_task.host.data.get(SILENT_SKIP_FLAG) is True
 
     def test_skip_if_silent_flagged_decorator_executes(self):
         """Test skip_if_silent_flagged decorator executes task when not flagged."""
@@ -241,9 +242,9 @@ class TestSingleHook:
         hook.task_instance_started(mock_task, host3)
 
         assert hook._delegate_host == "host1"
-        assert "nornflow_silent_skip_flag" not in host1.data
-        assert host2.data["nornflow_silent_skip_flag"] is True
-        assert host3.data["nornflow_silent_skip_flag"] is True
+        assert SILENT_SKIP_FLAG not in host1.data
+        assert host2.data[SILENT_SKIP_FLAG] is True
+        assert host3.data[SILENT_SKIP_FLAG] is True
 
     def test_delegate_host_does_not_get_flagged(self):
         """Test that the delegate host never receives the silent skip flag."""
@@ -258,7 +259,7 @@ class TestSingleHook:
         hook.task_instance_started(mock_task, delegate)
 
         assert hook._delegate_host == "delegate"
-        assert "nornflow_silent_skip_flag" not in delegate.data
+        assert SILENT_SKIP_FLAG not in delegate.data
 
     def test_task_started_with_none_value_stays_inactive(self, mock_vars_manager):
         """Test task_started with None value keeps hook inactive."""

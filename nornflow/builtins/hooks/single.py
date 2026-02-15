@@ -34,6 +34,7 @@ from typing import Any, TYPE_CHECKING
 from nornir.core.inventory import Host
 from nornir.core.task import AggregatedResult, Result, Task
 
+from nornflow.builtins.constants import SILENT_SKIP_FLAG
 from nornflow.hooks import Hook, Jinja2ResolvableMixin
 from nornflow.hooks.exceptions import HookValidationError
 from nornflow.logger import logger
@@ -52,7 +53,7 @@ def skip_if_silent_flagged(task_func: Callable) -> Callable:
 
     @wraps(task_func)
     def wrapper(task: Task, **kwargs: Any) -> Result:
-        if task.host.data.get("nornflow_silent_skip_flag", False):
+        if task.host.data.get(SILENT_SKIP_FLAG, False):
             return Result(
                 host=task.host,
                 result=None,
@@ -182,7 +183,7 @@ class SingleHook(Hook, Jinja2ResolvableMixin):
                 logger.debug(f"Host '{host.name}' designated as delegate for task '{task.name}'")
                 return
 
-        host.data["nornflow_silent_skip_flag"] = True
+        host.data[SILENT_SKIP_FLAG] = True
 
     def task_completed(self, task: Task, result: AggregatedResult) -> None:
         """Reset delegate state after task completes.

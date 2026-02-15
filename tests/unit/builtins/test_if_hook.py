@@ -4,6 +4,7 @@ import pytest
 from nornir.core.inventory import Host
 from nornir.core.task import Result, Task
 
+from nornflow.builtins.constants import SKIP_FLAG
 from nornflow.builtins.hooks import IfHook
 from nornflow.hooks.exceptions import HookValidationError
 
@@ -116,7 +117,7 @@ class TestIfHook:
 
         hook.task_instance_started(mock_task, mock_host)
 
-        assert mock_host.data['nornflow_skip_flag'] is True
+        assert mock_host.data[SKIP_FLAG] is True
         mock_filter_func.assert_called_once_with(mock_host, value="ios")
 
     @patch('nornflow.builtins.hooks.if_hook.logger')
@@ -131,7 +132,7 @@ class TestIfHook:
 
         hook.task_instance_started(mock_task, mock_host)
 
-        assert 'nornflow_skip_flag' not in mock_host.data
+        assert SKIP_FLAG not in mock_host.data
         mock_filter_func.assert_called_once_with(mock_host, value="ios")
 
     def test_task_instance_started_filter_missing_catalog_raises_error(self, mock_task, mock_host):
@@ -161,7 +162,7 @@ class TestIfHook:
         with patch.object(hook, 'get_resolved_value', return_value=False):
             hook.task_instance_started(mock_task, mock_host)
             
-            assert mock_host.data['nornflow_skip_flag'] is True
+            assert mock_host.data[SKIP_FLAG] is True
 
     @patch('nornflow.builtins.hooks.if_hook.logger')
     def test_task_instance_started_jinja_condition_continue(self, mock_logger, mock_task, mock_host, mock_vars_manager, mock_device_context):
@@ -171,7 +172,7 @@ class TestIfHook:
         with patch.object(hook, 'get_resolved_value', return_value=True):
             hook.task_instance_started(mock_task, mock_host)
             
-            assert 'nornflow_skip_flag' not in mock_host.data
+            assert SKIP_FLAG not in mock_host.data
 
     def test_task_instance_started_jinja_missing_vars_manager_raises_error(self, mock_task, mock_host):
         """Test task_instance_started raises error when vars_manager is missing."""
@@ -190,7 +191,7 @@ class TestIfHook:
         with patch.object(hook, 'get_resolved_value', return_value=True):
             hook.task_instance_started(mock_task, mock_host)
             
-            assert 'nornflow_skip_flag' not in mock_host.data
+            assert SKIP_FLAG not in mock_host.data
 
     def test_skip_if_condition_flagged_decorator_skip(self):
         """Test skip_if_condition_flagged decorator returns skipped result when flag is set."""
@@ -203,7 +204,7 @@ class TestIfHook:
         
         mock_task.host = mock_host
         mock_task.nornir = mock_nornir
-        mock_host.data = {'nornflow_skip_flag': True}
+        mock_host.data = {SKIP_FLAG: True}
         
         @skip_if_condition_flagged
         def dummy_task(task):
@@ -215,7 +216,7 @@ class TestIfHook:
         assert result.result is None
         assert result.changed is False
         assert result.failed is False
-        assert 'nornflow_skip_flag' not in mock_host.data
+        assert SKIP_FLAG not in mock_host.data
 
     def test_skip_if_condition_flagged_decorator_continue(self):
         """Test skip_if_condition_flagged decorator executes task when flag is not set."""

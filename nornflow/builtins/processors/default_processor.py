@@ -7,6 +7,8 @@ from nornir.core.inventory import Host
 from nornir.core.processor import Processor
 from nornir.core.task import Result, Task
 
+from nornflow.builtins.constants import SILENT_SKIP_FLAG
+
 # Initialize colorama
 init(autoreset=True)
 
@@ -103,7 +105,7 @@ class DefaultNornFlowProcessor(Processor):
         Returns:
             True if the host should be silently skipped.
         """
-        return host.data.get("nornflow_silent_skip_flag", False)
+        return host.data.get(SILENT_SKIP_FLAG, False)
 
     def task_started(self, task: Task) -> None:
         """Record task start time and print header information."""
@@ -136,7 +138,7 @@ class DefaultNornFlowProcessor(Processor):
     def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
         """Process task completion and print results for a specific host."""
         if self._is_silent_skip(host):
-            host.data.pop("nornflow_silent_skip_flag", None)
+            host.data.pop(SILENT_SKIP_FLAG, None)
             return
 
         finish_time = datetime.now()
