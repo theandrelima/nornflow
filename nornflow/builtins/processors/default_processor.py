@@ -12,13 +12,15 @@ from nornflow.builtins.constants import SILENT_SKIP_FLAG
 # Initialize colorama
 init(autoreset=True)
 
-# Create a global lock for synchronizing output only
-# No impact on actual task execution performance.
-# Prevents garbled output when multiple threads try to print simultaneously
-# Ensures each task's output is printed completely before the next one starts
-# Safely tracks task statistics across multiple threads
-# Protects the start_times dictionary from concurrent modifications
-output_lock = threading.Lock()
+# Reentrant lock that serializes all console output across concurrent Nornir
+# worker threads.  Prevents interleaving when multiple threads print task
+# result blocks, workflow banners, or execution summaries simultaneously.
+# Built-in tasks that perform interactive I/O (e.g. pause) may also acquire
+# this lock to coordinate their output with the processor's result printing.
+# Reentrant (RLock) so the same thread can safely acquire it multiple times
+# without deadlocking — necessary when a task holds the lock across its
+# return boundary into task_instance_completed on the same thread.
+output_lock = threading.RLock()
 
 
 class DefaultNornFlowProcessor(Processor):
@@ -60,6 +62,7 @@ class DefaultNornFlowProcessor(Processor):
 
         # Flag to enable printing workflow summary after each task completion
         self.print_summary_after_each_task = False
+        self._pause_lock_holders: set[tuple[str, str]] = set()
 
     def _is_output_suppressed(self, task: Task) -> bool:
         """Check if output should be suppressed for the given task.
@@ -144,6 +147,9 @@ class DefaultNornFlowProcessor(Processor):
         if self._is_silent_skip(host):
             return
 
+        pause_key = (task.name, host.name)
+        held_by_pause = pause_key in self._pause_lock_holders
+
         finish_time = datetime.now()
 
         # Determine status based on result attributes
@@ -171,23 +177,57 @@ class DefaultNornFlowProcessor(Processor):
         suppress_output = self._is_output_suppressed(task)
         output_section = self._format_task_output(result, suppress_output)
 
-        with output_lock:
-            print(f"{Fore.WHITE}{'-' * 80}")
-            print(
-                f"{Style.BRIGHT}{Fore.CYAN}Task: {task.name} "
-                f"{Fore.WHITE}| {Fore.YELLOW}Host: {host} "
-                f"{Fore.WHITE}| {Fore.MAGENTA}Hostname: {task.host.hostname or 'N/A'} "
-                f"{Fore.WHITE}| {status_color}Status: {status}"
+        if held_by_pause:
+            self._print_task_result(
+                task, host, status, status_color, start_str, finish_str, duration_ms, output_section
             )
-            print(f"{Fore.BLUE}{start_str} - {finish_str} ({duration_ms:.0f}ms)")
+            self._pause_lock_holders.discard(pause_key)
+            output_lock.release()
+        else:
+            with output_lock:
+                self._print_task_result(
+                    task, host, status, status_color, start_str, finish_str, duration_ms, output_section
+                )
 
-            if output_section:
-                print(output_section)
+    def _print_task_result(
+        self,
+        task: Task,
+        host: Host,
+        status: str,
+        status_color: str,
+        start_str: str,
+        finish_str: str,
+        duration_ms: float,
+        output_section: str,
+    ) -> None:
+        """Print the formatted task result block.
 
-            print(f"{Fore.WHITE}{'-' * 80}")
+        Args:
+            task: The Nornir task.
+            host: The host the task ran on.
+            status: Status string (Success/Failed/Skipped).
+            status_color: Colorama color for the status.
+            start_str: Formatted start time string.
+            finish_str: Formatted finish time string.
+            duration_ms: Duration in milliseconds.
+            output_section: Pre-formatted output section string.
+        """
+        print(f"{Fore.WHITE}{'-' * 80}")
+        print(
+            f"{Style.BRIGHT}{Fore.CYAN}Task: {task.name} "
+            f"{Fore.WHITE}| {Fore.YELLOW}Host: {host} "
+            f"{Fore.WHITE}| {Fore.MAGENTA}Hostname: {task.host.hostname or 'N/A'} "
+            f"{Fore.WHITE}| {status_color}Status: {status}"
+        )
+        print(f"{Fore.BLUE}{start_str} - {finish_str} ({duration_ms:.0f}ms)")
 
-            if (task.name, host) in self.start_times:
-                del self.start_times[(task.name, host)]
+        if output_section:
+            print(output_section)
+
+        print(f"{Fore.WHITE}{'-' * 80}")
+
+        if (task.name, host) in self.start_times:
+            del self.start_times[(task.name, host)]
 
     def task_instance_failed(self, task: Task, host: Host, result: Result) -> None:
         self.task_instance_completed(task, host, result)
