@@ -489,18 +489,6 @@ tasks:
       content: "{{ config_data }}"
 ```
 
-### `template_file`
-
-Render a Jinja2 template file.
-
-```yaml
-tasks:
-  - name: template_file
-    args:
-      template: "templates/config.j2"
-      dest: "configs/{{ host.name }}.conf"
-```
-
 ### `pause`
 
 Pause workflow execution, optionally with a message and/or a countdown timer.
