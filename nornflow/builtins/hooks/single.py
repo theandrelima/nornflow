@@ -114,11 +114,13 @@ class SingleHook(Hook, Jinja2ResolvableMixin):
         if not isinstance(self.value, bool) and isinstance(self.value, (dict, list, int, float)):
             raise HookValidationError(
                 "SingleHook",
-                [(
-                    "invalid_value_type",
-                    f"Task '{task_model.name}': single value must be a boolean or "
-                    f"Jinja2 expression string, got {type(self.value).__name__}",
-                )],
+                [
+                    (
+                        "invalid_value_type",
+                        f"Task '{task_model.name}': single value must be a boolean or "
+                        f"Jinja2 expression string, got {type(self.value).__name__}",
+                    )
+                ],
             )
 
         if isinstance(self.value, str) and not self.value.strip():
@@ -134,12 +136,14 @@ class SingleHook(Hook, Jinja2ResolvableMixin):
             if "if" in hook_keys:
                 raise HookValidationError(
                     "SingleHook",
-                    [(
-                        "mutual_exclusion",
-                        f"Task '{task_model.name}': 'single' and 'if' hooks cannot be "
-                        f"used on the same task. Use Jinja2 expressions in 'single' for "
-                        f"conditional single-host execution.",
-                    )],
+                    [
+                        (
+                            "mutual_exclusion",
+                            f"Task '{task_model.name}': 'single' and 'if' hooks cannot be "
+                            f"used on the same task. Use Jinja2 expressions in 'single' for "
+                            f"conditional single-host execution.",
+                        )
+                    ],
                 )
 
     def task_started(self, task: Task) -> None:
@@ -175,9 +179,7 @@ class SingleHook(Hook, Jinja2ResolvableMixin):
         with self._lock:
             if not self._delegate_host:
                 self._delegate_host = host.name
-                logger.debug(
-                    f"Host '{host.name}' designated as delegate for task '{task.name}'"
-                )
+                logger.debug(f"Host '{host.name}' designated as delegate for task '{task.name}'")
                 return
 
         host.data["nornflow_silent_skip_flag"] = True
