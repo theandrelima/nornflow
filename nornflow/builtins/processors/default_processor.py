@@ -136,9 +136,12 @@ class DefaultNornFlowProcessor(Processor):
         self.task_executions += 1
 
     def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
-        """Process task completion and print results for a specific host."""
+        """Process task completion and print results for a specific host.
+
+        Silent-skip flag cleanup is owned by SingleHook.task_completed,
+        not this processor. We only check the flag to skip output/stats.
+        """
         if self._is_silent_skip(host):
-            host.data.pop(SILENT_SKIP_FLAG, None)
             return
 
         finish_time = datetime.now()

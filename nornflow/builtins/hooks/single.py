@@ -186,11 +186,18 @@ class SingleHook(Hook, Jinja2ResolvableMixin):
         host.data[SILENT_SKIP_FLAG] = True
 
     def task_completed(self, task: Task, result: AggregatedResult) -> None:
-        """Reset delegate state after task completes.
+        """Reset delegate state and clean up skip flags after task completes.
+
+        Clears SILENT_SKIP_FLAG from all hosts to prevent stale flags
+        when running without DefaultNornFlowProcessor (custom processor chains).
 
         Args:
             task: The task that completed.
             result: Aggregated results from all hosts.
         """
+        if self._active:
+            for host in task.nornir.inventory.hosts.values():
+                host.data.pop(SILENT_SKIP_FLAG, None)
+
         self._delegate_host = None
         self._active = False

@@ -195,8 +195,11 @@ class TestDefaultNornFlowProcessorSilentSkip:
 
         assert processor.task_executions == initial_executions + 1
 
-    def test_task_instance_completed_skips_output_and_cleans_flag(self):
-        """Test that task_instance_completed skips output and cleans the flag for silent-skipped hosts."""
+    def test_task_instance_completed_skips_output_for_silent_hosts(self):
+        """Test that task_instance_completed skips output for silent-skipped hosts.
+
+        Flag cleanup is owned by SingleHook.task_completed, not the processor.
+        """
         processor = DefaultNornFlowProcessor()
         mock_task = MagicMock()
         mock_host = MagicMock()
@@ -208,7 +211,6 @@ class TestDefaultNornFlowProcessorSilentSkip:
             processor.task_instance_completed(mock_task, mock_host, mock_result)
 
         mock_print.assert_not_called()
-        assert SILENT_SKIP_FLAG not in mock_host.data
 
     def test_task_instance_completed_normal_host_prints_output(self):
         """Test that task_instance_completed prints output for normal hosts."""
