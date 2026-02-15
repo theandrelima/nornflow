@@ -161,3 +161,100 @@ class TestProcessorPrecedence:
                 assert len(nornflow.processors) == 1
                 assert isinstance(nornflow.processors[0], TestProcessor2)
                 assert nornflow.processors[0].name == "KwargsProc"
+
+
+class TestDefaultNornFlowProcessorSilentSkip:
+    """Test silent-skip logic in DefaultNornFlowProcessor."""
+
+    def test_task_instance_started_skips_silent_flag(self):
+        """Test that task_instance_started does not increment task_executions for silent-skipped hosts."""
+        from nornflow.builtins.processors.default_processor import DefaultNornFlowProcessor
+
+        processor = DefaultNornFlowProcessor()
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_host.data = {"nornflow_silent_skip_flag": True}
+
+        initial_executions = processor.task_executions
+
+        with patch("nornflow.builtins.processors.default_processor.output_lock"):
+            processor.task_instance_started(mock_task, mock_host)
+
+        # task_executions should not increment for silent-skipped hosts
+        assert processor.task_executions == initial_executions
+
+    def test_task_instance_started_normal_host(self):
+        """Test that task_instance_started increments task_executions for normal hosts."""
+        from nornflow.builtins.processors.default_processor import DefaultNornFlowProcessor
+
+        processor = DefaultNornFlowProcessor()
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_host.data = {}  # No silent skip flag
+
+        initial_executions = processor.task_executions
+
+        with patch("nornflow.builtins.processors.default_processor.output_lock"):
+            processor.task_instance_started(mock_task, mock_host)
+
+        # task_executions should increment for normal hosts
+        assert processor.task_executions == initial_executions + 1
+
+    def test_task_instance_completed_skips_output_and_cleans_flag(self):
+        """Test that task_instance_completed skips output and cleans the flag for silent-skipped hosts."""
+        from nornflow.builtins.processors.default_processor import DefaultNornFlowProcessor
+
+        processor = DefaultNornFlowProcessor()
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_host.data = {"nornflow_silent_skip_flag": True}
+        mock_result = MagicMock()
+
+        with patch("nornflow.builtins.processors.default_processor.output_lock"), \
+             patch("builtins.print") as mock_print:
+            processor.task_instance_completed(mock_task, mock_host, mock_result)
+
+        # No output should be printed for silent-skipped hosts
+        mock_print.assert_not_called()
+
+        # Flag should be cleaned up
+        assert "nornflow_silent_skip_flag" not in mock_host.data
+
+    def test_task_instance_completed_normal_host_prints_output(self):
+        """Test that task_instance_completed prints output for normal hosts."""
+        from nornflow.builtins.processors.default_processor import DefaultNornFlowProcessor
+
+        processor = DefaultNornFlowProcessor()
+        mock_task = MagicMock()
+        mock_task.name = "test_task"
+        mock_host = MagicMock()
+        mock_host.data = {}  # No silent skip flag
+        mock_host.__str__ = MagicMock(return_value="test_host")
+        mock_result = MagicMock()
+        mock_result.failed = False
+        mock_result.result = "test output"
+
+        with patch("nornflow.builtins.processors.default_processor.output_lock"), \
+             patch("builtins.print") as mock_print:
+            processor.task_instance_completed(mock_task, mock_host, mock_result)
+
+        # Output should be printed for normal hosts
+        assert mock_print.called
+
+    def test_silent_skip_does_not_increment_skipped_executions(self):
+        """Test that silent-skipped hosts do not increment skipped_executions."""
+        from nornflow.builtins.processors.default_processor import DefaultNornFlowProcessor
+
+        processor = DefaultNornFlowProcessor()
+        mock_task = MagicMock()
+        mock_host = MagicMock()
+        mock_host.data = {"nornflow_silent_skip_flag": True}
+        mock_result = MagicMock()
+
+        initial_skipped = processor.skipped_executions
+
+        with patch("nornflow.builtins.processors.default_processor.output_lock"):
+            processor.task_instance_completed(mock_task, mock_host, mock_result)
+
+        # skipped_executions should not increment for silent skips
+        assert processor.skipped_executions == initial_skipped
