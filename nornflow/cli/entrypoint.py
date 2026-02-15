@@ -16,7 +16,7 @@ def settings_callback(ctx: typer.Context, settings: str | None = None) -> None:
     3. Default nornflow.yaml (handled by NornFlowSettings.load)
     """
     # Just pass through whatever CLI provided (or empty string)
-    ctx.obj = {"settings": settings if settings else ""}
+    ctx.obj = {"settings": settings or ""}
 
 
 # Add the global option to the main Typer app

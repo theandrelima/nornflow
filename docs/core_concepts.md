@@ -691,7 +691,7 @@ Under the hood, hooks are implemented as Nornir Processors and are orchestrated 
 
 ### Built-in Hooks
 
-NornFlow provides three built-in hooks:
+NornFlow provides four built-in hooks:
 
 **`if` Hook - Conditional Execution**
 
@@ -746,6 +746,21 @@ tasks:
   - name: conditional_quiet
     shush: "{{ debug_mode == false }}"
 ```
+
+**`single` Hook - Single-Host Execution**
+
+Restricts task execution to exactly one host from the inventory, silently skipping others.
+
+```yaml
+tasks:
+  - name: gather_global_config
+    single: true
+
+  - name: conditional_single
+    single: "{{ run_as_single }}"
+```
+
+Cannot be combined with the `if` hook on the same task.
 
 For comprehensive documentation on hooks, including creating custom hooks, see the Hooks Guide.
 
