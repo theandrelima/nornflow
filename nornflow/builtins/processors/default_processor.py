@@ -94,6 +94,17 @@ class DefaultNornFlowProcessor(Processor):
             return f"\n{Fore.WHITE}Output: {Style.DIM}[Shushed!]{Style.RESET_ALL}"
         return ""
 
+    def _is_silent_skip(self, host: Host) -> bool:
+        """Check if a host is flagged for silent skip by the single hook.
+
+        Args:
+            host: The host to check.
+
+        Returns:
+            True if the host should be silently skipped.
+        """
+        return host.data.get("nornflow_silent_skip_flag", False)
+
     def task_started(self, task: Task) -> None:
         """Record task start time and print header information."""
         if not self.workflow_start_time:
@@ -114,6 +125,9 @@ class DefaultNornFlowProcessor(Processor):
 
     def task_instance_started(self, task: Task, host: Host) -> None:
         """Record start time for a specific task on a specific host."""
+        if self._is_silent_skip(host):
+            return
+
         start_time = datetime.now()
         with output_lock:
             self.start_times[(task.name, host)] = start_time
@@ -121,6 +135,10 @@ class DefaultNornFlowProcessor(Processor):
 
     def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
         """Process task completion and print results for a specific host."""
+        if self._is_silent_skip(host):
+            host.data.pop("nornflow_silent_skip_flag", None)
+            return
+
         finish_time = datetime.now()
 
         # Determine status based on result attributes
