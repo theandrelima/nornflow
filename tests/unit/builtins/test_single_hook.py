@@ -49,15 +49,15 @@ class TestSingleHook:
     def test_execute_hook_validations_invalid_types(self, mock_task):
         """Test validation raises error for invalid types."""
         hook = SingleHook([1, 2, 3])
-        with pytest.raises(HookValidationError, match="single value must be a boolean or Jinja2 expression string"):
+        with pytest.raises(HookValidationError, match=r"single value must be a boolean, Jinja2 expression string, or None, got list"):
             hook.execute_hook_validations(mock_task)
 
         hook = SingleHook({"key": "value"})
-        with pytest.raises(HookValidationError, match="single value must be a boolean or Jinja2 expression string"):
+        with pytest.raises(HookValidationError, match=r"single value must be a boolean, Jinja2 expression string, or None, got dict"):
             hook.execute_hook_validations(mock_task)
 
         hook = SingleHook(123)
-        with pytest.raises(HookValidationError, match="single value must be a boolean or Jinja2 expression string"):
+        with pytest.raises(HookValidationError, match=r"single value must be a boolean, Jinja2 expression string, or None, got int"):
             hook.execute_hook_validations(mock_task)
 
     def test_execute_hook_validations_empty_string(self, mock_task):
@@ -291,7 +291,7 @@ class TestSingleHook:
     def test_execute_hook_validations_float_rejected(self, mock_task):
         """Test validation rejects float values."""
         hook = SingleHook(1.5)
-        with pytest.raises(HookValidationError, match="single value must be a boolean"):
+        with pytest.raises(HookValidationError, match=r"single value must be a boolean, Jinja2 expression string, or None, got float"):
             hook.execute_hook_validations(mock_task)
 
     def test_execute_hook_validations_whitespace_string(self, mock_task):

@@ -112,14 +112,14 @@ class SingleHook(Hook, Jinja2ResolvableMixin):
         """
         super().execute_hook_validations(task_model)
 
-        if not isinstance(self.value, bool) and isinstance(self.value, (dict, list, int, float)):
+        if self.value is not None and not isinstance(self.value, (bool, str)):
             raise HookValidationError(
                 "SingleHook",
                 [
                     (
                         "invalid_value_type",
-                        f"Task '{task_model.name}': single value must be a boolean or "
-                        f"Jinja2 expression string, got {type(self.value).__name__}",
+                        f"Task '{task_model.name}': single value must be a boolean, "
+                        f"Jinja2 expression string, or None, got {type(self.value).__name__}",
                     )
                 ],
             )
