@@ -90,7 +90,7 @@ class NornFlowSettings(BaseSettings):
     )
     dry_run: bool = Field(default=False, description="Whether to run in dry-run mode")
     logger: dict[str, Any] = Field(
-        default_factory=lambda: NORNFLOW_DEFAULT_LOGGER.copy(), description="Logger configuration dictionary"
+        default_factory=lambda: {**NORNFLOW_DEFAULT_LOGGER}, description="Logger configuration dictionary"
     )
 
     _base_dir: Path | None = PrivateAttr(default=None)
