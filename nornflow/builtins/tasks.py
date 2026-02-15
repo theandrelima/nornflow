@@ -1,3 +1,5 @@
+# ruff: noqa: T201
+import threading
 from pathlib import Path
 
 from nornir.core.task import Result, Task
@@ -74,6 +76,97 @@ def echo(task: Task, msg: str) -> Result:
             msg: "Hello from {{ host.name }}, platform is {{ host.platform }}"
     """
     return Result(host=task.host, result=msg)
+
+
+def pause(task: Task, msg: str = "", timer: int = 0) -> Result:
+    """Pause workflow execution, optionally with a countdown timer.
+
+    When ``timer`` is provided, displays a countdown and auto-continues
+    when it expires.
+
+    When no ``timer`` is given, blocks until the user presses Enter.
+
+    Args:
+        task: The Nornir Task object.
+        msg: Optional message explaining the reason for the pause.
+        timer: Seconds to wait before auto-continuing. 0 means wait
+            indefinitely for user input.
+
+    Returns:
+        Result with a summary of the pause action.
+
+    Example in workflow YAML:
+        ```yaml
+        - name: wait_for_reboot
+          task: pause
+          single: true
+          args:
+            msg: "Device is rebooting — wait for it to come back"
+            timer: 120
+
+        - name: confirm_cabling
+          task: pause
+          single: true
+          args:
+            msg: "Verify all cables are connected, then press Enter"
+        ```
+    """
+    host_label = f"[{task.host.name}]"
+
+    if msg:
+        print(f"\n{'=' * 60}")
+        print(f"{host_label} {msg}")
+        print(f"{'=' * 60}")
+
+    if timer:
+        result_msg = _pause_with_timer(host_label, timer)
+    else:
+        result_msg = _pause_wait_for_enter(host_label)
+
+    return Result(host=task.host, result=result_msg)
+
+
+def _pause_with_timer(host_label: str, seconds: int) -> str:
+    """Run a countdown timer that auto-continues when expired.
+
+    Uses threading.Event.wait() as a portable, interruptible sleep
+    that responds to Ctrl+C cleanly via KeyboardInterrupt.
+
+    Args:
+        host_label: Label prefix for console output.
+        seconds: Total countdown duration.
+
+    Returns:
+        Summary string describing what happened.
+    """
+    stop = threading.Event()
+
+    print(f"{host_label} Pausing for {seconds}s...")
+
+    elapsed = 0
+    while elapsed < seconds and not stop.is_set():
+        remaining = seconds - elapsed
+        mins, secs = divmod(remaining, 60)
+        print(f"\r{host_label} Resuming in {mins:02d}:{secs:02d} ", end="", flush=True)
+        stop.wait(timeout=1)
+        elapsed += 1
+
+    print()
+
+    return f"Pause completed ({seconds}s)"
+
+
+def _pause_wait_for_enter(host_label: str) -> str:
+    """Block until the user presses Enter.
+
+    Args:
+        host_label: Label prefix for console output.
+
+    Returns:
+        Summary string.
+    """
+    input(f"{host_label} Press Enter to continue...")
+    return "Resumed by user"
 
 
 def write_file(task: Task, filename: str, content: str, append: bool = False, mkdir: bool = True) -> Result:
