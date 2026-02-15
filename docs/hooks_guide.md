@@ -11,6 +11,7 @@
   - [The `if` Hook](#the-if-hook)
   - [The `set_to` Hook](#the-set_to-hook)
   - [The `shush` Hook](#the-shush-hook)
+  - [The `single` Hook](#the-single-hook)
 - [Hook Configuration](#hook-configuration)
   - [Task-Level Configuration](#task-level-configuration)
   - [Multiple Hooks per Task](#multiple-hooks-per-task)
@@ -144,7 +145,7 @@ The system operates in two phases when deferred processing is requested:
 
 ## NornFlow's Built-in Hooks
 
-NornFlow includes three built-in hooks that demonstrate the framework's capabilities and serve as practical examples for creating your own custom hooks.
+NornFlow includes four built-in hooks that demonstrate the framework's capabilities and serve as practical examples for creating your own custom hooks.
 
 ### The `if` Hook
 
@@ -201,7 +202,7 @@ tasks:
     if:
       platform_filter: "ios" # assuming a 'platform_filter' exists in the catalog
     args: 
-      command: "show version"
+      command_string: "show version"
 ```
 
 #### How IfHook Uses Hook-Driven Template Resolution
@@ -398,6 +399,71 @@ class MyCustomProcessor(Processor):
             print(f"Task '{task.name}' on '{host.name}' output suppressed.")
         else:
             # Normal output logic here ...
+```
+
+### The `single` Hook
+
+Restrict task execution to a single host from the inventory.
+
+You are encouraged to refer to the source code for the `single` Hook [here](../nornflow/builtins/hooks/single.py), but here is a summary of how it works:
+
+1. **task_started**: Resolves the hook value (boolean or Jinja2 expression) and applies a decorator to silently skip non-delegate hosts
+2. **task_instance_started**: Designates the first host as the delegate; flags all subsequent hosts for silent skip
+3. **task_completed**: Resets the delegate state after task completion
+
+The hook ensures thread-safe delegate selection and cannot be combined with the `if` hook on the same task.
+
+#### Configuration Formats
+
+**Boolean (static single-host execution)**
+```yaml
+tasks:
+  - name: gather_global_config
+    single: true
+    args:
+      command_string: "show running-config"
+```
+
+**Jinja2 Expression (dynamic single-host execution)**
+
+```yaml
+vars:
+  run_as_single: true
+  
+tasks:
+  - name: conditional_single_task
+    single: "{{ run_as_single }}"  # Enable based on variable
+    args:
+      command_string: "show version"
+```
+
+**Expression Evaluation:**
+- Jinja2 expressions have access to all NornFlow variables (runtime, CLI, inline, domain, default, env)
+- Expressions have access to host.* namespace (Nornir inventory)
+- Must contain Jinja2 markers ({{, {%, or {#)
+- Expressions are resolved to values, then converted to boolean
+- String values "true", "yes", "1" evaluate to `True`
+- All other string values evaluate to False
+
+#### Mutual Exclusion
+
+The `single` hook cannot be combined with the `if` hook on the same task. This is validated during workflow preparation to prevent conflicting execution control.
+
+```yaml
+# ❌ Invalid - cannot combine 'single' and 'if'
+tasks:
+  - name: invalid_task
+    single: true
+    if: "{{ some_condition }}"
+    args:
+      command_string: "show version"
+
+# ✅ Valid - use Jinja2 in 'single' for conditional logic
+tasks:
+  - name: valid_task
+    single: "{{ run_as_single and some_condition }}"
+    args:
+      command_string: "show version"
 ```
 
 ## Hook Configuration
