@@ -58,6 +58,22 @@ VAR_SOURCE_CONFIG: list[tuple[str, str, str]] = [
 VAR_SOURCE_ORDER: dict[str, int] = {label: -idx for idx, (_, label, _) in enumerate(VAR_SOURCE_CONFIG)}
 
 
+def find_processor_by_type(processors: list[Processor], processor_type: type) -> Processor | None:
+    """Find a processor instance by its type in a processor list.
+
+    Args:
+        processors: List of processor instances to search.
+        processor_type: The type of processor to find.
+
+    Returns:
+        The matching processor instance, or None if not found.
+    """
+    for processor in processors:
+        if isinstance(processor, processor_type):
+            return processor
+    return None
+
+
 def normalize_failure_strategy(
     value: str | FailureStrategy, exception_class: type[Exception]
 ) -> FailureStrategy:

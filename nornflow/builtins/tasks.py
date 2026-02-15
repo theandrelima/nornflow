@@ -7,6 +7,7 @@ from nornir.core.task import Result, Task
 from nornflow.builtins.processors.default_processor import DefaultNornFlowProcessor, output_lock
 from nornflow.builtins.utils import build_set_task_report, get_task_vars_manager
 from nornflow.logger import logger
+from nornflow.utils import find_processor_by_type
 
 
 def set(task: Task, print_output: bool = True, **kwargs) -> Result:
@@ -128,7 +129,7 @@ def pause(task: Task, msg: str = "", timer: int = 0) -> Result:
 
     output_lock.acquire()
 
-    processor = _get_default_processor(task)
+    processor = find_processor_by_type(task.nornir.processors, DefaultNornFlowProcessor)
     if processor:
         processor._pause_lock_holders.add((task.name, task.host.name))  # noqa: SLF001
 
@@ -143,21 +144,6 @@ def pause(task: Task, msg: str = "", timer: int = 0) -> Result:
         output_lock.release()
 
     return Result(host=task.host, result=result_msg)
-
-
-def _get_default_processor(task: Task) -> DefaultNornFlowProcessor | None:
-    """Find the DefaultNornFlowProcessor in the task's processor chain.
-
-    Args:
-        task: The Nornir Task object.
-
-    Returns:
-        The processor instance, or None if not found.
-    """
-    for proc in task.nornir.processors:
-        if isinstance(proc, DefaultNornFlowProcessor):
-            return proc
-    return None
 
 
 def _countdown(host_label: str, seconds: int) -> str:

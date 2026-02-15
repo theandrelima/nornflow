@@ -8,6 +8,7 @@ from typing_extensions import Self
 from nornflow.constants import NORNFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import CoreError, ProcessorError
 from nornflow.logger import logger
+from nornflow.utils import find_processor_by_type
 
 
 class NornirManager:
@@ -223,10 +224,9 @@ class NornirManager:
             ProcessorError: If no processor of the requested type is found
         """
         logger.debug(f"Searching for processor of type: {processor_type.__name__}")
-        for processor in self.nornir.processors:
-            if isinstance(processor, processor_type):
-                logger.debug(f"Found processor: {type(processor).__name__}")
-                return processor
-
-        logger.debug(f"No processor of type {processor_type.__name__} found")
-        raise ProcessorError(f"No processor of type {processor_type.__name__} found in Nornir instance")
+        result = find_processor_by_type(self.nornir.processors, processor_type)
+        if not result:
+            logger.debug(f"No processor of type {processor_type.__name__} found")
+            raise ProcessorError(f"No processor of type {processor_type.__name__} found in Nornir instance")
+        logger.debug(f"Found processor: {type(result).__name__}")
+        return result
