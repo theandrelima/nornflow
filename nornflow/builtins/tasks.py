@@ -1,4 +1,4 @@
-# ruff: noqa: T201
+# ruff: noqa: T201, SLF001
 import time
 from pathlib import Path
 

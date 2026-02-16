@@ -1,4 +1,5 @@
 # ruff: noqa: T201, SLF001
+import contextlib
 import threading
 from datetime import datetime
 
@@ -250,10 +251,8 @@ class DefaultNornFlowProcessor(Processor):
         orphaned = {key for key in self._pause_lock_holders if key[0] == task_name}
         for key in orphaned:
             self._pause_lock_holders.discard(key)
-            try:
+            with contextlib.suppress(RuntimeError):
                 output_lock.release()
-            except RuntimeError:
-                pass
 
     def task_instance_failed(self, task: Task, host: Host, result: Result) -> None:
         self.task_instance_completed(task, host, result)
