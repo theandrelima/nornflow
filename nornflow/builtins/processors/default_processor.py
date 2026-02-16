@@ -62,6 +62,12 @@ class DefaultNornFlowProcessor(Processor):
 
         # Flag to enable printing workflow summary after each task completion
         self.print_summary_after_each_task = False
+
+        # Tracks (task_name, host_name) pairs where pause() acquired output_lock
+        # and deferred release to task_instance_completed. Entries are added by
+        # pause() and removed by task_instance_completed after printing the result
+        # block. _cleanup_pause_lock_holders provides a safety net in task_completed
+        # / task_failed for any orphaned entries that survived due to framework errors.
         self._pause_lock_holders: set[tuple[str, str]] = set()
 
     def _is_output_suppressed(self, task: Task) -> bool:
@@ -229,6 +235,26 @@ class DefaultNornFlowProcessor(Processor):
         if (task.name, host) in self.start_times:
             del self.start_times[(task.name, host)]
 
+    def _cleanup_pause_lock_holders(self, task_name: str) -> None:
+        """Remove any orphaned pause lock entries for the given task and release the lock.
+
+        Under normal operation, task_instance_completed handles cleanup per host.
+        This method acts as a safety net: if any (task_name, host_name) entries
+        survive to task_completed/task_failed (e.g. due to a framework-level error
+        that prevented task_instance_completed from firing), we discard them here
+        and release the lock once per orphaned entry to avoid permanent deadlock.
+
+        Args:
+            task_name: Name of the task that just finished across all hosts.
+        """
+        orphaned = {key for key in self._pause_lock_holders if key[0] == task_name}
+        for key in orphaned:
+            self._pause_lock_holders.discard(key)
+            try:
+                output_lock.release()
+            except RuntimeError:
+                pass
+
     def task_instance_failed(self, task: Task, host: Host, result: Result) -> None:
         self.task_instance_completed(task, host, result)
 
@@ -244,6 +270,7 @@ class DefaultNornFlowProcessor(Processor):
 
     def task_completed(self, task: Task, result: Result) -> None:
         self.tasks_completed += 1
+        self._cleanup_pause_lock_holders(task.name)
 
         # Only print summary at the end if this setting is enabled
         if self.print_summary_after_each_task:
@@ -252,6 +279,7 @@ class DefaultNornFlowProcessor(Processor):
     def task_failed(self, task: Task, result: Result) -> None:
         """Handle task failure across all hosts and update statistics."""
         self.tasks_completed += 1
+        self._cleanup_pause_lock_holders(task.name)
 
         # Only print summary at the end if this setting is enabled
         if self.print_summary_after_each_task:

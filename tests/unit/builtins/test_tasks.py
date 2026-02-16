@@ -5,7 +5,8 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 from nornir.core.task import Result
 
-from nornflow.builtins.tasks import echo, pause, write_file, _countdown, _prompt_enter
+from nornflow.builtins.processors.default_processor import DefaultNornFlowProcessor
+from nornflow.builtins.tasks import _countdown, _prompt_enter, echo, pause, write_file
 from nornflow.builtins.tasks import set as set_task
 
 
@@ -15,22 +16,19 @@ class TestSetTask:
         mock_task = MagicMock()
         mock_task.host = MagicMock()
         mock_task.host.name = "test_host"
-        
-        # Mock the vars_manager with required methods
+
         mock_vars_manager = MagicMock()
         mock_vars_manager.resolve_data.return_value = "resolved_value"
-        
+
         with patch("nornflow.builtins.tasks.get_task_vars_manager", return_value=mock_vars_manager) as mock_get_vars:
             with patch("nornflow.builtins.tasks.build_set_task_report", return_value="REPORT") as mock_report:
                 res: Result = set_task(mock_task, foo="bar")
 
                 mock_get_vars.assert_called_once_with(mock_task)
-                
-                # Verify vars_manager methods were called
+
                 mock_vars_manager.resolve_data.assert_called_once_with("bar", "test_host")
                 mock_vars_manager.set_runtime_variable.assert_called_once_with("foo", "resolved_value", "test_host")
-                
-                # Verify build_set_task_report was called and result returned
+
                 mock_report.assert_called_once_with(mock_task, {"foo": "bar"})
                 assert isinstance(res, Result)
                 assert res.result == "REPORT"
@@ -64,7 +62,6 @@ class TestPauseTask:
     @pytest.fixture
     def mock_default_processor(self):
         """Fixture providing a mock DefaultNornFlowProcessor."""
-        from nornflow.builtins.processors.default_processor import DefaultNornFlowProcessor
         processor = MagicMock(spec=DefaultNornFlowProcessor)
         processor._pause_lock_holders = builtins.set()
         return processor
@@ -175,8 +172,6 @@ class TestPauseTask:
 
     def test_pause_processor_lookup_uses_correct_type(self, pause_task):
         """pause() passes DefaultNornFlowProcessor as the type to find_processor_by_type."""
-        from nornflow.builtins.processors.default_processor import DefaultNornFlowProcessor
-
         with patch("nornflow.builtins.tasks.output_lock", MagicMock()):
             with patch("nornflow.builtins.tasks.find_processor_by_type", return_value=None) as mock_find:
                 with patch("builtins.input", return_value=""):
@@ -184,29 +179,50 @@ class TestPauseTask:
 
         mock_find.assert_called_once_with(pause_task.nornir.processors, DefaultNornFlowProcessor)
 
+    def test_pause_releases_lock_on_exception(self, pause_task):
+        """When an exception occurs during pause, the lock is released and the exception re-raised."""
+        mock_lock = MagicMock()
+        with patch("nornflow.builtins.tasks.output_lock", mock_lock):
+            with patch("nornflow.builtins.tasks.find_processor_by_type", return_value=None):
+                with patch("builtins.input", side_effect=KeyboardInterrupt):
+                    with pytest.raises(KeyboardInterrupt):
+                        pause(pause_task)
+
+        mock_lock.release.assert_called_once()
+
+    def test_pause_cleans_up_lock_holder_on_exception(self, pause_task, mock_default_processor):
+        """When an exception occurs with a processor, the lock holder entry is discarded before re-raising."""
+        mock_lock = MagicMock()
+        with patch("nornflow.builtins.tasks.output_lock", mock_lock):
+            with patch("nornflow.builtins.tasks.find_processor_by_type", return_value=mock_default_processor):
+                with patch("builtins.input", side_effect=KeyboardInterrupt):
+                    with pytest.raises(KeyboardInterrupt):
+                        pause(pause_task)
+
+        assert ("pause_task", "router1") not in mock_default_processor._pause_lock_holders
+        mock_lock.release.assert_called_once()
+
 
 class TestCountdown:
     """Test suite for the _countdown helper."""
 
     def test_countdown_returns_summary_string(self):
         """_countdown returns a summary including the duration."""
-        with patch("nornflow.builtins.tasks.threading.Event") as mock_event_cls:
-            mock_event_cls.return_value.wait.return_value = None
+        with patch("nornflow.builtins.tasks.time.sleep"):
             with patch("builtins.print"):
                 result = _countdown("[host1]", 2)
 
         assert result == "Pause completed (2s)"
 
-    def test_countdown_ticks_correct_number_of_times(self):
-        """_countdown waits once per second for the given duration."""
-        mock_event = MagicMock()
-        with patch("nornflow.builtins.tasks.threading.Event", return_value=mock_event):
+    def test_countdown_sleeps_correct_number_of_times(self):
+        """_countdown sleeps once per second for the given duration."""
+        with patch("nornflow.builtins.tasks.time.sleep") as mock_sleep:
             with patch("builtins.print"):
                 _countdown("[host1]", 3)
 
-        assert mock_event.wait.call_count == 3
-        for c in mock_event.wait.call_args_list:
-            assert c == call(timeout=1)
+        assert mock_sleep.call_count == 3
+        for c in mock_sleep.call_args_list:
+            assert c == call(1)
 
     def test_countdown_zero_seconds(self):
         """_countdown with 0 seconds skips the loop entirely."""
@@ -270,7 +286,6 @@ class TestWriteFileTask:
         assert res.result["path"] == str(target)
         assert res.result["dry_run"] is True
         assert res.result["operation"] == "write"
-        # parent doesn't exist so would_create_dirs should be True
         assert res.result["would_create_dirs"] is True
         assert res.result["content_size_bytes"] == len(content)
 
@@ -285,14 +300,12 @@ class TestWriteFileTask:
         content1 = "first\n"
         content2 = "second\n"
 
-        # First write (mkdir True default)
         res1: Result = write_file(mock_task, filename=str(target), content=content1, append=False, mkdir=True)
         assert res1.failed is False
         assert res1.changed is True
         assert target.exists()
         assert target.read_text(encoding="utf-8") == content1
 
-        # Append
         res2: Result = write_file(mock_task, filename=str(target), content=content2, append=True, mkdir=True)
         assert res2.failed is False
         assert res2.changed is True
@@ -305,7 +318,6 @@ class TestWriteFileTask:
         mock_task.is_dry_run.return_value = False
 
         target = tmp_path / "nope" / "file.txt"
-        # Ensure parent does not exist
         if target.parent.exists():
             for p in target.parent.rglob("*"):
                 if p.is_file():

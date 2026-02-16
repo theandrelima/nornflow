@@ -63,7 +63,10 @@ class NornFlowFailureStrategyProcessor(Processor):
         """Called after each host completes for a task."""
         if result.failed:
             self.collected_errors.append((task.name, host.name, result))
-            logger.debug(f"Collected error for task '{task.name}' on host '{host.name}'.")
+            logger.error(
+                f"Task '{task.name}' failed on host '{host.name}': {result.exception}",
+                exc_info=result.exception,
+            )
 
             if self.failure_strategy == FailureStrategy.FAIL_FAST and not self.fail_fast_triggered:
                 self.fail_fast_triggered = True

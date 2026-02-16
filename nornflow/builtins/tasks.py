@@ -1,5 +1,5 @@
 # ruff: noqa: T201
-import threading
+import time
 from pathlib import Path
 
 from nornir.core.task import Result, Task
@@ -105,10 +105,13 @@ def pause(task: Task, msg: str = "", timer: int = 0) -> Result:
         task: The Nornir Task object.
         msg: Optional message explaining the reason for the pause.
         timer: Seconds to wait before auto-continuing. 0 means wait
-            indefinitely for user input.
+            indefinitely for user input. Must be non-negative.
 
     Returns:
         Result with a summary of the pause action.
+
+    Raises:
+        ValueError: If timer is negative.
 
     Example in workflow YAML:
         ```yaml
@@ -125,20 +128,29 @@ def pause(task: Task, msg: str = "", timer: int = 0) -> Result:
             msg: "Verify all cables are connected, then press Enter"
         ```
     """
+    if timer < 0:
+        raise ValueError(f"timer must be non-negative, got {timer}")
+
     host_label = f"[{task.host.name}]"
+    processor = None
 
     output_lock.acquire()
+    try:
+        processor = find_processor_by_type(task.nornir.processors, DefaultNornFlowProcessor)
+        if processor:
+            processor._pause_lock_holders.add((task.name, task.host.name))
 
-    processor = find_processor_by_type(task.nornir.processors, DefaultNornFlowProcessor)
-    if processor:
-        processor._pause_lock_holders.add((task.name, task.host.name))  # noqa: SLF001
+        if msg:
+            print(f"\n{'=' * 60}")
+            print(f"{host_label} {msg}")
+            print(f"{'=' * 60}")
 
-    if msg:
-        print(f"\n{'=' * 60}")
-        print(f"{host_label} {msg}")
-        print(f"{'=' * 60}")
-
-    result_msg = _countdown(host_label, timer) if timer else _prompt_enter(host_label)
+        result_msg = _countdown(host_label, timer) if timer else _prompt_enter(host_label)
+    except BaseException:
+        if processor:
+            processor._pause_lock_holders.discard((task.name, task.host.name))
+        output_lock.release()
+        raise
 
     if not processor:
         output_lock.release()
@@ -160,13 +172,12 @@ def _countdown(host_label: str, seconds: int) -> str:
     """
     print(f"{host_label} Pausing for {seconds}s...")
 
-    tick = threading.Event()
     elapsed = 0
     while elapsed < seconds:
         remaining = seconds - elapsed
         mins, secs = divmod(remaining, 60)
         print(f"\r{host_label} Resuming in {mins:02d}:{secs:02d} ", end="", flush=True)
-        tick.wait(timeout=1)
+        time.sleep(1)
         elapsed += 1
 
     print()
