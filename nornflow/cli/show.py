@@ -7,13 +7,12 @@ from typing import Any
 import typer
 import yaml
 from nornir.core.exceptions import PluginNotRegistered
-from pydantic_serdes.utils import load_file_to_dict
 from tabulate import tabulate
 from termcolor import colored
 
 from nornflow import NornFlowBuilder
 from nornflow.catalogs import Catalog
-from nornflow.cli.constants import CWD, DESCRIPTION_FIRST_SENTENCE_LENGTH
+from nornflow.cli.constants import CWD
 from nornflow.cli.exceptions import CLIShowError
 from nornflow.exceptions import NornFlowError
 from nornflow.logger import logger
@@ -39,6 +38,7 @@ def show(  # noqa: PLR0912
     workflows: bool = typer.Option(False, "--workflows", "-w", help="Display the workflow catalog"),
     blueprints: bool = typer.Option(False, "--blueprints", "-b", help="Display the blueprint catalog"),
     j2_filters: bool = typer.Option(False, "--j2-filters", "-j", help="Display the Jinja2 filters catalog"),
+    hooks: bool = typer.Option(False, "--hooks", help="Display the hooks catalog"),
     settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
     nornir_configs: bool = typer.Option(
         False, "--nornir-configs", "-n", help="Display current Nornir Configs"
@@ -51,11 +51,22 @@ def show(  # noqa: PLR0912
     show_all_catalogs = catalog or catalogs
 
     if not any(
-        [show_all_catalogs, tasks, filters, workflows, blueprints, j2_filters, settings, nornir_configs, all]
+        [
+            show_all_catalogs,
+            tasks,
+            filters,
+            workflows,
+            blueprints,
+            j2_filters,
+            hooks,
+            settings,
+            nornir_configs,
+            all,
+        ]
     ):
         raise typer.BadParameter(
             "You must provide at least one option: --catalogs, --tasks, --filters, --workflows, "
-            "--blueprints, --j2-filters, --settings, --nornir-configs, or --all."
+            "--blueprints, --j2-filters, --hooks, --settings, --nornir-configs, or --all."
         )
 
     try:
@@ -73,6 +84,7 @@ def show(  # noqa: PLR0912
             show_workflows_catalog(nornflow)
             show_blueprints_catalog(nornflow)
             show_j2_filters_catalog(nornflow)
+            show_hooks_catalog(nornflow)
             show_nornflow_settings(nornflow)
             show_nornir_configs(nornflow)
         else:
@@ -82,6 +94,7 @@ def show(  # noqa: PLR0912
                 show_workflows_catalog(nornflow)
                 show_blueprints_catalog(nornflow)
                 show_j2_filters_catalog(nornflow)
+                show_hooks_catalog(nornflow)
             else:
                 if tasks:
                     show_tasks_catalog(nornflow)
@@ -93,6 +106,8 @@ def show(  # noqa: PLR0912
                     show_blueprints_catalog(nornflow)
                 if j2_filters:
                     show_j2_filters_catalog(nornflow)
+                if hooks:
+                    show_hooks_catalog(nornflow)
 
             if settings:
                 show_nornflow_settings(nornflow)
@@ -142,12 +157,13 @@ def show(  # noqa: PLR0912
 
 
 def show_catalog(nornflow: "NornFlow") -> None:
-    """Display all catalogs: tasks, filters, workflows, blueprints, and j2_filters."""
+    """Display all catalogs: tasks, filters, workflows, blueprints, j2_filters, and hooks."""
     show_tasks_catalog(nornflow)
     show_filters_catalog(nornflow)
     show_workflows_catalog(nornflow)
     show_blueprints_catalog(nornflow)
     show_j2_filters_catalog(nornflow)
+    show_hooks_catalog(nornflow)
 
 
 def show_tasks_catalog(nornflow: "NornFlow") -> None:
@@ -195,7 +211,17 @@ def show_j2_filters_catalog(nornflow: "NornFlow") -> None:
     show_formatted_table(
         "JINJA2 FILTERS CATALOG",
         render_j2_filters_catalog_table_data,
-        ["Filter Name", "Description", "Source"],
+        ["Filter Name", "Description", "Source (python module)"],
+        nornflow,
+    )
+
+
+def show_hooks_catalog(nornflow: "NornFlow") -> None:
+    """Display the hooks catalog."""
+    show_formatted_table(
+        "HOOKS CATALOG",
+        render_hooks_catalog_table_data,
+        ["Hook Name", "Description", "Source (python module)"],
         nornflow,
     )
 
@@ -276,14 +302,11 @@ def get_source_from_catalog(catalog: Catalog, item_name: str) -> str:  # noqa: P
     return "Unknown"
 
 
-def render_callable_catalog_table_data(
-    catalog, description_processor: Callable[[Any], str]
-) -> list[list[str]]:
+def render_callable_catalog_table_data(catalog) -> list[list[str]]:
     """Render a callable catalog (tasks, filters, or J2 filters) as a list of lists.
 
     Args:
         catalog: The catalog to render.
-        description_processor: Function to process the description from the callable.
 
     Returns:
         The table data.
@@ -291,8 +314,7 @@ def render_callable_catalog_table_data(
     table_data = []
     item_names = sorted(catalog.get_builtin_items()) + sorted(catalog.get_custom_items())
     for item_name in item_names:
-        item = catalog[item_name]
-        description = description_processor(item)
+        description = catalog.sources.get(item_name, {}).get("description", "No description available")
         source_path = get_source_from_catalog(catalog, item_name)
         table_data.append(get_colored_row(item_name, description, source_path))
     return table_data
@@ -307,10 +329,7 @@ def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     Returns:
         The table data.
     """
-    return render_callable_catalog_table_data(
-        nornflow.tasks_catalog,
-        lambda func: process_task_description(func.__doc__ or "No description available"),
-    )
+    return render_callable_catalog_table_data(nornflow.tasks_catalog)
 
 
 def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
@@ -322,9 +341,7 @@ def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]
     Returns:
         The table data.
     """
-    return render_file_based_catalog_table_data(
-        nornflow.workflows_catalog, lambda path: get_yaml_description(path, "workflow"), nornflow
-    )
+    return render_file_based_catalog_table_data(nornflow.workflows_catalog, nornflow)
 
 
 def render_blueprints_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
@@ -336,9 +353,7 @@ def render_blueprints_catalog_table_data(nornflow: "NornFlow") -> list[list[str]
     Returns:
         The table data.
     """
-    return render_file_based_catalog_table_data(
-        nornflow.blueprints_catalog, lambda path: get_yaml_description(path, "description"), nornflow
-    )
+    return render_file_based_catalog_table_data(nornflow.blueprints_catalog, nornflow)
 
 
 def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
@@ -350,10 +365,23 @@ def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
     Returns:
         The table data.
     """
-    return render_callable_catalog_table_data(
-        nornflow.filters_catalog,
-        lambda item: process_filter_description(item[0].__doc__ or "No description available", item[1]),
-    )
+    table_data = []
+    catalog = nornflow.filters_catalog
+    item_names = sorted(catalog.get_builtin_items()) + sorted(catalog.get_custom_items())
+    for item_name in item_names:
+        description = catalog.sources.get(item_name, {}).get("description", "No description available")
+        # For filters, append parameter info if available
+        item = catalog[item_name]
+        if isinstance(item, tuple) and len(item) > 1:
+            param_names = item[1]
+            if param_names:
+                description += f"\nParameters: {', '.join(param_names)}"
+            else:
+                description += "\nParameters: None (host only)"
+        description = textwrap.fill(description, width=60)
+        source_path = get_source_from_catalog(catalog, item_name)
+        table_data.append(get_colored_row(item_name, description, source_path))
+    return table_data
 
 
 def render_j2_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
@@ -365,10 +393,27 @@ def render_j2_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]
     Returns:
         The table data.
     """
-    return render_callable_catalog_table_data(
-        nornflow.j2_filters_catalog,
-        lambda func: extract_first_sentence(func.__doc__ or "No description available"),
-    )
+    return render_callable_catalog_table_data(nornflow.j2_filters_catalog)
+
+
+def render_hooks_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
+    """Render the hooks catalog as a list of lists.
+
+    Args:
+        nornflow: The NornFlow object.
+
+    Returns:
+        The table data.
+    """
+    table_data = []
+    catalog = nornflow.hooks_catalog
+    item_names = sorted(catalog.get_builtin_items()) + sorted(catalog.get_custom_items())
+    for item_name in item_names:
+        description = catalog.sources.get(item_name, {}).get("description", "No description available")
+        description = textwrap.fill(description, width=60)
+        source_path = get_source_from_catalog(catalog, item_name)
+        table_data.append(get_colored_row(item_name, description, source_path))
+    return table_data
 
 
 def render_settings_table_data(nornflow: "NornFlow") -> list[list[str]]:
@@ -464,41 +509,19 @@ def display_banner(banner_text: str, table: str) -> None:
     typer.echo("\n\n" + centered_banner)
 
 
-def get_yaml_description(file_path: Path, key: str) -> str:
-    """Get description from a YAML file by key.
-
-    Args:
-        file_path: Path to the YAML file.
-        key: The key to extract the description from.
-
-    Returns:
-        The description or a fallback.
-    """
-    try:
-        data = load_file_to_dict(file_path)
-        if key == "workflow":
-            return data.get(key, {}).get("description", "No description available")
-        return data.get(key, "No description available")
-    except Exception:
-        return "Could not load description from file"
-
-
-def render_file_based_catalog_table_data(
-    catalog, description_getter: Callable[[Path], str], nornflow: "NornFlow"
-) -> list[list[str]]:
+def render_file_based_catalog_table_data(catalog, nornflow: "NornFlow") -> list[list[str]]:
     """Render a file-based catalog (workflows or blueprints) as a list of lists.
 
     Args:
         catalog: The catalog to render.
-        description_getter: Function to get description from file path.
         nornflow: The NornFlow object.
 
     Returns:
         The table data.
     """
     table_data = []
-    for item_name, item_path in sorted(catalog.items()):
-        description = description_getter(item_path)
+    for item_name, _ in sorted(catalog.items()):
+        description = catalog.sources.get(item_name, {}).get("description", "No description available")
         description = textwrap.fill(description, width=60)
         source_path = get_source_from_catalog(catalog, item_name)
         table_data.append(get_colored_row(item_name, description, source_path))
@@ -521,50 +544,3 @@ def get_colored_row(name: str, desc: str, source: str) -> list[str]:
         colored(desc, "yellow"),
         colored(source, "light_green"),
     ]
-
-
-def extract_first_sentence(docstring: str) -> str:
-    """Extract and truncate the first sentence from a docstring.
-
-    Args:
-        docstring: The raw docstring.
-
-    Returns:
-        The extracted and possibly truncated first sentence.
-    """
-    first_sentence = docstring.split(".", maxsplit=1)[0].strip()
-    if len(first_sentence) > DESCRIPTION_FIRST_SENTENCE_LENGTH:
-        first_sentence = first_sentence[:97] + "..."
-    return first_sentence
-
-
-def process_task_description(docstring: str) -> str:
-    """Process task description from docstring.
-
-    Args:
-        docstring: The raw docstring.
-
-    Returns:
-        The processed description.
-    """
-    first_sentence = extract_first_sentence(docstring)
-    return textwrap.fill(first_sentence, width=60)
-
-
-def process_filter_description(docstring: str, param_names: list[str]) -> str:
-    """Process filter description from docstring and parameters.
-
-    Args:
-        docstring: The raw docstring.
-        param_names: List of parameter names.
-
-    Returns:
-        The processed description.
-    """
-    first_sentence = extract_first_sentence(docstring)
-    if not param_names:
-        param_info = "Parameters: None (host only)"
-    else:
-        param_info = f"Parameters: {', '.join(param_names)}"
-    description = f"{first_sentence}\n{param_info}"
-    return textwrap.fill(description, width=60)
