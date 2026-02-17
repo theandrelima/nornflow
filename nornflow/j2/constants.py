@@ -12,4 +12,4 @@ JINJA2_MARKERS = [
 
 # Lower case string values that evaluate to True when converting to boolean.
 # This provides a centralized reference point to avoid ambiguity across the codebase.
-TRUTHY_STRING_VALUES = ("true", "yes", "1", "on", "y", "t", "enabled")
+TRUTHY_STRING_VALUES = ("true", "yes", "1", "on", "ok", "y", "t", "enabled")
