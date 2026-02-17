@@ -76,6 +76,9 @@ class SingleHook(Hook, Jinja2ResolvableMixin):
     Supported values:
         - Boolean: true/false for static control
         - Jinja2 expression: Dynamic resolution to boolean
+        - Plain string: Evaluated against NornFlow's truthy string values
+          ("true", "yes", "1", "on", "y", "t", "enabled" → True,
+          all other strings → False, meaning no single-host restriction)
         - None: No effect (default)
 
     Cannot be combined with the 'if' hook on the same task.

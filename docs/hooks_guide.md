@@ -181,6 +181,27 @@ if: "{{ host.name }}"  # Returns string
 if: "{{ vlans }}"      # Returns list
 ```
 
+##### Plain String Values
+
+The `if` hook also accepts plain strings (without Jinja2 markers). These are evaluated as boolean using NornFlow's standard truthy string values:
+
+- **Truthy strings** (case-insensitive): `"true"`, `"yes"`, `"1"`, `"on"`, `"y"`, `"t"`, `"enabled"` → task **executes**
+- **All other strings** → task is **skipped** on all hosts
+
+```yaml
+# ✅ These execute the task (truthy strings)
+if: "true"
+if: "yes"
+if: "enabled"
+
+# ⚠️ These SKIP the task on all hosts (non-truthy strings)
+if: "hello"           # Not in truthy values → False → skipped
+if: "shouldnt_work"   # Not in truthy values → False → skipped
+if: "maybe"           # Not in truthy values → False → skipped
+```
+
+> **Important:** NornFlow does NOT use Python's general string truthiness (where any non-empty string is `True`). Instead, it checks against a specific set of truthy string values. A string like `"hello"` evaluates to `False`, not `True`.
+
 ##### Filter Function Details
 
 The Filter functions must:
@@ -350,8 +371,10 @@ tasks:
 - Expressions have access to host.* namespace (Nornir inventory)
 - Must contain Jinja2 markers ({{, {%, or {#)
 - Expressions are resolved to strings, then evaluated as boolean. 
-- String values "true", "yes", "1" evaluate to True. 
-- All other string values evaluate to False. 
+- String values "true", "yes", "1", "on", "y", "t", "enabled" evaluate to True (case-insensitive).
+- All other string values evaluate to False.
+
+> **Important:** NornFlow does NOT use Python's general string truthiness (where any non-empty string is `True`). Instead, it checks against a specific set of truthy string values. A plain string like `"hello"` evaluates to `False`, not `True`.
 
 #### Processor Compatibility
 
@@ -442,8 +465,26 @@ tasks:
 - Expressions have access to host.* namespace (Nornir inventory)
 - Must contain Jinja2 markers ({{, {%, or {#)
 - Expressions are resolved to values, then converted to boolean
-- String values "true", "yes", "1" evaluate to `True`
-- All other string values evaluate to False
+- String values "true", "yes", "1", "on", "y", "t", "enabled" evaluate to `True` (case-insensitive)
+- All other string values evaluate to `False`
+
+**Plain String Values:**
+
+The `single` hook also accepts plain strings (without Jinja2 markers). These are evaluated as boolean using NornFlow's standard truthy string values:
+
+```yaml
+# ✅ These activate single-host mode (truthy strings)
+single: "true"
+single: "yes"
+single: "enabled"
+
+# ⚠️ These do NOT activate single-host mode (non-truthy strings → False)
+single: "hello"           # Not in truthy values → False → runs on ALL hosts
+single: "shouldnt_work"   # Not in truthy values → False → runs on ALL hosts
+single: "maybe"           # Not in truthy values → False → runs on ALL hosts
+```
+
+> **Important:** NornFlow does NOT use Python's general string truthiness (where any non-empty string is `True`). Instead, it checks against a specific set of truthy string values. Be aware that when `single` evaluates to `False`, the hook has **no effect** — the task runs on **all hosts** as if `single` was not configured at all. This is different from the `if` hook, where `False` means the task is **skipped**.
 
 #### Mutual Exclusion
 
@@ -910,6 +951,8 @@ When using `as_bool=True`, the mixin converts values to boolean using NornFlow's
 - Booleans: Returned as-is
 - Other values: Converted using Python's `bool()`
 
+> **Important:** NornFlow does NOT use Python's general string truthiness (where any non-empty string is `True`). A plain string like `"hello"` evaluates to `False` when converted via `as_bool=True`.
+
 ```python
 # All these evaluate to True:
 get_resolved_value(task, as_bool=True)  # if self.value = "yes"
@@ -920,6 +963,7 @@ get_resolved_value(task, as_bool=True)  # if self.value = True
 get_resolved_value(task, as_bool=True)  # if self.value = "no"
 get_resolved_value(task, as_bool=True)  # if self.value = "{{ 'disabled' }}"
 get_resolved_value(task, as_bool=True)  # if self.value = False
+get_resolved_value(task, as_bool=True)  # if self.value = "shouldnt_work"
 ```
 
 #### Examples from Built-in Hooks
