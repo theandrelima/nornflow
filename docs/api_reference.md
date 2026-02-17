@@ -489,28 +489,29 @@ tasks:
       content: "{{ config_data }}"
 ```
 
-### `read_file`
+### `pause`
 
-Read content from a file.
+Pause workflow execution, optionally with a message and/or a countdown timer.
 
-```yaml
-tasks:
-  - name: read_file
-    args:
-      filename: "templates/config.j2"
-    set_to: "template_content"
-```
+Execution is serialized across hosts via `DefaultNornFlowProcessor` output_lock so that each host pauses individually. Using the same lock as the processor prevents pause I/O from interleaving with task result output. Using the DefaultNornFlowProcessor is important to keep output tidy and clean. If not using it, the task still functions, but developers should check how the default processor handles the lock and implement similar behavior to avoid interleaved output.
 
-### `template_file`
+When `timer` is provided, displays a per-host countdown and auto-continues when it expires.
 
-Render a Jinja2 template file.
+When no `timer` is given, prompts for Enter once per host.
+
+Use the `single` hook to pause only once for the entire inventory. Use the `if` hook to pause only for a subset of hosts.
+
+The `msg` parameter is optional and allows displaying a custom message before pausing.
 
 ```yaml
 tasks:
-  - name: template_file
+  - name: pause
     args:
-      template: "templates/config.j2"
-      dest: "configs/{{ host.name }}.conf"
+      msg: "Verify all cables are connected, then press Enter"
+  - name: pause
+    single: true
+    args:
+      timer: 120
 ```
 
 ## Built-in Filters

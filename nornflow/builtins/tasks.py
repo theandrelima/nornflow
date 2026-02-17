@@ -1,9 +1,13 @@
+# ruff: noqa: T201, SLF001
+import time
 from pathlib import Path
 
 from nornir.core.task import Result, Task
 
+from nornflow.builtins.processors.default_processor import DefaultNornFlowProcessor, output_lock
 from nornflow.builtins.utils import build_set_task_report, get_task_vars_manager
 from nornflow.logger import logger
+from nornflow.utils import find_processor_by_type
 
 
 def set(task: Task, print_output: bool = True, **kwargs) -> Result:
@@ -74,6 +78,125 @@ def echo(task: Task, msg: str) -> Result:
             msg: "Hello from {{ host.name }}, platform is {{ host.platform }}"
     """
     return Result(host=task.host, result=msg)
+
+
+def pause(task: Task, msg: str = "", timer: int = 0) -> Result:
+    """Pause workflow execution, optionally with a countdown timer.
+
+    Execution is serialized across hosts via the processor's output_lock
+    so that each host pauses individually, one at a time, even when Nornir
+    dispatches them concurrently. Using the same lock as the processor
+    prevents pause I/O from interleaving with task result output.
+
+    The lock is acquired here and intentionally NOT released. Instead,
+    the DefaultNornFlowProcessor.task_instance_completed releases it
+    after printing the task result block. This ensures the full sequence
+    (pause prompt → user input → result output) is atomic per host.
+
+    When ``timer`` is provided, displays a per-host countdown and
+    auto-continues when it expires.
+
+    When no ``timer`` is given, prompts for Enter once per host.
+
+    Use the ``single`` hook to pause only once for the entire inventory.
+    Use the ``if`` hook to pause only for a subset of hosts.
+
+    Args:
+        task: The Nornir Task object.
+        msg: Optional message explaining the reason for the pause.
+        timer: Seconds to wait before auto-continuing. 0 means wait
+            indefinitely for user input. Must be non-negative.
+
+    Returns:
+        Result with a summary of the pause action.
+
+    Raises:
+        ValueError: If timer is negative.
+
+    Example in workflow YAML:
+        ```yaml
+        - name: wait_for_reboot
+          task: pause
+          single: true
+          args:
+            msg: "Device is rebooting — wait for it to come back"
+            timer: 120
+
+        - name: confirm_cabling
+          task: pause
+          args:
+            msg: "Verify all cables are connected, then press Enter"
+        ```
+    """
+    if timer < 0:
+        raise ValueError(f"timer must be non-negative, got {timer}")
+
+    host_label = f"[{task.host.name}]"
+    processor = None
+
+    output_lock.acquire()
+    try:
+        processor = find_processor_by_type(task.nornir.processors, DefaultNornFlowProcessor)
+        if processor:
+            processor._pause_lock_holders.add((task.name, task.host.name))
+
+        if msg:
+            print(f"\n{'=' * 60}")
+            print(f"{host_label} {msg}")
+            print(f"{'=' * 60}")
+
+        result_msg = _countdown(host_label, timer) if timer else _prompt_enter(host_label)
+    except BaseException:
+        if processor:
+            processor._pause_lock_holders.discard((task.name, task.host.name))
+        output_lock.release()
+        raise
+
+    if not processor:
+        output_lock.release()
+
+    return Result(host=task.host, result=result_msg)
+
+
+def _countdown(host_label: str, seconds: int) -> str:
+    """Display a countdown timer that auto-continues when expired.
+
+    Must be called while holding output_lock.
+
+    Args:
+        host_label: Label prefix for console output.
+        seconds: Total countdown duration.
+
+    Returns:
+        Summary string.
+    """
+    print(f"{host_label} Pausing for {seconds}s...")
+
+    elapsed = 0
+    while elapsed < seconds:
+        remaining = seconds - elapsed
+        mins, secs = divmod(remaining, 60)
+        print(f"\r{host_label} Resuming in {mins:02d}:{secs:02d} ", end="", flush=True)
+        time.sleep(1)
+        elapsed += 1
+
+    print()
+    return f"Pause completed ({seconds}s)"
+
+
+def _prompt_enter(host_label: str) -> str:
+    """Block until the user presses Enter.
+
+    Must be called while holding output_lock.
+
+    Args:
+        host_label: Label prefix for console output.
+
+    Returns:
+        Summary string.
+    """
+    input(f"{host_label} Press Enter to continue...")
+    return "Resumed by user"
 
 
 def write_file(task: Task, filename: str, content: str, append: bool = False, mkdir: bool = True) -> Result:

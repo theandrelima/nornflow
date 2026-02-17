@@ -458,7 +458,7 @@ def display_banner(banner_text: str, table: str) -> None:
     """
     banner = colored(banner_text, "magenta", attrs=["bold", "underline"])
 
-    table_width = len(table.split("\n")[0])
+    table_width = len(table.split("\n", maxsplit=1)[0])
     centered_banner = banner.center(table_width + 5)
 
     typer.echo("\n\n" + centered_banner)
@@ -532,7 +532,7 @@ def extract_first_sentence(docstring: str) -> str:
     Returns:
         The extracted and possibly truncated first sentence.
     """
-    first_sentence = docstring.split(".")[0].strip()
+    first_sentence = docstring.split(".", maxsplit=1)[0].strip()
     if len(first_sentence) > DESCRIPTION_FIRST_SENTENCE_LENGTH:
         first_sentence = first_sentence[:97] + "..."
     return first_sentence

@@ -95,3 +95,10 @@ def mock_filters_catalog():
     """Fixture providing a mock filters catalog."""
     catalog = {}
     return catalog
+
+
+@pytest.fixture
+def single_hook():
+    """Create a SingleHook instance for testing."""
+    from nornflow.builtins.hooks import SingleHook
+    return SingleHook()

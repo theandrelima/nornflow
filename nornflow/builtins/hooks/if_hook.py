@@ -30,6 +30,7 @@ from typing import Any, TYPE_CHECKING
 from nornir.core.inventory import Host
 from nornir.core.task import Result, Task
 
+from nornflow.builtins.constants import SKIP_FLAG
 from nornflow.hooks import Hook, Jinja2ResolvableMixin
 from nornflow.hooks.exceptions import HookValidationError
 from nornflow.logger import logger
@@ -46,9 +47,8 @@ def skip_if_condition_flagged(task_func: Callable) -> Callable:
 
     @wraps(task_func)
     def wrapper(task: Task, **kwargs: Any) -> Result:
-        if task.host.data.get("nornflow_skip_flag", False):
-            # Clean up the flag after use to avoid stale state
-            task.host.data.pop("nornflow_skip_flag", None)
+        if task.host.data.get(SKIP_FLAG, False):
+            task.host.data.pop(SKIP_FLAG, None)
             return Result(
                 host=task.host,
                 result=None,
@@ -160,7 +160,7 @@ class IfHook(Hook, Jinja2ResolvableMixin):
                 should_skip = not condition
 
             if should_skip:
-                host.data["nornflow_skip_flag"] = True
+                host.data[SKIP_FLAG] = True
 
         except Exception as e:
             logger.exception(f"Error evaluating if condition for host '{host.name}': {e}")
