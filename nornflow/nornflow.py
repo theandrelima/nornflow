@@ -594,7 +594,7 @@ class NornFlow:
         """Get the hooks catalog.
 
         Returns:
-            DictCatalog: Catalog of hook names and their corresponding classes.
+            ClassCatalog: Catalog of hook names and their corresponding classes.
         """
         return self._hooks_catalog
 
