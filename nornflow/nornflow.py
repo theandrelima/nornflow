@@ -5,7 +5,7 @@ from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
 from nornflow.builtins.processors import NornFlowFailureStrategyProcessor, NornFlowHookProcessor
-from nornflow.catalogs import CallableCatalog, FileCatalog
+from nornflow.catalogs import CallableCatalog, ClassCatalog, FileCatalog
 from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
 from nornflow.exceptions import (
     CatalogError,
@@ -18,6 +18,7 @@ from nornflow.exceptions import (
     TaskError,
     WorkflowError,
 )
+from nornflow.hooks.base import HOOK_REGISTRY
 from nornflow.j2 import Jinja2Service
 from nornflow.logger import logger
 from nornflow.models import WorkflowModel
@@ -186,6 +187,7 @@ class NornFlow:
         self._load_filters_catalog()
         self._load_workflows_catalog()
         self._load_blueprints_catalog()
+        self._load_hooks_catalog()
         # Note: j2_filters_catalog is handled by Jinja2Service
         # and doesn't need a separate load method.
 
@@ -588,6 +590,24 @@ class NornFlow:
         raise ImmutableAttributeError("Cannot set J2 filters catalog directly.")
 
     @property
+    def hooks_catalog(self) -> ClassCatalog:
+        """Get the hooks catalog.
+
+        Returns:
+            ClassCatalog: Catalog of hook names and their corresponding classes.
+        """
+        return self._hooks_catalog
+
+    @hooks_catalog.setter
+    def hooks_catalog(self, _: Any) -> None:
+        """Prevent setting the hooks catalog directly.
+
+        Raises:
+            ImmutableAttributeError: Always raised to prevent direct setting.
+        """
+        raise ImmutableAttributeError("Cannot set hooks catalog directly.")
+
+    @property
     def workflow(self) -> WorkflowModel | None:
         """
         Get the workflow model object.
@@ -816,6 +836,14 @@ class NornFlow:
             directories=self.settings.local_blueprints,
             recursive=True,
         )
+
+    def _load_hooks_catalog(self) -> None:
+        """Populate the hooks catalog from HOOK_REGISTRY.
+
+        By this point, _initialize_hooks has already imported all hook modules
+        (both builtins and user-defined), so HOOK_REGISTRY is fully populated.
+        """
+        self._hooks_catalog = ClassCatalog.from_dict(name="hooks", items_dict=HOOK_REGISTRY)
 
     def _validate_init_kwargs(self, kwargs: dict[str, Any]) -> None:
         """

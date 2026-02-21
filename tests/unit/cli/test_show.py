@@ -13,6 +13,7 @@ from nornflow.cli.show import (
     render_settings_table_data,
     render_task_catalog_table_data,
     render_workflows_catalog_table_data,
+    render_hooks_catalog_table_data,
     show,
     show_catalog,
     show_formatted_table,
@@ -174,10 +175,10 @@ class TestShowCommand:
         """Test 'show' with no flags raises an error."""
         mock_ctx = MagicMock()
         mock_ctx.obj = {}
-
+    
         with pytest.raises(typer.BadParameter):
             show(mock_ctx, catalog=False, catalogs=False, tasks=False, filters=False,
-                 workflows=False, blueprints=False, j2_filters=False, settings=False, nornir_configs=False, all=False)
+                 workflows=False, blueprints=False, j2_filters=False, hooks=False, settings=False, nornir_configs=False, all=False)
 
     @patch("nornflow.cli.show.NornFlowBuilder")
     @patch("nornflow.cli.show.CLIShowError")
@@ -255,10 +256,10 @@ class TestShowHelpers:
     def test_show_catalog(self, mock_show_table):
         """Test show_catalog calls show_formatted_table with correct parameters."""
         mock_nornflow = MagicMock()
-
+    
         show_catalog(mock_nornflow)
-
-        assert mock_show_table.call_count == 5
+    
+        assert mock_show_table.call_count == 6
         calls = [
             call(
                 "TASKS CATALOG",
@@ -287,7 +288,13 @@ class TestShowHelpers:
             call(
                 "JINJA2 FILTERS CATALOG",
                 render_j2_filters_catalog_table_data,
-                ["Filter Name", "Description", "Source"],
+                ["Filter Name", "Description", "Source (python module)"],
+                mock_nornflow,
+            ),
+            call(
+                "HOOKS CATALOG",
+                render_hooks_catalog_table_data,
+                ["Hook Name", "Description", "Source (python module)"],
                 mock_nornflow,
             ),
         ]
@@ -356,9 +363,8 @@ class TestTableRenderers:
         for row in result:
             assert len(row) == 3
 
-    @patch("yaml.safe_load")
     @patch("nornflow.cli.show.get_source_from_catalog")
-    def test_render_workflows_catalog_table_data(self, mock_get_source, mock_safe_load):
+    def test_render_workflows_catalog_table_data(self, mock_get_source):
         """Test render_workflows_catalog_table_data generates workflow catalog table data."""
         mock_nornflow = MagicMock()
         workflow_path1 = MagicMock(spec=Path)
@@ -368,23 +374,18 @@ class TestTableRenderers:
             ("workflow1", workflow_path1),
             ("workflow2", workflow_path2),
         ]
-
-        mock_safe_load.side_effect = [
-            {"workflow": {"description": "Test workflow 1"}},
-            {"workflow": {"description": "Test workflow 2"}},
-        ]
+        mock_nornflow.workflows_catalog.sources = {
+            "workflow1": {"description": "Test workflow 1"},
+            "workflow2": {"description": "Test workflow 2"},
+        }
         
         mock_get_source.return_value = "./workflows/test.yaml"
-
-        with patch("pathlib.Path.open", create=True) as mock_open:
-            mock_file = MagicMock()
-            mock_open.return_value.__enter__.return_value = mock_file
-
-            result = render_workflows_catalog_table_data(mock_nornflow)
-
-            assert len(result) == 2
-            for row in result:
-                assert len(row) == 3
+    
+        result = render_workflows_catalog_table_data(mock_nornflow)
+    
+        assert len(result) == 2
+        for row in result:
+            assert len(row) == 3
 
     @patch("nornflow.cli.show.get_source_from_catalog")
     def test_render_filters_catalog_table_data(self, mock_get_source):
@@ -397,12 +398,16 @@ class TestTableRenderers:
         mock_filters_catalog.get_builtin_items.return_value = ["filter1"]
         mock_filters_catalog.get_custom_items.return_value = ["filter2"]
         mock_filters_catalog.__getitem__.side_effect = lambda x: (filter_func1, ["param1"]) if x == "filter1" else (filter_func2, [])
+        mock_filters_catalog.sources = {
+            "filter1": {"description": "Test filter 1 description"},
+            "filter2": {"description": "Test filter 2 description"},
+        }
         mock_nornflow.filters_catalog = mock_filters_catalog
         
         mock_get_source.return_value = "test.module"
-
+    
         result = render_filters_catalog_table_data(mock_nornflow)
-
+    
         assert len(result) == 2
         for row in result:
             assert len(row) == 3
@@ -428,9 +433,8 @@ class TestTableRenderers:
         for row in result:
             assert len(row) == 3
 
-    @patch("yaml.safe_load")
     @patch("nornflow.cli.show.get_source_from_catalog")
-    def test_render_blueprints_catalog_table_data(self, mock_get_source, mock_safe_load):
+    def test_render_blueprints_catalog_table_data(self, mock_get_source):
         """Test render_blueprints_catalog_table_data generates blueprints catalog table data."""
         mock_nornflow = MagicMock()
         blueprint_path1 = MagicMock(spec=Path)
@@ -440,23 +444,18 @@ class TestTableRenderers:
             ("blueprint1", blueprint_path1),
             ("blueprint2", blueprint_path2),
         ]
-
-        mock_safe_load.side_effect = [
-            {"description": "Test blueprint 1"},
-            {"blueprint": {"description": "Test blueprint 2"}},
-        ]
+        mock_nornflow.blueprints_catalog.sources = {
+            "blueprint1": {"description": "Test blueprint 1"},
+            "blueprint2": {"description": "Test blueprint 2"},
+        }
         
         mock_get_source.return_value = "./blueprints/test.yaml"
-
-        with patch("pathlib.Path.open", create=True) as mock_open:
-            mock_file = MagicMock()
-            mock_open.return_value.__enter__.return_value = mock_file
-
-            result = render_blueprints_catalog_table_data(mock_nornflow)
-
-            assert len(result) == 2
-            for row in result:
-                assert len(row) == 3
+    
+        result = render_blueprints_catalog_table_data(mock_nornflow)
+    
+        assert len(result) == 2
+        for row in result:
+            assert len(row) == 3
 
     def test_render_settings_table_data(self):
         """Test render_settings_table_data generates settings table data."""

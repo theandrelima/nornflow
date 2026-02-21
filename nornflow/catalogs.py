@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from pydantic_serdes.utils import load_file_to_dict
+
 from nornflow.exceptions import CatalogError, CoreError, ResourceError
 from nornflow.logger import logger
 from nornflow.utils import import_module_from_path
@@ -122,6 +124,17 @@ class Catalog(ABC, dict[str, Any]):
         """
         return {name: self[name] for name in self if not self.sources.get(name, {}).get("is_builtin", False)}
 
+
+class DiscoverableCatalog(Catalog):
+    """Catalog that supports discovering items from directories.
+
+    This catalog extends Catalog with file-based discovery functionality,
+    including abstract methods for processing files and a template method
+    for directory scanning.
+    """
+
+    max_description_size = 100
+
     def discover_items_in_dir(self, dir_path: str, **kwargs) -> int:
         """Discover and register items from a directory.
 
@@ -186,10 +199,72 @@ class Catalog(ABC, dict[str, Any]):
         """
 
 
-class CallableCatalog(Catalog):
+class ClassCatalog(Catalog):
+    """Catalog specialized for populating from a dictionary of items.
+
+    This catalog extends Catalog to allow registration from an existing dict,
+    making it suitable for wrapping registries like HOOK_REGISTRY. It includes
+    custom logic for extracting descriptions from classes (e.g., for hooks).
+    """
+
+    @classmethod
+    def from_dict(cls, name: str, items_dict: dict[str, Any], **kwargs) -> "ClassCatalog":
+        """Create a ClassCatalog populated from a dictionary of items.
+
+        Args:
+            name: The catalog name.
+            items_dict: Dictionary mapping names to items (e.g., HOOK_REGISTRY).
+            **kwargs: Additional metadata to apply to all items.
+
+        Returns:
+            A fully populated ClassCatalog instance.
+        """
+        catalog = cls(name)
+        for item_name, item in items_dict.items():
+            catalog.register(item_name, item, **kwargs)
+        return catalog
+
+    def register(self, name: str, item: Any, **kwargs) -> Any:
+        """Register an item with enhanced metadata extraction for classes.
+
+        For class-based items (like hooks), extracts:
+        - description from a class-level 'description' attribute or docstring
+        - module_name from __module__ if not already provided
+        - is_builtin derived from module_name
+
+        Args:
+            name: The key for the item.
+            item: The item to register (e.g., a hook class).
+            **kwargs: Additional metadata.
+
+        Returns:
+            The registered item.
+        """
+        if inspect.isclass(item):
+            description = None
+            if hasattr(item, "description") and item.description:
+                description = item.description
+            elif item.__doc__:
+                first_line = item.__doc__.strip().split("\n", 1)[0].strip()
+                if first_line:
+                    description = first_line
+
+            if description:
+                kwargs.setdefault("description", description)
+
+            if "module_name" not in kwargs:
+                kwargs["module_name"] = getattr(item, "__module__", "") or ""
+
+            if "is_builtin" not in kwargs:
+                kwargs["is_builtin"] = kwargs["module_name"].startswith("nornflow.builtins")
+
+        return super().register(name, item, **kwargs)
+
+
+class CallableCatalog(DiscoverableCatalog):
     """Catalog specialized for Python callables like Nornir tasks and filters.
 
-    This catalog extends BaseCatalog with functionality for:
+    This catalog extends DiscoverableCatalog with functionality for:
     - Discovering Python modules in directories
     - Registering functions from modules based on predicates
     - Tracking built-in vs custom items
@@ -213,6 +288,10 @@ class CallableCatalog(Catalog):
         Raises:
             CatalogError: If a custom item tries to override a built-in.
         """
+        if callable(item):
+            description = self._extract_description_from_callable(item)
+            kwargs.setdefault("description", description)
+
         if module_name is None and hasattr(item, "__module__"):
             module_name = getattr(item, "__module__", None)
 
@@ -229,6 +308,26 @@ class CallableCatalog(Catalog):
         )
         logger.debug(f"Registered callable '{name}' from module '{module_name}' in {self.name} catalog")
         return result
+
+    def _extract_description_from_callable(self, item: Any) -> str:
+        """Extract description from a callable's docstring.
+
+        Args:
+            item: The callable item.
+
+        Returns:
+            The extracted description.
+        """
+        docstring = getattr(item, "__doc__", None)
+        if not docstring:
+            return "No description available"
+        docstring = docstring.strip()
+        if not docstring:
+            return "No description available"
+        first_line = docstring.split("\n", 1)[0].strip()
+        if len(first_line) > self.max_description_size:
+            first_line = first_line[: self.max_description_size - 3] + "..."
+        return first_line
 
     def register_from_module(
         self,
@@ -355,13 +454,53 @@ class CallableCatalog(Catalog):
         return modules
 
 
-class FileCatalog(Catalog):
+class FileCatalog(DiscoverableCatalog):
     """Catalog for file resources like workflow definitions.
 
-    This catalog extends BaseCatalog with functionality for:
+    This catalog extends DiscoverableCatalog with functionality for:
     - Discovering files in directories based on custom predicates
     - Registering file paths rather than importing modules
     """
+
+    def register(self, name: str, item: Any, **kwargs) -> Any:
+        """Register a file path with description extraction from YAML.
+
+        Args:
+            name: The name of the item.
+            item: The file path item.
+            **kwargs: Additional metadata.
+
+        Returns:
+            The registered item.
+        """
+        if isinstance(item, Path):
+            description = self._extract_description_from_file(item)
+            kwargs.setdefault("description", description)
+
+        return super().register(name, item, **kwargs)
+
+    def _extract_description_from_file(self, file_path: Path) -> str:
+        """Extract description from a file.
+
+        Args:
+            file_path: Path to the file.
+
+        Returns:
+            The extracted description.
+        """
+        try:
+            data = load_file_to_dict(file_path)
+            # TODO: Currently a bit hard-coded, as the only 2 supported cases
+            # for FileCatalogs are Workflows and Blueprints
+            if "workflow" in data:
+                description = data["workflow"].get("description", "No description available")
+            else:
+                description = data.get("description", "No description available")
+            if len(description) > self.max_description_size:
+                description = description[: self.max_description_size - 3] + "..."
+            return description
+        except Exception:
+            return "Could not load description from file"
 
     def _get_files_to_process(self, dir_path: Path, **kwargs) -> list[Path]:
         """Get all files from a directory based on recursive flag.
