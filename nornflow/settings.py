@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, field_validator, PrivateAttr
+from pydantic import Field, field_validator, model_validator, PrivateAttr
 from pydantic_serdes.utils import load_file_to_dict
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,6 +19,7 @@ from nornflow.constants import (
 )
 from nornflow.exceptions import SettingsError
 from nornflow.logger import logger
+from nornflow.packages import PackageDescriptor
 
 
 class NornFlowSettings(BaseSettings):
@@ -76,8 +77,9 @@ class NornFlowSettings(BaseSettings):
         default=[NORNFLOW_DEFAULT_J2_FILTERS_DIR],
         description="List of directories containing custom Jinja2 filter functions",
     )
-    imported_packages: list[str] = Field(
-        default_factory=list, description="List of Python packages to import for additional resources"
+    packages: list[PackageDescriptor] = Field(
+        default_factory=list,
+        description="List of NornFlow-compatible Python packages to load resources from",
     )
     processors: list[dict[str, Any]] = Field(
         default_factory=list, description="List of processor configurations with class and args"
@@ -95,6 +97,39 @@ class NornFlowSettings(BaseSettings):
 
     _base_dir: Path | None = PrivateAttr(default=None)
     _settings_file: str | None = PrivateAttr(default=None)
+
+    @field_validator("packages", mode="before")
+    @classmethod
+    def validate_packages(cls, v: Any) -> list[dict[str, Any]]:
+        """Normalize package entries — bare strings are expanded to full descriptor dicts."""
+        if not v:
+            return []
+
+        if not isinstance(v, list):
+            raise ValueError("packages must be a list")
+
+        normalized = []
+        for item in v:
+            if isinstance(item, str):
+                normalized.append({"name": item})
+            elif isinstance(item, dict):
+                normalized.append(item)
+            elif isinstance(item, PackageDescriptor):
+                normalized.append(item)
+            else:
+                raise ValueError(f"Invalid package entry type: {type(item).__name__}")
+
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_no_duplicate_packages(self) -> "NornFlowSettings":
+        """Catch duplicate package names that would silently load resources twice."""
+        names = [p.name for p in self.packages]
+        seen = set()
+        duplicates = [n for n in names if n in seen or seen.add(n)]
+        if duplicates:
+            raise ValueError(f"Duplicate package name(s) in 'packages': {sorted(set(duplicates))}")
+        return self
 
     @field_validator("processors", mode="before")
     @classmethod
