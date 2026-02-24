@@ -9,6 +9,7 @@ from nornflow.catalogs import CallableCatalog
 from nornflow.j2.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
 from nornflow.j2.exceptions import Jinja2ServiceError, TemplateError, TemplateValidationError
 from nornflow.logger import logger
+from nornflow.packages import PackageLoader
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import is_public_callable
 
@@ -57,16 +58,25 @@ class Jinja2Service:
         instance.environment.filters.update(instance.j2_filters_catalog)
 
     @classmethod
-    def initialize_with_settings(cls, settings: NornFlowSettings) -> None:
+    def initialize_with_settings(
+        cls, settings: NornFlowSettings, package_loader: PackageLoader | None = None
+    ) -> None:
         """Initialize the service with NornFlow settings, registering custom filters.
 
-        This method configures the Jinja2Service singleton using the provided settings,
-        ensuring custom filters from local_j2_filters directories are registered.
+        Registers j2_filters from packages first (in declared order), then from
+        local_j2_filters directories, so local filters take precedence over package filters.
 
         Args:
             settings: NornFlowSettings instance containing configuration.
+            package_loader: Optional PackageLoader for discovering j2_filters from packages.
         """
-        cls.register_custom_filters(settings.local_j2_filters)
+        pkg_j2_filter_dirs = []
+        if package_loader:
+            pkg_j2_filter_dirs = [
+                str(d) for _, d in package_loader.get_resource_dirs("j2_filters")
+            ]
+
+        cls.register_custom_filters(pkg_j2_filter_dirs + settings.local_j2_filters)
 
     @classmethod
     def register_custom_filters(cls, local_j2_filters_dirs: list[str]) -> None:
