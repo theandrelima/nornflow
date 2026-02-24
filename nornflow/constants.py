@@ -73,7 +73,7 @@ NORNFLOW_SETTINGS_OPTIONAL = {
     "local_filters": [NORNFLOW_DEFAULT_FILTERS_DIR],
     "local_hooks": [NORNFLOW_DEFAULT_HOOKS_DIR],
     "local_j2_filters": [NORNFLOW_DEFAULT_J2_FILTERS_DIR],
-    "imported_packages": [],
+    "packages": [],
     "processors": [],
     "vars_dir": NORNFLOW_DEFAULT_VARS_DIR,
     "failure_strategy": FailureStrategy.SKIP_FAILED,
@@ -90,7 +90,7 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "local_filters",
     "local_hooks",
     "local_j2_filters",
-    "imported_packages",
+    "packages",
     "logger",
 )
 
