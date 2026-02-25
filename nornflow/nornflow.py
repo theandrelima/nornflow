@@ -18,7 +18,7 @@ from nornflow.exceptions import (
     TaskError,
     WorkflowError,
 )
-from nornflow.hooks.base import HOOK_REGISTRY
+from nornflow.hooks.base import HOOKS_CATALOG
 from nornflow.j2 import Jinja2Service
 from nornflow.logger import logger
 from nornflow.models import WorkflowModel
@@ -131,7 +131,7 @@ class NornFlow:
 
             self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, processors)
             self._initialize_package_loader()
-            self._initialize_hooks() # Must run before _initialize_catalogs to populate HOOK_REGISTRY
+            self._initialize_hooks() # Must run before _initialize_catalogs to populate HOOKS_CATALOG
             self._initialize_catalogs()
             self._initialize_processors()
             self._initialize_j2_service()
@@ -898,12 +898,13 @@ class NornFlow:
         )
 
     def _load_hooks_catalog(self) -> None:
-        """Populate the hooks catalog from HOOK_REGISTRY.
+        """Point the hooks catalog at the module-level HOOKS_CATALOG singleton.
 
-        By this point, _initialize_hooks has already imported all hook modules
-        (both builtins and user-defined), so HOOK_REGISTRY is fully populated.
+        HOOKS_CATALOG is populated incrementally as hook modules are imported
+        by _initialize_hooks(). By the time this method runs, all builtin,
+        package, and local hooks have already been registered into it.
         """
-        self._hooks_catalog = ClassCatalog.from_dict(name="hooks", items_dict=HOOK_REGISTRY)
+        self._hooks_catalog = HOOKS_CATALOG
 
     def _validate_init_kwargs(self, kwargs: dict[str, Any]) -> None:
         """

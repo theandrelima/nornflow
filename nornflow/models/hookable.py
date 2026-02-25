@@ -8,7 +8,7 @@ from pydantic_serdes.utils import convert_to_hashable
 
 from nornflow.builtins.processors import NornFlowHookProcessor
 from nornflow.exceptions import ProcessorError
-from nornflow.hooks import Hook, HOOK_REGISTRY
+from nornflow.hooks import Hook, HOOKS_CATALOG
 from nornflow.hooks.loader import load_hooks
 from nornflow.nornir_manager import NornirManager
 from nornflow.vars.manager import NornFlowVariablesManager
@@ -66,7 +66,7 @@ class HookableModel(NornFlowBaseModel, ABC):
         hooks_dict = {}
         keys_to_remove = []
         for key, value in model_dict.items():
-            if key in HOOK_REGISTRY:
+            if key in HOOKS_CATALOG:
                 hooks_dict[key] = value
                 keys_to_remove.append(key)
 
