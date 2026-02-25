@@ -97,6 +97,7 @@ class SingleHook(Hook, Jinja2ResolvableMixin):
 
     hook_name = "single"
     run_once_per_task = False
+    is_builtin = True
 
     def __init__(self, value: Any = None):
         super().__init__(value)
