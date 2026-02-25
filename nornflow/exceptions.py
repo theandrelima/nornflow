@@ -51,6 +51,27 @@ class CatalogError(CoreError):
         self.catalog_name = catalog_name
 
 
+class BuiltinOverrideError(CoreError):
+    """Raised when any asset attempts to register under a name already claimed by a built-in.
+
+    This applies uniformly across all catalog types and all asset sources (packages,
+    local directories, hooks). Built-in names are permanently reserved.
+
+    Attributes:
+        name: The conflicting name.
+        catalog_name: The catalog where the conflict occurred.
+    """
+
+    def __init__(self, name: str, catalog_name: str = ""):
+        self.name = name
+        self.catalog_name = catalog_name
+        location = f" in {catalog_name} catalog" if catalog_name else ""
+        super().__init__(
+            f"'{name}'{location} is a built-in name and cannot be overridden. "
+            f"Rename the offending asset."
+        )
+
+
 class InitializationError(CoreError):
     """Base for all initialization-related errors."""
 
