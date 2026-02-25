@@ -114,6 +114,7 @@ class IfHook(Hook, Jinja2ResolvableMixin):
     hook_name = "if"
     run_once_per_task = False
     requires_deferred_templates = True
+    is_builtin = True
 
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
         """Validate condition configuration during task preparation."""
