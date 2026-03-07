@@ -190,7 +190,7 @@ tasks:
 
 > **What counts as "set":** The `is_set` filter returns `True` if a variable exists and is not `None`. Empty values like `""`, `[]`, `{}`, and `0` are considered "set" because they are valid assigned values. Only `None` or undefined variables return `False`.
 
-> **Template validation with `if` hooks:** When using `is_set` with the `if` hook, task arguments (`args`) are validated before the `if` condition is evaluated. If your args reference variables that might not exist, the workflow will fail with a template error even if `if` would have been `False`. To handle potentially-missing variables in args, use the `default` filter:
+> **Using `is_set` with `if` hooks and task args:** The `if` hook uses [Hook-Driven Template Resolution](./hooks_guide.md#hook-driven-template-resolution) — task argument templates are stored without resolution until after the `if` condition is evaluated. This means args referencing variables that only exist on some hosts are safe: they are only resolved for hosts that pass the condition. For extra safety or readability, you can still use the `default` filter in args:
 > ```yaml
 > tasks:
 >   - name: echo
@@ -409,7 +409,7 @@ This displays a table with filter names, descriptions (extracted from docstrings
 <table width="100%" border="0" style="border-collapse: collapse;">
 <tr>
 <td width="33%" align="left" style="border: none;">
-<a href="./nornflow_settings.md">← Previous: NornFlow Settings</a>
+<a href="./packages_guide.md">← Previous: Packages Guide</a>
 </td>
 <td width="33%" align="center" style="border: none;">
 </td>

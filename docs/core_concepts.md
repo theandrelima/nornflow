@@ -284,8 +284,8 @@ NornFlow automatically discovers and builds catalogs of available tasks, workflo
 The task catalog contains all available Nornir tasks that can be used in workflows. Tasks are discovered from:
 
 1. **Built-in tasks** - Always available (e.g., `echo` & `set`)
-2. **Local directories** - Specified in `local_tasks` setting
-3. **Imported packages** - *(Planned feature, not yet implemented)*
+2. **Package tasks** - Contributed by packages declared in the `packages` setting
+3. **Local directories** - Specified in `local_tasks` setting
 
 ```yaml
 # nornflow.yaml
@@ -312,7 +312,10 @@ def my_task(task: Task, **kwargs) -> Result:
 
 ### Workflow Catalog
 
-The workflow catalog contains all discovered workflow YAML files. Workflows are discovered from directories specified in `local_workflows`:
+The workflow catalog contains all discovered workflow YAML files. Workflows are discovered from:
+
+1. **Package workflows** - Contributed by packages declared in the `packages` setting
+2. **Local directories** - Specified in `local_workflows` setting
 
 ```yaml
 # nornflow.yaml
@@ -328,7 +331,8 @@ All files with `.yaml` or `.yml` extensions in these directories (including subd
 The filter catalog contains inventory filter functions that can be used in workflow definitions. Filters are discovered from:
 
 1. **Built-in filters** - currently `hosts` and `groups` filters
-2. **Local directories** - Specified in `local_filters` setting
+2. **Package filters** - Contributed by packages declared in the `packages` setting
+3. **Local directories** - Specified in `local_filters` setting
 
 ```yaml
 # nornflow.yaml
@@ -355,7 +359,10 @@ def site_filter(host: Host, region: str) -> bool:
 
 ### Blueprint Catalog
 
-The blueprint catalog contains all discovered blueprint YAML files. Blueprints are discovered from directories specified in `local_blueprints`:
+The blueprint catalog contains all discovered blueprint YAML files. Blueprints are discovered from:
+
+1. **Package blueprints** - Contributed by packages declared in the `packages` setting
+2. **Local directories** - Specified in `local_blueprints` setting
 
 ```yaml
 # nornflow.yaml
@@ -371,7 +378,8 @@ All files with `.yaml` or `.yml` extensions in these directories (including subd
 The Jinja2 filters catalog contains all available Jinja2 filters that can be used in templates throughout NornFlow. Filters are discovered from:
 
 1. **Built-in filters** - NornFlow's custom filters and Python wrapper filters (always available)
-2. **Local directories** - Specified in `local_j2_filters` setting
+2. **Package j2_filters** - Contributed by packages declared in the `packages` setting
+3. **Local directories** - Specified in `local_j2_filters` setting
 
 ```yaml
 # nornflow.yaml
@@ -408,16 +416,49 @@ View with: `nornflow show --j2-filters`
 
 ### Catalog Discovery
 
-NornFlow performs recursive searches in all configured directories:
+NornFlow performs recursive searches in all configured directories, loading assets in this fixed order for each catalog:
+
+1. **Built-in assets** — Always loaded first (where applicable)
+2. **Package assets** — Loaded in the order packages are declared in `packages`
+3. **Local assets** — Loaded from `local_*` directories in the order specified
 
 - **Automatic discovery** happens during NornFlow initialization
-- **Name conflicts** - NornFlow prevents custom or imported tasks/filters to override built-in ones. However later custom or imported discoveries will override earlier ones. 
-- **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters`, `--workflows`, `--blueprints`, and `--j2-filters` options.
+- **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters`, `--workflows`, `--blueprints`, `--hooks`, and `--j2-filters` options.
 
-**Discovery order:**
-1. Built-in items are loaded first
-2. Local directories are processed in the order specified
-3. Each directory is searched recursively
+#### Loading Order vs. Override Priority
+
+These are two distinct concepts and it's important not to conflate them:
+
+**Loading order** is simply the sequence in which assets are registered into the catalog. It determines what replaces what when non-builtin names collide:
+
+```
+Loading order (first → last):
+  built-ins → package[0] → package[1] → ... → local assets
+```
+
+For **non-builtin assets**, later-loaded wins: local assets override package assets, and later packages override earlier ones. You can always shadow a package asset by creating one with the same name in your local directories.
+
+**Override priority** is a separate concept that governs whether a name *can* be overridden at all. Builtins are loaded first but have **absolute, unconditional priority** — they cannot be overridden by anything, regardless of load order. Attempting to register any asset under a name already claimed by a builtin raises `BuiltinOverrideError` at startup, halting NornFlow initialization immediately.
+
+```
+Override priority:
+  built-ins (immutable) >> local assets > package[n] > ... > package[0]
+```
+
+#### Built-in Protection
+
+Built-in asset names are **permanently reserved** across all catalog types that have builtins. The enforcement is uniform — there is no catalog where a builtin name can be silently overridden. You must rename the offending asset.
+
+| Catalog | Built-in names | Protection |
+|---|---|---|
+| Tasks | `echo`, `set`, `write_file`, `pause` | `BuiltinOverrideError` |
+| Filters | `hosts`, `groups` | `BuiltinOverrideError` |
+| Hooks | `if`, `set_to`, `shush`, `single` | `BuiltinOverrideError` |
+| Jinja2 Filters | NornFlow's built-in j2 filters | `BuiltinOverrideError` |
+| Workflows | — no builtins — | n/a |
+| Blueprints | — no builtins — | n/a |
+
+For workflows and blueprints there are no built-in assets, so `BuiltinOverrideError` is never reachable in practice. **All** non-builtin name collisions (package vs package, or package vs local) are resolved as last-write-wins with a `WARNING` logged, uniformly across every catalog type.
 
 ## Domains
 

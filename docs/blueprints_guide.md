@@ -239,9 +239,13 @@ workflow:
 > 
 > When using **relative paths** for blueprints (not catalog names), the path is resolved against the **current working directory** where the nornflow command is executed — NOT the workflow file location or the blueprint file location.
 > 
-> In practice, you **SHOULD** always run nornflow commands from your project root directory (where n`ornflow.yaml` is located), so relative paths effectively resolve from there.
+> In practice, you **SHOULD** always run nornflow commands from your project root directory (where `nornflow.yaml` is located), so relative paths effectively resolve from there.
 > 
 > **BEST PRACTICE:** For blueprints outside your configured `local_blueprints` directories, prefer **absolute paths** to avoid confusion about path resolution.
+
+> 🚫 **Packages restriction: catalog names only**
+>
+> If your blueprints are distributed as part of a NornFlow package, **path-based references (relative or absolute) must never be used** — neither in the workflow referencing the blueprint, nor inside the blueprint itself when referencing other blueprints. Packages are installed to arbitrary locations on the filesystem, so any path-based reference will break for anyone consuming the package. **Always use catalog names** when working with packaged blueprints. See the [Packages Guide](./packages_guide.md) for full details.
 
 **Example with uncatalogued blueprints:**
 
@@ -611,7 +615,7 @@ tasks:
 <table width="100%" border="0" style="border-collapse: collapse;">
 <tr>
 <td width="33%" align="left" style="border: none;">
-<a href="./core_concepts.md">← Previous: Core Concepts</a>
+<a href="./nornflow_settings.md">← Previous: NornFlow Settings</a>
 </td>
 <td width="33%" align="center" style="border: none;">
 </td>
