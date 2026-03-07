@@ -3,20 +3,23 @@ from typing import Any, ClassVar, TYPE_CHECKING
 from nornir.core.inventory import Host
 from nornir.core.task import AggregatedResult, MultiResult, Task
 
+from nornflow.catalogs import ClassCatalog
 from nornflow.hooks.exceptions import HookRegistrationError
 from nornflow.logger import logger
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
 
-HOOK_REGISTRY: dict[str, type["Hook"]] = {}
+HOOKS_CATALOG: ClassCatalog = ClassCatalog("hooks")
 
 
 class Hook:
     """Base hook class with automatic registration and cooperative validation.
 
     Any class that inherits from Hook and defines a hook_name will be
-    automatically registered when the class is defined (at import time).
+    automatically registered into HOOKS_CATALOG when the class is defined
+    (at import time). Override and builtin-protection policies are enforced
+    by ClassCatalog.register() at that point — no deferred resolution needed.
 
     The execute_hook_validations method uses cooperative super() calls to ensure
     proper validation in multiple inheritance scenarios (e.g., with mixins).
@@ -30,23 +33,29 @@ class Hook:
 
     Attributes:
         hook_name: Unique identifier for this hook type. Required for registration.
+        is_builtin: Whether this hook is a NornFlow built-in. Defaults to False.
+            Built-in hooks in nornflow.builtins must explicitly set this to True.
+            ClassCatalog treats this attribute as authoritative when present.
         run_once_per_task: If True, hook executes once per task regardless of hosts.
         exception_handlers: Maps exception types to handler method names.
     """
 
     hook_name: ClassVar[str]
+    is_builtin: ClassVar[bool] = False
     run_once_per_task: bool = False
     exception_handlers: ClassVar[dict[type[Exception], str]] = {}
 
     def __init_subclass__(cls, **kwargs):
-        """Automatically register hook subclasses when they are defined.
+        """Automatically register hook subclasses into HOOKS_CATALOG when defined.
+
+        Only validates that hook_name is a non-empty string. All override and
+        builtin-protection policies are owned by ClassCatalog.register().
 
         Args:
             **kwargs: Any keyword arguments passed to the class definition.
 
         Raises:
-            HookRegistrationError: If a different class already registered
-                                   the same hook_name, or if hook_name is invalid.
+            HookRegistrationError: If hook_name is missing or not a non-empty string.
         """
         super().__init_subclass__(**kwargs)
 
@@ -56,17 +65,7 @@ class Hook:
                 f"'hook_name' attribute."
             )
 
-        # Check for duplicate registration
-        if cls.hook_name in HOOK_REGISTRY:
-            existing_class = HOOK_REGISTRY[cls.hook_name]
-            if existing_class is not cls:
-                raise HookRegistrationError(
-                    f"Hook name '{cls.hook_name}' is already registered "
-                    f"by {existing_class.__module__}.{existing_class.__name__}. "
-                    f"Cannot register {cls.__module__}.{cls.__name__}"
-                )
-
-        HOOK_REGISTRY[cls.hook_name] = cls
+        HOOKS_CATALOG.register(cls.hook_name, cls)
         logger.info(f"Hook class {cls.__name__} registered with hook_name '{cls.hook_name}'")
 
     def __init__(self, value: Any = None):

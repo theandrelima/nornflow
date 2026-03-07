@@ -194,6 +194,9 @@ todo*
 # local jinja2 filters dir
 /j2_filters/
 
+# local hooks filters dir
+/hooks/
+
 # ruff
 .ruff*/
 

@@ -169,7 +169,7 @@ local_blueprints:
   - "blueprints"
 local_j2_filters:
   - "j2_filters"
-imported_packages: []
+packages: []
 dry_run: False
 failure_strategy: "skip-failed"
 processors:

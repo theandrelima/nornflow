@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic_serdes.utils import load_file_to_dict
 
-from nornflow.exceptions import CatalogError, CoreError, ResourceError
+from nornflow.exceptions import BuiltinOverrideError, CoreError, ResourceError
 from nornflow.logger import logger
 from nornflow.utils import import_module_from_path
 
@@ -55,6 +55,53 @@ class Catalog(ABC, dict[str, Any]):
         self.__setitem__(name, item, **kwargs)
         logger.debug(f"Registered item '{name}' in {self.name} catalog")
         return item
+
+    def _guard_builtin_override(self, name: str) -> None:
+        """Raise BuiltinOverrideError if name is already registered as a built-in.
+
+        Args:
+            name: The name being registered.
+
+        Raises:
+            BuiltinOverrideError: If the name belongs to a built-in asset.
+        """
+        if name in self and self.sources.get(name, {}).get("is_builtin", False):
+            raise BuiltinOverrideError(name=name, catalog_name=self.name)
+
+    def _warn_non_builtin_override(self, name: str) -> None:
+        """Log a warning when a non-builtin asset overrides another non-builtin.
+
+        This is a known NornFlow v1 limitation — namespacing is not yet supported,
+        so same-named assets across packages or local directories resolve to
+        last-write-wins. Users must curate their asset names carefully.
+
+        Args:
+            name: The name being overridden.
+        """
+        existing_module = self.sources.get(name, {}).get("module_name", "unknown")
+        logger.warning(
+            f"{self.name.capitalize()} catalog: '{name}' (from '{existing_module}') is being overridden. "
+            f"Same-name asset resolution is last-write-wins in this version of NornFlow. "
+            f"Ensure asset names are unique across all packages and local directories."
+        )
+
+    def _guard_and_warn_overrides(self, name: str) -> None:
+        """Enforce builtin protection and log non-builtin name clashes.
+
+        Combines the builtin guard (hard stop) and the non-builtin override warning
+        (last-write-wins) into a single call. All catalog subclass register() methods
+        should call this instead of the two methods separately.
+
+        Args:
+            name: The name about to be registered.
+
+        Raises:
+            BuiltinOverrideError: If the name is already claimed by a built-in asset.
+        """
+        self._guard_builtin_override(name)
+
+        if name in self:
+            self._warn_non_builtin_override(name)
 
     @property
     def is_empty(self) -> bool:
@@ -200,63 +247,58 @@ class DiscoverableCatalog(Catalog):
 
 
 class ClassCatalog(Catalog):
-    """Catalog specialized for populating from a dictionary of items.
+    """Catalog specialized for class-based assets such as hooks.
 
-    This catalog extends Catalog to allow registration from an existing dict,
-    making it suitable for wrapping registries like HOOK_REGISTRY. It includes
-    custom logic for extracting descriptions from classes (e.g., for hooks).
+    Handles is_builtin resolution with the following precedence:
+    1. Explicit is_builtin class attribute on the item (authoritative).
+    2. Module name prefix fallback ('nornflow.builtins').
+
+    Same-name asset resolution is last-write-wins for non-builtins. This is a
+    known v1 limitation; namespacing is planned for a future release.
     """
 
-    @classmethod
-    def from_dict(cls, name: str, items_dict: dict[str, Any], **kwargs) -> "ClassCatalog":
-        """Create a ClassCatalog populated from a dictionary of items.
-
-        Args:
-            name: The catalog name.
-            items_dict: Dictionary mapping names to items (e.g., HOOK_REGISTRY).
-            **kwargs: Additional metadata to apply to all items.
-
-        Returns:
-            A fully populated ClassCatalog instance.
-        """
-        catalog = cls(name)
-        for item_name, item in items_dict.items():
-            catalog.register(item_name, item, **kwargs)
-        return catalog
-
     def register(self, name: str, item: Any, **kwargs) -> Any:
-        """Register an item with enhanced metadata extraction for classes.
+        """Register a class with metadata extraction and builtin protection.
 
-        For class-based items (like hooks), extracts:
-        - description from a class-level 'description' attribute or docstring
-        - module_name from __module__ if not already provided
-        - is_builtin derived from module_name
+        is_builtin resolution order:
+        1. Explicit is_builtin attribute on the item — authoritative.
+        2. Caller-supplied is_builtin in kwargs.
+        3. Fallback: module name starts with 'nornflow.builtins'.
 
         Args:
             name: The key for the item.
-            item: The item to register (e.g., a hook class).
+            item: The class to register.
             **kwargs: Additional metadata.
 
         Returns:
             The registered item.
-        """
-        if inspect.isclass(item):
-            description = None
-            if hasattr(item, "description") and item.description:
-                description = item.description
-            elif item.__doc__:
-                first_line = item.__doc__.strip().split("\n", 1)[0].strip()
-                if first_line:
-                    description = first_line
 
-            if description:
-                kwargs.setdefault("description", description)
+        Raises:
+            BuiltinOverrideError: If name is already claimed by a built-in.
+        """
+        self._guard_and_warn_overrides(name)
+
+        if inspect.isclass(item):
+            if not kwargs.get("description"):
+                description = None
+                if hasattr(item, "description") and item.description:
+                    description = item.description
+                elif item.__doc__:
+                    first_line = item.__doc__.strip().split("\n", 1)[0].strip()
+                    if first_line:
+                        description = first_line
+                if description:
+                    kwargs["description"] = description
 
             if "module_name" not in kwargs:
                 kwargs["module_name"] = getattr(item, "__module__", "") or ""
 
             if "is_builtin" not in kwargs:
-                kwargs["is_builtin"] = kwargs["module_name"].startswith("nornflow.builtins")
+                explicit = getattr(item, "is_builtin", None)
+                if explicit is not None:
+                    kwargs["is_builtin"] = bool(explicit)
+                else:
+                    kwargs["is_builtin"] = kwargs["module_name"].startswith("nornflow.builtins")
 
         return super().register(name, item, **kwargs)
 
@@ -268,16 +310,23 @@ class CallableCatalog(DiscoverableCatalog):
     - Discovering Python modules in directories
     - Registering functions from modules based on predicates
     - Tracking built-in vs custom items
+
+    Note — same-name asset resolution is last-write-wins in this version of NornFlow.
+    Namespacing support is planned for a future release. Users are responsible for
+    ensuring unique asset names across all configured packages and local directories.
     """
 
     def register(
         self, name: str, item: Any, module_path: str | None = None, module_name: str | None = None, **kwargs
     ) -> Any:
-        """Register a Python function/class with module tracking.
+        """Register a Python callable with module tracking.
+
+        If name already exists and is non-builtin, logs a warning and proceeds
+        (last-write-wins). If name belongs to a builtin, raises BuiltinOverrideError.
 
         Args:
             name: The name of the item.
-            item: The item to register.
+            item: The callable to register.
             module_path: Path to the module file.
             module_name: Python dotted module name.
             **kwargs: Additional metadata.
@@ -286,22 +335,18 @@ class CallableCatalog(DiscoverableCatalog):
             The registered item.
 
         Raises:
-            CatalogError: If a custom item tries to override a built-in.
+            BuiltinOverrideError: If name is already claimed by a built-in.
         """
+        self._guard_and_warn_overrides(name)
+
         if callable(item):
             description = self._extract_description_from_callable(item)
             kwargs.setdefault("description", description)
 
-        if module_name is None and hasattr(item, "__module__"):
+        if not module_name and hasattr(item, "__module__"):
             module_name = getattr(item, "__module__", None)
 
         is_builtin = bool(module_name and module_name.startswith("nornflow.builtins"))
-
-        if name in self and self.sources.get(name, {}).get("is_builtin", False):
-            logger.warning(f"Attempted to override built-in '{name}' in {self.name} catalog")
-            raise CatalogError(
-                f"Cannot override built-in '{name}' with a custom implementation", catalog_name=self.name
-            )
 
         result = super().register(
             name, item, module_path=module_path, module_name=module_name, is_builtin=is_builtin, **kwargs
@@ -460,24 +505,49 @@ class FileCatalog(DiscoverableCatalog):
     This catalog extends DiscoverableCatalog with functionality for:
     - Discovering files in directories based on custom predicates
     - Registering file paths rather than importing modules
+    - Tracking whether entries originate from imported packages (is_package=True)
+
+    Package-originated entries must always be referenced by catalog name — path-based
+    resolution (absolute or relative) is not available for them. This is a v1 limitation;
+    namespacing for package assets is planned for a future release.
+
+    Note — same-name asset resolution is last-write-wins in this version of NornFlow.
+    Namespacing support is planned for a future release. Users are responsible for
+    ensuring unique asset names across all configured packages and local directories.
     """
 
     def register(self, name: str, item: Any, **kwargs) -> Any:
         """Register a file path with description extraction from YAML.
 
+        If name already exists and is non-builtin, logs a warning and proceeds
+        (last-write-wins). If name belongs to a builtin, raises BuiltinOverrideError.
+
         Args:
             name: The name of the item.
             item: The file path item.
-            **kwargs: Additional metadata.
+            **kwargs: Additional metadata. Pass is_package=True for package-originated entries.
 
         Returns:
             The registered item.
+
+        Raises:
+            BuiltinOverrideError: If name is already claimed by a built-in.
         """
+        self._guard_and_warn_overrides(name)
+
         if isinstance(item, Path):
             description = self._extract_description_from_file(item)
             kwargs.setdefault("description", description)
 
         return super().register(name, item, **kwargs)
+
+    def get_package_names(self) -> set[str]:
+        """Return the set of entry names that originated from imported packages.
+
+        Returns:
+            Set of catalog names where is_package is True.
+        """
+        return {name for name in self if self.sources.get(name, {}).get("is_package", False)}
 
     def _extract_description_from_file(self, file_path: Path) -> str:
         """Extract description from a file.
@@ -519,23 +589,37 @@ class FileCatalog(DiscoverableCatalog):
     def _process_file(self, file_path: Path, **kwargs) -> int:
         """Process a file by applying predicate and registering if matched.
 
+        The is_package flag from kwargs is forwarded to register() so provenance
+        is preserved in sources metadata.
+
         Args:
             file_path: Path to the file.
-            **kwargs: Contains 'predicate' for filtering files.
+            **kwargs: Contains 'predicate' for filtering and 'is_package' for provenance.
 
         Returns:
             1 if the file was registered, 0 otherwise.
         """
         predicate = kwargs.get("predicate")
+        is_package = kwargs.get("is_package", False)
 
         if file_path.is_file() and predicate and predicate(file_path):
-            self.register(name=file_path.name, item=file_path, file_path=str(file_path))
+            self.register(
+                name=file_path.name,
+                item=file_path,
+                file_path=str(file_path),
+                is_package=is_package,
+            )
             logger.debug(f"Registered file '{file_path}' in {self.name} catalog")
             return 1
         return 0
 
     def discover_items_in_dir(
-        self, dir_path: str, predicate: Callable[[Path], bool], recursive: bool = True, **kwargs
+        self,
+        dir_path: str,
+        predicate: Callable[[Path], bool],
+        recursive: bool = True,
+        is_package: bool = False,
+        **kwargs,
     ) -> int:
         """Discover and register file paths in a directory.
 
@@ -543,6 +627,10 @@ class FileCatalog(DiscoverableCatalog):
             dir_path: Path to the directory to scan.
             predicate: Function to determine if a file should be included.
             recursive: Whether to search recursively through subdirectories.
+            is_package: Whether this directory belongs to an imported package.
+                        When True, registered entries get is_package=True in their
+                        sources metadata, and path-based blueprint resolution will
+                        be skipped for them — catalog name reference is required.
             **kwargs: Additional arguments (passed to base implementation).
 
         Returns:
@@ -551,7 +639,9 @@ class FileCatalog(DiscoverableCatalog):
         Raises:
             ResourceError: If directory doesn't exist.
         """
-        return super().discover_items_in_dir(dir_path, predicate=predicate, recursive=recursive, **kwargs)
+        return super().discover_items_in_dir(
+            dir_path, predicate=predicate, recursive=recursive, is_package=is_package, **kwargs
+        )
 
     def get_by_extension(self, extension: str) -> dict[str, Path]:
         """Get all files with a specific extension.
