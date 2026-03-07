@@ -131,7 +131,7 @@ class NornFlow:
 
             self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, processors)
             self._initialize_package_loader()
-            self._initialize_hooks() # Must run before _initialize_catalogs to populate HOOKS_CATALOG
+            self._initialize_hooks()  # Must run before _initialize_catalogs to populate HOOKS_CATALOG
             self._initialize_catalogs()
             self._initialize_processors()
             self._initialize_j2_service()

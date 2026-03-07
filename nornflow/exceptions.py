@@ -67,8 +67,7 @@ class BuiltinOverrideError(CoreError):
         self.catalog_name = catalog_name
         location = f" in {catalog_name} catalog" if catalog_name else ""
         super().__init__(
-            f"'{name}'{location} is a built-in name and cannot be overridden. "
-            f"Rename the offending asset."
+            f"'{name}'{location} is a built-in name and cannot be overridden. Rename the offending asset."
         )
 
 

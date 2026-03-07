@@ -72,9 +72,7 @@ class Jinja2Service:
         """
         pkg_j2_filter_dirs = []
         if package_loader:
-            pkg_j2_filter_dirs = [
-                str(d) for _, d in package_loader.get_resource_dirs("j2_filters")
-            ]
+            pkg_j2_filter_dirs = [str(d) for _, d in package_loader.get_resource_dirs("j2_filters")]
 
         cls.register_custom_filters(pkg_j2_filter_dirs + settings.local_j2_filters)
 

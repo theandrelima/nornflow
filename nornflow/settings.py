@@ -106,18 +106,16 @@ class NornFlowSettings(BaseSettings):
             return []
 
         if not isinstance(v, list):
-            raise ValueError("packages must be a list")
+            raise TypeError("packages must be a list")
 
         normalized = []
         for item in v:
             if isinstance(item, str):
                 normalized.append({"name": item})
-            elif isinstance(item, dict):
-                normalized.append(item)
-            elif isinstance(item, PackageDescriptor):
+            elif isinstance(item, (dict, PackageDescriptor)):
                 normalized.append(item)
             else:
-                raise ValueError(f"Invalid package entry type: {type(item).__name__}")
+                raise TypeError(f"Invalid package entry type: {type(item).__name__}")
 
         return normalized
 
