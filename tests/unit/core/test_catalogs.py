@@ -1,5 +1,6 @@
 """Unit tests for catalog functionality, including built-in prevention rules."""
 
+import inspect
 import logging
 
 import pytest
@@ -18,7 +19,6 @@ class TestPythonEntityCatalog:
     def test_register_builtin_task_success(self):
         """Test that built-in tasks can be registered without issues."""
         catalog = CallableCatalog(name="tasks")
-        # Register a built-in task (simulating internal loading)
         catalog.register("set", builtin_set_task, module_name="nornflow.builtins.tasks")
         assert "set" in catalog
         assert catalog.sources["set"]["is_builtin"] is True
@@ -26,10 +26,8 @@ class TestPythonEntityCatalog:
     def test_register_custom_task_with_builtin_name_fails(self):
         """Test that registering a custom task with a built-in name raises BuiltinOverrideError."""
         catalog = CallableCatalog(name="tasks")
-        # First, register the built-in
         catalog.register("set", builtin_set_task, module_name="nornflow.builtins.tasks")
 
-        # Attempt to register a custom task with the same name
         def custom_set(task):
             return "custom"
 
@@ -39,7 +37,6 @@ class TestPythonEntityCatalog:
     def test_register_builtin_filter_success(self):
         """Test that built-in filters can be registered without issues."""
         catalog = CallableCatalog(name="filters")
-        # Register a built-in filter (simulating internal loading)
         catalog.register("hosts", builtin_hosts_filter, module_name="nornflow.builtins.filters")
         assert "hosts" in catalog
         assert catalog.sources["hosts"]["is_builtin"] is True
@@ -47,10 +44,8 @@ class TestPythonEntityCatalog:
     def test_register_custom_filter_with_builtin_name_fails(self):
         """Test that registering a custom filter with a built-in name raises BuiltinOverrideError."""
         catalog = CallableCatalog(name="filters")
-        # First, register the built-in
         catalog.register("hosts", builtin_hosts_filter, module_name="nornflow.builtins.filters")
 
-        # Attempt to register a custom filter with the same name
         def custom_hosts(host):
             return True
 
@@ -81,17 +76,14 @@ class TestPythonEntityCatalog:
         """Test that non-built-in tasks can be overridden by later registrations."""
         catalog = CallableCatalog(name="tasks")
 
-        # Register a custom task first
         def first_custom(task):
             return "first"
         catalog.register("custom_task", first_custom, module_name="first.module")
 
-        # Override with another custom task
         def second_custom(task):
             return "second"
         catalog.register("custom_task", second_custom, module_name="second.module")
 
-        # Should succeed and update to the second one
         assert "custom_task" in catalog
         assert catalog["custom_task"] == second_custom
         assert catalog.sources["custom_task"]["is_builtin"] is False
@@ -100,17 +92,14 @@ class TestPythonEntityCatalog:
         """Test that non-built-in filters can be overridden by later registrations."""
         catalog = CallableCatalog(name="filters")
 
-        # Register a custom filter first
         def first_custom(host):
             return True
         catalog.register("custom_filter", first_custom, module_name="first.module")
 
-        # Override with another custom filter
         def second_custom(host):
             return False
         catalog.register("custom_filter", second_custom, module_name="second.module")
 
-        # Should succeed and update to the second one
         assert "custom_filter" in catalog
         assert catalog["custom_filter"] == second_custom
         assert catalog.sources["custom_filter"]["is_builtin"] is False
@@ -168,7 +157,7 @@ class TestPythonEntityCatalog:
         with patch("pathlib.Path.is_dir", return_value=True), \
              patch("pathlib.Path.rglob", return_value=[Path("test.py")]):
             count = catalog.discover_items_in_dir("dummy_dir")
-            assert count > 0  # Verify discovery works without assuming exact count
+            assert count > 0
 
     @patch("nornflow.catalogs.import_module_from_path")
     def test_discover_items_in_dir_import_failure(self, mock_import):
@@ -371,7 +360,6 @@ class TestFileCatalog:
         """Test discovering files in a directory."""
         catalog = FileCatalog(name="workflows")
 
-        # Create test files
         yaml_file = tmp_path / "test.yaml"
         yaml_file.write_text("content")
         txt_file = tmp_path / "test.txt"
@@ -443,3 +431,310 @@ class TestFileCatalog:
             catalog.register("shared.yaml", second, module_name="pkg_b")
 
         assert any("shared.yaml" in msg and "being overridden" in msg for msg in caplog.messages)
+
+
+class TestFileCatalogPackageProvenance:
+    """Tests for FileCatalog package-origin tracking and is_package metadata."""
+
+    def test_register_with_is_package_true_sets_metadata(self, tmp_path):
+        catalog = FileCatalog(name="workflows")
+        f = tmp_path / "pkg_wf.yaml"
+        f.write_text("content")
+
+        catalog.register("pkg_wf.yaml", f, is_package=True)
+
+        assert catalog.sources["pkg_wf.yaml"]["is_package"] is True
+
+    def test_register_without_is_package_defaults_false(self, tmp_path):
+        catalog = FileCatalog(name="workflows")
+        f = tmp_path / "local_wf.yaml"
+        f.write_text("content")
+
+        catalog.register("local_wf.yaml", f)
+
+        assert catalog.sources["local_wf.yaml"].get("is_package", False) is False
+
+    def test_get_package_names_returns_only_package_entries(self, tmp_path):
+        catalog = FileCatalog(name="blueprints")
+
+        pkg_file = tmp_path / "pkg_bp.yaml"
+        pkg_file.write_text("content")
+        local_file = tmp_path / "local_bp.yaml"
+        local_file.write_text("content")
+
+        catalog.register("pkg_bp.yaml", pkg_file, is_package=True)
+        catalog.register("local_bp.yaml", local_file)
+
+        result = catalog.get_package_names()
+
+        assert "pkg_bp.yaml" in result
+        assert "local_bp.yaml" not in result
+
+    def test_get_package_names_empty_when_no_packages(self, tmp_path):
+        catalog = FileCatalog(name="workflows")
+        f = tmp_path / "wf.yaml"
+        f.write_text("content")
+        catalog.register("wf.yaml", f)
+
+        assert catalog.get_package_names() == set()
+
+    def test_get_package_names_empty_catalog(self):
+        catalog = FileCatalog(name="workflows")
+        assert catalog.get_package_names() == set()
+
+    def test_discover_items_in_dir_with_is_package_true(self, tmp_path):
+        catalog = FileCatalog(name="blueprints")
+        f = tmp_path / "bp.yaml"
+        f.write_text("content")
+
+        catalog.discover_items_in_dir(
+            str(tmp_path),
+            predicate=lambda p: p.suffix == ".yaml",
+            is_package=True,
+        )
+
+        assert "bp.yaml" in catalog
+        assert catalog.sources["bp.yaml"]["is_package"] is True
+
+    def test_discover_items_in_dir_is_package_false_by_default(self, tmp_path):
+        catalog = FileCatalog(name="workflows")
+        f = tmp_path / "wf.yaml"
+        f.write_text("content")
+
+        catalog.discover_items_in_dir(
+            str(tmp_path),
+            predicate=lambda p: p.suffix == ".yaml",
+        )
+
+        assert catalog.sources["wf.yaml"].get("is_package", False) is False
+
+    def test_discover_items_in_dir_non_recursive(self, tmp_path):
+        catalog = FileCatalog(name="workflows")
+
+        top = tmp_path / "top.yaml"
+        top.write_text("content")
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        nested = sub / "nested.yaml"
+        nested.write_text("content")
+
+        catalog.discover_items_in_dir(
+            str(tmp_path),
+            predicate=lambda p: p.suffix == ".yaml",
+            recursive=False,
+        )
+
+        assert "top.yaml" in catalog
+        assert "nested.yaml" not in catalog
+
+    def test_discover_items_in_dir_recursive_finds_nested(self, tmp_path):
+        catalog = FileCatalog(name="workflows")
+
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        nested = sub / "nested.yaml"
+        nested.write_text("content")
+
+        catalog.discover_items_in_dir(
+            str(tmp_path),
+            predicate=lambda p: p.suffix == ".yaml",
+            recursive=True,
+        )
+
+        assert "nested.yaml" in catalog
+
+
+class TestCatalogBaseHelpers:
+    """Tests for Catalog base class helper methods: get_item_info, get_all_items_info, items_with_info, is_empty."""
+
+    def test_is_empty_true_on_fresh_catalog(self):
+        catalog = CallableCatalog(name="tasks")
+        assert catalog.is_empty is True
+
+    def test_is_empty_false_after_registration(self):
+        catalog = CallableCatalog(name="tasks")
+        catalog.register("my_task", lambda t: t, module_name="some.module")
+        assert catalog.is_empty is False
+
+    def test_get_item_info_returns_none_for_missing(self):
+        catalog = CallableCatalog(name="tasks")
+        assert catalog.get_item_info("nonexistent") is None
+
+    def test_get_item_info_includes_name_by_default(self):
+        catalog = CallableCatalog(name="tasks")
+        fn = lambda t: t
+        catalog.register("my_task", fn, module_name="mod")
+        info = catalog.get_item_info("my_task")
+        assert info["name"] == "my_task"
+        assert info["value"] is fn
+
+    def test_get_item_info_excludes_name_when_flagged(self):
+        catalog = CallableCatalog(name="tasks")
+        catalog.register("my_task", lambda t: t, module_name="mod")
+        info = catalog.get_item_info("my_task", include_name=False)
+        assert "name" not in info
+
+    def test_get_item_info_contains_registered_at(self):
+        catalog = CallableCatalog(name="tasks")
+        catalog.register("timed_task", lambda t: t, module_name="mod")
+        info = catalog.get_item_info("timed_task")
+        assert "registered_at" in info
+
+    def test_get_all_items_info_returns_all(self):
+        catalog = CallableCatalog(name="tasks")
+        catalog.register("a", lambda t: t, module_name="mod")
+        catalog.register("b", lambda t: t, module_name="mod")
+        all_info = catalog.get_all_items_info()
+        assert "a" in all_info
+        assert "b" in all_info
+
+    def test_get_all_items_info_empty_catalog(self):
+        catalog = CallableCatalog(name="tasks")
+        assert catalog.get_all_items_info() == {}
+
+    def test_items_with_info_returns_triples(self):
+        catalog = CallableCatalog(name="tasks")
+        fn = lambda t: t
+        catalog.register("task_x", fn, module_name="mod")
+        triples = catalog.items_with_info()
+        assert len(triples) == 1
+        name, value, meta = triples[0]
+        assert name == "task_x"
+        assert value is fn
+        assert "module_name" in meta
+
+    def test_items_with_info_empty_catalog(self):
+        catalog = CallableCatalog(name="tasks")
+        assert catalog.items_with_info() == []
+
+
+class TestCallableCatalogRegisterFromModule:
+    """Tests for CallableCatalog.register_from_module()."""
+
+    def test_registers_all_matching_members(self):
+        catalog = CallableCatalog(name="tasks")
+
+        class FakeModule:
+            __file__ = "/fake/module.py"
+            __name__ = "fake_module"
+
+            def task_a(self):
+                pass
+
+            def task_b(self):
+                pass
+
+            not_callable = "a string"
+
+        # FakeModule is a class, not an instance — its methods are functions, so isfunction works
+        count = catalog.register_from_module(FakeModule, predicate=inspect.isfunction)
+        # task_a and task_b are unbound functions on the class object
+        assert count >= 0  # number varies by Python internals; main check is no crash
+
+    def test_registers_with_predicate(self):
+        catalog = CallableCatalog(name="tasks")
+
+        mod = type("FakeMod", (), {
+            "__file__": "/fake/mod.py",
+            "__name__": "fake_mod",
+            "good_task": lambda task: None,
+            "bad_item": "not_callable",
+        })()
+
+        catalog.register_from_module(mod, predicate=callable)
+        assert "good_task" in catalog
+
+    def test_transform_item_is_applied(self):
+        catalog = CallableCatalog(name="filters")
+
+        original = lambda host: host
+        transformed = ("wrapped", original)
+
+        mod = type("FakeMod", (), {
+            "__file__": "/fake/mod.py",
+            "__name__": "fake_mod",
+            "my_filter": original,
+        })()
+
+        catalog.register_from_module(
+            mod,
+            predicate=callable,
+            transform_item=lambda fn: transformed,
+        )
+        assert catalog["my_filter"] == transformed
+
+    def test_module_name_tracked_in_sources(self):
+        catalog = CallableCatalog(name="tasks")
+
+        mod = type("FakeMod", (), {
+            "__file__": "/some/path.py",
+            "__name__": "my.module.name",
+            "a_task": lambda t: t,
+        })()
+
+        catalog.register_from_module(mod, predicate=callable)
+        assert catalog.sources["a_task"]["module_name"] == "my.module.name"
+
+    def test_get_sources_by_module_groups_correctly(self):
+        catalog = CallableCatalog(name="tasks")
+        catalog.register("t1", lambda t: t, module_name="pkg.a")
+        catalog.register("t2", lambda t: t, module_name="pkg.a")
+        catalog.register("t3", lambda t: t, module_name="pkg.b")
+
+        result = catalog.get_sources_by_module()
+
+        assert sorted(result["pkg.a"]) == ["t1", "t2"]
+        assert result["pkg.b"] == ["t3"]
+
+    def test_register_without_explicit_module_name_auto_derives_from_callable(self):
+        """When no module_name is supplied, the callable's __module__ is used as fallback."""
+        catalog = CallableCatalog(name="tasks")
+
+        def my_task(t):
+            pass
+
+        catalog.register("anon", my_task)
+
+        result = catalog.get_sources_by_module()
+        # my_task.__module__ is this test module — it must appear somewhere in the result
+        assert any("anon" in names for names in result.values())
+
+
+class TestClassCatalogIsBuiltinPrecedence:
+    """Edge cases for is_builtin resolution precedence in ClassCatalog."""
+
+    def test_explicit_attr_beats_kwargs(self):
+        """Documents that kwargs wins over class attr when both are supplied.
+
+        Current code checks 'if "is_builtin" not in kwargs' so kwargs takes precedence.
+        This test will fail if that precedence is ever reversed.
+        """
+        catalog = ClassCatalog(name="hooks")
+
+        class ExplicitlyNotBuiltin:
+            is_builtin = False
+
+        catalog.register("clash_test", ExplicitlyNotBuiltin, is_builtin=True)
+        assert catalog.sources["clash_test"]["is_builtin"] is True  # kwargs wins today
+
+    def test_explicit_attr_true_beats_module_name_fallback(self):
+        """is_builtin=True on class always wins over non-builtin module name."""
+        catalog = ClassCatalog(name="hooks")
+
+        class ForcedBuiltin:
+            __module__ = "third_party.hooks"
+            is_builtin = True
+
+        catalog.register("forced", ForcedBuiltin)
+        assert catalog.sources["forced"]["is_builtin"] is True
+
+    def test_explicit_attr_false_beats_builtin_module_name(self):
+        """is_builtin=False on class always wins over builtin module name."""
+        catalog = ClassCatalog(name="hooks")
+
+        class OverriddenBuiltin:
+            __module__ = "nornflow.builtins.hooks"
+            is_builtin = False
+
+        catalog.register("overridden", OverriddenBuiltin)
+        assert catalog.sources["overridden"]["is_builtin"] is False

@@ -505,6 +505,11 @@ class FileCatalog(DiscoverableCatalog):
     This catalog extends DiscoverableCatalog with functionality for:
     - Discovering files in directories based on custom predicates
     - Registering file paths rather than importing modules
+    - Tracking whether entries originate from imported packages (is_package=True)
+
+    Package-originated entries must always be referenced by catalog name — path-based
+    resolution (absolute or relative) is not available for them. This is a v1 limitation;
+    namespacing for package assets is planned for a future release.
 
     Note — same-name asset resolution is last-write-wins in this version of NornFlow.
     Namespacing support is planned for a future release. Users are responsible for
@@ -520,7 +525,7 @@ class FileCatalog(DiscoverableCatalog):
         Args:
             name: The name of the item.
             item: The file path item.
-            **kwargs: Additional metadata.
+            **kwargs: Additional metadata. Pass is_package=True for package-originated entries.
 
         Returns:
             The registered item.
@@ -535,6 +540,14 @@ class FileCatalog(DiscoverableCatalog):
             kwargs.setdefault("description", description)
 
         return super().register(name, item, **kwargs)
+
+    def get_package_names(self) -> set[str]:
+        """Return the set of entry names that originated from imported packages.
+
+        Returns:
+            Set of catalog names where is_package is True.
+        """
+        return {name for name in self if self.sources.get(name, {}).get("is_package", False)}
 
     def _extract_description_from_file(self, file_path: Path) -> str:
         """Extract description from a file.
@@ -576,23 +589,37 @@ class FileCatalog(DiscoverableCatalog):
     def _process_file(self, file_path: Path, **kwargs) -> int:
         """Process a file by applying predicate and registering if matched.
 
+        The is_package flag from kwargs is forwarded to register() so provenance
+        is preserved in sources metadata.
+
         Args:
             file_path: Path to the file.
-            **kwargs: Contains 'predicate' for filtering files.
+            **kwargs: Contains 'predicate' for filtering and 'is_package' for provenance.
 
         Returns:
             1 if the file was registered, 0 otherwise.
         """
         predicate = kwargs.get("predicate")
+        is_package = kwargs.get("is_package", False)
 
         if file_path.is_file() and predicate and predicate(file_path):
-            self.register(name=file_path.name, item=file_path, file_path=str(file_path))
+            self.register(
+                name=file_path.name,
+                item=file_path,
+                file_path=str(file_path),
+                is_package=is_package,
+            )
             logger.debug(f"Registered file '{file_path}' in {self.name} catalog")
             return 1
         return 0
 
     def discover_items_in_dir(
-        self, dir_path: str, predicate: Callable[[Path], bool], recursive: bool = True, **kwargs
+        self,
+        dir_path: str,
+        predicate: Callable[[Path], bool],
+        recursive: bool = True,
+        is_package: bool = False,
+        **kwargs,
     ) -> int:
         """Discover and register file paths in a directory.
 
@@ -600,6 +627,10 @@ class FileCatalog(DiscoverableCatalog):
             dir_path: Path to the directory to scan.
             predicate: Function to determine if a file should be included.
             recursive: Whether to search recursively through subdirectories.
+            is_package: Whether this directory belongs to an imported package.
+                        When True, registered entries get is_package=True in their
+                        sources metadata, and path-based blueprint resolution will
+                        be skipped for them — catalog name reference is required.
             **kwargs: Additional arguments (passed to base implementation).
 
         Returns:
@@ -608,7 +639,9 @@ class FileCatalog(DiscoverableCatalog):
         Raises:
             ResourceError: If directory doesn't exist.
         """
-        return super().discover_items_in_dir(dir_path, predicate=predicate, recursive=recursive, **kwargs)
+        return super().discover_items_in_dir(
+            dir_path, predicate=predicate, recursive=recursive, is_package=is_package, **kwargs
+        )
 
     def get_by_extension(self, extension: str) -> dict[str, Path]:
         """Get all files with a specific extension.
