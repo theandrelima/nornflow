@@ -377,54 +377,144 @@ task = TaskModel(
 - `set_to`: Variable storage configuration (optional hook)
 - `if`: Conditional execution hook (optional hook)
 - `shush`: Output suppression hook (optional hook)
+- `single`: Single-host execution hook (optional hook)
 - Other hook configurations as needed
 
 ## Hook Classes
 
 Hooks extend task behavior without modifying task code. They implement the Nornir Processor protocol and are automatically registered when imported.
 
-### BaseHook
+### Hook
 
-Base class for all hooks, implementing the Nornir Processor protocol.
+Base class for all hooks, providing automatic registration, lifecycle method delegation, and context injection.
 
 ```python
-from nornflow.hooks import BaseHook
+from nornflow.hooks import Hook
 from nornir.core.task import Task
+from nornir.core.inventory import Host
 from typing import Any
 
-class MyCustomHook(BaseHook):
-    """Custom hook implementation."""
+class MyCustomHook(Hook):
+    hook_name = "my_custom"       # Required — defines the YAML key that activates this hook
+    run_once_per_task = False     # False = runs per host (default); True = runs once for the task
     
     def __init__(self, value: Any):
-        self.value = value
+        super().__init__(value)
     
     def task_started(self, task: Task) -> None:
-        """Called when task starts."""
+        """Called once when the task starts, before any host executes."""
         pass
     
     def task_instance_started(self, task: Task, host: Host) -> None:
-        """Called when task starts on a specific host."""
+        """Called before the task executes on each host."""
         pass
     
-    def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
-        """Called when task completes on a specific host."""
+    def task_instance_completed(self, task: Task, host: Host, result: Any) -> None:
+        """Called after the task executes on each host."""
+        pass
+    
+    def task_completed(self, task: Task, result: Any) -> None:
+        """Called once when the task completes, after all hosts."""
         pass
 ```
+
+**Key class attributes:**
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `hook_name` | `str` | **Yes** | The YAML key that activates this hook (e.g., `"if"`, `"set_to"`). Without this, the class is never registered. |
+| `run_once_per_task` | `bool` | No (default `False`) | If `True`, hook logic runs only for the first host per task; subsequent hosts skip execution. Use for task-wide concerns (e.g., suppressing output, logging). If `False`, runs independently per host. |
+| `requires_deferred_templates` | `bool` | No (default `False`) | If `True`, signals `NornFlowVariableProcessor` to defer resolution of task argument templates until after the hook's pre-execution logic completes. See [Hook-Driven Template Resolution](./hooks_guide.md#hook-driven-template-resolution). |
+
+**Lifecycle methods** (override only what you need — the base class provides empty default implementations for all):
+
+| Method | Scope | Description |
+|--------|-------|-------------|
+| `task_started(task)` | Once per task | Called before any host executes |
+| `task_completed(task, result)` | Once per task | Called after all hosts complete |
+| `task_instance_started(task, host)` | Per host | Called before task executes on a specific host |
+| `task_instance_completed(task, host, result)` | Per host | Called after task executes on a specific host |
+| `subtask_instance_started(task, host)` | Per host | Called before a subtask executes |
+| `subtask_instance_completed(task, host, result)` | Per host | Called after a subtask completes |
+
+**Context access:**
+
+Inside any lifecycle method, `self.context` provides access to NornFlow runtime components:
+
+```python
+def task_instance_started(self, task: Task, host: Host) -> None:
+    vars_manager = self.context.get("vars_manager")
+    task_model = self.context.get("task_model")
+    tasks_catalog = self.context.get("tasks_catalog")
+    filters_catalog = self.context.get("filters_catalog")
+    nornir_manager = self.context.get("nornir_manager")
+```
+
+### Jinja2ResolvableMixin
+
+Optional mixin that adds automatic Jinja2 template resolution to a hook's configured value. Combine with `Hook` when your hook should accept both static values and `{{ ... }}` expressions from YAML.
+
+```python
+from nornflow.hooks import Hook, Jinja2ResolvableMixin
+
+class MyConditionalHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "my_hook"
+    run_once_per_task = False
+    
+    def task_instance_started(self, task: Task, host: Host) -> None:
+        # Resolves Jinja2 if present, returns static value otherwise
+        condition = self.get_resolved_value(task, host=host, as_bool=True, default=False)
+        
+        if condition:
+            ...
+```
+
+**`get_resolved_value()` signature:**
+
+```python
+def get_resolved_value(
+    self,
+    task: Task,
+    host: Host | None = None,
+    as_bool: bool = False,
+    default: Any = None
+) -> Any
+```
+
+- If `self.value` is falsy → returns `default`
+- If `self.value` contains Jinja2 markers (`{{`, `{%`, `{#`) → resolves via NornFlow variable system
+- Otherwise → returns `self.value` as-is
+- If `as_bool=True` → converts result to boolean using NornFlow's truthy string set (`"true"`, `"yes"`, `"1"`, `"on"`, `"y"`, `"t"`, `"enabled"`)
+
+The mixin also automatically validates Jinja2 expression syntax during workflow preparation (when markers are detected). Override `execute_hook_validations()` to add hook-specific constraints — always call `super().execute_hook_validations(task_model)` first to preserve mixin validation.
 
 ### Hook Registration
 
-Hooks are automatically registered when their class is defined:
+Registration is automatic — it happens at import time via `__init_subclass__` when Python loads a class that inherits from `Hook` and defines `hook_name`:
 
 ```python
 # hooks/my_hook.py
-from nornflow.hooks import BaseHook
+from nornflow.hooks import Hook
 
-class MyHook(BaseHook):
-    """Automatically registered when this file is imported."""
-    pass
+class MyHook(Hook):
+    hook_name = "my_hook"  # Registered immediately when this module is imported
 ```
 
-NornFlow discovers hooks by importing all Python files in configured hook directories.
+For NornFlow to import your hook module, place it in a directory covered by `local_hooks` in `nornflow.yaml`:
+
+```yaml
+# nornflow.yaml
+local_hooks:
+  - "hooks"
+  - "custom_extensions/hooks"
+```
+
+NornFlow recursively scans all configured directories for `.py` files and imports them during initialization. See the [Hooks Guide](./hooks_guide.md#hook-discovery-and-loading) for full details.
+
+**Registration constraints:**
+- `hook_name` must be globally unique across built-ins, packages, and local modules
+- Duplicate `hook_name` values raise `HookRegistrationError` at import time — there is no "local overrides package" precedence for hooks
+- Classes without `hook_name` are silently ignored (not registered)
 
 ## Variable System Classes
 
@@ -610,7 +700,7 @@ logger.set_execution_context(
 
 ### Sensitive Data Sanitization
 
-NornFlow Logger attempts to saniteze log messages to hid sensitive data. This is a best effort endeavour, and will only work for data explicitly related to what is considered a protected keyword.  
+NornFlow Logger attempts to sanitize log messages to hide sensitive data. This is a best effort endeavour, and will only work for data explicitly related to what is considered a protected keyword.  
 > Note: `PROTECTED_KEYWORDS` can be found in [constants.py](../nornflow/constants.py)
 ```python
 from nornflow.logger import sanitize_log_message

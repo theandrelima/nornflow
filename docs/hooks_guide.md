@@ -605,15 +605,15 @@ tasks:
 
 **This is critical**: For NornFlow to find and register your custom hooks, you need to either:
 1. Place them in the default hooks directory in the root of your NornFlow project, OR
-2. Configure `local_hooks_dirs` to point to your custom location
+2. Configure `local_hooks` in your `nornflow.yaml` to point to your custom location(s)
 
-#### The `local_hooks_dirs` Setting
+#### The `local_hooks` Setting
 
 Configure this in your `nornflow.yaml` file:
 
 ```yaml
 # nornflow.yaml
-local_hooks_dirs:
+local_hooks:
   - "hooks"
   - "custom_extensions/hooks"
   - "/absolute/path/to/hooks"
@@ -627,7 +627,7 @@ local_hooks_dirs:
 
 When NornFlow starts, it:
 
-1. **Reads `local_hooks_dirs`** from settings (or uses default `["hooks"]`)
+1. **Reads `local_hooks`** from settings (or uses default `["hooks"]`)
 2. **Recursively scans** each directory for `.py` files
 3. **Imports** each Python module found
 4. **Registration happens automatically** via `__init_subclass__` during import
@@ -666,9 +666,9 @@ Project Structure:
    └── hooks/             # Matches default
        └── custom.py
    
-   ✅ Correct (using custom):
+   ✅ Correct (using custom path in nornflow.yaml):
    project/
-   ├── nornflow.yaml      # local_hooks_dirs: ["my_hooks"]
+   ├── nornflow.yaml      # local_hooks: ["my_hooks"]
    └── my_hooks/          # Matches configuration
        └── custom.py
    ```
@@ -1184,7 +1184,7 @@ This means:
 <td width="33%" align="center" style="border: none;">
 </td>
 <td width="33%" align="right" style="border: none;">
-<a href="./nornflow_settings.md">Next: NornFlow Settings →</a>
+<a href="./packages_guide.md">Next: Packages Guide →</a>
 </td>
 </tr>
 </table>
