@@ -757,6 +757,7 @@ class NornFlow:
         directories: list[str] | None = None,
         recursive: bool = False,
         check_empty: bool = False,
+        is_package: bool = False,
     ) -> Any:
         """
         Generic method to load a catalog with common logic for discovery and error handling.
@@ -771,6 +772,9 @@ class NornFlow:
             directories: List of directories to scan for items.
             recursive: Whether to scan directories recursively (for FileCatalog).
             check_empty: Whether to raise an error if the catalog ends up empty.
+            is_package: Whether the directories belong to imported packages. When True,
+                        registered file entries will carry is_package=True in their sources
+                        metadata, preventing path-based resolution in BlueprintExpander.
 
         Returns:
             The loaded catalog instance.
@@ -794,7 +798,9 @@ class NornFlow:
 
             try:
                 if catalog_type == FileCatalog:
-                    catalog.discover_items_in_dir(dir_path, predicate=predicate, recursive=recursive)
+                    catalog.discover_items_in_dir(
+                        dir_path, predicate=predicate, recursive=recursive, is_package=is_package
+                    )
                 else:
                     catalog.discover_items_in_dir(
                         dir_path, predicate=predicate, transform_item=transform_item
@@ -872,14 +878,24 @@ class NornFlow:
         """
         Discover and load workflow files from directories specified in settings.
 
-        This catalogs the available workflow files for later use when a workflow
-        is requested by name.
+        Package workflows are registered first (is_package=True), then local workflows.
+        This ensures local workflows take precedence on name clashes (last-write-wins),
+        and package workflows are correctly tagged to prevent path-based resolution.
         """
-        self._workflows_catalog = self._load_catalog(
+        catalog = self._load_catalog(
             FileCatalog,
             "workflows",
             predicate=is_yaml_file,
-            directories=self._get_package_dirs("workflows") + self.settings.local_workflows,
+            directories=self._get_package_dirs("workflows"),
+            recursive=True,
+            is_package=True,
+        )
+        self._workflows_catalog = self._load_catalog(
+            FileCatalog,
+            "workflows",
+            catalog=catalog,
+            predicate=is_yaml_file,
+            directories=self.settings.local_workflows,
             recursive=True,
         )
 
@@ -887,13 +903,24 @@ class NornFlow:
         """
         Discover and load blueprint files from directories specified in settings.
 
-        This catalogs the available blueprint files for later use.
+        Package blueprints are registered first (is_package=True), then local blueprints.
+        This ensures local blueprints take precedence on name clashes (last-write-wins),
+        and package blueprints are correctly tagged to prevent path-based resolution.
         """
-        self._blueprints_catalog = self._load_catalog(
+        catalog = self._load_catalog(
             FileCatalog,
             "blueprints",
             predicate=is_yaml_file,
-            directories=self._get_package_dirs("blueprints") + self.settings.local_blueprints,
+            directories=self._get_package_dirs("blueprints"),
+            recursive=True,
+            is_package=True,
+        )
+        self._blueprints_catalog = self._load_catalog(
+            FileCatalog,
+            "blueprints",
+            catalog=catalog,
+            predicate=is_yaml_file,
+            directories=self.settings.local_blueprints,
             recursive=True,
         )
 
@@ -1050,7 +1077,7 @@ class NornFlow:
             workflow_dict = load_file_to_dict(workflow_path)
             workflow = WorkflowModel.create(
                 workflow_dict,
-                blueprints_catalog=dict(self.blueprints_catalog),
+                blueprints_catalog=self.blueprints_catalog,
                 vars_dir=self.settings.vars_dir,
                 workflow_path=workflow_path,
                 workflow_roots=self.settings.local_workflows,
