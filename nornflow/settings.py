@@ -365,9 +365,7 @@ class NornFlowSettings(BaseSettings):
         try:
             instance = cls(**settings_data)
         except Exception as e:
-            raise SettingsError(
-                f"Invalid settings in {resolved_file}: {e}"
-            ) from e
+            raise SettingsError(f"Invalid settings in {resolved_file}: {e}") from e
 
         instance._base_dir = base_dir
         instance._settings_file = str(settings_path)
