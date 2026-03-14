@@ -193,27 +193,27 @@ class TestPythonEntityCatalog:
 class TestClassCatalog:
     """Tests for ClassCatalog registration, is_builtin resolution, and override policies."""
 
-    def test_register_class_with_explicit_is_builtin_true(self):
-        """Test that an explicit is_builtin=True class attribute is authoritative."""
+    def test_register_class_builtin_from_module_origin(self):
+        """Test that is_builtin is derived from __module__ starting with 'nornflow.builtins'."""
         catalog = ClassCatalog(name="hooks")
 
         class FakeBuiltin:
-            is_builtin = True
+            pass
 
+        FakeBuiltin.__module__ = "nornflow.builtins.hooks.fake"
         catalog.register("fake_builtin", FakeBuiltin)
         assert catalog.sources["fake_builtin"]["is_builtin"] is True
 
-    def test_register_class_with_explicit_is_builtin_false(self):
-        """Test that an explicit is_builtin=False class attribute is authoritative,
-        even when the module name would suggest builtin status."""
+    def test_register_class_module_origin_ignores_class_attribute(self):
+        """Test that is_builtin is derived from module origin, ignoring any class attribute."""
         catalog = ClassCatalog(name="hooks")
 
-        class NotReallyBuiltin:
+        class ClaimsNotBuiltin:
             __module__ = "nornflow.builtins.something"
             is_builtin = False
 
-        catalog.register("not_really", NotReallyBuiltin)
-        assert catalog.sources["not_really"]["is_builtin"] is False
+        catalog.register("actually_builtin", ClaimsNotBuiltin)
+        assert catalog.sources["actually_builtin"]["is_builtin"] is True
 
     def test_register_class_fallback_to_module_name_builtin(self):
         """Test that module-name prefix is used when no explicit is_builtin attr exists."""
@@ -237,8 +237,8 @@ class TestClassCatalog:
         catalog.register("user_hook", UserClass)
         assert catalog.sources["user_hook"]["is_builtin"] is False
 
-    def test_register_class_kwargs_is_builtin_respected(self):
-        """Test that caller-supplied is_builtin kwarg is used when class has no attr."""
+    def test_register_class_kwargs_cannot_override_module_origin(self):
+        """Test that caller-supplied is_builtin kwarg is ignored — module origin wins."""
         catalog = ClassCatalog(name="hooks")
 
         class Neutral:
@@ -246,14 +246,16 @@ class TestClassCatalog:
 
         Neutral.__module__ = "some.module"
         catalog.register("neutral", Neutral, is_builtin=True)
-        assert catalog.sources["neutral"]["is_builtin"] is True
+        assert catalog.sources["neutral"]["is_builtin"] is False
 
     def test_builtin_override_raises(self):
         """Test that overriding a builtin entry raises BuiltinOverrideError."""
         catalog = ClassCatalog(name="hooks")
 
         class Builtin:
-            is_builtin = True
+            pass
+
+        Builtin.__module__ = "nornflow.builtins.hooks.something"
 
         class Imposter:
             pass
@@ -392,12 +394,11 @@ class TestFileCatalog:
         """Test that overriding a builtin file entry raises BuiltinOverrideError."""
         catalog = FileCatalog(name="workflows")
 
-        builtin_file = tmp_path / "base.yaml"
-        builtin_file.write_text("content")
-        override_file = tmp_path / "base_v2.yaml"
+        builtin_file = FileCatalog.nornflow_builtins_dir / "base.yaml"
+        override_file = tmp_path / "base.yaml"
         override_file.write_text("content")
 
-        catalog.register("base.yaml", builtin_file, is_builtin=True)
+        catalog.register("base.yaml", builtin_file)
 
         with pytest.raises(BuiltinOverrideError, match="'base.yaml'.*is a built-in name"):
             catalog.register("base.yaml", override_file)
@@ -700,41 +701,38 @@ class TestCallableCatalogRegisterFromModule:
         assert any("anon" in names for names in result.values())
 
 
-class TestClassCatalogIsBuiltinPrecedence:
-    """Edge cases for is_builtin resolution precedence in ClassCatalog."""
+class TestClassCatalogIsBuiltinModuleOrigin:
+    """Tests that is_builtin is derived solely from module origin in ClassCatalog."""
 
-    def test_explicit_attr_beats_kwargs(self):
-        """Documents that kwargs wins over class attr when both are supplied.
-
-        Current code checks 'if "is_builtin" not in kwargs' so kwargs takes precedence.
-        This test will fail if that precedence is ever reversed.
-        """
+    def test_kwargs_cannot_fake_builtin(self):
+        """Caller-supplied is_builtin=True kwarg is ignored when module is not builtin."""
         catalog = ClassCatalog(name="hooks")
 
-        class ExplicitlyNotBuiltin:
-            is_builtin = False
+        class External:
+            pass
 
-        catalog.register("clash_test", ExplicitlyNotBuiltin, is_builtin=True)
-        assert catalog.sources["clash_test"]["is_builtin"] is True  # kwargs wins today
+        External.__module__ = "third_party.hooks"
+        catalog.register("external", External, is_builtin=True)
+        assert catalog.sources["external"]["is_builtin"] is False
 
-    def test_explicit_attr_true_beats_module_name_fallback(self):
-        """is_builtin=True on class always wins over non-builtin module name."""
+    def test_class_attr_cannot_fake_builtin(self):
+        """is_builtin=True class attribute is ignored when module is not builtin."""
         catalog = ClassCatalog(name="hooks")
 
-        class ForcedBuiltin:
+        class ClaimsBuiltin:
             __module__ = "third_party.hooks"
             is_builtin = True
 
-        catalog.register("forced", ForcedBuiltin)
-        assert catalog.sources["forced"]["is_builtin"] is True
+        catalog.register("claims", ClaimsBuiltin)
+        assert catalog.sources["claims"]["is_builtin"] is False
 
-    def test_explicit_attr_false_beats_builtin_module_name(self):
-        """is_builtin=False on class always wins over builtin module name."""
+    def test_class_attr_cannot_deny_builtin(self):
+        """is_builtin=False class attribute is ignored when module IS builtin."""
         catalog = ClassCatalog(name="hooks")
 
-        class OverriddenBuiltin:
+        class DeniesBuiltin:
             __module__ = "nornflow.builtins.hooks"
             is_builtin = False
 
-        catalog.register("overridden", OverriddenBuiltin)
-        assert catalog.sources["overridden"]["is_builtin"] is False
+        catalog.register("denier", DeniesBuiltin)
+        assert catalog.sources["denier"]["is_builtin"] is True

@@ -22,7 +22,6 @@ class ShushHook(Hook, Jinja2ResolvableMixin):
 
     hook_name = "shush"
     run_once_per_task = True
-    is_builtin = True
 
     def task_started(self, task: Task) -> None:
         """Mark task for output suppression if conditions are met."""

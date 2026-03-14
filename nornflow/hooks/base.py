@@ -33,15 +33,11 @@ class Hook:
 
     Attributes:
         hook_name: Unique identifier for this hook type. Required for registration.
-        is_builtin: Whether this hook is a NornFlow built-in. Defaults to False.
-            Built-in hooks in nornflow.builtins must explicitly set this to True.
-            ClassCatalog treats this attribute as authoritative when present.
         run_once_per_task: If True, hook executes once per task regardless of hosts.
         exception_handlers: Maps exception types to handler method names.
     """
 
     hook_name: ClassVar[str]
-    is_builtin: ClassVar[bool] = False
     run_once_per_task: bool = False
     exception_handlers: ClassVar[dict[type[Exception], str]] = {}
 
