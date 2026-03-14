@@ -11,28 +11,34 @@ class PackageLoader:
 
     Instantiated once during NornFlow initialization with validated
     PackageDescriptor instances. All packages are imported and validated
-    eagerly — namespace packages (no __file__) are rejected immediately.
+    eagerly. Namespace packages (no __file__) are warned about once and
+    excluded from further processing.
 
     Args:
         descriptors: Validated PackageDescriptor instances from settings.
 
     Raises:
-        ResourceError: If any package cannot be imported or is a namespace package.
+        ResourceError: If any package cannot be imported.
     """
 
     def __init__(self, descriptors: list[PackageDescriptor]):
         self._descriptors = descriptors
         self._root_cache: dict[str, Path] = {}
+        self._skipped_packages: set[str] = set()
         self._resolve_all_package_roots()
 
     def _resolve_all_package_roots(self) -> None:
         """Import every declared package and cache its root directory.
 
+        Namespace packages (no __file__) are warned about exactly once
+        and added to _skipped_packages so they are silently ignored on
+        subsequent get_resource_dirs calls.
+
         Raises:
-            ResourceError: If a package cannot be imported or is a namespace package.
+            ResourceError: If a package cannot be imported.
         """
         for desc in self._descriptors:
-            if desc.name in self._root_cache:
+            if desc.name in self._root_cache or desc.name in self._skipped_packages:
                 continue
 
             try:
@@ -46,14 +52,12 @@ class PackageLoader:
 
             package_file = getattr(package, "__file__", None)
             if not package_file:
-                raise ResourceError(
-                    f"Package '{desc.name}' is a namespace package (no __file__ attribute). "
-                    f"NornFlow requires regular packages with an __init__.py because it "
-                    f"relies on __file__ to locate resource subdirectories on disk. "
-                    f"Namespace packages have no single root directory to search.",
-                    resource_type="package",
-                    resource_name=desc.name,
+                logger.warning(
+                    f"Package '{desc.name}' has no __file__ attribute "
+                    f"(namespace packages are not supported). Skipping."
                 )
+                self._skipped_packages.add(desc.name)
+                continue
 
             self._root_cache[desc.name] = Path(package_file).parent
             logger.debug(f"Resolved package root for '{desc.name}': {self._root_cache[desc.name]}")
@@ -74,6 +78,9 @@ class PackageLoader:
         result = []
 
         for desc in self._descriptors:
+            if desc.name in self._skipped_packages:
+                continue
+
             if not desc.should_import(resource_type):
                 continue
 

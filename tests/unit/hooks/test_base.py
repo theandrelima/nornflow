@@ -7,6 +7,7 @@ import pytest
 from nornflow.exceptions import BuiltinOverrideError
 from nornflow.hooks.base import Hook, HOOKS_CATALOG
 from nornflow.hooks.exceptions import HookRegistrationError
+import nornflow.builtins.hooks  # noqa: F401  # ensure builtin hooks are registered
 
 
 class TestHook:

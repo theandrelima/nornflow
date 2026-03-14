@@ -71,25 +71,34 @@ class TestResolveResourceDir:
             with pytest.raises(ResourceError, match="could not be imported"):
                 PackageLoader([desc])
 
-    def test_raises_on_namespace_package(self):
+    def test_namespace_package_skipped_with_warning(self, caplog):
         desc = PackageDescriptor(name="ns_pkg")
 
         fake_module = ModuleType("ns_pkg")
         fake_module.__file__ = None
 
         with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
-            with pytest.raises(ResourceError, match="namespace package"):
-                PackageLoader([desc])
+            with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+                loader = PackageLoader([desc])
 
-    def test_namespace_package_error_mentions_package_name(self):
+        assert any("namespace" in msg.lower() for msg in caplog.messages)
+        assert loader.get_resource_dirs("tasks") == []
+
+    def test_namespace_package_warned_once(self, caplog):
         desc = PackageDescriptor(name="ns_pkg")
 
         fake_module = ModuleType("ns_pkg")
         fake_module.__file__ = None
 
         with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
-            with pytest.raises(ResourceError, match="ns_pkg"):
-                PackageLoader([desc])
+            with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+                loader = PackageLoader([desc])
+                loader.get_resource_dirs("tasks")
+                loader.get_resource_dirs("workflows")
+                loader.get_resource_dirs("hooks")
+
+        namespace_warnings = [msg for msg in caplog.messages if "namespace" in msg.lower()]
+        assert len(namespace_warnings) == 1
 
 
 class TestGetResourceDirs:
