@@ -161,19 +161,15 @@ class TestHook:
         assert HOOKS_CATALOG["shush"] == ShushHook
 
     def test_user_hook_is_builtin_defaults_false(self):
-        """Test that user-defined hooks get is_builtin=False by default."""
+        """Test that user-defined hooks get is_builtin=False in catalog sources."""
         class UserDefinedHook(Hook):
             hook_name = "user_defined_for_builtin_check"
 
-        assert UserDefinedHook.is_builtin is False
         assert HOOKS_CATALOG.sources["user_defined_for_builtin_check"]["is_builtin"] is False
 
     def test_builtin_hooks_have_is_builtin_in_sources(self):
         """Test that builtin hooks are marked is_builtin=True in HOOKS_CATALOG.sources."""
-        from nornflow.builtins.hooks import IfHook, SetToHook, ShushHook, SingleHook
-
-        for hook_name, hook_cls in [("if", IfHook), ("set_to", SetToHook), ("shush", ShushHook), ("single", SingleHook)]:
-            assert hook_cls.is_builtin is True
+        for hook_name in ("if", "set_to", "shush", "single"):
             assert HOOKS_CATALOG.sources[hook_name]["is_builtin"] is True
 
     def test_non_builtin_override_logs_warning(self, caplog):
@@ -187,3 +183,4 @@ class TestHook:
 
         assert any("warn_override_test" in msg and "being overridden" in msg for msg in caplog.messages)
         assert HOOKS_CATALOG["warn_override_test"] is WarnHookB
+    

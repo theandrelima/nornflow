@@ -53,7 +53,6 @@ class SetToHook(Hook):
 
     hook_name = "set_to"
     run_once_per_task = False
-    is_builtin = True
 
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
         """

@@ -249,9 +249,9 @@ class DiscoverableCatalog(Catalog):
 class ClassCatalog(Catalog):
     """Catalog specialized for class-based assets such as hooks.
 
-    Handles is_builtin resolution with the following precedence:
-    1. Explicit is_builtin class attribute on the item (authoritative).
-    2. Module name prefix fallback ('nornflow.builtins').
+    Derives is_builtin from the item's module origin: any class whose
+    __module__ starts with 'nornflow.builtins' is treated as built-in.
+    This cannot be overridden via class attributes or kwargs.
 
     Same-name asset resolution is last-write-wins for non-builtins. This is a
     known v1 limitation; namespacing is planned for a future release.
@@ -260,10 +260,9 @@ class ClassCatalog(Catalog):
     def register(self, name: str, item: Any, **kwargs) -> Any:
         """Register a class with metadata extraction and builtin protection.
 
-        is_builtin resolution order:
-        1. Explicit is_builtin attribute on the item — authoritative.
-        2. Caller-supplied is_builtin in kwargs.
-        3. Fallback: module name starts with 'nornflow.builtins'.
+        is_builtin is derived solely from the item's __module__ — any class
+        defined under 'nornflow.builtins' is built-in. No class attributes or
+        caller-supplied kwargs can influence this determination.
 
         Args:
             name: The key for the item.
@@ -293,12 +292,7 @@ class ClassCatalog(Catalog):
             if "module_name" not in kwargs:
                 kwargs["module_name"] = getattr(item, "__module__", "") or ""
 
-            if "is_builtin" not in kwargs:
-                explicit = getattr(item, "is_builtin", None)
-                if explicit is not None:
-                    kwargs["is_builtin"] = bool(explicit)
-                else:
-                    kwargs["is_builtin"] = kwargs["module_name"].startswith("nornflow.builtins")
+            kwargs["is_builtin"] = kwargs["module_name"].startswith("nornflow.builtins")
 
         return super().register(name, item, **kwargs)
 
@@ -507,6 +501,10 @@ class FileCatalog(DiscoverableCatalog):
     - Registering file paths rather than importing modules
     - Tracking whether entries originate from imported packages (is_package=True)
 
+    Derives is_builtin from the file's path: any file located under the
+    nornflow/builtins/ directory is treated as built-in. This cannot be
+    overridden via kwargs.
+
     Package-originated entries must always be referenced by catalog name — path-based
     resolution (absolute or relative) is not available for them. This is a v1 limitation;
     namespacing for package assets is planned for a future release.
@@ -516,8 +514,14 @@ class FileCatalog(DiscoverableCatalog):
     ensuring unique asset names across all configured packages and local directories.
     """
 
+    nornflow_builtins_dir = Path(__file__).resolve().parent / "builtins"
+
     def register(self, name: str, item: Any, **kwargs) -> Any:
         """Register a file path with description extraction from YAML.
+
+        is_builtin is derived solely from the file's path — any file under
+        nornflow/builtins/ is built-in. No caller-supplied kwargs can influence
+        this determination.
 
         If name already exists and is non-builtin, logs a warning and proceeds
         (last-write-wins). If name belongs to a builtin, raises BuiltinOverrideError.
@@ -538,6 +542,7 @@ class FileCatalog(DiscoverableCatalog):
         if isinstance(item, Path):
             description = self._extract_description_from_file(item)
             kwargs.setdefault("description", description)
+            kwargs["is_builtin"] = item.resolve().is_relative_to(self.nornflow_builtins_dir)
 
         return super().register(name, item, **kwargs)
 
