@@ -89,6 +89,7 @@ class BlueprintExpander:
         expansion_stack: list[str],
         name_stack: list[str],
         content_cache: dict[str, list[dict[str, Any]]],
+        catalog_only: bool = False,
     ) -> list[dict[str, Any]]:
         """Process a single task item, expanding blueprints or returning regular tasks.
 
@@ -99,6 +100,8 @@ class BlueprintExpander:
             expansion_stack: Stack of content hashes for circular detection.
             name_stack: Stack of blueprint names for error reporting.
             content_cache: Cache mapping content hash to parsed tasks.
+            catalog_only: When True, blueprint references must resolve via catalog
+                name lookup only — path-based resolution is disabled.
 
         Returns:
             List of task dictionaries.
@@ -112,7 +115,7 @@ class BlueprintExpander:
             return []
 
         return self._expand_single_blueprint(
-            task_dict, blueprints_catalog, context, expansion_stack, name_stack, content_cache
+            task_dict, blueprints_catalog, context, expansion_stack, name_stack, content_cache, catalog_only
         )
 
     def _should_include_blueprint(self, blueprint_ref: dict[str, Any], context: dict[str, Any]) -> bool:
@@ -138,6 +141,7 @@ class BlueprintExpander:
         expansion_stack: list[str],
         name_stack: list[str],
         content_cache: dict[str, list[dict[str, Any]]],
+        catalog_only: bool = False,
     ) -> list[dict[str, Any]]:
         """Expand a single blueprint reference.
 
@@ -148,6 +152,7 @@ class BlueprintExpander:
             expansion_stack: Stack of content hashes for circular detection.
             name_stack: Stack of blueprint names for error reporting.
             content_cache: Cache mapping content hash to parsed tasks.
+            catalog_only: When True, only catalog name lookup is allowed.
 
         Returns:
             List of expanded task dictionaries.
@@ -163,11 +168,13 @@ class BlueprintExpander:
         resolved_name = self.resolver.resolve_template(blueprint_name, context)
         logger.debug(f"Expanding blueprint '{resolved_name}'")
 
-        blueprint_path = self._resolve_blueprint_to_path(resolved_name, blueprints_catalog)
+        blueprint_path = self._resolve_blueprint_to_path(resolved_name, blueprints_catalog, catalog_only)
         content_hash = get_file_content_hash(blueprint_path)
 
         if content_hash in expansion_stack:
             raise BlueprintCircularDependencyError(blueprint_path.name, name_stack)
+
+        child_catalog_only = catalog_only or self._is_package_entry(resolved_name, blueprints_catalog)
 
         expansion_stack.append(content_hash)
         name_stack.append(blueprint_path.name)
@@ -183,7 +190,13 @@ class BlueprintExpander:
             expanded = []
             for task_dict in blueprint_tasks:
                 processed = self._process_task_item(
-                    task_dict, blueprints_catalog, context, expansion_stack, name_stack, content_cache
+                    task_dict,
+                    blueprints_catalog,
+                    context,
+                    expansion_stack,
+                    name_stack,
+                    content_cache,
+                    catalog_only=child_catalog_only,
                 )
                 expanded.extend(processed)
 
@@ -194,16 +207,41 @@ class BlueprintExpander:
             name_stack.pop()
 
     @staticmethod
-    def _resolve_blueprint_to_path(blueprint_ref: str, blueprints_catalog: dict[str, Path]) -> Path:
+    def _is_package_entry(name: str, blueprints_catalog: dict[str, Path]) -> bool:
+        """Check if a catalog entry originated from an imported package.
+
+        Args:
+            name: The catalog key to check.
+            blueprints_catalog: Catalog (may be a FileCatalog with sources metadata).
+
+        Returns:
+            True if the entry is marked as a package entry, False otherwise.
+        """
+        if not hasattr(blueprints_catalog, "sources"):
+            return False
+        return blueprints_catalog.sources.get(name, {}).get("is_package", False)
+
+    @staticmethod
+    def _resolve_blueprint_to_path(
+        blueprint_ref: str,
+        blueprints_catalog: dict[str, Path],
+        catalog_only: bool = False,
+    ) -> Path:
         """Resolve blueprint reference to file path.
 
         Resolution order:
-        1. Catalog lookup (by name)
-        2. Direct file path (relative or absolute, must include suffix)
+        1. Catalog lookup (by name) — always attempted.
+        2. Direct file path (relative or absolute) — only when catalog_only is
+           False. Package blueprints set catalog_only to True for their nested
+           references because filesystem paths are not portable across
+           installations.
 
         Args:
             blueprint_ref: Blueprint name or file path.
             blueprints_catalog: Catalog mapping blueprint names to file paths.
+            catalog_only: When True, skip path-based resolution entirely. This is
+                set when expanding nested references from a package blueprint,
+                where filesystem paths are non-portable.
 
         Returns:
             Resolved file path.
@@ -214,6 +252,26 @@ class BlueprintExpander:
         if blueprint_ref in blueprints_catalog:
             logger.debug(f"Blueprint '{blueprint_ref}' found in catalog")
             return blueprints_catalog[blueprint_ref]
+
+        if catalog_only:
+            logger.error(
+                f"Blueprint '{blueprint_ref}' not found in catalog. "
+                f"Path-based resolution is disabled for package-originated contexts."
+            )
+            raise BlueprintError(
+                f"Blueprint '{blueprint_ref}' not found in catalog. "
+                f"Path-based resolution is not available for blueprints referenced "
+                f"from package blueprints — use the registered catalog name instead.",
+                blueprint_name=blueprint_ref,
+                details={
+                    "catalog_keys": list(blueprints_catalog.keys())[:10],
+                    "reason": (
+                        "This blueprint reference originates from an imported package. "
+                        "Filesystem paths (absolute or relative) are not portable across "
+                        "installations, so only catalog name references are allowed."
+                    ),
+                },
+            )
 
         path = Path(blueprint_ref)
 

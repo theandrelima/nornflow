@@ -4,7 +4,12 @@ from typing import Any
 
 from pydantic import Field, field_validator, model_validator, PrivateAttr
 from pydantic_serdes.utils import load_file_to_dict
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    EnvSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 from nornflow.constants import (
     FailureStrategy,
@@ -21,6 +26,24 @@ from nornflow.exceptions import SettingsError
 from nornflow.logger import logger
 from nornflow.packages import PackageDescriptor
 
+_ENV_EXCLUDED_FIELDS: frozenset[str] = frozenset({"packages"})
+
+
+class _NornFlowEnvSettingsSource(EnvSettingsSource):
+    """Env settings source that excludes structural fields from env var override.
+
+    The ``packages`` setting is a design-time decision that belongs in the
+    settings YAML file (or programmatic overrides).  This source strips it
+    from the env-provided values so that ``NORNFLOW_SETTINGS_PACKAGES`` is
+    never honoured, matching the documented behaviour.
+    """
+
+    def __call__(self) -> dict[str, Any]:
+        data = super().__call__()
+        for field_name in _ENV_EXCLUDED_FIELDS:
+            data.pop(field_name, None)
+        return data
+
 
 class NornFlowSettings(BaseSettings):
     """
@@ -31,6 +54,9 @@ class NornFlowSettings(BaseSettings):
     2. Values from settings YAML file
     3. Environment variables (prefixed with NORNFLOW_SETTINGS_)
     4. Default values defined in this class
+
+    The ``packages`` setting is excluded from environment variable override.
+    It must be set in the settings YAML file or via programmatic overrides.
 
     Note the careful terminology:
     - "Settings" refers to NornFlow's own configuration
@@ -52,6 +78,22 @@ class NornFlowSettings(BaseSettings):
         case_sensitive=True,
         extra="allow",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            _NornFlowEnvSettingsSource(settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
 
     nornir_config_file: str = Field(description="Path to Nornir configuration file (required)")
 

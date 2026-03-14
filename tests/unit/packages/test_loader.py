@@ -20,7 +20,18 @@ class TestPackageLoaderInit:
 
     def test_stores_descriptors(self):
         descs = [PackageDescriptor(name="a"), PackageDescriptor(name="b")]
-        loader = PackageLoader(descs)
+
+        mod_a = ModuleType("a")
+        mod_a.__file__ = "/fake/a/__init__.py"
+        mod_b = ModuleType("b")
+        mod_b.__file__ = "/fake/b/__init__.py"
+
+        def import_side_effect(name):
+            return {"a": mod_a, "b": mod_b}[name]
+
+        with patch("nornflow.packages.loader.importlib.import_module", side_effect=import_side_effect):
+            loader = PackageLoader(descs)
+
         assert loader._descriptors is descs
 
 
@@ -28,12 +39,13 @@ class TestResolveResourceDir:
     """Tests for PackageLoader._resolve_resource_dir()."""
 
     def test_returns_path_when_subdir_exists(self, fake_package_dir):
-        loader = PackageLoader([])
+        desc = PackageDescriptor(name="fake_pkg")
 
         fake_module = ModuleType("fake_pkg")
         fake_module.__file__ = str(fake_package_dir / "__init__.py")
 
         with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
+            loader = PackageLoader([desc])
             result = loader._resolve_resource_dir("fake_pkg", "tasks")
 
         assert result is not None
@@ -41,45 +53,43 @@ class TestResolveResourceDir:
         assert result.is_dir()
 
     def test_returns_none_when_subdir_missing(self, fake_package_dir):
-        loader = PackageLoader([])
+        desc = PackageDescriptor(name="fake_pkg")
 
         fake_module = ModuleType("fake_pkg")
         fake_module.__file__ = str(fake_package_dir / "__init__.py")
 
         with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
+            loader = PackageLoader([desc])
             result = loader._resolve_resource_dir("fake_pkg", "processors")
 
         assert result is None
 
     def test_raises_on_import_error(self):
-        loader = PackageLoader([])
+        desc = PackageDescriptor(name="nonexistent_pkg")
 
         with patch("nornflow.packages.loader.importlib.import_module", side_effect=ImportError("nope")):
             with pytest.raises(ResourceError, match="could not be imported"):
-                loader._resolve_resource_dir("nonexistent_pkg", "tasks")
+                PackageLoader([desc])
 
-    def test_returns_none_for_namespace_package(self):
-        loader = PackageLoader([])
-
-        fake_module = ModuleType("ns_pkg")
-        fake_module.__file__ = None
-
-        with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
-            result = loader._resolve_resource_dir("ns_pkg", "tasks")
-
-        assert result is None
-
-    def test_namespace_package_logs_warning(self, caplog):
-        loader = PackageLoader([])
+    def test_raises_on_namespace_package(self):
+        desc = PackageDescriptor(name="ns_pkg")
 
         fake_module = ModuleType("ns_pkg")
         fake_module.__file__ = None
 
         with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
-            with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
-                loader._resolve_resource_dir("ns_pkg", "tasks")
+            with pytest.raises(ResourceError, match="namespace package"):
+                PackageLoader([desc])
 
-        assert any("namespace" in msg.lower() for msg in caplog.messages)
+    def test_namespace_package_error_mentions_package_name(self):
+        desc = PackageDescriptor(name="ns_pkg")
+
+        fake_module = ModuleType("ns_pkg")
+        fake_module.__file__ = None
+
+        with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
+            with pytest.raises(ResourceError, match="ns_pkg"):
+                PackageLoader([desc])
 
 
 class TestGetResourceDirs:
@@ -87,12 +97,12 @@ class TestGetResourceDirs:
 
     def test_returns_dirs_for_matching_descriptors(self, fake_package_dir):
         desc = PackageDescriptor(name="fake_pkg")
-        loader = PackageLoader([desc])
 
         fake_module = ModuleType("fake_pkg")
         fake_module.__file__ = str(fake_package_dir / "__init__.py")
 
         with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
+            loader = PackageLoader([desc])
             result = loader.get_resource_dirs("tasks")
 
         assert len(result) == 1
@@ -102,36 +112,36 @@ class TestGetResourceDirs:
 
     def test_skips_descriptors_that_dont_include_resource_type(self, fake_package_dir):
         desc = PackageDescriptor(name="fake_pkg", include=["hooks"])
-        loader = PackageLoader([desc])
 
         fake_module = ModuleType("fake_pkg")
         fake_module.__file__ = str(fake_package_dir / "__init__.py")
 
         with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
+            loader = PackageLoader([desc])
             result = loader.get_resource_dirs("tasks")
 
         assert result == []
 
     def test_returns_empty_when_subdir_missing_and_not_explicit(self, fake_package_dir):
         desc = PackageDescriptor(name="fake_pkg")
-        loader = PackageLoader([desc])
 
         fake_module = ModuleType("fake_pkg")
         fake_module.__file__ = str(fake_package_dir / "__init__.py")
 
         with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
+            loader = PackageLoader([desc])
             result = loader.get_resource_dirs("j2_filters")
 
         assert result == []
 
     def test_logs_warning_when_explicit_include_but_dir_missing(self, fake_package_dir, caplog):
         desc = PackageDescriptor(name="fake_pkg", include=["j2_filters"])
-        loader = PackageLoader([desc])
 
         fake_module = ModuleType("fake_pkg")
         fake_module.__file__ = str(fake_package_dir / "__init__.py")
 
         with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
+            loader = PackageLoader([desc])
             with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
                 result = loader.get_resource_dirs("j2_filters")
 
@@ -143,12 +153,12 @@ class TestGetResourceDirs:
 
     def test_logs_debug_when_implicit_include_and_dir_missing(self, fake_package_dir, caplog):
         desc = PackageDescriptor(name="fake_pkg")
-        loader = PackageLoader([desc])
 
         fake_module = ModuleType("fake_pkg")
         fake_module.__file__ = str(fake_package_dir / "__init__.py")
 
         with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
+            loader = PackageLoader([desc])
             with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
                 result = loader.get_resource_dirs("processors")
 
@@ -168,7 +178,6 @@ class TestGetResourceDirs:
 
         desc_a = PackageDescriptor(name="pkg_a")
         desc_b = PackageDescriptor(name="pkg_b")
-        loader = PackageLoader([desc_a, desc_b])
 
         mod_a = ModuleType("pkg_a")
         mod_a.__file__ = str(pkg_a / "__init__.py")
@@ -183,6 +192,7 @@ class TestGetResourceDirs:
             raise ImportError(f"No module named '{name}'")
 
         with patch("nornflow.packages.loader.importlib.import_module", side_effect=import_side_effect):
+            loader = PackageLoader([desc_a, desc_b])
             result = loader.get_resource_dirs("tasks")
 
         assert len(result) == 2
@@ -199,7 +209,6 @@ class TestGetResourceDirs:
             dirs[name] = pkg
 
         descs = [PackageDescriptor(name=n) for n in ["charlie", "alpha", "bravo"]]
-        loader = PackageLoader(descs)
 
         modules = {}
         for name, pkg_dir in dirs.items():
@@ -213,6 +222,7 @@ class TestGetResourceDirs:
             raise ImportError(f"No module named '{name}'")
 
         with patch("nornflow.packages.loader.importlib.import_module", side_effect=import_side_effect):
+            loader = PackageLoader(descs)
             result = loader.get_resource_dirs("tasks")
 
         names = [pkg_name for pkg_name, _ in result]
@@ -220,14 +230,13 @@ class TestGetResourceDirs:
 
     def test_import_error_propagates(self):
         desc = PackageDescriptor(name="broken_pkg")
-        loader = PackageLoader([desc])
 
         with patch(
             "nornflow.packages.loader.importlib.import_module",
             side_effect=ImportError("cannot find"),
         ):
             with pytest.raises(ResourceError, match="could not be imported"):
-                loader.get_resource_dirs("tasks")
+                PackageLoader([desc])
 
     def test_mixed_existing_and_missing_dirs(self, tmp_path):
         pkg = tmp_path / "mixed_pkg"
@@ -236,12 +245,12 @@ class TestGetResourceDirs:
         (pkg / "tasks").mkdir()
 
         desc = PackageDescriptor(name="mixed_pkg")
-        loader = PackageLoader([desc])
 
         fake_module = ModuleType("mixed_pkg")
         fake_module.__file__ = str(pkg / "__init__.py")
 
         with patch("nornflow.packages.loader.importlib.import_module", return_value=fake_module):
+            loader = PackageLoader([desc])
             tasks_result = loader.get_resource_dirs("tasks")
             filters_result = loader.get_resource_dirs("filters")
 

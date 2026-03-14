@@ -26,13 +26,14 @@ NornFlow uses a settings file to configure different behaviors, including to spe
 ## Finding the Settings File
 
 NornFlow will try to find a settings YAML file in the following order:
+
 1. The path specified in the environment variable `NORNFLOW_SETTINGS`.
 2. The path passed to the `NornFlowSettings` initializer (through the CLI, it can be done using `nornflow --settings <PATH> ...` option).
 3. The path `nornflow.yaml` in the root of the project.
 
 ## Environment Variable Support
 
-All settings can be overridden using environment variables with the `NORNFLOW_SETTINGS_` prefix:
+Most settings can be overridden using environment variables with the `NORNFLOW_SETTINGS_` prefix. The **`packages`** setting is an exception — it cannot be overridden via environment variables and must be set in the settings YAML file (see [`packages`](#packages)).
 
 ```bash
 # Override nornir_config_file
@@ -49,11 +50,12 @@ export NORNFLOW_SETTINGS_DRY_RUN=true
 ```
 
 **Settings Loading Priority (highest to lowest):**
-1. Environment variables with `NORNFLOW_SETTINGS_` prefix
+1. Programmatic overrides (passed directly to `NornFlowSettings.load()` as `**overrides`)
 2. Values from settings YAML file
-3. Default values defined in the NornFlowSettings class
+3. Environment variables with `NORNFLOW_SETTINGS_` prefix
+4. Default values defined in the NornFlowSettings class
 
-> **Design Rationale**: NornFlow follows the [12-factor app](https://12factor.net/config) methodology where environment variables take precedence over configuration files for application settings. This allows for deployment-time configuration changes without modifying files, which is especially useful in containerized environments, CI/CD pipelines, and cloud deployments.
+> **Design Rationale**: NornFlow uses `NornFlowSettings.load()` as the standard entry point, which reads the YAML file and passes its contents (merged with any programmatic overrides) as init kwargs to the Pydantic model. Because init kwargs take precedence over environment variables in pydantic-settings, YAML values effectively override environment variables. Environment variables serve as a fallback for fields not present in the YAML file, which is useful in containerized environments, CI/CD pipelines, and cloud deployments where you want to provide defaults without modifying files.
 
 Additionally, for certain settings like `dry_run` and `failure_strategy`, there's a **runtime precedence** layer that sits above the settings loading priority:
 
@@ -218,7 +220,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Runtime Precedence** (highest to lowest):
   1. CLI `--dry-run` flag or NornFlow constructor `dry_run` parameter
   2. Workflow-level `dry_run` setting in workflow YAML
-  3. This settings value (which itself follows: env var > YAML file > default)
+  3. This settings value (which itself follows: programmatic overrides > YAML file > env var > default)
 - **Example**:
   ```yaml
   dry_run: True
@@ -233,7 +235,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Runtime Precedence** (highest to lowest):
   1. CLI `--failure-strategy` flag or NornFlow constructor `failure_strategy` parameter
   2. Workflow-level `failure_strategy` setting in workflow YAML
-  3. This settings value (which itself follows: env var > YAML file > default)
+  3. This settings value (which itself follows: programmatic overrides > YAML file > env var > default)
 - **Example**:
   ```yaml
   failure_strategy: "fail-fast"

@@ -773,8 +773,9 @@ class NornFlow:
             recursive: Whether to scan directories recursively (for FileCatalog).
             check_empty: Whether to raise an error if the catalog ends up empty.
             is_package: Whether the directories belong to imported packages. When True,
-                        registered file entries will carry is_package=True in their sources
-                        metadata, preventing path-based resolution in BlueprintExpander.
+                registered file entries will carry is_package=True in their sources
+                metadata, allowing downstream components (e.g., BlueprintExpander)
+                to distinguish entries originating from packages versus filesystem paths.
 
         Returns:
             The loaded catalog instance.
@@ -783,7 +784,7 @@ class NornFlow:
             ResourceError: If directories don't exist or discovery fails.
             CatalogError: If check_empty is True and catalog is empty.
         """
-        if not catalog:
+        if catalog is None:
             catalog = catalog_type(name)
 
         if builtin_module and predicate:

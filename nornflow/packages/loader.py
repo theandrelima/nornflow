@@ -10,15 +10,53 @@ class PackageLoader:
     """Resolves installed package paths and discovers resource subdirectories.
 
     Instantiated once during NornFlow initialization with validated
-    PackageDescriptor instances. Queried by each catalog load method
-    to get filesystem paths for package resource directories.
+    PackageDescriptor instances. All packages are imported and validated
+    eagerly — namespace packages (no __file__) are rejected immediately.
 
     Args:
         descriptors: Validated PackageDescriptor instances from settings.
+
+    Raises:
+        ResourceError: If any package cannot be imported or is a namespace package.
     """
 
     def __init__(self, descriptors: list[PackageDescriptor]):
         self._descriptors = descriptors
+        self._root_cache: dict[str, Path] = {}
+        self._resolve_all_package_roots()
+
+    def _resolve_all_package_roots(self) -> None:
+        """Import every declared package and cache its root directory.
+
+        Raises:
+            ResourceError: If a package cannot be imported or is a namespace package.
+        """
+        for desc in self._descriptors:
+            if desc.name in self._root_cache:
+                continue
+
+            try:
+                package = importlib.import_module(desc.name)
+            except ImportError as e:
+                raise ResourceError(
+                    f"Package '{desc.name}' could not be imported. Is it installed?",
+                    resource_type="package",
+                    resource_name=desc.name,
+                ) from e
+
+            package_file = getattr(package, "__file__", None)
+            if not package_file:
+                raise ResourceError(
+                    f"Package '{desc.name}' is a namespace package (no __file__ attribute). "
+                    f"NornFlow requires regular packages with an __init__.py because it "
+                    f"relies on __file__ to locate resource subdirectories on disk. "
+                    f"Namespace packages have no single root directory to search.",
+                    resource_type="package",
+                    resource_name=desc.name,
+                )
+
+            self._root_cache[desc.name] = Path(package_file).parent
+            logger.debug(f"Resolved package root for '{desc.name}': {self._root_cache[desc.name]}")
 
     def get_resource_dirs(self, resource_type: str) -> list[tuple[str, Path]]:
         """Get (package_name, directory_path) pairs for a given resource type.
@@ -32,9 +70,6 @@ class PackageLoader:
 
         Returns:
             List of (package_name, path_to_resource_dir) tuples for existing dirs.
-
-        Raises:
-            ResourceError: If a package cannot be imported.
         """
         result = []
 
@@ -68,28 +103,10 @@ class PackageLoader:
 
         Returns:
             Path to the resource directory if it exists, None otherwise.
-
-        Raises:
-            ResourceError: If the package cannot be imported.
         """
-        try:
-            package = importlib.import_module(package_name)
-        except ImportError as e:
-            raise ResourceError(
-                f"Package '{package_name}' could not be imported. Is it installed?",
-                resource_type="package",
-                resource_name=package_name,
-            ) from e
+        package_root = self._root_cache[package_name]
 
-        package_file = getattr(package, "__file__", None)
-        if not package_file:
-            logger.warning(
-                f"Package '{package_name}' has no __file__ attribute "
-                f"(namespace packages are not supported). Skipping."
-            )
-            return None
-
-        resource_dir = Path(package_file).parent / resource_type
+        resource_dir = package_root / resource_type
         if not resource_dir.is_dir():
             return None
 

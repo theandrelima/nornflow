@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 from nornflow.packages.descriptor import PackageDescriptor
-from nornflow.packages.loader import PackageLoader
 
 
 @pytest.fixture
@@ -42,15 +41,3 @@ def fake_package_dir(tmp_path) -> Path:
     (pkg_root / "hooks" / "__init__.py").write_text("")
 
     return pkg_root
-
-
-@pytest.fixture
-def loader_with_one_descriptor(descriptor_all) -> PackageLoader:
-    """PackageLoader initialized with a single import-all descriptor."""
-    return PackageLoader([descriptor_all])
-
-
-@pytest.fixture
-def loader_with_tasks_only(descriptor_tasks_only) -> PackageLoader:
-    """PackageLoader initialized with a single tasks-only descriptor."""
-    return PackageLoader([descriptor_tasks_only])

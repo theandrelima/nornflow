@@ -13,7 +13,7 @@
   - [Loading Order and Precedence](#loading-order-and-precedence)
   - [Name Conflict Resolution](#name-conflict-resolution)
   - [The Built-in Protection Mechanism](#the-built-in-protection-mechanism)
-  - [Hook Override Behavior](#hook-override-behavior)
+  - [Hook Registration Note](#hook-registration-note)
 - [Error Reference](#error-reference)
 - [Limitations](#limitations)
 
@@ -58,7 +58,7 @@ packages:
       - blueprints
 ```
 
-If `include` is omitted, NornFlow tries to imports **all seven** resource types from that package. If the package provides all seven asset types in their subdirectories, then all is imported. If the package provides only a subset of those, the all provided is also imported. If `include` key is present, however, NornFlow will only attempt to import the listed types under it.
+If `include` is omitted, NornFlow tries to import **all seven** resource types from that package. If the package provides all seven asset types in their subdirectories, then all is imported. If the package provides only a subset of those, all provided is also imported. If `include` key is present, however, NornFlow will only attempt to import the listed types under it.
 
 ### Package Descriptor Fields
 
@@ -177,7 +177,7 @@ Once a resource directory is resolved, NornFlow uses **the exact same discovery 
 
 ### Loading Order and Precedence
 
-#### Catalog-Based Resources (Tasks, Filters, Workflows, Blueprints, J2 Filters)
+The following loading order and precedence rules apply uniformly to **all asset types** — tasks, filters, workflows, blueprints, hooks, J2 filters, and processors. Every catalog type (`CallableCatalog`, `ClassCatalog`, `FileCatalog`) enforces the same builtin protection and the same last-write-wins resolution for non-builtins.
 
 Resources are loaded in strict order — **last write wins** since catalogs are dictionaries:
 
@@ -187,28 +187,25 @@ Resources are loaded in strict order — **last write wins** since catalogs are 
 │    └── nornflow.builtins.*      │     PROTECTED — cannot be overridden
 ├─────────────────────────────────┤
 │ 2. Package resources            │  ← Loaded in order listed in `packages`
-│    ├── packages[0]              │     CatalogError if name clashes with builtin
-│    ├── packages[1]              │     Later packages override earlier ones
+│    ├── packages[0]              │     BuiltinOverrideError if name clashes with builtin
+│    ├── packages[1]              │     Later packages override earlier ones (WARNING)
 │    └── packages[N]              │
 ├─────────────────────────────────┤
 │ 3. Local directory resources    │  ← Loaded last
-│    └── local_* settings dirs    │     CatalogError if name clashes with builtin
-│                                 │     Overrides package resources (WARNING logged)
-└─────────────────────────────────┘
+│    └── local_* settings dirs    │     BuiltinOverrideError if name clashes with builtin
+│                                 │     Overrides earlier local entries (WARNING)
+└─────────────────────────────────┘     Overrides package resources (WARNING)
 ```
 
-- Built-in resources are **protected** — any attempt to register a name that clashes with a built-in, whether from a package or a local directory, raises `CatalogError` and halts initialization.
-- Package resources can be **overridden by local resources** — later write wins, and a `WARNING` is logged.
-- Between packages, **later entries in the `packages` list override earlier ones** for the same name.
-- Between local directories (e.g., multiple `local_tasks` entries), later entries override earlier ones — this is existing behavior, unchanged.
-
-#### Hooks (Different Architecture)
-
-Hooks use a completely different precedence model because they register via `__init_subclass__` into a global `HOOK_REGISTRY` dict at import time — not via catalog dict writes. See [Hook Override Behavior](#hook-override-behavior).
+- Built-in resources are **protected** — any attempt to register a name that clashes with a built-in, whether from a package or a local directory, raises `BuiltinOverrideError` and halts initialization. Built-in status is derived from asset origin (`nornflow.builtins` python package)
+- Local resources **override package resources** for the same name — later write wins, and a `WARNING` is logged.
+- Between packages, **later entries in the `packages` list override earlier ones** for the same name, with a `WARNING` logged.
+- Between local directories (e.g., multiple `local_tasks` entries), later entries override earlier ones, with a `WARNING` logged. 
+- Because later entries always override earlier ones (except for built-ins), assets loaded from local directories will override assets loaded from packages too in case of name clashes.
 
 ### Name Conflict Resolution
 
-NornFlow uses **flat names** across all resources. There is no namespace isolation — all tasks share one namespace, all filters share one, and so on. Resources are registered by their simple name: function name for tasks/filters/j2_filters, filename stem for YAML files, `hook_name` for hooks.
+NornFlow uses **flat names** across all resources. There is no namespace isolation — all tasks share one namespace, all filters share one, and so on. Resources are registered by their simple name: function name for tasks/filters/j2_filters, filename stem for YAML files, `hook_name` for hooks. This is a known v1 limitation; namespacing for package assets is planned for a future release.
 
 **Non-builtin conflict (package vs local) — WARNING, local wins:**
 ```
@@ -224,7 +221,7 @@ Result: local version wins, WARNING logged:
 ```
 nornflow_acme_toolkit/tasks/echo.py → tries to register "echo"
 
-Result: CatalogError raised, initialization halts:
+Result: BuiltinOverrideError raised, initialization halts:
   "Cannot override built-in 'echo' with a custom implementation"
   Fix: rename the resource in your package or local directory
 ```
@@ -233,14 +230,11 @@ There are no fully qualified names. If you need both the package version and a l
 
 ### The Built-in Protection Mechanism
 
-`CallableCatalog.register()` contains unconditional protection against overriding built-in items:
+The base `Catalog` class contains unconditional protection against overriding built-in items:
 
 ```python
 if name in self and self.sources.get(name, {}).get("is_builtin", False):
-    raise CatalogError(
-        f"Cannot override built-in '{name}' with a custom implementation",
-        catalog_name=self.name,
-    )
+    raise BuiltinOverrideError(name=name, catalog_name=self.name)
 ```
 
 This applies to **all** sources — packages and local directories alike. There are no exceptions.
@@ -254,43 +248,44 @@ Built-in protection flow:
     Step 1: Built-in "echo" registered, is_builtin=True
     ─────────────────────────────────────────────────────
     Step 2: Package tries to register "echo"
-            → CatalogError raised
+            → BuiltinOverrideError raised
             → NornFlow initialization HALTS
             → Fix: rename the package resource
     ─────────────────────────────────────────────────────
     Step 3: (never reached if step 2 fails)
             Local tries to register "echo"
-            → Same CatalogError, same halt
+            → Same BuiltinOverrideError, same halt
             → Fix: rename the local resource
 ```
 
-### Hook Override Behavior
+### Hook Registration Note
 
-Hooks enforce strict name uniqueness through a fundamentally different mechanism than catalog-based resources. **Duplicate `hook_name` values raise `HookRegistrationError` at import time**, regardless of source — built-in, package, or local.
+Hooks follow the **same builtin protection and last-write-wins rules** as all other asset types — they are registered into `HOOKS_CATALOG` (a `ClassCatalog`) and subject to the same `BuiltinOverrideError` for builtin name clashes and the same WARNING-based last-write-wins for non-builtin duplicates.
+
+The only hook-specific behavior is in `Hook.__init_subclass__`: any `Hook` subclass that does not define `hook_name` as a non-empty string raises `HookRegistrationError` at class definition time. This is a validation constraint, not an override policy.
 
 ```
 Hook registration flow (at import time via __init_subclass__):
-    ┌────────────────────────────────────────────────────────────┐
-    │ 1. Built-in hooks imported                                 │
-    │    HOOK_REGISTRY["set_to"] = SetToHook          ✅         │
-    │    HOOK_REGISTRY["if"]     = IfHook             ✅         │
-    │    HOOK_REGISTRY["shush"]  = ShushHook          ✅         │
-    ├────────────────────────────────────────────────────────────┤
-    │ 2. Package hooks imported                                  │
-    │    hook_name = "audit"  → PkgAuditHook          ✅         │
-    │    hook_name = "set_to" → HookRegistrationError ❌         │
-    ├────────────────────────────────────────────────────────────┤
-    │ 3. Local hooks imported                                    │
-    │    hook_name = "notify" → MyNotifyHook          ✅         │
-    │    hook_name = "audit"  → HookRegistrationError ❌         │
-    └────────────────────────────────────────────────────────────┘
+    ┌──────────────────────────────────────────────────────────────────┐
+    │ 1. Built-in hooks imported                                       │
+    │    HOOKS_CATALOG["set_to"] = SetToHook              (builtin) ✅ │
+    │    HOOKS_CATALOG["if"]     = IfHook                 (builtin) ✅ │
+    │    HOOKS_CATALOG["shush"]  = ShushHook              (builtin) ✅ │
+    ├──────────────────────────────────────────────────────────────────┤
+    │ 2. Package hooks imported                                        │
+    │    hook_name = "audit"  → HOOKS_CATALOG["audit"] = PkgAudit  ✅  │
+    │    hook_name = "set_to" → BuiltinOverrideError raised        ❌  │
+    │                           → Initialization HALTS                 │
+    ├──────────────────────────────────────────────────────────────────┤
+    │ 3. Local hooks imported                                          │
+    │    hook_name = "notify" → HOOKS_CATALOG["notify"] = MyNotify ✅  │
+    │    hook_name = "audit"  → WARNING: overrides existing hook       │
+    │                           HOOKS_CATALOG["audit"] = LocalAudit ✅ │
+    │                           (last-write-wins, no exception)        │
+    └──────────────────────────────────────────────────────────────────┘
 ```
 
-Unlike catalog-based resources, there is **no "local overrides package" precedence for hooks**. Every `hook_name` must be globally unique across built-ins, packages, and local modules. If a package hook and a local hook both define `hook_name = "audit"`, the second one to be imported raises `HookRegistrationError` and initialization fails.
-
-**Why:** Hooks are behavioral extensions injected into the task execution lifecycle via YAML keys (`if:`, `set_to:`, `shush:`). A silent replacement would mean a workflow referencing `set_to:` could get a completely different implementation depending on what packages are installed — that class of bug is extremely difficult to diagnose. Strict uniqueness ensures every `hook_name` maps to exactly one implementation, always.
-
-**Practical impact:** Package and local hook authors must choose unique `hook_name` values. If you want enhanced conditional execution, use `hook_name = "when"` — not `hook_name = "if"`. The `HookRegistrationError` message will clearly identify the conflicting name.
+**Practical impact:** Package and local hook authors must avoid built-in hook names (`set_to`, `if`, `shush`, `single`). Non-builtin name clashes are resolved by load order (last wins), just like every other asset type. If you want enhanced conditional execution, use `hook_name = "when"` — not `hook_name = "if"`. The `BuiltinOverrideError` message will clearly identify the conflicting name.
 
 ## Error Reference
 
@@ -304,8 +299,8 @@ Unlike catalog-based resources, there is **no "local overrides package" preceden
 | Namespace package (no `__file__`) | Warning logged, package skipped | NornFlow initialization |
 | Resource subdir missing, explicitly in `include` | WARNING logged, resource type skipped | NornFlow initialization |
 | Resource subdir missing, `include` omitted | DEBUG logged, resource type skipped | NornFlow initialization |
-| Package or local task/filter name clashes with builtin | `CatalogError` | NornFlow initialization |
-| Package or local hook name clashes with any existing hook | `HookRegistrationError` | At import time |
+| Package or local asset name clashes with builtin | `BuiltinOverrideError` | NornFlow initialization |
+| Hook subclass missing or invalid `hook_name` | `HookRegistrationError` | At import time (class definition) |
 
 **Fail-fast on missing packages:** If a declared package cannot be imported, NornFlow raises `ResourceError` immediately. The user explicitly asked for that package — not having it installed is a hard failure, not a warning.
 
@@ -317,7 +312,7 @@ Unlike catalog-based resources, there is **no "local overrides package" preceden
 
 3. **No version management.** NornFlow uses whatever version is currently installed. Version pinning is your responsibility (e.g., via `requirements.txt`, `pyproject.toml`).
 
-4. **No namespace isolation.** All resources share flat namespaces within their catalogs. Non-builtin conflicts are resolved by load order; builtin and hook conflicts are hard errors.
+4. **No namespace isolation.** All resources share flat namespaces within their catalogs. Non-builtin conflicts are resolved by load order; builtin conflicts are hard errors. This is a known v1 limitation — namespacing is planned for a future release.
 
 5. **No environment variable override.** The `packages` setting is YAML-only.
 
