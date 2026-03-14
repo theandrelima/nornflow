@@ -17,7 +17,7 @@
   - [`failure_strategy`](#failure_strategy)
   - [`processors`](#processors)
   - [`logger`](#logger)
-  - [`imported_packages`](#imported_packages)
+  - [`packages`](#packages)
 - [NornFlow Settings vs Nornir Configs](#nornflow-settings-vs-nornir-configs)
 
 
@@ -26,13 +26,14 @@ NornFlow uses a settings file to configure different behaviors, including to spe
 ## Finding the Settings File
 
 NornFlow will try to find a settings YAML file in the following order:
+
 1. The path specified in the environment variable `NORNFLOW_SETTINGS`.
 2. The path passed to the `NornFlowSettings` initializer (through the CLI, it can be done using `nornflow --settings <PATH> ...` option).
 3. The path `nornflow.yaml` in the root of the project.
 
 ## Environment Variable Support
 
-All settings can be overridden using environment variables with the `NORNFLOW_SETTINGS_` prefix:
+Most settings can be overridden using environment variables with the `NORNFLOW_SETTINGS_` prefix. The **`packages`** setting is an exception — it cannot be overridden via environment variables and must be set in the settings YAML file (see [`packages`](#packages)).
 
 ```bash
 # Override nornir_config_file
@@ -49,11 +50,12 @@ export NORNFLOW_SETTINGS_DRY_RUN=true
 ```
 
 **Settings Loading Priority (highest to lowest):**
-1. Environment variables with `NORNFLOW_SETTINGS_` prefix
+1. Programmatic overrides (passed directly to `NornFlowSettings.load()` as `**overrides`)
 2. Values from settings YAML file
-3. Default values defined in the NornFlowSettings class
+3. Environment variables with `NORNFLOW_SETTINGS_` prefix
+4. Default values defined in the NornFlowSettings class
 
-> **Design Rationale**: NornFlow follows the [12-factor app](https://12factor.net/config) methodology where environment variables take precedence over configuration files for application settings. This allows for deployment-time configuration changes without modifying files, which is especially useful in containerized environments, CI/CD pipelines, and cloud deployments.
+> **Design Rationale**: NornFlow uses `NornFlowSettings.load()` as the standard entry point, which reads the YAML file and passes its contents (merged with any programmatic overrides) as init kwargs to the Pydantic model. Because init kwargs take precedence over environment variables in pydantic-settings, YAML values effectively override environment variables. Environment variables serve as a fallback for fields not present in the YAML file, which is useful in containerized environments, CI/CD pipelines, and cloud deployments where you want to provide defaults without modifying files.
 
 Additionally, for certain settings like `dry_run` and `failure_strategy`, there's a **runtime precedence** layer that sits above the settings loading priority:
 
@@ -152,6 +154,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_HOOKS`
 - **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_hooks` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
+- **Deep Dive**: [Hooks Guide](./hooks_guide.md)
 
 ### `local_blueprints`
 
@@ -171,6 +174,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_BLUEPRINTS`
 - **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_blueprints` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
+- **Deep Dive**: [Blueprints Guide](./blueprints_guide.md)
 
 ### `local_j2_filters`
 
@@ -189,6 +193,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   ```
 - **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_J2_FILTERS`
 - **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_j2_filters` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
+- **Deep Dive**: [Jinja2 Filters Reference](./jinja2_filters.md)
 
 ### `vars_dir`
 
@@ -205,7 +210,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   # Or with absolute path:
   vars_dir: "/shared/variables"
   ```
-- **Note**: For details on how variables are loaded and their precedence, see the Variables Basics documentation.
+- **Deep Dive**: [Variables Basics](./variables_basics.md)
 
 ### `dry_run`
 
@@ -215,7 +220,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Runtime Precedence** (highest to lowest):
   1. CLI `--dry-run` flag or NornFlow constructor `dry_run` parameter
   2. Workflow-level `dry_run` setting in workflow YAML
-  3. This settings value (which itself follows: env var > YAML file > default)
+  3. This settings value (which itself follows: programmatic overrides > YAML file > env var > default)
 - **Example**:
   ```yaml
   dry_run: True
@@ -230,12 +235,12 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Runtime Precedence** (highest to lowest):
   1. CLI `--failure-strategy` flag or NornFlow constructor `failure_strategy` parameter
   2. Workflow-level `failure_strategy` setting in workflow YAML
-  3. This settings value (which itself follows: env var > YAML file > default)
+  3. This settings value (which itself follows: programmatic overrides > YAML file > env var > default)
 - **Example**:
   ```yaml
   failure_strategy: "fail-fast"
   ```
-- **Note**: For details on how failure strategies work, see the Failure Strategies documentation.
+- **Deep Dive**: [Failure Strategies](./failure_strategies.md)
 
 ### `processors`
 - **Description**: List of Nornir processor configurations to be applied during task/workflow execution. If not provided, NornFlow will default to using only its default processor: `nornflow.builtins.DefaultNornFlowProcessor`.
@@ -284,21 +289,23 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 - **Note**: Log files are automatically created with timestamped filenames (e.g., `my_workflow_20260115_143022.log`). Each workflow execution creates a new log file. Errors (`ERROR` level and above) are printed to stderr regardless of the log level setting.
 - **Sensitive Data Protection**: NornFlow will attempt to redact sensitive data in log messages. Values explicitly associated with keys like `password`, `secret`, `token`, `api_key`, and similar are replaced with `***REDACTED***`. However, this is merely a best effort. It is the user's responsibility to avoid logging sensitive data.
 
----
-> 🚨 ***NOTE: `imported_packages` is planned, but not yet supported and right now has no effect at all.***
-### *`imported_packages`*
+### `packages`
 
-- ***Description**: List of Python packages installed in your environment that contain Nornir tasks and filter functions to be included in NornFlow's catalogs.*
-- ***Type**: `list[str]`*
-- ***Default***: `[]`
-- ***Example***:
+- **Description**: List of NornFlow package descriptors. Each entry declares an **installed python package** that contributes NornFlow assets (tasks, workflows, filters, hooks, blueprints, Jinja2 filters, and/or processors) into NornFlow's catalogs.
+- **Type**: `list[dict]`
+- **Default**: `[]`
+- **Example**:
   ```yaml
-  imported_packages:
-    - "nornir_napalm"
-    - "nornir_netmiko"
+  packages:
+    - name: "nornflow_acme_toolkit"         # import all resource types
+    - name: "nornflow_acme_hooks"
+      include:                              # import only selected resource types
+        - hooks
+        - j2_filters
   ```
----
-<br><br>
+- **Deep Dive**: [Packages Guide](./packages_guide.md)
+
+> **Note**: Environment variable override is not supported for this setting — package declarations are structural project decisions that belong in `nornflow.yaml`.
 
 ## NornFlow Settings vs Nornir Configs
 
@@ -322,12 +329,12 @@ In fact, even the choice of words here is purposeful: you may have noticed that 
 <table width="100%" border="0" style="border-collapse: collapse;">
 <tr>
 <td width="33%" align="left" style="border: none;">
-<a href="./hooks_guide.md">← Previous: Hooks Guide</a>
+<a href="./core_concepts.md">← Previous: Core Concepts</a>
 </td>
 <td width="33%" align="center" style="border: none;">
 </td>
 <td width="33%" align="right" style="border: none;">
-<a href="./jinja2_filters.md">Next: Jinja2 Filters Reference →</a>
+<a href="./blueprints_guide.md">Next: Blueprints Guide →</a>
 </td>
 </tr>
 </table>

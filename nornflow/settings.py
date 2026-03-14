@@ -2,9 +2,14 @@ import os
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, field_validator, PrivateAttr
+from pydantic import Field, field_validator, model_validator, PrivateAttr
 from pydantic_serdes.utils import load_file_to_dict
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    EnvSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 from nornflow.constants import (
     FailureStrategy,
@@ -19,6 +24,25 @@ from nornflow.constants import (
 )
 from nornflow.exceptions import SettingsError
 from nornflow.logger import logger
+from nornflow.packages import PackageDescriptor
+
+_ENV_EXCLUDED_FIELDS: frozenset[str] = frozenset({"packages"})
+
+
+class _NornFlowEnvSettingsSource(EnvSettingsSource):
+    """Env settings source that excludes structural fields from env var override.
+
+    The ``packages`` setting is a design-time decision that belongs in the
+    settings YAML file (or programmatic overrides).  This source strips it
+    from the env-provided values so that ``NORNFLOW_SETTINGS_PACKAGES`` is
+    never honoured, matching the documented behaviour.
+    """
+
+    def __call__(self) -> dict[str, Any]:
+        data = super().__call__()
+        for field_name in _ENV_EXCLUDED_FIELDS:
+            data.pop(field_name, None)
+        return data
 
 
 class NornFlowSettings(BaseSettings):
@@ -30,6 +54,9 @@ class NornFlowSettings(BaseSettings):
     2. Values from settings YAML file
     3. Environment variables (prefixed with NORNFLOW_SETTINGS_)
     4. Default values defined in this class
+
+    The ``packages`` setting is excluded from environment variable override.
+    It must be set in the settings YAML file or via programmatic overrides.
 
     Note the careful terminology:
     - "Settings" refers to NornFlow's own configuration
@@ -51,6 +78,22 @@ class NornFlowSettings(BaseSettings):
         case_sensitive=True,
         extra="allow",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            _NornFlowEnvSettingsSource(settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
 
     nornir_config_file: str = Field(description="Path to Nornir configuration file (required)")
 
@@ -76,8 +119,9 @@ class NornFlowSettings(BaseSettings):
         default=[NORNFLOW_DEFAULT_J2_FILTERS_DIR],
         description="List of directories containing custom Jinja2 filter functions",
     )
-    imported_packages: list[str] = Field(
-        default_factory=list, description="List of Python packages to import for additional resources"
+    packages: list[PackageDescriptor] = Field(
+        default_factory=list,
+        description="List of NornFlow-compatible Python packages to load resources from",
     )
     processors: list[dict[str, Any]] = Field(
         default_factory=list, description="List of processor configurations with class and args"
@@ -95,6 +139,37 @@ class NornFlowSettings(BaseSettings):
 
     _base_dir: Path | None = PrivateAttr(default=None)
     _settings_file: str | None = PrivateAttr(default=None)
+
+    @field_validator("packages", mode="before")
+    @classmethod
+    def validate_packages(cls, v: Any) -> list[dict[str, Any]]:
+        """Normalize package entries — bare strings are expanded to full descriptor dicts."""
+        if not v:
+            return []
+
+        if not isinstance(v, list):
+            raise TypeError("packages must be a list")
+
+        normalized = []
+        for item in v:
+            if isinstance(item, str):
+                normalized.append({"name": item})
+            elif isinstance(item, (dict, PackageDescriptor)):
+                normalized.append(item)
+            else:
+                raise TypeError(f"Invalid package entry type: {type(item).__name__}")
+
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_no_duplicate_packages(self) -> "NornFlowSettings":
+        """Catch duplicate package names that would silently load resources twice."""
+        names = [p.name for p in self.packages]
+        seen = set()
+        duplicates = [n for n in names if n in seen or seen.add(n)]
+        if duplicates:
+            raise ValueError(f"Duplicate package name(s) in 'packages': {sorted(set(duplicates))}")
+        return self
 
     @field_validator("processors", mode="before")
     @classmethod
@@ -287,7 +362,11 @@ class NornFlowSettings(BaseSettings):
 
         settings_data = {**yaml_data, **overrides}
 
-        instance = cls(**settings_data)
+        try:
+            instance = cls(**settings_data)
+        except Exception as e:
+            raise SettingsError(f"Invalid settings in {resolved_file}: {e}") from e
+
         instance._base_dir = base_dir
         instance._settings_file = str(settings_path)
 

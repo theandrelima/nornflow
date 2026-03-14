@@ -1,10 +1,13 @@
 # ruff: noqa: SLF001, T201
+import logging
 from unittest.mock import MagicMock
 
 import pytest
 
-from nornflow.hooks.base import Hook, HOOK_REGISTRY
+from nornflow.exceptions import BuiltinOverrideError
+from nornflow.hooks.base import Hook, HOOKS_CATALOG
 from nornflow.hooks.exceptions import HookRegistrationError
+import nornflow.builtins.hooks  # noqa: F401  # ensure builtin hooks are registered
 
 
 class TestHook:
@@ -103,14 +106,14 @@ class TestHook:
 
     def test_auto_registration(self):
         """Test that hooks with hook_name are automatically registered."""
-        initial_registry_size = len(HOOK_REGISTRY)
+        initial_registry_size = len(HOOKS_CATALOG)
         
         class TestAutoHook(Hook):
             hook_name = "test_auto_hook"
         
-        assert "test_auto_hook" in HOOK_REGISTRY
-        assert HOOK_REGISTRY["test_auto_hook"] == TestAutoHook
-        assert len(HOOK_REGISTRY) == initial_registry_size + 1
+        assert "test_auto_hook" in HOOKS_CATALOG
+        assert HOOKS_CATALOG["test_auto_hook"] == TestAutoHook
+        assert len(HOOKS_CATALOG) == initial_registry_size + 1
 
     def test_no_hook_name_raises_error(self):
         """Test that missing hook_name raises HookRegistrationError."""
@@ -123,27 +126,62 @@ class TestHook:
         class TestDuplicateHook(Hook):
             hook_name = "test_duplicate"
         
-        assert "test_duplicate" in HOOK_REGISTRY
-        assert HOOK_REGISTRY["test_duplicate"] == TestDuplicateHook
+        assert "test_duplicate" in HOOKS_CATALOG
+        assert HOOKS_CATALOG["test_duplicate"] == TestDuplicateHook
 
-    def test_duplicate_registration_different_class(self):
-        """Test that different class with same hook_name raises error."""
-        class FirstHook(Hook):
-            hook_name = "conflict_hook"
-        
-        with pytest.raises(HookRegistrationError, match="already registered"):
-            class SecondHook(Hook):
-                hook_name = "conflict_hook"
+    def test_duplicate_registration_different_class_is_last_write_wins(self):
+        """Test that a different non-builtin class with same hook_name overrides with a warning (last-write-wins)."""
+        class FirstHookLWW(Hook):
+            hook_name = "conflict_hook_lww"
+
+        assert HOOKS_CATALOG["conflict_hook_lww"] is FirstHookLWW
+
+        class SecondHookLWW(Hook):
+            hook_name = "conflict_hook_lww"
+
+        # Last-write-wins: SecondHookLWW should now be registered
+        assert HOOKS_CATALOG["conflict_hook_lww"] is SecondHookLWW
+
+    def test_duplicate_registration_builtin_raises_error(self):
+        """Test that attempting to override a builtin hook raises BuiltinOverrideError."""
+        with pytest.raises(BuiltinOverrideError):
+            class FakeSetToHook(Hook):
+                hook_name = "set_to"  # builtin — must raise
 
     def test_builtin_hooks_registered(self):
         """Test that built-in hooks are properly registered."""
         from nornflow.builtins.hooks import IfHook, SetToHook, ShushHook
         
-        assert "if" in HOOK_REGISTRY
-        assert HOOK_REGISTRY["if"] == IfHook
+        assert "if" in HOOKS_CATALOG
+        assert HOOKS_CATALOG["if"] == IfHook
         
-        assert "set_to" in HOOK_REGISTRY
-        assert HOOK_REGISTRY["set_to"] == SetToHook
+        assert "set_to" in HOOKS_CATALOG
+        assert HOOKS_CATALOG["set_to"] == SetToHook
         
-        assert "shush" in HOOK_REGISTRY
-        assert HOOK_REGISTRY["shush"] == ShushHook
+        assert "shush" in HOOKS_CATALOG
+        assert HOOKS_CATALOG["shush"] == ShushHook
+
+    def test_user_hook_is_builtin_defaults_false(self):
+        """Test that user-defined hooks get is_builtin=False in catalog sources."""
+        class UserDefinedHook(Hook):
+            hook_name = "user_defined_for_builtin_check"
+
+        assert HOOKS_CATALOG.sources["user_defined_for_builtin_check"]["is_builtin"] is False
+
+    def test_builtin_hooks_have_is_builtin_in_sources(self):
+        """Test that builtin hooks are marked is_builtin=True in HOOKS_CATALOG.sources."""
+        for hook_name in ("if", "set_to", "shush", "single"):
+            assert HOOKS_CATALOG.sources[hook_name]["is_builtin"] is True
+
+    def test_non_builtin_override_logs_warning(self, caplog):
+        """Test that last-write-wins override emits a warning log message."""
+        class WarnHookA(Hook):
+            hook_name = "warn_override_test"
+
+        with caplog.at_level(logging.WARNING):
+            class WarnHookB(Hook):
+                hook_name = "warn_override_test"
+
+        assert any("warn_override_test" in msg and "being overridden" in msg for msg in caplog.messages)
+        assert HOOKS_CATALOG["warn_override_test"] is WarnHookB
+    

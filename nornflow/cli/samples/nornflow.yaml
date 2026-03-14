@@ -36,7 +36,7 @@ local_blueprints:
 local_j2_filters:
   - "j2_filters"
 
-imported_packages: []
+packages: []
 
 processors:
   - class: "nornflow.builtins.DefaultNornFlowProcessor"
