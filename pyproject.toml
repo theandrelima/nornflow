@@ -7,7 +7,7 @@ requires-python = ">=3.10"
 authors = [
     { name = "Andre Lima"}
 ]
-license = { text = "GPL-3.0-or-later" }
+license = { text = "MIT" }
 dependencies = [
     "jmespath>=1.0.1",
     "nornir>=3.5.0",
@@ -20,6 +20,10 @@ dependencies = [
     "termcolor>=2.5.0",
     "typer>=0.15.1",
 ]
+
+[project.urls]
+Repository = "https://github.com/theandrelima/nornflow"
+Documentation = "https://github.com/theandrelima/nornflow/tree/main/docs"
 
 [build-system]
 requires = ["hatchling>=1.17.0"]
@@ -37,7 +41,6 @@ include = ["nornflow*"]
 
 [project.optional-dependencies]
 dev = [
-    "black>=25.12.0",
     "mypy>=1.15.0",
     "ruff>=0.15.1",
     "pytest-cov>=6.0.0",
@@ -108,10 +111,6 @@ order-by-type = false
 combine-as-imports = true
 no-lines-before = ["local-folder"]
 known-first-party = ["nornflow"]
-
-[tool.black]
-line-length = 110
-extend-exclude = '(^|/)tests/|(^|/)debug_.*\.py$'
 
 [project.scripts]
 nornflow = "nornflow.cli.entrypoint:app"
