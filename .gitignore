@@ -1,3 +1,12 @@
+# macOS
+.DS_Store
+
+# Cursor IDE
+.cursor/
+
+# Local architecture notes (not published docs)
+architectural_docs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
