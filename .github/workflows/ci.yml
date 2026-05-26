@@ -65,8 +65,3 @@ jobs:
       run: |
         source .venv/bin/activate
         ruff check .
-        
-    - name: Format check with Black
-      run: |
-        source .venv/bin/activate
-        black --check .
