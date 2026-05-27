@@ -3,7 +3,8 @@ from typing import Any, ClassVar, TYPE_CHECKING
 from nornir.core.inventory import Host
 from nornir.core.task import AggregatedResult, MultiResult, Task
 
-from nornflow.catalogs import ClassCatalog
+from nornflow.catalogs import ClassCatalog, BUILTIN_NAMESPACE, LOCAL_NAMESPACE, TIER_BUILTIN, TIER_LOCAL
+from nornflow.hooks.context import get_hook_registration
 from nornflow.hooks.exceptions import HookRegistrationError
 from nornflow.logger import logger
 
@@ -61,7 +62,15 @@ class Hook:
                 f"'hook_name' attribute."
             )
 
-        HOOKS_CATALOG.register(cls.hook_name, cls)
+        ctx = get_hook_registration()
+        if ctx:
+            namespace, tier = ctx
+        elif cls.__module__.startswith("nornflow.builtins"):
+            namespace, tier = BUILTIN_NAMESPACE, TIER_BUILTIN
+        else:
+            namespace, tier = LOCAL_NAMESPACE, TIER_LOCAL
+
+        HOOKS_CATALOG.register(cls.hook_name, cls, namespace=namespace, tier=tier)
         logger.info(f"Hook class {cls.__name__} registered with hook_name '{cls.hook_name}'")
 
     def __init__(self, value: Any = None):

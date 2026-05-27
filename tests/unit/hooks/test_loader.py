@@ -49,9 +49,9 @@ class TestHookLoader:
         MockHook2.return_value = mock_instance2
         
         with patch("nornflow.hooks.loader.HOOKS_CATALOG") as mock_registry:
-            mock_registry.get.side_effect = lambda k: {
+            mock_registry.resolve.side_effect = lambda k: {
                 "hook1": MockHook1,
-                "hook2": MockHook2
+                "hook2": MockHook2,
             }.get(k)
             
             hooks = load_hooks(hooks_dict)
@@ -85,7 +85,7 @@ class TestHookLoader:
         MockHook.return_value = mock_instance
         
         with patch("nornflow.hooks.loader.HOOKS_CATALOG") as mock_registry:
-            mock_registry.get.return_value = MockHook
+            mock_registry.resolve.return_value = MockHook
             
             hooks = load_hooks(hooks_dict)
             
