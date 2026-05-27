@@ -173,7 +173,34 @@ class IfHook(Hook, Jinja2ResolvableMixin):
         filter_name, filter_values = next(iter(self.value.items()))
         filters_catalog = self.context.get("filters_catalog", {})
 
-        if filter_name not in filters_catalog:
+        if hasattr(filters_catalog, "resolve"):
+            try:
+                filter_entry = filters_catalog.resolve(filter_name)
+            except AssetNotFoundError:
+                available = ", ".join(sorted(filters_catalog.keys()))
+                raise HookValidationError(
+                    "IfHook",
+                    [
+                        (
+                            filter_name,
+                            f"Filter '{filter_name}' not found in filters catalog. "
+                            f"Available filters: {available}",
+                        )
+                    ],
+                ) from None
+            except AssetAmbiguityError as exc:
+                raise HookValidationError(
+                    "IfHook",
+                    [
+                        (
+                            filter_name,
+                            f"Filter '{filter_name}' is ambiguous. "
+                            f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
+                        )
+                    ],
+                ) from exc
+            filter_func, param_names = filter_entry
+        elif filter_name not in filters_catalog:
             available = ", ".join(sorted(filters_catalog.keys()))
             raise HookValidationError(
                 "IfHook",
@@ -185,8 +212,8 @@ class IfHook(Hook, Jinja2ResolvableMixin):
                     )
                 ],
             )
-
-        filter_func, param_names = filters_catalog[filter_name]
+        else:
+            filter_func, param_names = filters_catalog[filter_name]
         filter_kwargs = self._build_filter_kwargs(param_names, filter_values)
 
         return filter_func(host, **filter_kwargs)

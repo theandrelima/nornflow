@@ -4,7 +4,12 @@ from typing import Any
 from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.blueprints.resolver import BlueprintResolver
-from nornflow.exceptions import BlueprintCircularDependencyError, BlueprintError
+from nornflow.exceptions import (
+    AssetAmbiguityError,
+    AssetNotFoundError,
+    BlueprintCircularDependencyError,
+    BlueprintError,
+)
 from nornflow.logger import logger
 from nornflow.utils import get_file_content_hash
 
@@ -208,18 +213,15 @@ class BlueprintExpander:
 
     @staticmethod
     def _is_package_entry(name: str, blueprints_catalog: dict[str, Path]) -> bool:
-        """Check if a catalog entry originated from an imported package.
-
-        Args:
-            name: The catalog key to check.
-            blueprints_catalog: Catalog (may be a FileCatalog with sources metadata).
-
-        Returns:
-            True if the entry is marked as a package entry, False otherwise.
-        """
+        """Check if a catalog entry originated from an imported package."""
         if not hasattr(blueprints_catalog, "sources"):
             return False
-        return blueprints_catalog.sources.get(name, {}).get("is_package", False)
+        try:
+            qualified_key = blueprints_catalog.resolve_key(name)
+        except (AssetNotFoundError, AssetAmbiguityError):
+            return False
+        source = blueprints_catalog.sources.get(qualified_key, {})
+        return source.get("is_package", False) or source.get("tier") == "package"
 
     @staticmethod
     def _resolve_blueprint_to_path(
@@ -249,7 +251,20 @@ class BlueprintExpander:
         Raises:
             BlueprintError: If blueprint cannot be found.
         """
-        if blueprint_ref in blueprints_catalog:
+        if hasattr(blueprints_catalog, "resolve"):
+            try:
+                path = blueprints_catalog.resolve(blueprint_ref)
+                logger.debug(f"Blueprint '{blueprint_ref}' found in catalog")
+                return path
+            except AssetAmbiguityError as exc:
+                raise BlueprintError(
+                    f"Blueprint '{blueprint_ref}' is ambiguous in blueprints catalog. "
+                    f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
+                    blueprint_name=blueprint_ref,
+                ) from exc
+            except AssetNotFoundError:
+                pass
+        elif blueprint_ref in blueprints_catalog:
             logger.debug(f"Blueprint '{blueprint_ref}' found in catalog")
             return blueprints_catalog[blueprint_ref]
 
