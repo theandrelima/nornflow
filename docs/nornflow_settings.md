@@ -291,14 +291,14 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
 
 ### `packages`
 
-- **Description**: List of NornFlow package descriptors. Each entry declares an **installed python package** that contributes NornFlow assets (tasks, workflows, filters, hooks, blueprints, Jinja2 filters, and/or processors) into NornFlow's catalogs.
+- **Description**: List of NornFlow-compatible package descriptors. Each entry declares an installed Python package that contributes with NornFlow assets (tasks, workflows, filters, hooks, blueprints, Jinja2 filters, and/or processors) into NornFlow's catalogs.
 - **Type**: `list[dict]`
 - **Default**: `[]`
 - **Example**:
   ```yaml
   packages:
     - name: "nornflow_acme_toolkit"         # import all resource types
-    - name: "nornflow_acme_hooks"
+    - name: "nornflow_xyz"
       include:                              # import only selected resource types
         - hooks
         - j2_filters
