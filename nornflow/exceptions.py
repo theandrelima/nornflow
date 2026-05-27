@@ -51,6 +51,40 @@ class CatalogError(CoreError):
         self.catalog_name = catalog_name
 
 
+class AssetNotFoundError(CatalogError):
+    """Raised when a catalog reference does not match any registered asset."""
+
+    def __init__(self, reference: str, catalog_name: str = ""):
+        self.reference = reference
+        location = f" in {catalog_name} catalog" if catalog_name else ""
+        super().__init__(
+            f"Asset '{reference}'{location} was not found. "
+            f"Use a qualified name (namespace.name) if the bare name is shared.",
+            catalog_name=catalog_name,
+        )
+
+
+class AssetAmbiguityError(CatalogError):
+    """Raised when a bare catalog reference is ambiguous within the winning tier."""
+
+    def __init__(
+        self,
+        reference: str,
+        catalog_name: str = "",
+        candidates: list[str] | None = None,
+        tier: str = "",
+    ):
+        self.reference = reference
+        self.candidates = candidates or []
+        self.tier = tier
+        candidate_list = ", ".join(sorted(self.candidates))
+        super().__init__(
+            f"Bare reference '{reference}' is ambiguous{(' at tier ' + tier) if tier else ''}. "
+            f"Candidates: {candidate_list}. Use a qualified name instead.",
+            catalog_name=catalog_name,
+        )
+
+
 class BuiltinOverrideError(CoreError):
     """Raised when any asset attempts to register under a name already claimed by a built-in.
 
