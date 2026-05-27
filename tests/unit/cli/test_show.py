@@ -6,6 +6,7 @@ import typer
 import yaml
 
 from nornflow.cli.show import (
+    get_catalog_table_headers,
     render_blueprints_catalog_table_data,
     render_filters_catalog_table_data,
     render_j2_filters_catalog_table_data,
@@ -16,6 +17,7 @@ from nornflow.cli.show import (
     render_hooks_catalog_table_data,
     show,
     show_catalog,
+    show_catalog_formatted_table,
     show_formatted_table,
     show_nornflow_settings,
     show_nornir_configs,
@@ -252,51 +254,21 @@ class TestShowCommand:
 class TestShowHelpers:
     """Tests for the show helper functions."""
 
-    @patch("nornflow.cli.show.show_formatted_table")
+    @patch("nornflow.cli.show.show_catalog_formatted_table")
     def test_show_catalog(self, mock_show_table):
-        """Test show_catalog calls show_formatted_table with correct parameters."""
+        """Test show_catalog calls show_catalog_formatted_table for each catalog."""
         mock_nornflow = MagicMock()
-    
+
         show_catalog(mock_nornflow)
-    
+
         assert mock_show_table.call_count == 6
         calls = [
-            call(
-                "TASKS CATALOG",
-                render_task_catalog_table_data,
-                ["Task Name", "Description", "Source (python module)"],
-                mock_nornflow,
-            ),
-            call(
-                "FILTERS CATALOG",
-                render_filters_catalog_table_data,
-                ["Filter Name", "Description", "Source (python module)"],
-                mock_nornflow,
-            ),
-            call(
-                "WORKFLOWS CATALOG",
-                render_workflows_catalog_table_data,
-                ["Workflow Name", "Description", "Source (file path)"],
-                mock_nornflow,
-            ),
-            call(
-                "BLUEPRINTS CATALOG",
-                render_blueprints_catalog_table_data,
-                ["Blueprint Name", "Description", "Source (file path)"],
-                mock_nornflow,
-            ),
-            call(
-                "JINJA2 FILTERS CATALOG",
-                render_j2_filters_catalog_table_data,
-                ["Filter Name", "Description", "Source (python module)"],
-                mock_nornflow,
-            ),
-            call(
-                "HOOKS CATALOG",
-                render_hooks_catalog_table_data,
-                ["Hook Name", "Description", "Source (python module)"],
-                mock_nornflow,
-            ),
+            call("TASKS CATALOG", render_task_catalog_table_data, mock_nornflow),
+            call("FILTERS CATALOG", render_filters_catalog_table_data, mock_nornflow),
+            call("WORKFLOWS CATALOG", render_workflows_catalog_table_data, mock_nornflow),
+            call("BLUEPRINTS CATALOG", render_blueprints_catalog_table_data, mock_nornflow),
+            call("JINJA2 FILTERS CATALOG", render_j2_filters_catalog_table_data, mock_nornflow),
+            call("HOOKS CATALOG", render_hooks_catalog_table_data, mock_nornflow),
         ]
         mock_show_table.assert_has_calls(calls)
 
@@ -342,120 +314,146 @@ class TestShowHelpers:
 class TestTableRenderers:
     """Tests for the table data rendering functions."""
 
-    @patch("nornflow.cli.show.get_source_from_catalog")
-    def test_render_task_catalog_table_data(self, mock_get_source):
+    def test_render_task_catalog_table_data(self):
         """Test render_task_catalog_table_data generates task catalog table data."""
         mock_nornflow = MagicMock()
         task_func1 = MagicMock(__doc__="Test task 1 description")
         task_func2 = MagicMock(__doc__="Test task 2 description")
         
         mock_tasks_catalog = MagicMock()
-        mock_tasks_catalog.get_builtin_items.return_value = ["task1"]
-        mock_tasks_catalog.get_custom_items.return_value = ["task2"]
-        mock_tasks_catalog.__getitem__.side_effect = lambda x: task_func1 if x == "task1" else task_func2
+        mock_tasks_catalog.get_builtin_items.return_value = {"nornflow.task1": task_func1}
+        mock_tasks_catalog.get_custom_items.return_value = {"local.task2": task_func2}
+        mock_tasks_catalog.__getitem__.side_effect = lambda x: task_func1 if x == "nornflow.task1" else task_func2
+        mock_tasks_catalog.sources = {
+            "nornflow.task1": {"description": "Test task 1 description", "bare_name": "task1", "collision": ""},
+            "local.task2": {"description": "Test task 2 description", "bare_name": "task2", "collision": ""},
+        }
         mock_nornflow.tasks_catalog = mock_tasks_catalog
-        
-        mock_get_source.return_value = "test.module"
 
-        result = render_task_catalog_table_data(mock_nornflow)
+        result, headers = render_task_catalog_table_data(mock_nornflow)
 
+        assert headers == get_catalog_table_headers(include_collision=False)
         assert len(result) == 2
         for row in result:
-            assert len(row) == 3
+            assert len(row) == 2
 
-    @patch("nornflow.cli.show.get_source_from_catalog")
-    def test_render_workflows_catalog_table_data(self, mock_get_source):
+    def test_render_task_catalog_table_data_includes_collision_column(self):
+        """Test collision column appears when any entry has collision metadata."""
+        mock_nornflow = MagicMock()
+        task_func1 = MagicMock(__doc__="Test task 1 description")
+
+        mock_tasks_catalog = MagicMock()
+        mock_tasks_catalog.get_builtin_items.return_value = {"nornflow.task1": task_func1}
+        mock_tasks_catalog.get_custom_items.return_value = {}
+        mock_tasks_catalog.sources = {
+            "nornflow.task1": {
+                "description": "Test task 1 description",
+                "collision": "local (bare → nornflow.task1)",
+            },
+        }
+        mock_nornflow.tasks_catalog = mock_tasks_catalog
+
+        result, headers = render_task_catalog_table_data(mock_nornflow)
+
+        assert headers == get_catalog_table_headers(include_collision=True)
+        assert len(result) == 1
+        assert len(result[0]) == 3
+
+    def test_render_workflows_catalog_table_data(self):
         """Test render_workflows_catalog_table_data generates workflow catalog table data."""
         mock_nornflow = MagicMock()
         workflow_path1 = MagicMock(spec=Path)
         workflow_path2 = MagicMock(spec=Path)
         
-        mock_nornflow.workflows_catalog.items.return_value = [
-            ("workflow1", workflow_path1),
-            ("workflow2", workflow_path2),
-        ]
         mock_nornflow.workflows_catalog.sources = {
-            "workflow1": {"description": "Test workflow 1"},
-            "workflow2": {"description": "Test workflow 2"},
+            "local.workflow1": {"description": "Test workflow 1"},
+            "local.workflow2": {"description": "Test workflow 2"},
         }
-        
-        mock_get_source.return_value = "./workflows/test.yaml"
-    
-        result = render_workflows_catalog_table_data(mock_nornflow)
-    
+        mock_nornflow.workflows_catalog.get_builtin_items.return_value = {}
+        mock_nornflow.workflows_catalog.get_custom_items.return_value = {
+            "local.workflow1": workflow_path1,
+            "local.workflow2": workflow_path2,
+        }
+
+        result, headers = render_workflows_catalog_table_data(mock_nornflow)
+
+        assert headers == get_catalog_table_headers(include_collision=False)
         assert len(result) == 2
         for row in result:
-            assert len(row) == 3
+            assert len(row) == 2
 
-    @patch("nornflow.cli.show.get_source_from_catalog")
-    def test_render_filters_catalog_table_data(self, mock_get_source):
+    def test_render_filters_catalog_table_data(self):
         """Test render_filters_catalog_table_data generates filters catalog table data."""
         mock_nornflow = MagicMock()
         filter_func1 = MagicMock(__doc__="Test filter 1 description")
         filter_func2 = MagicMock(__doc__="Test filter 2 description")
         
         mock_filters_catalog = MagicMock()
-        mock_filters_catalog.get_builtin_items.return_value = ["filter1"]
-        mock_filters_catalog.get_custom_items.return_value = ["filter2"]
-        mock_filters_catalog.__getitem__.side_effect = lambda x: (filter_func1, ["param1"]) if x == "filter1" else (filter_func2, [])
+        mock_filters_catalog.get_builtin_items.return_value = {"nornflow.filter1": filter_func1}
+        mock_filters_catalog.get_custom_items.return_value = {"local.filter2": filter_func2}
+        mock_filters_catalog.__getitem__.side_effect = (
+            lambda x: (filter_func1, ["param1"]) if x == "nornflow.filter1" else (filter_func2, [])
+        )
         mock_filters_catalog.sources = {
-            "filter1": {"description": "Test filter 1 description"},
-            "filter2": {"description": "Test filter 2 description"},
+            "nornflow.filter1": {"description": "Test filter 1 description", "bare_name": "filter1", "collision": ""},
+            "local.filter2": {"description": "Test filter 2 description", "bare_name": "filter2", "collision": ""},
         }
         mock_nornflow.filters_catalog = mock_filters_catalog
-        
-        mock_get_source.return_value = "test.module"
     
-        result = render_filters_catalog_table_data(mock_nornflow)
-    
+        result, headers = render_filters_catalog_table_data(mock_nornflow)
+
+        assert headers == get_catalog_table_headers(include_collision=False)
         assert len(result) == 2
         for row in result:
-            assert len(row) == 3
+            assert len(row) == 2
 
-    @patch("nornflow.cli.show.get_source_from_catalog")
-    def test_render_j2_filters_catalog_table_data(self, mock_get_source):
+    def test_render_j2_filters_catalog_table_data(self):
         """Test render_j2_filters_catalog_table_data generates Jinja2 filters catalog table data."""
         mock_nornflow = MagicMock()
         filter_func1 = MagicMock(__doc__="Test Jinja2 filter 1 description.")
         filter_func2 = MagicMock(__doc__="Test Jinja2 filter 2 description.")
         
         mock_j2_filters_catalog = MagicMock()
-        mock_j2_filters_catalog.get_builtin_items.return_value = ["j2_filter1"]
-        mock_j2_filters_catalog.get_custom_items.return_value = ["j2_filter2"]
-        mock_j2_filters_catalog.__getitem__.side_effect = lambda x: filter_func1 if x == "j2_filter1" else filter_func2
+        mock_j2_filters_catalog.get_builtin_items.return_value = {"nornflow.j2_filter1": filter_func1}
+        mock_j2_filters_catalog.get_custom_items.return_value = {"local.j2_filter2": filter_func2}
+        mock_j2_filters_catalog.__getitem__.side_effect = (
+            lambda x: filter_func1 if x == "nornflow.j2_filter1" else filter_func2
+        )
+        mock_j2_filters_catalog.sources = {
+            "nornflow.j2_filter1": {"description": "Test Jinja2 filter 1 description.", "bare_name": "j2_filter1", "collision": ""},
+            "local.j2_filter2": {"description": "Test Jinja2 filter 2 description.", "bare_name": "j2_filter2", "collision": ""},
+        }
         mock_nornflow.j2_filters_catalog = mock_j2_filters_catalog
-        
-        mock_get_source.return_value = "test.module"
 
-        result = render_j2_filters_catalog_table_data(mock_nornflow)
+        result, headers = render_j2_filters_catalog_table_data(mock_nornflow)
 
+        assert headers == get_catalog_table_headers(include_collision=False)
         assert len(result) == 2
         for row in result:
-            assert len(row) == 3
+            assert len(row) == 2
 
-    @patch("nornflow.cli.show.get_source_from_catalog")
-    def test_render_blueprints_catalog_table_data(self, mock_get_source):
+    def test_render_blueprints_catalog_table_data(self):
         """Test render_blueprints_catalog_table_data generates blueprints catalog table data."""
         mock_nornflow = MagicMock()
         blueprint_path1 = MagicMock(spec=Path)
         blueprint_path2 = MagicMock(spec=Path)
         
-        mock_nornflow.blueprints_catalog.items.return_value = [
-            ("blueprint1", blueprint_path1),
-            ("blueprint2", blueprint_path2),
-        ]
         mock_nornflow.blueprints_catalog.sources = {
-            "blueprint1": {"description": "Test blueprint 1"},
-            "blueprint2": {"description": "Test blueprint 2"},
+            "local.blueprint1": {"description": "Test blueprint 1"},
+            "local.blueprint2": {"description": "Test blueprint 2"},
         }
-        
-        mock_get_source.return_value = "./blueprints/test.yaml"
-    
-        result = render_blueprints_catalog_table_data(mock_nornflow)
-    
+        mock_nornflow.blueprints_catalog.get_builtin_items.return_value = {}
+        mock_nornflow.blueprints_catalog.get_custom_items.return_value = {
+            "local.blueprint1": blueprint_path1,
+            "local.blueprint2": blueprint_path2,
+        }
+
+        result, headers = render_blueprints_catalog_table_data(mock_nornflow)
+
+        assert headers == get_catalog_table_headers(include_collision=False)
         assert len(result) == 2
         for row in result:
-            assert len(row) == 3
+            assert len(row) == 2
 
     def test_render_settings_table_data(self):
         """Test render_settings_table_data generates settings table data."""
