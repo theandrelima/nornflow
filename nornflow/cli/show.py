@@ -166,62 +166,84 @@ def show_catalog(nornflow: "NornFlow") -> None:
     show_hooks_catalog(nornflow)
 
 
+CATALOG_TABLE_HEADERS_BASE = [
+    "Qualified Name",
+    "Description",
+]
+
+
+def get_catalog_table_headers(include_collision: bool) -> list[str]:
+    """Build catalog table headers, omitting Collision when not needed."""
+    headers = list(CATALOG_TABLE_HEADERS_BASE)
+    if include_collision:
+        headers.append("Collision")
+    return headers
+
+
+def catalog_has_collisions(catalog: Catalog) -> bool:
+    """Return True if any catalog entry has collision metadata."""
+    return any(meta.get("collision") for meta in catalog.sources.values())
+
+
+def _catalog_qualified_names(catalog: Catalog) -> list[str]:
+    """Return catalog keys in display order: built-ins first, then custom."""
+    builtin_names = sorted(catalog.get_builtin_items())
+    custom_names = sorted(catalog.get_custom_items())
+    if builtin_names or custom_names:
+        return builtin_names + custom_names
+    return sorted(catalog.keys())
+
+
 def show_tasks_catalog(nornflow: "NornFlow") -> None:
     """Display the tasks catalog."""
-    show_formatted_table(
+    show_catalog_formatted_table(
         "TASKS CATALOG",
         render_task_catalog_table_data,
-        ["Task Name", "Description", "Source (python module)"],
         nornflow,
     )
 
 
 def show_filters_catalog(nornflow: "NornFlow") -> None:
     """Display the filters catalog."""
-    show_formatted_table(
+    show_catalog_formatted_table(
         "FILTERS CATALOG",
         render_filters_catalog_table_data,
-        ["Filter Name", "Description", "Source (python module)"],
         nornflow,
     )
 
 
 def show_workflows_catalog(nornflow: "NornFlow") -> None:
     """Display the workflows catalog."""
-    show_formatted_table(
+    show_catalog_formatted_table(
         "WORKFLOWS CATALOG",
         render_workflows_catalog_table_data,
-        ["Workflow Name", "Description", "Source (file path)"],
         nornflow,
     )
 
 
 def show_blueprints_catalog(nornflow: "NornFlow") -> None:
     """Display the blueprints catalog."""
-    show_formatted_table(
+    show_catalog_formatted_table(
         "BLUEPRINTS CATALOG",
         render_blueprints_catalog_table_data,
-        ["Blueprint Name", "Description", "Source (file path)"],
         nornflow,
     )
 
 
 def show_j2_filters_catalog(nornflow: "NornFlow") -> None:
     """Display the Jinja2 filters catalog."""
-    show_formatted_table(
+    show_catalog_formatted_table(
         "JINJA2 FILTERS CATALOG",
         render_j2_filters_catalog_table_data,
-        ["Filter Name", "Description", "Source (python module)"],
         nornflow,
     )
 
 
 def show_hooks_catalog(nornflow: "NornFlow") -> None:
     """Display the hooks catalog."""
-    show_formatted_table(
+    show_catalog_formatted_table(
         "HOOKS CATALOG",
         render_hooks_catalog_table_data,
-        ["Hook Name", "Description", "Source (python module)"],
         nornflow,
     )
 
@@ -234,6 +256,22 @@ def show_nornflow_settings(nornflow: "NornFlow") -> None:
 def show_nornir_configs(nornflow: "NornFlow") -> None:
     """Display the Nornir configs."""
     show_formatted_table("NORNIR CONFIGS", render_nornir_cfgs_table_data, ["Config", "Value"], nornflow)
+
+
+def show_catalog_formatted_table(
+    banner_text: str, table_data_renderer: Callable, nornflow: "NornFlow"
+) -> None:
+    """Display a catalog table with headers derived from rendered data."""
+    table_data, headers = table_data_renderer(nornflow)
+
+    if not table_data:
+        return
+
+    colored_headers = get_colored_headers(headers, "blue")
+    colalign = ["center"] + ["left"] * (len(headers) - 1)
+    table = tabulate(table_data, headers=colored_headers, tablefmt="rounded_grid", colalign=colalign)
+    display_banner(banner_text, table)
+    typer.echo(table)
 
 
 def show_formatted_table(
@@ -302,118 +340,91 @@ def get_source_from_catalog(catalog: Catalog, item_name: str) -> str:  # noqa: P
     return "Unknown"
 
 
-def render_callable_catalog_table_data(catalog) -> list[list[str]]:
-    """Render a callable catalog (tasks, filters, or J2 filters) as a list of lists.
+def render_catalog_table_data(
+    catalog: Catalog,
+    *,
+    format_description: Callable[[str, dict[str, Any]], str] | None = None,
+) -> tuple[list[list[str]], list[str]]:
+    """Render catalog rows and headers, omitting Collision when unused."""
+    include_collision = catalog_has_collisions(catalog)
+    headers = get_catalog_table_headers(include_collision)
+    table_data: list[list[str]] = []
 
-    Args:
-        catalog: The catalog to render.
+    for qualified_name in _catalog_qualified_names(catalog):
+        meta = catalog.sources.get(qualified_name, {})
+        collision = meta.get("collision", "")
+        if format_description:
+            description = format_description(qualified_name, meta)
+        else:
+            description = meta.get("description", "No description available")
+        table_data.append(
+            get_colored_catalog_row(
+                qualified_name,
+                description,
+                collision,
+                include_collision=include_collision,
+            )
+        )
 
-    Returns:
-        The table data.
-    """
-    table_data = []
-    item_names = sorted(catalog.get_builtin_items()) + sorted(catalog.get_custom_items())
-    for item_name in item_names:
-        description = catalog.sources.get(item_name, {}).get("description", "No description available")
-        source_path = get_source_from_catalog(catalog, item_name)
-        table_data.append(get_colored_row(item_name, description, source_path))
-    return table_data
+    return table_data, headers
 
 
-def render_task_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
-    """Render the task catalog as a list of lists.
+def render_callable_catalog_table_data(catalog) -> tuple[list[list[str]], list[str]]:
+    """Render a callable catalog (tasks, filters, or J2 filters) as a list of lists."""
+    return render_catalog_table_data(catalog)
 
-    Args:
-        nornflow: The NornFlow object.
 
-    Returns:
-        The table data.
-    """
+def render_task_catalog_table_data(nornflow: "NornFlow") -> tuple[list[list[str]], list[str]]:
+    """Render the task catalog as a list of lists."""
     return render_callable_catalog_table_data(nornflow.tasks_catalog)
 
 
-def render_workflows_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
-    """Render the workflows catalog as a list of lists.
-
-    Args:
-        nornflow: The NornFlow object.
-
-    Returns:
-        The table data.
-    """
+def render_workflows_catalog_table_data(nornflow: "NornFlow") -> tuple[list[list[str]], list[str]]:
+    """Render the workflows catalog as a list of lists."""
     return render_file_based_catalog_table_data(nornflow.workflows_catalog, nornflow)
 
 
-def render_blueprints_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
-    """Render the blueprints catalog as a list of lists.
-
-    Args:
-        nornflow: The NornFlow object.
-
-    Returns:
-        The table data.
-    """
+def render_blueprints_catalog_table_data(nornflow: "NornFlow") -> tuple[list[list[str]], list[str]]:
+    """Render the blueprints catalog as a list of lists."""
     return render_file_based_catalog_table_data(nornflow.blueprints_catalog, nornflow)
 
 
-def render_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
-    """Render the filters catalog as a list of lists.
+def render_filters_catalog_table_data(nornflow: "NornFlow") -> tuple[list[list[str]], list[str]]:
+    """Render the filters catalog as a list of lists."""
 
-    Args:
-        nornflow: The NornFlow object.
-
-    Returns:
-        The table data.
-    """
-    table_data = []
-    catalog = nornflow.filters_catalog
-    item_names = sorted(catalog.get_builtin_items()) + sorted(catalog.get_custom_items())
-    for item_name in item_names:
-        description = catalog.sources.get(item_name, {}).get("description", "No description available")
-        # For filters, append parameter info if available
-        item = catalog[item_name]
+    def format_filter_description(qualified_name: str, meta: dict[str, Any]) -> str:
+        description = meta.get("description", "No description available")
+        item = nornflow.filters_catalog[qualified_name]
         if isinstance(item, tuple) and len(item) > 1:
             param_names = item[1]
             if param_names:
                 description += f"\nParameters: {', '.join(param_names)}"
             else:
                 description += "\nParameters: None (host only)"
-        description = textwrap.fill(description, width=60)
-        source_path = get_source_from_catalog(catalog, item_name)
-        table_data.append(get_colored_row(item_name, description, source_path))
-    return table_data
+        return textwrap.fill(description, width=60)
+
+    return render_catalog_table_data(
+        nornflow.filters_catalog,
+        format_description=format_filter_description,
+    )
 
 
-def render_j2_filters_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
-    """Render the Jinja2 filters catalog as a list of lists.
-
-    Args:
-        nornflow: The NornFlow object.
-
-    Returns:
-        The table data.
-    """
+def render_j2_filters_catalog_table_data(nornflow: "NornFlow") -> tuple[list[list[str]], list[str]]:
+    """Render the Jinja2 filters catalog as a list of lists."""
     return render_callable_catalog_table_data(nornflow.j2_filters_catalog)
 
 
-def render_hooks_catalog_table_data(nornflow: "NornFlow") -> list[list[str]]:
-    """Render the hooks catalog as a list of lists.
+def render_hooks_catalog_table_data(nornflow: "NornFlow") -> tuple[list[list[str]], list[str]]:
+    """Render the hooks catalog as a list of lists."""
 
-    Args:
-        nornflow: The NornFlow object.
+    def format_hook_description(_qualified_name: str, meta: dict[str, Any]) -> str:
+        description = meta.get("description", "No description available")
+        return textwrap.fill(description, width=60)
 
-    Returns:
-        The table data.
-    """
-    table_data = []
-    catalog = nornflow.hooks_catalog
-    item_names = sorted(catalog.get_builtin_items()) + sorted(catalog.get_custom_items())
-    for item_name in item_names:
-        description = catalog.sources.get(item_name, {}).get("description", "No description available")
-        description = textwrap.fill(description, width=60)
-        source_path = get_source_from_catalog(catalog, item_name)
-        table_data.append(get_colored_row(item_name, description, source_path))
-    return table_data
+    return render_catalog_table_data(
+        nornflow.hooks_catalog,
+        format_description=format_hook_description,
+    )
 
 
 def render_settings_table_data(nornflow: "NornFlow") -> list[list[str]]:
@@ -509,23 +520,47 @@ def display_banner(banner_text: str, table: str) -> None:
     typer.echo("\n\n" + centered_banner)
 
 
-def render_file_based_catalog_table_data(catalog, nornflow: "NornFlow") -> list[list[str]]:
-    """Render a file-based catalog (workflows or blueprints) as a list of lists.
+def render_file_based_catalog_table_data(
+    catalog, nornflow: "NornFlow"
+) -> tuple[list[list[str]], list[str]]:
+    """Render a file-based catalog (workflows or blueprints) as a list of lists."""
 
-    Args:
-        catalog: The catalog to render.
-        nornflow: The NornFlow object.
+    def format_file_description(_qualified_name: str, meta: dict[str, Any]) -> str:
+        description = meta.get("description", "No description available")
+        return textwrap.fill(description, width=60)
 
-    Returns:
-        The table data.
-    """
-    table_data = []
-    for item_name, _ in sorted(catalog.items()):
-        description = catalog.sources.get(item_name, {}).get("description", "No description available")
-        description = textwrap.fill(description, width=60)
-        source_path = get_source_from_catalog(catalog, item_name)
-        table_data.append(get_colored_row(item_name, description, source_path))
-    return table_data
+    return render_catalog_table_data(catalog, format_description=format_file_description)
+
+
+def format_colored_qualified_name(qualified_name: str) -> str:
+    """Color the namespace and asset name portions of a qualified catalog key."""
+    if "." not in qualified_name:
+        return colored(qualified_name, "cyan", attrs=["bold"])
+
+    namespace, _, asset_name = qualified_name.partition(".")
+    return (
+        colored(namespace, "green", attrs=["bold"])
+        + colored(".", "white")
+        + colored(asset_name, "cyan", attrs=["bold"])
+    )
+
+
+def get_colored_catalog_row(
+    qualified_name: str,
+    desc: str,
+    collision: str = "",
+    *,
+    include_collision: bool = True,
+) -> list[str]:
+    """Create a colored table row for namespaced catalog items."""
+    row = [
+        format_colored_qualified_name(qualified_name),
+        colored(desc, "yellow"),
+    ]
+    if include_collision:
+        collision_display = collision or "—"
+        row.append(colored(collision_display, "magenta" if collision else "white"))
+    return row
 
 
 def get_colored_row(name: str, desc: str, source: str) -> list[str]:
