@@ -429,36 +429,55 @@ NornFlow performs recursive searches in all configured directories, loading asse
 
 These are two distinct concepts and it's important not to conflate them:
 
-**Loading order** is simply the sequence in which assets are registered into the catalog. It determines what replaces what when non-builtin names collide:
+**Loading order** is the sequence in which assets are registered into the catalog:
 
 ```
 Loading order (first → last):
-  built-ins → package[0] → package[1] → ... → local assets
+  built-ins → local assets → package resources
 ```
 
-For **non-builtin assets**, later-loaded wins: local assets override package assets, and later packages override earlier ones. You can always shadow a package asset by creating one with the same name in your local directories.
-
-**Override priority** is a separate concept that governs whether a name *can* be overridden at all. Builtins are loaded first but have **absolute, unconditional priority** — they cannot be overridden by anything, regardless of load order. Attempting to register any asset under a name already claimed by a builtin raises `BuiltinOverrideError` at startup, halting NornFlow initialization immediately.
+**Bare-name priority** governs which asset wins when you reference a name without a namespace prefix:
 
 ```
-Override priority:
-  built-ins (immutable) >> local assets > package[n] > ... > package[0]
+Bare resolution priority:
+  built-ins > local assets > package resources (single owner only)
 ```
 
-#### Built-in Protection
+#### Namespace isolation
 
-Built-in asset names are **permanently reserved** across all catalog types that have builtins. The enforcement is uniform — there is no catalog where a builtin name can be silently overridden. You must rename the offending asset.
+Every catalog asset is stored under a **qualified key** (`namespace.name`):
 
-| Catalog | Built-in names | Protection |
+| Namespace | Source |
+|---|---|
+| `nornflow` | Built-in assets from `nornflow.builtins` |
+| `local` | Files and modules from your `local_*` settings directories |
+| `<package_name>` | Resources discovered from an imported package |
+
+You can reference assets in two ways:
+
+- **Bare name** (e.g. `echo`, `deploy.yaml`) — resolves by tier priority when unambiguous
+- **Qualified name** (e.g. `local.echo`, `nornflow_arista.get_facts`) — exact match only
+
+Packages and local assets **may reuse built-in names** — they remain reachable via qualified references. Local assets claim bare names only when no built-in already owns that bare name.
+
+When two packages register the same bare name, initialization still succeeds. Collisions are tracked and shown in `nornflow show`. A bare reference fails with `AssetAmbiguityError` only when an executing workflow actually uses that ambiguous bare name.
+
+#### Built-in bare ownership
+
+Built-ins register first and **claim bare names unconditionally**. A local or package asset with the same bare name is registered under its qualified key only unless tier priority assigns bare ownership (local beats package when no built-in exists).
+
+| Catalog | Built-in examples | Bare behavior |
 |---|---|---|
-| Tasks | `echo`, `set`, `write_file`, `pause` | `BuiltinOverrideError` |
-| Filters | `hosts`, `groups` | `BuiltinOverrideError` |
-| Hooks | `if`, `set_to`, `shush`, `single` | `BuiltinOverrideError` |
-| Jinja2 Filters | NornFlow's built-in j2 filters | `BuiltinOverrideError` |
+| Tasks | `echo`, `set`, `write_file`, `pause` | Bare resolves to `nornflow.*` when present |
+| Filters | `hosts`, `groups` | Bare resolves to `nornflow.*` when present |
+| Hooks | `if`, `set_to`, `shush`, `single` | Bare resolves to `nornflow.*` when present |
+| Jinja2 Filters | NornFlow's built-in j2 filters | Bare resolves to `nornflow.*` when present |
 | Workflows | — no builtins — | n/a |
 | Blueprints | — no builtins — | n/a |
 
-For workflows and blueprints there are no built-in assets, so `BuiltinOverrideError` is never reachable in practice. **All** non-builtin name collisions (package vs package, or package vs local) are resolved as last-write-wins with a `WARNING` logged, uniformly across every catalog type.
+For workflows and blueprints, bare names are typically filenames (e.g. `deploy.yaml`). Qualified references look like `local.deploy.yaml`.
+
+Use `nornflow show --tasks` (and other `--*` catalog flags) to inspect the **Collision** column — it lists every namespace sharing a bare name and indicates whether bare resolution is unambiguous.
 
 ## Domains
 
