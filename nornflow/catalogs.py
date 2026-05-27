@@ -7,18 +7,30 @@ from typing import Any
 
 from pydantic_serdes.utils import load_file_to_dict
 
-from nornflow.exceptions import BuiltinOverrideError, CoreError, ResourceError
+from nornflow.exceptions import AssetAmbiguityError, AssetNotFoundError, CoreError, ResourceError
 from nornflow.logger import logger
 from nornflow.utils import import_module_from_path
 
+BUILTIN_NAMESPACE = "nornflow"
+LOCAL_NAMESPACE = "local"
+TIER_BUILTIN = "builtin"
+TIER_LOCAL = "local"
+TIER_PACKAGE = "package"
+TIER_ORDER = (TIER_BUILTIN, TIER_LOCAL, TIER_PACKAGE)
+
+
+def qualified_key(namespace: str, bare_name: str) -> str:
+    """Build a qualified catalog key from namespace and bare name."""
+    return f"{namespace}.{bare_name}"
+
+
+def namespace_of(reference: str) -> str:
+    """Return the namespace portion of a qualified reference."""
+    return reference.split(".", 1)[0]
+
 
 class Catalog(ABC, dict[str, Any]):
-    """Base catalog that provides core functionality for tracking items and their sources.
-
-    This catalog extends dict while adding:
-    - Source tracking for each item
-    - Basic registration and query methods
-    """
+    """Base catalog that tracks namespaced assets and supports tier-priority resolution."""
 
     def __init__(self, name: str):
         """Initialize an empty catalog with a name for error messages.
@@ -29,79 +41,238 @@ class Catalog(ABC, dict[str, Any]):
         super().__init__()
         self.name = name
         self.sources: dict[str, dict[str, Any]] = {}
+        self._bare_index: dict[str, dict[str, list[str]]] = {}
+        self._bare_owners: dict[str, str] = {}
+        self._package_tier_finalized = False
 
-    def __setitem__(self, key: str, value: Any, **kwargs) -> None:
-        """Sets an item in the catalog and tracks metadata.
+    def __contains__(self, reference: str) -> bool:
+        """Return True if a bare or qualified reference exists in the catalog."""
+        if reference in self._bare_index:
+            return True
+        if "." in reference:
+            return dict.__contains__(self, reference)
+        return False
+
+    def register_namespaced(
+        self,
+        bare_name: str,
+        item: Any,
+        namespace: str,
+        tier: str,
+        **kwargs: Any,
+    ) -> Any:
+        """Register an asset under a qualified namespace key.
 
         Args:
-            key: The key for the item.
-            value: The value to store.
-            **kwargs: Arbitrary metadata to associate with the item.
+            bare_name: Unqualified asset name.
+            item: Asset value to store.
+            namespace: Catalog namespace (``nornflow``, ``local``, or package name).
+            tier: Registration tier (``builtin``, ``local``, or ``package``).
+            **kwargs: Additional metadata stored in ``sources``.
+
+        Returns:
+            The registered item.
         """
-        super().__setitem__(key, value)
-        self.sources[key] = {"registered_at": datetime.now(), **kwargs}
+        key = qualified_key(namespace, bare_name)
+        super().__setitem__(key, item)
+        self.sources[key] = {
+            "registered_at": datetime.now(),
+            "bare_name": bare_name,
+            "namespace": namespace,
+            "tier": tier,
+            **kwargs,
+        }
 
-    def register(self, name: str, item: Any, **kwargs) -> Any:
-        """Registers an item in the catalog and stores its metadata.
+        tier_map = self._bare_index.setdefault(bare_name, {})
+        tier_keys = tier_map.setdefault(tier, [])
+        if key not in tier_keys:
+            tier_keys.append(key)
+
+        if tier == TIER_BUILTIN:
+            self._bare_owners[bare_name] = key
+        elif tier == TIER_LOCAL and bare_name not in self._bare_owners:
+            self._bare_owners[bare_name] = key
+
+        logger.debug(
+            f"Registered item '{key}' (bare='{bare_name}', tier={tier}) in {self.name} catalog"
+        )
+        return item
+
+    def register(self, name: str, item: Any, **kwargs: Any) -> Any:
+        """Register an item, inferring namespace and tier when omitted.
 
         Args:
-            name: The key for the item.
-            item: The value to store.
-            **kwargs: Arbitrary metadata to associate with the item.
+            name: Bare or legacy key for the item.
+            item: Value to store.
+            **kwargs: Metadata; may include ``namespace`` and ``tier``.
 
         Returns:
             The registered value.
         """
-        self.__setitem__(name, item, **kwargs)
-        logger.debug(f"Registered item '{name}' in {self.name} catalog")
-        return item
+        namespace = kwargs.pop("namespace", None)
+        tier = kwargs.pop("tier", None)
+        bare_name = kwargs.pop("bare_name", None) or name
 
-    def _guard_builtin_override(self, name: str) -> None:
-        """Raise BuiltinOverrideError if name is already registered as a built-in.
+        if namespace and tier:
+            return self.register_namespaced(bare_name, item, namespace, tier, **kwargs)
 
-        Args:
-            name: The name being registered.
-
-        Raises:
-            BuiltinOverrideError: If the name belongs to a built-in asset.
-        """
-        if name in self and self.sources.get(name, {}).get("is_builtin", False):
-            raise BuiltinOverrideError(name=name, catalog_name=self.name)
-
-    def _warn_non_builtin_override(self, name: str) -> None:
-        """Log a warning when a non-builtin asset overrides another non-builtin.
-
-        This is a known NornFlow v1 limitation — namespacing is not yet supported,
-        so same-named assets across packages or local directories resolve to
-        last-write-wins. Users must curate their asset names carefully.
-
-        Args:
-            name: The name being overridden.
-        """
-        existing_module = self.sources.get(name, {}).get("module_name", "unknown")
-        logger.warning(
-            f"{self.name.capitalize()} catalog: '{name}' (from '{existing_module}') is being overridden. "
-            f"Same-name asset resolution is last-write-wins in this version of NornFlow. "
-            f"Ensure asset names are unique across all packages and local directories."
+        inferred_namespace, inferred_tier = self._infer_namespace_and_tier(item, kwargs)
+        return self.register_namespaced(
+            bare_name, item, inferred_namespace, inferred_tier, **kwargs
         )
 
-    def _guard_and_warn_overrides(self, name: str) -> None:
-        """Enforce builtin protection and log non-builtin name clashes.
+    def _infer_namespace_and_tier(self, item: Any, kwargs: dict[str, Any]) -> tuple[str, str]:
+        """Infer namespace and tier from metadata or item origin."""
+        module_name = kwargs.get("module_name") or getattr(item, "__module__", None)
+        if module_name and str(module_name).startswith("nornflow.builtins"):
+            return BUILTIN_NAMESPACE, TIER_BUILTIN
+        if kwargs.get("is_package"):
+            return kwargs.get("namespace", LOCAL_NAMESPACE), TIER_PACKAGE
+        return LOCAL_NAMESPACE, TIER_LOCAL
 
-        Combines the builtin guard (hard stop) and the non-builtin override warning
-        (last-write-wins) into a single call. All catalog subclass register() methods
-        should call this instead of the two methods separately.
+    def finalize_package_tier(self) -> None:
+        """Assign bare owners for unambiguous single-package names after all packages load."""
+        self._package_tier_finalized = True
+        for bare_name, tier_map in self._bare_index.items():
+            if bare_name in self._bare_owners:
+                continue
+            package_keys = tier_map.get(TIER_PACKAGE, [])
+            if len(package_keys) == 1:
+                self._bare_owners[bare_name] = package_keys[0]
+
+    def compute_collision_metadata(self) -> None:
+        """Compute collision display metadata for every registered asset."""
+        for bare_name, tier_map in self._bare_index.items():
+            all_keys: list[str] = []
+            for keys in tier_map.values():
+                all_keys.extend(keys)
+
+            winner = self._bare_owners.get(bare_name)
+            package_keys = tier_map.get(TIER_PACKAGE, [])
+            package_ambiguous = len(package_keys) > 1
+
+            for key in all_keys:
+                peers = [peer for peer in all_keys if peer != key]
+                peer_names = sorted({namespace_of(peer) for peer in peers})
+                collision = self._build_collision_display(
+                    key, peer_names, winner, package_ambiguous, package_keys
+                )
+                self.sources[key]["collision"] = collision
+                self.sources[key]["bare_name"] = bare_name
+                self.sources[key]["bare_winner"] = winner
+                self.sources[key]["bare_ambiguous"] = (
+                    package_ambiguous and key in package_keys and not winner
+                )
+
+    def _build_collision_display(
+        self,
+        qualified_key: str,
+        peer_names: list[str],
+        winner: str | None,
+        package_ambiguous: bool,
+        package_keys: list[str],
+    ) -> str:
+        """Build the Collision column display string for a catalog entry."""
+        if not peer_names:
+            return ""
+
+        peer_text = ", ".join(peer_names)
+        if package_ambiguous and qualified_key in package_keys and not winner:
+            return f"{peer_text} (bare ambiguous)"
+        if winner:
+            return f"{peer_text} (bare → {winner})"
+        return peer_text
+
+    def resolve(self, reference: str) -> Any:
+        """Resolve a bare or qualified reference to its catalog value.
 
         Args:
-            name: The name about to be registered.
+            reference: Bare name or ``namespace.name`` qualified reference.
+
+        Returns:
+            The registered asset value.
 
         Raises:
-            BuiltinOverrideError: If the name is already claimed by a built-in asset.
+            AssetNotFoundError: If the reference does not exist.
+            AssetAmbiguityError: If a bare reference is same-tier ambiguous.
         """
-        self._guard_builtin_override(name)
+        key = self.resolve_key(reference)
+        return self[key]
 
-        if name in self:
-            self._warn_non_builtin_override(name)
+    def resolve_key(self, reference: str) -> str:
+        """Resolve a reference to its qualified catalog key.
+
+        Args:
+            reference: Bare name or qualified reference.
+
+        Returns:
+            Qualified catalog key.
+
+        Raises:
+            AssetNotFoundError: If the reference does not exist.
+            AssetAmbiguityError: If a bare reference is same-tier ambiguous.
+        """
+        if reference in self._bare_index:
+            bare_name = reference
+        elif "." in reference:
+            if not dict.__contains__(self, reference):
+                raise AssetNotFoundError(reference, self.name)
+            return reference
+        else:
+            raise AssetNotFoundError(reference, self.name)
+
+        tier_map = self._bare_index[bare_name]
+
+        if bare_name in self._bare_owners:
+            return self._bare_owners[bare_name]
+
+        package_keys = tier_map.get(TIER_PACKAGE, [])
+        if self._package_tier_finalized and len(package_keys) > 1:
+            raise AssetAmbiguityError(reference, self.name, package_keys, TIER_PACKAGE)
+
+        for tier in TIER_ORDER:
+            keys = tier_map.get(tier, [])
+            if not keys:
+                continue
+            if tier == TIER_PACKAGE and not self._package_tier_finalized:
+                continue
+            if len(keys) > 1:
+                raise AssetAmbiguityError(reference, self.name, keys, tier)
+            return keys[0]
+
+        raise AssetNotFoundError(reference, self.name)
+
+    def get_collision_peers(self, qualified_key: str) -> list[str]:
+        """Return other qualified keys sharing the same bare name."""
+        bare_name = self.sources.get(qualified_key, {}).get("bare_name")
+        if not bare_name:
+            return []
+        tier_map = self._bare_index.get(bare_name, {})
+        peers: list[str] = []
+        for keys in tier_map.values():
+            peers.extend(key for key in keys if key != qualified_key)
+        return peers
+
+    def get_bare_collisions(self, bare_name: str) -> list[str]:
+        """Return all qualified keys registered under a bare name."""
+        tier_map = self._bare_index.get(bare_name, {})
+        result: list[str] = []
+        for keys in tier_map.values():
+            result.extend(keys)
+        return result
+
+    def get_unambiguous_bare_names(self) -> list[str]:
+        """Return bare names that resolve without ambiguity."""
+        names: list[str] = []
+        for bare_name in self._bare_index:
+            try:
+                self.resolve(bare_name)
+            except AssetAmbiguityError:
+                continue
+            except AssetNotFoundError:
+                continue
+            names.append(bare_name)
+        return names
 
     @property
     def is_empty(self) -> bool:
@@ -109,15 +280,7 @@ class Catalog(ABC, dict[str, Any]):
         return len(self) == 0
 
     def get_item_info(self, name: str, include_name: bool = True) -> dict[str, Any] | None:
-        """Get detailed information about an item.
-
-        Args:
-            name: The name of the item to look up.
-            include_name: Whether to include the name in the returned info.
-
-        Returns:
-            A dictionary with item metadata or None if not found.
-        """
+        """Get detailed information about an item."""
         if name not in self:
             return None
 
@@ -133,14 +296,7 @@ class Catalog(ABC, dict[str, Any]):
         return info
 
     def get_all_items_info(self, include_name: bool = False) -> dict[str, dict[str, Any]]:
-        """Get information about all items in the catalog.
-
-        Args:
-            include_name: Whether to include the name in each info dict.
-
-        Returns:
-            A dictionary mapping item names to their metadata.
-        """
+        """Get information about all items in the catalog."""
         return {
             name: self.get_item_info(name, include_name)
             for name in self
@@ -148,56 +304,35 @@ class Catalog(ABC, dict[str, Any]):
         }
 
     def items_with_info(self) -> list[tuple[str, Any, dict[str, Any]]]:
-        """Get a list of (key, value, metadata) tuples for all items.
-
-        Returns:
-            A list of tuples with key, value, and metadata dictionary.
-        """
+        """Get a list of (key, value, metadata) tuples for all items."""
         return [(name, self[name], self.sources.get(name, {})) for name in self]
 
     def get_builtin_items(self) -> dict[str, Any]:
-        """Get all built-in items in the catalog.
-
-        Returns:
-            Dictionary of built-in items.
-        """
-        return {name: self[name] for name in self if self.sources.get(name, {}).get("is_builtin", False)}
+        """Get all built-in items in the catalog."""
+        return {
+            name: self[name]
+            for name in self
+            if self.sources.get(name, {}).get("tier") == TIER_BUILTIN
+            or self.sources.get(name, {}).get("is_builtin", False)
+        }
 
     def get_custom_items(self) -> dict[str, Any]:
-        """Get all custom (non-builtin) items in the catalog.
-
-        Returns:
-            Dictionary of custom items.
-        """
-        return {name: self[name] for name in self if not self.sources.get(name, {}).get("is_builtin", False)}
+        """Get all custom (non-builtin) items in the catalog."""
+        return {
+            name: self[name]
+            for name in self
+            if self.sources.get(name, {}).get("tier") != TIER_BUILTIN
+            and not self.sources.get(name, {}).get("is_builtin", False)
+        }
 
 
 class DiscoverableCatalog(Catalog):
-    """Catalog that supports discovering items from directories.
-
-    This catalog extends Catalog with file-based discovery functionality,
-    including abstract methods for processing files and a template method
-    for directory scanning.
-    """
+    """Catalog that supports discovering items from directories."""
 
     max_description_size = 100
 
-    def discover_items_in_dir(self, dir_path: str, **kwargs) -> int:
-        """Discover and register items from a directory.
-
-        This implements the template method pattern, delegating specific behavior
-        to _get_files_to_process and _process_file methods that subclasses must implement.
-
-        Args:
-            dir_path: Path to the directory to scan.
-            **kwargs: Additional arguments for specific catalog types.
-
-        Returns:
-            Number of items discovered and registered.
-
-        Raises:
-            ResourceError: If directory doesn't exist.
-        """
+    def discover_items_in_dir(self, dir_path: str, **kwargs: Any) -> int:
+        """Discover and register items from a directory."""
         logger.info(f"Starting discovery of {self.name} items in directory: {dir_path}")
         path = Path(dir_path)
         if not path.is_dir():
@@ -222,61 +357,19 @@ class DiscoverableCatalog(Catalog):
         return total_items
 
     @abstractmethod
-    def _get_files_to_process(self, dir_path: Path, **kwargs) -> list[Path]:
-        """Get list of files to process from a directory.
-
-        Args:
-            dir_path: Path to the directory.
-            **kwargs: Additional arguments for filtering files.
-
-        Returns:
-            List of Path objects to process.
-        """
+    def _get_files_to_process(self, dir_path: Path, **kwargs: Any) -> list[Path]:
+        """Get list of files to process from a directory."""
 
     @abstractmethod
-    def _process_file(self, file_path: Path, **kwargs) -> int:
-        """Process a single file and register any discovered items.
-
-        Args:
-            file_path: Path to the file.
-            **kwargs: Additional arguments for processing.
-
-        Returns:
-            Number of items registered from this file.
-        """
+    def _process_file(self, file_path: Path, **kwargs: Any) -> int:
+        """Process a single file and register any discovered items."""
 
 
 class ClassCatalog(Catalog):
-    """Catalog specialized for class-based assets such as hooks.
+    """Catalog specialized for class-based assets such as hooks."""
 
-    Derives is_builtin from the item's module origin: any class whose
-    __module__ starts with 'nornflow.builtins' is treated as built-in.
-    This cannot be overridden via class attributes or kwargs.
-
-    Same-name asset resolution is last-write-wins for non-builtins. This is a
-    known v1 limitation; namespacing is planned for a future release.
-    """
-
-    def register(self, name: str, item: Any, **kwargs) -> Any:
-        """Register a class with metadata extraction and builtin protection.
-
-        is_builtin is derived solely from the item's __module__ — any class
-        defined under 'nornflow.builtins' is built-in. No class attributes or
-        caller-supplied kwargs can influence this determination.
-
-        Args:
-            name: The key for the item.
-            item: The class to register.
-            **kwargs: Additional metadata.
-
-        Returns:
-            The registered item.
-
-        Raises:
-            BuiltinOverrideError: If name is already claimed by a built-in.
-        """
-        self._guard_and_warn_overrides(name)
-
+    def register(self, name: str, item: Any, **kwargs: Any) -> Any:
+        """Register a class with metadata extraction."""
         if inspect.isclass(item):
             if not kwargs.get("description"):
                 description = None
@@ -292,47 +385,31 @@ class ClassCatalog(Catalog):
             if "module_name" not in kwargs:
                 kwargs["module_name"] = getattr(item, "__module__", "") or ""
 
-            kwargs["is_builtin"] = kwargs["module_name"].startswith("nornflow.builtins")
+            module_name = kwargs["module_name"]
+            kwargs["is_builtin"] = module_name.startswith("nornflow.builtins")
+            if "namespace" not in kwargs or "tier" not in kwargs:
+                if kwargs["is_builtin"]:
+                    kwargs.setdefault("namespace", BUILTIN_NAMESPACE)
+                    kwargs.setdefault("tier", TIER_BUILTIN)
+                else:
+                    kwargs.setdefault("namespace", LOCAL_NAMESPACE)
+                    kwargs.setdefault("tier", TIER_LOCAL)
 
         return super().register(name, item, **kwargs)
 
 
 class CallableCatalog(DiscoverableCatalog):
-    """Catalog specialized for Python callables like Nornir tasks and filters.
-
-    This catalog extends DiscoverableCatalog with functionality for:
-    - Discovering Python modules in directories
-    - Registering functions from modules based on predicates
-    - Tracking built-in vs custom items
-
-    Note — same-name asset resolution is last-write-wins in this version of NornFlow.
-    Namespacing support is planned for a future release. Users are responsible for
-    ensuring unique asset names across all configured packages and local directories.
-    """
+    """Catalog specialized for Python callables like Nornir tasks and filters."""
 
     def register(
-        self, name: str, item: Any, module_path: str | None = None, module_name: str | None = None, **kwargs
+        self,
+        name: str,
+        item: Any,
+        module_path: str | None = None,
+        module_name: str | None = None,
+        **kwargs: Any,
     ) -> Any:
-        """Register a Python callable with module tracking.
-
-        If name already exists and is non-builtin, logs a warning and proceeds
-        (last-write-wins). If name belongs to a builtin, raises BuiltinOverrideError.
-
-        Args:
-            name: The name of the item.
-            item: The callable to register.
-            module_path: Path to the module file.
-            module_name: Python dotted module name.
-            **kwargs: Additional metadata.
-
-        Returns:
-            The registered item.
-
-        Raises:
-            BuiltinOverrideError: If name is already claimed by a built-in.
-        """
-        self._guard_and_warn_overrides(name)
-
+        """Register a Python callable with module tracking."""
         if callable(item):
             description = self._extract_description_from_callable(item)
             kwargs.setdefault("description", description)
@@ -341,22 +418,27 @@ class CallableCatalog(DiscoverableCatalog):
             module_name = getattr(item, "__module__", None)
 
         is_builtin = bool(module_name and module_name.startswith("nornflow.builtins"))
+        kwargs.setdefault("is_builtin", is_builtin)
+        if "namespace" not in kwargs or "tier" not in kwargs:
+            if is_builtin:
+                kwargs.setdefault("namespace", BUILTIN_NAMESPACE)
+                kwargs.setdefault("tier", TIER_BUILTIN)
+            elif kwargs.get("is_package"):
+                kwargs.setdefault("tier", TIER_PACKAGE)
+            else:
+                kwargs.setdefault("namespace", LOCAL_NAMESPACE)
+                kwargs.setdefault("tier", TIER_LOCAL)
 
         result = super().register(
-            name, item, module_path=module_path, module_name=module_name, is_builtin=is_builtin, **kwargs
+            name, item, module_path=module_path, module_name=module_name, **kwargs
         )
-        logger.debug(f"Registered callable '{name}' from module '{module_name}' in {self.name} catalog")
+        logger.debug(
+            f"Registered callable '{name}' from module '{module_name}' in {self.name} catalog"
+        )
         return result
 
     def _extract_description_from_callable(self, item: Any) -> str:
-        """Extract description from a callable's docstring.
-
-        Args:
-            item: The callable item.
-
-        Returns:
-            The extracted description.
-        """
+        """Extract description from a callable's docstring."""
         docstring = getattr(item, "__doc__", None)
         if not docstring:
             return "No description available"
@@ -373,17 +455,10 @@ class CallableCatalog(DiscoverableCatalog):
         module: Any,
         predicate: Callable[[Any], bool] | None = None,
         transform_item: Callable[[Any], Any] | None = None,
+        namespace: str | None = None,
+        tier: str | None = None,
     ) -> int:
-        """Register items from a module that match the predicate.
-
-        Args:
-            module: The module to extract items from.
-            predicate: Optional function to filter items (e.g., is_task).
-            transform_item: Optional function to transform items before registration.
-
-        Returns:
-            Number of items registered.
-        """
+        """Register items from a module that match the predicate."""
         module_path = getattr(module, "__file__", None)
         module_name = getattr(module, "__name__", None)
 
@@ -391,52 +466,50 @@ class CallableCatalog(DiscoverableCatalog):
             predicate = callable
 
         count = 0
+        register_kwargs: dict[str, Any] = {}
+        if namespace:
+            register_kwargs["namespace"] = namespace
+        if tier:
+            register_kwargs["tier"] = tier
 
         for name, obj in inspect.getmembers(module, predicate):
-            # Transform the item if needed
-            # for example, for nornir filters catalog, we need to extract parameters
             if transform_item:
                 obj = transform_item(obj)
 
-            self.register(name, obj, module_path=module_path, module_name=module_name)
+            self.register(
+                name,
+                obj,
+                module_path=module_path,
+                module_name=module_name,
+                **register_kwargs,
+            )
             count += 1
 
         logger.debug(f"Registered {count} items from module '{module_name}'")
         return count
 
-    def _get_files_to_process(self, dir_path: Path, **kwargs) -> list[Path]:
-        """Get Python files from a directory.
-
-        Args:
-            dir_path: Path to the directory.
-            **kwargs: Additional arguments (unused).
-
-        Returns:
-            List of Python files to process.
-        """
+    def _get_files_to_process(self, dir_path: Path, **kwargs: Any) -> list[Path]:
+        """Get Python files from a directory."""
         return [py_file for py_file in dir_path.rglob("*.py") if not py_file.name.startswith("__")]
 
-    def _process_file(self, file_path: Path, **kwargs) -> int:
-        """Process a Python file by importing it and registering its items.
-
-        Args:
-            file_path: Path to the Python file.
-            **kwargs: May contain 'predicate' and 'transform_item' for filtering/processing.
-
-        Returns:
-            Number of items registered from this file.
-
-        Raises:
-            CoreError: If module import fails.
-        """
+    def _process_file(self, file_path: Path, **kwargs: Any) -> int:
+        """Process a Python file by importing it and registering its items."""
         predicate = kwargs.get("predicate")
         transform_item = kwargs.get("transform_item")
+        namespace = kwargs.get("namespace")
+        tier = kwargs.get("tier")
         module_name = file_path.stem
         module_path = str(file_path)
 
         try:
             module = import_module_from_path(module_name, module_path)
-            count = self.register_from_module(module, predicate, transform_item)
+            count = self.register_from_module(
+                module,
+                predicate,
+                transform_item,
+                namespace=namespace,
+                tier=tier,
+            )
             logger.debug(f"Processed file '{file_path}': {count} items registered")
             return count
         except Exception as e:
@@ -451,33 +524,22 @@ class CallableCatalog(DiscoverableCatalog):
         dir_path: str,
         predicate: Callable[[Any], bool] | None = None,
         transform_item: Callable[[Any], Any] | None = None,
-        **kwargs,
+        namespace: str | None = None,
+        tier: str | None = None,
+        **kwargs: Any,
     ) -> int:
-        """Discover and register items from Python modules in a directory.
-
-        Args:
-            dir_path: Path to the directory to scan.
-            predicate: Function to filter items to register.
-            transform_item: Function to transform items before registration.
-            **kwargs: Additional arguments (passed to base implementation).
-
-        Returns:
-            Number of items discovered and registered.
-
-        Raises:
-            ResourceError: If directory doesn't exist.
-            CoreError: If module import fails.
-        """
+        """Discover and register items from Python modules in a directory."""
         return super().discover_items_in_dir(
-            dir_path, predicate=predicate, transform_item=transform_item, **kwargs
+            dir_path,
+            predicate=predicate,
+            transform_item=transform_item,
+            namespace=namespace,
+            tier=tier,
+            **kwargs,
         )
 
     def get_sources_by_module(self) -> dict[str, list[str]]:
-        """Get items grouped by their source modules.
-
-        Returns:
-            Dictionary mapping module names to lists of item names.
-        """
+        """Get items grouped by their source modules."""
         modules: dict[str, list[str]] = {}
 
         for name in self:
@@ -494,79 +556,41 @@ class CallableCatalog(DiscoverableCatalog):
 
 
 class FileCatalog(DiscoverableCatalog):
-    """Catalog for file resources like workflow definitions.
-
-    This catalog extends DiscoverableCatalog with functionality for:
-    - Discovering files in directories based on custom predicates
-    - Registering file paths rather than importing modules
-    - Tracking whether entries originate from imported packages (is_package=True)
-
-    Derives is_builtin from the file's path: any file located under the
-    nornflow/builtins/ directory is treated as built-in. This cannot be
-    overridden via kwargs.
-
-    Package-originated entries must always be referenced by catalog name — path-based
-    resolution (absolute or relative) is not available for them. This is a v1 limitation;
-    namespacing for package assets is planned for a future release.
-
-    Note — same-name asset resolution is last-write-wins in this version of NornFlow.
-    Namespacing support is planned for a future release. Users are responsible for
-    ensuring unique asset names across all configured packages and local directories.
-    """
+    """Catalog for file resources like workflow definitions."""
 
     nornflow_builtins_dir = Path(__file__).resolve().parent / "builtins"
 
-    def register(self, name: str, item: Any, **kwargs) -> Any:
-        """Register a file path with description extraction from YAML.
-
-        is_builtin is derived solely from the file's path — any file under
-        nornflow/builtins/ is built-in. No caller-supplied kwargs can influence
-        this determination.
-
-        If name already exists and is non-builtin, logs a warning and proceeds
-        (last-write-wins). If name belongs to a builtin, raises BuiltinOverrideError.
-
-        Args:
-            name: The name of the item.
-            item: The file path item.
-            **kwargs: Additional metadata. Pass is_package=True for package-originated entries.
-
-        Returns:
-            The registered item.
-
-        Raises:
-            BuiltinOverrideError: If name is already claimed by a built-in.
-        """
-        self._guard_and_warn_overrides(name)
-
+    def register(self, name: str, item: Any, **kwargs: Any) -> Any:
+        """Register a file path with description extraction from YAML."""
         if isinstance(item, Path):
             description = self._extract_description_from_file(item)
             kwargs.setdefault("description", description)
-            kwargs["is_builtin"] = item.resolve().is_relative_to(self.nornflow_builtins_dir)
+            is_builtin = item.resolve().is_relative_to(self.nornflow_builtins_dir)
+            kwargs["is_builtin"] = is_builtin
+            if is_builtin:
+                kwargs.setdefault("namespace", BUILTIN_NAMESPACE)
+                kwargs.setdefault("tier", TIER_BUILTIN)
+            elif kwargs.get("is_package"):
+                kwargs.setdefault("tier", TIER_PACKAGE)
+            else:
+                kwargs.setdefault("namespace", LOCAL_NAMESPACE)
+                kwargs.setdefault("tier", TIER_LOCAL)
 
         return super().register(name, item, **kwargs)
 
     def get_package_names(self) -> set[str]:
-        """Return the set of entry names that originated from imported packages.
-
-        Returns:
-            Set of catalog names where is_package is True.
-        """
-        return {name for name in self if self.sources.get(name, {}).get("is_package", False)}
+        """Return qualified keys for entries that originated from imported packages."""
+        return {
+            name
+            for name in self
+            if self.sources.get(name, {}).get("is_package", False)
+            or self.sources.get(name, {}).get("tier") == TIER_PACKAGE
+        }
 
     def _extract_description_from_file(self, file_path: Path) -> str:
-        """Extract description from a file.
-
-        Args:
-            file_path: Path to the file.
-
-        Returns:
-            The extracted description.
-        """
+        """Extract description from a file."""
         try:
             data = load_file_to_dict(file_path)
-            # TODO: Currently a bit hard-coded, as the only 2 supported cases
-            # for FileCatalogs are Workflows and Blueprints
             if "workflow" in data:
                 description = data["workflow"].get("description", "No description available")
             else:
@@ -577,35 +601,18 @@ class FileCatalog(DiscoverableCatalog):
         except Exception:
             return "Could not load description from file"
 
-    def _get_files_to_process(self, dir_path: Path, **kwargs) -> list[Path]:
-        """Get all files from a directory based on recursive flag.
-
-        Args:
-            dir_path: Path to the directory.
-            **kwargs: Contains 'recursive' flag to control directory traversal.
-
-        Returns:
-            List of files to process.
-        """
+    def _get_files_to_process(self, dir_path: Path, **kwargs: Any) -> list[Path]:
+        """Get all files from a directory based on recursive flag."""
         recursive = kwargs.get("recursive", True)
         glob_method = dir_path.rglob if recursive else dir_path.glob
         return list(glob_method("*"))
 
-    def _process_file(self, file_path: Path, **kwargs) -> int:
-        """Process a file by applying predicate and registering if matched.
-
-        The is_package flag from kwargs is forwarded to register() so provenance
-        is preserved in sources metadata.
-
-        Args:
-            file_path: Path to the file.
-            **kwargs: Contains 'predicate' for filtering and 'is_package' for provenance.
-
-        Returns:
-            1 if the file was registered, 0 otherwise.
-        """
+    def _process_file(self, file_path: Path, **kwargs: Any) -> int:
+        """Process a file by applying predicate and registering if matched."""
         predicate = kwargs.get("predicate")
         is_package = kwargs.get("is_package", False)
+        namespace = kwargs.get("namespace", LOCAL_NAMESPACE)
+        tier = kwargs.get("tier", TIER_PACKAGE if is_package else TIER_LOCAL)
 
         if file_path.is_file() and predicate and predicate(file_path):
             self.register(
@@ -613,6 +620,8 @@ class FileCatalog(DiscoverableCatalog):
                 item=file_path,
                 file_path=str(file_path),
                 is_package=is_package,
+                namespace=namespace,
+                tier=tier,
             )
             logger.debug(f"Registered file '{file_path}' in {self.name} catalog")
             return 1
@@ -624,39 +633,25 @@ class FileCatalog(DiscoverableCatalog):
         predicate: Callable[[Path], bool],
         recursive: bool = True,
         is_package: bool = False,
-        **kwargs,
+        namespace: str | None = None,
+        tier: str | None = None,
+        **kwargs: Any,
     ) -> int:
-        """Discover and register file paths in a directory.
-
-        Args:
-            dir_path: Path to the directory to scan.
-            predicate: Function to determine if a file should be included.
-            recursive: Whether to search recursively through subdirectories.
-            is_package: Whether this directory belongs to an imported package.
-                        When True, registered entries get is_package=True in their
-                        sources metadata, and path-based blueprint resolution will
-                        be skipped for them — catalog name reference is required.
-            **kwargs: Additional arguments (passed to base implementation).
-
-        Returns:
-            Number of files discovered and registered.
-
-        Raises:
-            ResourceError: If directory doesn't exist.
-        """
+        """Discover and register file paths in a directory."""
+        effective_namespace = namespace or LOCAL_NAMESPACE
+        effective_tier = tier or (TIER_PACKAGE if is_package else TIER_LOCAL)
         return super().discover_items_in_dir(
-            dir_path, predicate=predicate, recursive=recursive, is_package=is_package, **kwargs
+            dir_path,
+            predicate=predicate,
+            recursive=recursive,
+            is_package=is_package,
+            namespace=effective_namespace,
+            tier=effective_tier,
+            **kwargs,
         )
 
     def get_by_extension(self, extension: str) -> dict[str, Path]:
-        """Get all files with a specific extension.
-
-        Args:
-            extension: File extension to filter by (with or without dot).
-
-        Returns:
-            Dictionary of items with matching extension.
-        """
+        """Get all files with a specific extension."""
         if not extension.startswith("."):
             extension = f".{extension}"
 
