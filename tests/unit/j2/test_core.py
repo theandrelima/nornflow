@@ -226,7 +226,14 @@ class TestJinja2Service:
             service = Jinja2Service()
             service.register_custom_filters(["/fake/dir"])
 
-            mock_catalog.discover_items_in_dir.assert_called_with("/fake/dir", predicate=mock_predicate)
+            mock_catalog.discover_items_in_dir.assert_called_with(
+                "/fake/dir",
+                predicate=mock_predicate,
+                namespace="local",
+                tier="local",
+            )
+            mock_catalog.finalize_package_tier.assert_called_once()
+            mock_catalog.compute_collision_metadata.assert_called_once()
 
     def test_get_registered_j2_filters(self):
         """Test get_registered_j2_filters returns environment filters."""
@@ -286,4 +293,4 @@ class TestJinja2Service:
             settings = NornFlowSettings(local_j2_filters=["/dir"], nornir_config_file="/fake/config")
             Jinja2Service.initialize_with_settings(settings)
 
-            mock_register.assert_called_once_with(["/dir"])
+            mock_register.assert_called_once_with([("local", "/dir", "local")])

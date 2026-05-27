@@ -5,7 +5,14 @@ from typing import Any
 from jinja2 import Environment, StrictUndefined, TemplateSyntaxError, UndefinedError
 
 from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
-from nornflow.catalogs import CallableCatalog
+from nornflow.catalogs import (
+    BUILTIN_NAMESPACE,
+    LOCAL_NAMESPACE,
+    TIER_BUILTIN,
+    TIER_LOCAL,
+    TIER_PACKAGE,
+    CallableCatalog,
+)
 from nornflow.j2.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
 from nornflow.j2.exceptions import Jinja2ServiceError, TemplateError, TemplateValidationError
 from nornflow.logger import logger
@@ -52,10 +59,31 @@ class Jinja2Service:
 
         # Add ALL_BUILTIN_J2_FILTERS to instances j2_filters_catalog
         for name, func in ALL_BUILTIN_J2_FILTERS.items():
-            instance.j2_filters_catalog.register(name, func, module_name="nornflow.builtins.jinja2_filters")
+            instance.j2_filters_catalog.register(
+                name,
+                func,
+                module_name="nornflow.builtins.jinja2_filters",
+                namespace=BUILTIN_NAMESPACE,
+                tier=TIER_BUILTIN,
+            )
 
-        # Update environment filters from catalog to ensure consistency
-        instance.environment.filters.update(instance.j2_filters_catalog)
+        cls._sync_environment_filters(instance)
+
+    @staticmethod
+    def _sync_environment_filters(instance: "Jinja2Service") -> None:
+        """Register qualified and unambiguous bare filter names in the Jinja2 environment."""
+        catalog = instance._j2_filters_catalog
+        std_env = Environment(
+            undefined=StrictUndefined,
+            extensions=["jinja2.ext.loopcontrols"],
+            autoescape=False,  # noqa: S701
+        )
+        filters = dict(std_env.filters)
+        filters.update(dict(catalog))
+        for bare_name in catalog.get_unambiguous_bare_names():
+            filters[bare_name] = catalog.resolve(bare_name)
+        instance.environment.filters.clear()
+        instance.environment.filters.update(filters)
 
     @classmethod
     def initialize_with_settings(
@@ -63,37 +91,45 @@ class Jinja2Service:
     ) -> None:
         """Initialize the service with NornFlow settings, registering custom filters.
 
-        Registers j2_filters from packages first (in declared order), then from
-        local_j2_filters directories, so local filters take precedence over package filters.
-
-        Args:
-            settings: NornFlowSettings instance containing configuration.
-            package_loader: Optional PackageLoader for discovering j2_filters from packages.
+        Registers j2_filters from local directories first, then from packages.
         """
-        pkg_j2_filter_dirs = []
+        locations = [(LOCAL_NAMESPACE, str(path), TIER_LOCAL) for path in settings.local_j2_filters]
         if package_loader:
-            pkg_j2_filter_dirs = [str(d) for _, d in package_loader.get_resource_dirs("j2_filters")]
+            locations.extend(
+                (pkg_name, str(path), TIER_PACKAGE)
+                for pkg_name, path in package_loader.get_resource_dirs("j2_filters")
+            )
 
-        cls.register_custom_filters(pkg_j2_filter_dirs + settings.local_j2_filters)
+        cls.register_custom_filters(locations)
 
     @classmethod
-    def register_custom_filters(cls, local_j2_filters_dirs: list[str]) -> None:
+    def register_custom_filters(
+        cls, filter_locations: list[tuple[str, str, str]] | list[str]
+    ) -> None:
         """Register custom Jinja2 filters from specified directories into the catalog.
 
-        This method can be called to register custom filters into the Jinja2
-        environment and catalog. It allows multiple calls, with later calls overriding
-        previous filters.
-
         Args:
-            local_j2_filters_dirs: List of directory paths to scan for custom filters.
+            filter_locations: Directory paths or (namespace, path, tier) tuples to scan.
         """
         instance = cls()
+        normalized_locations: list[tuple[str, str, str]] = []
+        for entry in filter_locations:
+            if isinstance(entry, tuple):
+                normalized_locations.append(entry)
+            else:
+                normalized_locations.append((LOCAL_NAMESPACE, entry, TIER_LOCAL))
 
-        for dir_path in local_j2_filters_dirs:
-            instance._j2_filters_catalog.discover_items_in_dir(dir_path, predicate=is_public_callable)
+        for namespace, dir_path, tier in normalized_locations:
+            instance._j2_filters_catalog.discover_items_in_dir(
+                dir_path,
+                predicate=is_public_callable,
+                namespace=namespace,
+                tier=tier,
+            )
 
-        # Update environment filters from catalog to reflect changes
-        instance.environment.filters.update(instance._j2_filters_catalog)
+        instance._j2_filters_catalog.finalize_package_tier()
+        instance._j2_filters_catalog.compute_collision_metadata()
+        cls._sync_environment_filters(instance)
 
     @classmethod
     def get_registered_j2_filters(cls) -> dict[str, Any]:
