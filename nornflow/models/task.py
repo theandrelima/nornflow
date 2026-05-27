@@ -6,7 +6,8 @@ from pydantic import field_validator
 from pydantic_serdes.custom_collections import HashableDict
 from pydantic_serdes.utils import convert_to_hashable
 
-from nornflow.exceptions import TaskError
+from nornflow.catalogs import CallableCatalog
+from nornflow.exceptions import AssetAmbiguityError, AssetNotFoundError, TaskError
 from nornflow.logger import logger
 from nornflow.models import HookableModel
 from nornflow.models.validators import run_post_creation_task_validation
@@ -83,14 +84,29 @@ class TaskModel(HookableModel):
         self,
         nornir_manager: NornirManager,
         vars_manager: NornFlowVariablesManager,
-        tasks_catalog: dict[str, Callable],
+        tasks_catalog: CallableCatalog | dict[str, Callable],
     ) -> AggregatedResult:
         """Execute the task using the provided managers and tasks catalog."""
         logger.info(f"Starting execution of task '{self.canonical_id}'")
-        task_func = tasks_catalog.get(self.name)
-        if not task_func:
+        try:
+            if isinstance(tasks_catalog, CallableCatalog):
+                task_func = tasks_catalog.resolve(self.name)
+            else:
+                task_func = tasks_catalog.get(self.name)
+                if not task_func:
+                    raise AssetNotFoundError(self.name, "tasks")
+        except AssetAmbiguityError as exc:
+            raise TaskError(
+                f"Task '{self.name}' is ambiguous in tasks catalog. "
+                f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
+                task_name=self.name,
+            ) from exc
+        except AssetNotFoundError as exc:
             logger.error(f"Task function for '{self.name}' not found in tasks catalog")
-            raise TaskError(f"Task function for '{self.name}' not found in tasks catalog")
+            raise TaskError(
+                f"Task function for '{self.name}' not found in tasks catalog",
+                task_name=self.name,
+            ) from exc
 
         task_args = self.get_task_args()
         logger.debug(f"Task '{self.canonical_id}' prepared with args: {list(task_args.keys())}")
