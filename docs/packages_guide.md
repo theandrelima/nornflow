@@ -177,115 +177,69 @@ Once a resource directory is resolved, NornFlow uses **the exact same discovery 
 
 ### Loading Order and Precedence
 
-The following loading order and precedence rules apply uniformly to **all asset types** — tasks, filters, workflows, blueprints, hooks, J2 filters, and processors. Every catalog type (`CallableCatalog`, `ClassCatalog`, `FileCatalog`) enforces the same builtin protection and the same last-write-wins resolution for non-builtins.
-
-Resources are loaded in strict order — **last write wins** since catalogs are dictionaries:
+The following loading order applies uniformly to **all asset types** — tasks, filters, workflows, blueprints, hooks, J2 filters, and processors:
 
 ```
 ┌─────────────────────────────────┐
-│ 1. Built-in resources           │  ← Loaded first, marked is_builtin=True
-│    └── nornflow.builtins.*      │     PROTECTED — cannot be overridden
+│ 1. Built-in resources           │  ← namespace: nornflow, tier: builtin
+│    └── nornflow.builtins.*      │     claims bare names unconditionally
 ├─────────────────────────────────┤
-│ 2. Package resources            │  ← Loaded in order listed in `packages`
-│    ├── packages[0]              │     BuiltinOverrideError if name clashes with builtin
-│    ├── packages[1]              │     Later packages override earlier ones (WARNING)
+│ 2. Local directory resources    │  ← namespace: local, tier: local
+│    └── local_* settings dirs    │     claims bare when builtin does not
+├─────────────────────────────────┤
+│ 3. Package resources            │  ← namespace: <package_name>, tier: package
+│    ├── packages[0]              │     qualified-only until all packages load
+│    ├── packages[1]              │     bare assigned when exactly one package owns it
 │    └── packages[N]              │
-├─────────────────────────────────┤
-│ 3. Local directory resources    │  ← Loaded last
-│    └── local_* settings dirs    │     BuiltinOverrideError if name clashes with builtin
-│                                 │     Overrides earlier local entries (WARNING)
-└─────────────────────────────────┘     Overrides package resources (WARNING)
+└─────────────────────────────────┘
 ```
 
-- Built-in resources are **protected** — any attempt to register a name that clashes with a built-in, whether from a package or a local directory, raises `BuiltinOverrideError` and halts initialization. Built-in status is derived from asset origin (`nornflow.builtins` python package)
-- Local resources **override package resources** for the same name — later write wins, and a `WARNING` is logged.
-- Between packages, **later entries in the `packages` list override earlier ones** for the same name, with a `WARNING` logged.
-- Between local directories (e.g., multiple `local_tasks` entries), later entries override earlier ones, with a `WARNING` logged. 
-- Because later entries always override earlier ones (except for built-ins), assets loaded from local directories will override assets loaded from packages too in case of name clashes.
+- **Registration never fails** because two namespaces share a bare name. Collisions are tracked for `nornflow show`.
+- **Bare resolution priority:** built-in > local > package (single package owner only).
+- **Qualified references** (`namespace.name`) always target the exact namespace — never ambiguous.
+- **Package vs package** with the same bare name: both register successfully; bare usage raises `AssetAmbiguityError` at resolve time; qualified refs always work.
 
 ### Name Conflict Resolution
 
-NornFlow uses **flat names** across all resources. There is no namespace isolation — all tasks share one namespace, all filters share one, and so on. Resources are registered by their simple name: function name for tasks/filters/j2_filters, filename stem for YAML files, `hook_name` for hooks. This is a known v1 limitation; namespacing for package assets is planned for a future release.
+Assets are stored under qualified keys (`namespace.name`). Bare references resolve by tier priority when unambiguous.
 
-**Non-builtin conflict (package vs local) — WARNING, local wins:**
+**Cross-tier reuse (allowed — use qualified to pick a specific namespace):**
 ```
-nornflow_acme_toolkit/tasks/backup.py → registers "backup_config"
-local tasks/backup.py                 → registers "backup_config"
+Built-in:  nornflow.echo
+Local:     local.echo
+Package:   nornflow_acme.echo
 
-Result: local version wins, WARNING logged:
-  "Task 'backup_config' from local directory 'tasks/' overrides
-   'backup_config' from package 'nornflow_acme_toolkit'"
-```
-
-**Builtin conflict — hard error:**
-```
-nornflow_acme_toolkit/tasks/echo.py → tries to register "echo"
-
-Result: BuiltinOverrideError raised, initialization halts:
-  "Cannot override built-in 'echo' with a custom implementation"
-  Fix: rename the resource in your package or local directory
+Bare "echo"           → nornflow.echo (built-in wins)
+Qualified "local.echo" → local task
 ```
 
-There are no fully qualified names. If you need both the package version and a local version of a resource with the same name, rename one of them.
+**Package vs package (latent collision — show warns, qualified refs work):**
+```
+nornflow_arista.get_facts
+nornflow_cisco.get_facts
 
-### The Built-in Protection Mechanism
-
-The base `Catalog` class contains unconditional protection against overriding built-in items:
-
-```python
-if name in self and self.sources.get(name, {}).get("is_builtin", False):
-    raise BuiltinOverrideError(name=name, catalog_name=self.name)
+Bare "get_facts" at runtime → AssetAmbiguityError
+"nornflow_arista.get_facts" → always works
 ```
 
-This applies to **all** sources — packages and local directories alike. There are no exceptions.
-
-**Why this is intentional and permanent:** Built-in tasks (`echo`, `set`, `write_file`) and built-in filters (`hosts`, `groups`) are integral to NornFlow's core runtime. The `set` task powers the runtime variable system. `hosts` and `groups` are referenced implicitly by Nornir's inventory filtering pipeline. Silently replacing any of these would create subtle, hard-to-diagnose failures in fundamental NornFlow operations.
-
-The hard error makes the problem immediately obvious. The fix is always the same: rename the offending resource.
-
+**Local vs package (local wins bare when no built-in):**
 ```
-Built-in protection flow:
-    Step 1: Built-in "echo" registered, is_builtin=True
-    ─────────────────────────────────────────────────────
-    Step 2: Package tries to register "echo"
-            → BuiltinOverrideError raised
-            → NornFlow initialization HALTS
-            → Fix: rename the package resource
-    ─────────────────────────────────────────────────────
-    Step 3: (never reached if step 2 fails)
-            Local tries to register "echo"
-            → Same BuiltinOverrideError, same halt
-            → Fix: rename the local resource
+local.backup
+nornflow_acme.backup
+
+Bare "backup" → local.backup
+"nornflow_acme.backup" → package task
 ```
+
+There is no strict mode and no init-time failure for collisions. Inspect conflicts with `nornflow show --tasks` (and other catalog flags) — the **Collision** column lists co-holders and whether bare resolution is `(bare → winner)` or `(bare ambiguous)`.
 
 ### Hook Registration Note
 
-Hooks follow the **same builtin protection and last-write-wins rules** as all other asset types — they are registered into `HOOKS_CATALOG` (a `ClassCatalog`) and subject to the same `BuiltinOverrideError` for builtin name clashes and the same WARNING-based last-write-wins for non-builtin duplicates.
+Hooks follow the same namespace model as all other asset types. Built-in hooks live under the `nornflow` namespace; local and package hooks use `local` and `<package_name>` respectively.
 
-The only hook-specific behavior is in `Hook.__init_subclass__`: any `Hook` subclass that does not define `hook_name` as a non-empty string raises `HookRegistrationError` at class definition time. This is a validation constraint, not an override policy.
+The only hook-specific behavior is in `Hook.__init_subclass__`: any `Hook` subclass that does not define `hook_name` as a non-empty string raises `HookRegistrationError` at class definition time.
 
-```
-Hook registration flow (at import time via __init_subclass__):
-    ┌──────────────────────────────────────────────────────────────────┐
-    │ 1. Built-in hooks imported                                       │
-    │    HOOKS_CATALOG["set_to"] = SetToHook              (builtin) ✅ │
-    │    HOOKS_CATALOG["if"]     = IfHook                 (builtin) ✅ │
-    │    HOOKS_CATALOG["shush"]  = ShushHook              (builtin) ✅ │
-    ├──────────────────────────────────────────────────────────────────┤
-    │ 2. Package hooks imported                                        │
-    │    hook_name = "audit"  → HOOKS_CATALOG["audit"] = PkgAudit  ✅  │
-    │    hook_name = "set_to" → BuiltinOverrideError raised        ❌  │
-    │                           → Initialization HALTS                 │
-    ├──────────────────────────────────────────────────────────────────┤
-    │ 3. Local hooks imported                                          │
-    │    hook_name = "notify" → HOOKS_CATALOG["notify"] = MyNotify ✅  │
-    │    hook_name = "audit"  → WARNING: overrides existing hook       │
-    │                           HOOKS_CATALOG["audit"] = LocalAudit ✅ │
-    │                           (last-write-wins, no exception)        │
-    └──────────────────────────────────────────────────────────────────┘
-```
-
-**Practical impact:** Package and local hook authors must avoid built-in hook names (`set_to`, `if`, `shush`, `single`). Non-builtin name clashes are resolved by load order (last wins), just like every other asset type. If you want enhanced conditional execution, use `hook_name = "when"` — not `hook_name = "if"`. The `BuiltinOverrideError` message will clearly identify the conflicting name.
+Bare `set_to` resolves to the built-in hook. A package hook named `set_to` is reachable as `my_pkg.set_to`. Reusing a built-in hook name in a package no longer halts initialization.
 
 ## Error Reference
 
@@ -299,7 +253,8 @@ Hook registration flow (at import time via __init_subclass__):
 | Namespace package (no `__file__`) | Warning logged, package skipped | NornFlow initialization |
 | Resource subdir missing, explicitly in `include` | WARNING logged, resource type skipped | NornFlow initialization |
 | Resource subdir missing, `include` omitted | DEBUG logged, resource type skipped | NornFlow initialization |
-| Package or local asset name clashes with builtin | `BuiltinOverrideError` | NornFlow initialization |
+| Bare name ambiguous at same tier | `AssetAmbiguityError` | Catalog resolve at runtime |
+| Qualified or missing reference | `AssetNotFoundError` | Catalog resolve at runtime |
 | Hook subclass missing or invalid `hook_name` | `HookRegistrationError` | At import time (class definition) |
 
 **Fail-fast on missing packages:** If a declared package cannot be imported, NornFlow raises `ResourceError` immediately. The user explicitly asked for that package — not having it installed is a hard failure, not a warning.
@@ -312,7 +267,7 @@ Hook registration flow (at import time via __init_subclass__):
 
 3. **No version management.** NornFlow uses whatever version is currently installed. Version pinning is your responsibility (e.g., via `requirements.txt`, `pyproject.toml`).
 
-4. **No namespace isolation.** All resources share flat namespaces within their catalogs. Non-builtin conflicts are resolved by load order; builtin conflicts are hard errors. This is a known v1 limitation — namespacing is planned for a future release.
+4. **Qualified references for disambiguation.** Package assets share bare names safely when workflows use qualified references. Bare names that collide at the same tier fail only when actually resolved at runtime.
 
 5. **No environment variable override.** The `packages` setting is YAML-only.
 
@@ -320,7 +275,7 @@ Hook registration flow (at import time via __init_subclass__):
 
 7. **No lazy loading.** All declared packages are fully discovered during NornFlow initialization.
 
-8. **Built-in names are reserved.** No package or local resource may use the same name as a built-in task, filter, or hook. Attempts to do so are hard errors.
+8. **Built-in bare names are owned by `nornflow`.** Packages and local assets may reuse built-in names via qualified keys; bare resolution still prefers built-ins.
 
 ---
 

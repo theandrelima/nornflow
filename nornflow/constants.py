@@ -185,3 +185,11 @@ PROTECTED_KEYWORDS = [
     "identity",
     "login",
 ]
+
+# Catalog namespaces and bare-name resolution tiers (see nornflow.catalogs).
+BUILTIN_NAMESPACE = "nornflow"
+LOCAL_NAMESPACE = "local"
+TIER_BUILTIN = "builtin"
+TIER_LOCAL = "local"
+TIER_PACKAGE = "package"
+TIER_ORDER = (TIER_BUILTIN, TIER_LOCAL, TIER_PACKAGE)

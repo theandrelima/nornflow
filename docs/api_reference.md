@@ -273,16 +273,18 @@ NornFlow uses typed catalog registries to manage all discovered assets. Every as
 
 ### Universal Registration Rules
 
-The following rules apply uniformly to **all asset types** across all catalog types:
+Catalog assets are registered under qualified keys and resolved through `Catalog.resolve()`:
 
-- **Built-in protection:** Any attempt to register a name that clashes with a built-in asset raises `BuiltinOverrideError` and halts initialization. Built-in status is derived from asset origin (the `nornflow.builtins` package) and cannot be faked through class attributes or kwargs.
-- **Non-builtin duplicates:** When a non-builtin asset is registered under a name that already exists, the new entry wins (last-write-wins) and a `WARNING` is logged.
-- **Loading order:** Built-ins are loaded first, then package resources (in `packages` list order), then local directory resources. This means local assets override package assets for the same name, and later packages override earlier ones.
-- **Flat namespaces:** All assets of a given type share a single flat namespace. There is no namespace isolation — this is a known v1 limitation; namespacing is planned for a future release.
+- **Namespaces:** `nornflow` (built-ins), `local` (local directories), `<package_name>` (imported packages)
+- **Bare references:** tier priority — built-in > local > package (single owner)
+- **Qualified references:** exact match on `namespace.name`; never ambiguous
+- **Collisions:** tracked at load time, shown in `nornflow show`; never fail initialization
+- **Ambiguity errors:** `AssetAmbiguityError` when a bare reference is same-tier ambiguous at resolve time
+- **Missing references:** `AssetNotFoundError` when no matching asset exists
 
-> **NOTE:** Name conflicts and flat namespaces are a known v1 limitation. Future releases are expected to introduce namespacing so that package and local assets can coexist without last-write-wins resolution.
+Loading order: built-ins → local → packages (in `packages` list order).
 
-See the [Packages Guide — Loading Order and Precedence](./packages_guide.md#loading-order-and-precedence) for the full loading diagram and precedence details.
+See the [Packages Guide — Loading Order and Precedence](./packages_guide.md#loading-order-and-precedence) for diagrams and examples.
 
 ## Model Classes
 

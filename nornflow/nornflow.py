@@ -6,10 +6,21 @@ from pydantic_serdes.utils import load_file_to_dict
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
 from nornflow.builtins.processors import NornFlowFailureStrategyProcessor, NornFlowHookProcessor
 from nornflow.catalogs import CallableCatalog, ClassCatalog, FileCatalog
-from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
+from nornflow.constants import (
+    BUILTIN_NAMESPACE,
+    FailureStrategy,
+    LOCAL_NAMESPACE,
+    NORNFLOW_INVALID_INIT_KWARGS,
+    TIER_BUILTIN,
+    TIER_LOCAL,
+    TIER_PACKAGE,
+)
 from nornflow.exceptions import (
+    AssetAmbiguityError,
+    AssetNotFoundError,
     CatalogError,
     CoreError,
+    FilterError,
     ImmutableAttributeError,
     InitializationError,
     ProcessorError,
@@ -19,6 +30,7 @@ from nornflow.exceptions import (
     WorkflowError,
 )
 from nornflow.hooks.base import HOOKS_CATALOG
+from nornflow.hooks.context import reset_hook_registration, set_hook_registration
 from nornflow.j2 import Jinja2Service
 from nornflow.logger import logger
 from nornflow.models import WorkflowModel
@@ -213,14 +225,22 @@ class NornFlow:
     def _initialize_hooks(self) -> None:
         """Initialize hooks by importing modules from configured directories."""
         logger.debug("Initializing hooks")
-        if self.package_loader:
-            for _, hook_dir in self.package_loader.get_resource_dirs("hooks"):
-                import_modules_recursively(hook_dir)
-
         for dir_path in self.settings.local_hooks:
             dir_path_obj = Path(dir_path)
             if dir_path_obj.exists():
-                import_modules_recursively(dir_path_obj)
+                token = set_hook_registration(LOCAL_NAMESPACE, TIER_LOCAL)
+                try:
+                    import_modules_recursively(dir_path_obj)
+                finally:
+                    reset_hook_registration(token)
+
+        if self.package_loader:
+            for pkg_name, hook_dir in self.package_loader.get_resource_dirs("hooks"):
+                token = set_hook_registration(pkg_name, TIER_PACKAGE)
+                try:
+                    import_modules_recursively(hook_dir)
+                finally:
+                    reset_hook_registration(token)
 
     def _initialize_nornir(self) -> None:
         """Initialize Nornir configurations and manager."""
@@ -754,10 +774,9 @@ class NornFlow:
         builtin_module: Any = None,
         predicate: Any = None,
         transform_item: Any = None,
-        directories: list[str] | None = None,
+        locations: list[tuple[str, str, str]] | None = None,
         recursive: bool = False,
         check_empty: bool = False,
-        is_package: bool = False,
     ) -> Any:
         """
         Generic method to load a catalog with common logic for discovery and error handling.
@@ -769,13 +788,9 @@ class NornFlow:
             builtin_module: Optional module to register builtins from (for CallableCatalog).
             predicate: Predicate function for filtering items during discovery.
             transform_item: Optional transform function for items (for CallableCatalog).
-            directories: List of directories to scan for items.
+            locations: List of (namespace, directory_path, tier) tuples to scan.
             recursive: Whether to scan directories recursively (for FileCatalog).
             check_empty: Whether to raise an error if the catalog ends up empty.
-            is_package: Whether the directories belong to imported packages. When True,
-                registered file entries will carry is_package=True in their sources
-                metadata, allowing downstream components (e.g., BlueprintExpander)
-                to distinguish entries originating from packages versus filesystem paths.
 
         Returns:
             The loaded catalog instance.
@@ -788,23 +803,39 @@ class NornFlow:
             catalog = catalog_type(name)
 
         if builtin_module and predicate:
-            catalog.register_from_module(builtin_module, predicate=predicate, transform_item=transform_item)
+            catalog.register_from_module(
+                builtin_module,
+                predicate=predicate,
+                transform_item=transform_item,
+                namespace=BUILTIN_NAMESPACE,
+                tier=TIER_BUILTIN,
+            )
 
         errors = []
-        for dir_path in directories or []:
+        for namespace, dir_path, tier in locations or []:
             path = Path(dir_path)
             if not path.exists():
                 errors.append(f"{name.capitalize()} directory does not exist: {dir_path}")
                 continue
 
+            is_package = tier == TIER_PACKAGE
             try:
                 if catalog_type == FileCatalog:
                     catalog.discover_items_in_dir(
-                        dir_path, predicate=predicate, recursive=recursive, is_package=is_package
+                        dir_path,
+                        predicate=predicate,
+                        recursive=recursive,
+                        is_package=is_package,
+                        namespace=namespace,
+                        tier=tier,
                     )
                 else:
                     catalog.discover_items_in_dir(
-                        dir_path, predicate=predicate, transform_item=transform_item
+                        dir_path,
+                        predicate=predicate,
+                        transform_item=transform_item,
+                        namespace=namespace,
+                        tier=tier,
                     )
             except Exception as e:
                 logger.exception(f"Error loading {name} from {dir_path}: {e!s}")
@@ -821,6 +852,9 @@ class NornFlow:
                 resource_name="directories",
             )
 
+        catalog.finalize_package_tier()
+        catalog.compute_collision_metadata()
+
         if check_empty and catalog.is_empty:
             raise CatalogError(
                 f"No {name} were found. The {name.capitalize()} Catalog can't be empty.", catalog_name=name
@@ -828,100 +862,71 @@ class NornFlow:
 
         return catalog
 
-    def _get_package_dirs(self, resource_type: str) -> list[str]:
-        """Get filesystem directory paths for a resource type from all configured packages.
+    def _get_package_dirs(self, resource_type: str) -> list[tuple[str, str]]:
+        """Get namespace and directory paths for a resource type from configured packages.
 
         Args:
             resource_type: The resource type to query (e.g. "tasks", "workflows").
 
         Returns:
-            List of directory path strings ready to pass to _load_catalog.
+            List of (package_name, directory_path) tuples.
         """
         if not self.package_loader:
             return []
-        return [str(pkg_dir) for _pkg_name, pkg_dir in self.package_loader.get_resource_dirs(resource_type)]
+        return [
+            (pkg_name, str(pkg_dir))
+            for pkg_name, pkg_dir in self.package_loader.get_resource_dirs(resource_type)
+        ]
+
+    def _build_catalog_locations(
+        self, resource_type: str, local_dirs: list[str]
+    ) -> list[tuple[str, str, str]]:
+        """Build ordered catalog locations: local first, then packages."""
+        locations = [(LOCAL_NAMESPACE, str(path), TIER_LOCAL) for path in local_dirs]
+        locations.extend(
+            (namespace, path, TIER_PACKAGE) for namespace, path in self._get_package_dirs(resource_type)
+        )
+        return locations
 
     def _load_tasks_catalog(self) -> None:
-        """
-        Load all Nornir tasks from built-ins and from directories specified in settings.
-
-        Tasks are loaded in two phases:
-        1. Built-in tasks from nornflow.builtins.tasks module
-        2. User-defined tasks from local_tasks
-        """
+        """Load built-in, local, and package tasks into the tasks catalog."""
         self._tasks_catalog = self._load_catalog(
             CallableCatalog,
             "tasks",
             builtin_module=builtin_tasks,
             predicate=is_nornir_task,
-            directories=self._get_package_dirs("tasks") + self.settings.local_tasks,
+            locations=self._build_catalog_locations("tasks", self.settings.local_tasks),
             check_empty=True,
         )
 
     def _load_filters_catalog(self) -> None:
-        """
-        Load inventory filters from built-ins and from directories specified in settings.
-
-        Filters are loaded in two phases:
-        1. Built-in filters from nflow.builtins.filters module
-        2. User-defined filters from configured local_filters
-        """
+        """Load built-in, local, and package inventory filters into the filters catalog."""
         self._filters_catalog = self._load_catalog(
             CallableCatalog,
             "filters",
             builtin_module=builtin_filters,
             predicate=is_nornir_filter,
             transform_item=process_filter,
-            directories=self._get_package_dirs("filters") + self.settings.local_filters,
+            locations=self._build_catalog_locations("filters", self.settings.local_filters),
         )
 
     def _load_workflows_catalog(self) -> None:
-        """
-        Discover and load workflow files from directories specified in settings.
-
-        Package workflows are registered first (is_package=True), then local workflows.
-        This ensures local workflows take precedence on name clashes (last-write-wins),
-        and package workflows are correctly tagged to prevent path-based resolution.
-        """
-        catalog = self._load_catalog(
-            FileCatalog,
-            "workflows",
-            predicate=is_yaml_file,
-            directories=self._get_package_dirs("workflows"),
-            recursive=True,
-            is_package=True,
-        )
+        """Discover and load workflow files from local and package directories."""
         self._workflows_catalog = self._load_catalog(
             FileCatalog,
             "workflows",
-            catalog=catalog,
             predicate=is_yaml_file,
-            directories=self.settings.local_workflows,
+            locations=self._build_catalog_locations("workflows", self.settings.local_workflows),
             recursive=True,
         )
 
     def _load_blueprints_catalog(self) -> None:
-        """
-        Discover and load blueprint files from directories specified in settings.
-
-        Package blueprints are registered first (is_package=True), then local blueprints.
-        This ensures local blueprints take precedence on name clashes (last-write-wins),
-        and package blueprints are correctly tagged to prevent path-based resolution.
-        """
-        catalog = self._load_catalog(
-            FileCatalog,
-            "blueprints",
-            predicate=is_yaml_file,
-            directories=self._get_package_dirs("blueprints"),
-            recursive=True,
-            is_package=True,
-        )
+        """Discover and load blueprint files from local and package directories."""
         self._blueprints_catalog = self._load_catalog(
             FileCatalog,
             "blueprints",
-            catalog=catalog,
             predicate=is_yaml_file,
-            directories=self.settings.local_blueprints,
+            locations=self._build_catalog_locations("blueprints", self.settings.local_blueprints),
             recursive=True,
         )
 
@@ -930,8 +935,10 @@ class NornFlow:
 
         HOOKS_CATALOG is populated incrementally as hook modules are imported
         by _initialize_hooks(). By the time this method runs, all builtin,
-        package, and local hooks have already been registered into it.
+        local, and package hooks have already been registered into it.
         """
+        HOOKS_CATALOG.finalize_package_tier()
+        HOOKS_CATALOG.compute_collision_metadata()
         self._hooks_catalog = HOOKS_CATALOG
 
     def _validate_init_kwargs(self, kwargs: dict[str, Any]) -> None:
@@ -956,12 +963,23 @@ class NornFlow:
         Check if the tasks in the workflow are present in the tasks catalog.
 
         Raises:
-            TaskError: If any tasks in the workflow are not found in the tasks catalog.
+            TaskError: If any tasks in the workflow are not found or ambiguous.
         """
         logger.debug("Checking tasks in workflow")
         task_names = [task.name for task in self.workflow.tasks]
 
-        missing_tasks = [task_name for task_name in task_names if task_name not in self.tasks_catalog]
+        missing_tasks: list[str] = []
+        for task_name in task_names:
+            try:
+                self.tasks_catalog.resolve(task_name)
+            except AssetAmbiguityError as exc: # noqa: PERF203
+                raise TaskError(
+                    f"Task '{task_name}' is ambiguous in tasks catalog. "
+                    f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
+                    task_name=task_name,
+                ) from exc
+            except AssetNotFoundError:
+                missing_tasks.append(task_name)
 
         if missing_tasks:
             logger.error(f"Missing tasks in catalog: {missing_tasks}")
@@ -1013,10 +1031,18 @@ class NornFlow:
         Raises:
             WorkflowError: If the filter is not found or parameter count doesn't match.
         """
-        if key not in self.filters_catalog:
-            raise WorkflowError(f"Filter '{key}' not found in filters catalog")
+        try:
+            filter_entry = self.filters_catalog.resolve(key)
+        except AssetAmbiguityError as exc:
+            raise FilterError(
+                f"Filter '{key}' is ambiguous in filters catalog. "
+                f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
+                filter_name=key,
+            ) from exc
+        except AssetNotFoundError as exc:
+            raise FilterError(f"Filter '{key}' not found in filters catalog", filter_name=key) from exc
 
-        filter_func, param_names = self.filters_catalog[key]
+        filter_func, param_names = filter_entry
 
         if isinstance(filter_values, dict):
             return self._build_filter_kwargs_for_dict(filter_func, filter_values)
@@ -1066,14 +1092,20 @@ class NornFlow:
         Raises:
             WorkflowError: If the workflow is not found or loading fails.
         """
-        if name not in self.workflows_catalog:
+        try:
+            workflow_path = self.workflows_catalog.resolve(name)
+        except AssetAmbiguityError as exc:
+            raise WorkflowError(
+                f"Workflow '{name}' is ambiguous in workflows catalog. "
+                f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
+            ) from exc
+        except AssetNotFoundError as exc:
             raise WorkflowError(
                 f"Workflow '{name}' not found in workflows catalog. "
                 f"Available workflows: {', '.join(sorted(self.workflows_catalog.keys()))}",
                 component="NornFlow",
-            )
+            ) from exc
 
-        workflow_path = self.workflows_catalog[name]
         try:
             workflow_dict = load_file_to_dict(workflow_path)
             workflow = WorkflowModel.create(
@@ -1168,7 +1200,7 @@ class NornFlow:
                 task.run(
                     nornir_manager=self.nornir_manager,
                     vars_manager=self.var_processor.vars_manager,
-                    tasks_catalog=dict(self.tasks_catalog),
+                    tasks_catalog=self.tasks_catalog,
                 )
 
     def _print_workflow_overview(self) -> None:

@@ -106,13 +106,15 @@ class TestIfHook:
         assert mock_task.task == original_func
 
     @patch('nornflow.builtins.hooks.if_hook.logger')
-    def test_task_instance_started_filter_condition_skip(self, mock_logger, mock_task, mock_host, mock_filters_catalog):
+    def test_task_instance_started_filter_condition_skip(
+        self, mock_logger, mock_task, mock_host, mock_filters_catalog, register_filter
+    ):
         """Test task_instance_started sets skip flag when filter condition fails."""
         hook = IfHook({"platform": "ios"})
-        
+
         mock_filter_func = MagicMock(return_value=False)
-        mock_filters_catalog["platform"] = (mock_filter_func, ["value"])
-        
+        register_filter(mock_filters_catalog, "platform", mock_filter_func, ["value"])
+
         hook._current_context = {"filters_catalog": mock_filters_catalog}
 
         hook.task_instance_started(mock_task, mock_host)
@@ -121,13 +123,15 @@ class TestIfHook:
         mock_filter_func.assert_called_once_with(mock_host, value="ios")
 
     @patch('nornflow.builtins.hooks.if_hook.logger')
-    def test_task_instance_started_filter_condition_continue(self, mock_logger, mock_task, mock_host, mock_filters_catalog):
+    def test_task_instance_started_filter_condition_continue(
+        self, mock_logger, mock_task, mock_host, mock_filters_catalog, register_filter
+    ):
         """Test task_instance_started doesn't set skip flag when filter condition passes."""
         hook = IfHook({"platform": "ios"})
-        
+
         mock_filter_func = MagicMock(return_value=True)
-        mock_filters_catalog["platform"] = (mock_filter_func, ["value"])
-        
+        register_filter(mock_filters_catalog, "platform", mock_filter_func, ["value"])
+
         hook._current_context = {"filters_catalog": mock_filters_catalog}
 
         hook.task_instance_started(mock_task, mock_host)
@@ -144,11 +148,13 @@ class TestIfHook:
         with pytest.raises(HookValidationError, match="Failed to evaluate condition"):
             hook.task_instance_started(mock_task, mock_host)
 
-    def test_task_instance_started_filter_unknown_filter_raises_error(self, mock_task, mock_host, mock_filters_catalog):
+    def test_task_instance_started_filter_unknown_filter_raises_error(
+        self, mock_task, mock_host, mock_filters_catalog, register_filter
+    ):
         """Test task_instance_started raises error when filter is not in catalog."""
         hook = IfHook({"unknown_filter": "value"})
-        
-        mock_filters_catalog["platform"] = (MagicMock(), ["value"])
+
+        register_filter(mock_filters_catalog, "platform", MagicMock(), ["value"])
         hook._current_context = {"filters_catalog": mock_filters_catalog}
 
         with pytest.raises(HookValidationError, match="Filter 'unknown_filter' not found"):
