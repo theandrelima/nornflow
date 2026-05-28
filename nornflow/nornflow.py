@@ -8,12 +8,13 @@ from nornflow.builtins.processors import NornFlowFailureStrategyProcessor, NornF
 from nornflow.catalogs import CallableCatalog, ClassCatalog, FileCatalog
 from nornflow.constants import (
     BUILTIN_NAMESPACE,
+    FailureStrategy,
     LOCAL_NAMESPACE,
+    NORNFLOW_INVALID_INIT_KWARGS,
     TIER_BUILTIN,
     TIER_LOCAL,
     TIER_PACKAGE,
 )
-from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
 from nornflow.exceptions import (
     AssetAmbiguityError,
     AssetNotFoundError,
