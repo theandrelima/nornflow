@@ -88,9 +88,7 @@ class Catalog(ABC, dict[str, Any]):
         if key not in tier_keys:
             tier_keys.append(key)
 
-        if tier == TIER_BUILTIN:
-            self._bare_owners[bare_name] = key
-        elif tier == TIER_LOCAL and bare_name not in self._bare_owners:
+        if tier == TIER_BUILTIN or (tier == TIER_LOCAL and bare_name not in self._bare_owners):
             self._bare_owners[bare_name] = key
 
         logger.debug(

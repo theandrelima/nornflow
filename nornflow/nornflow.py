@@ -7,13 +7,13 @@ from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filte
 from nornflow.builtins.processors import NornFlowFailureStrategyProcessor, NornFlowHookProcessor
 from nornflow.catalogs import (
     BUILTIN_NAMESPACE,
+    CallableCatalog,
+    ClassCatalog,
+    FileCatalog,
     LOCAL_NAMESPACE,
     TIER_BUILTIN,
     TIER_LOCAL,
     TIER_PACKAGE,
-    CallableCatalog,
-    ClassCatalog,
-    FileCatalog,
 )
 from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
 from nornflow.exceptions import (
@@ -879,7 +879,9 @@ class NornFlow:
             for pkg_name, pkg_dir in self.package_loader.get_resource_dirs(resource_type)
         ]
 
-    def _build_catalog_locations(self, resource_type: str, local_dirs: list[str]) -> list[tuple[str, str, str]]:
+    def _build_catalog_locations(
+        self, resource_type: str, local_dirs: list[str]
+    ) -> list[tuple[str, str, str]]:
         """Build ordered catalog locations: local first, then packages."""
         locations = [(LOCAL_NAMESPACE, str(path), TIER_LOCAL) for path in local_dirs]
         locations.extend(
@@ -971,7 +973,7 @@ class NornFlow:
         for task_name in task_names:
             try:
                 self.tasks_catalog.resolve(task_name)
-            except AssetAmbiguityError as exc:
+            except AssetAmbiguityError as exc: # noqa: PERF203
                 raise TaskError(
                     f"Task '{task_name}' is ambiguous in tasks catalog. "
                     f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
