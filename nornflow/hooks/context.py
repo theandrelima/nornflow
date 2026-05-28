@@ -1,12 +1,5 @@
 from contextvars import ContextVar, Token
 
-from nornflow.constants import (
-    BUILTIN_NAMESPACE,
-    LOCAL_NAMESPACE,
-    TIER_BUILTIN,
-    TIER_LOCAL,
-    TIER_PACKAGE,
-)
 
 _hook_registration: ContextVar[tuple[str, str] | None] = ContextVar("hook_registration", default=None)
 

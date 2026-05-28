@@ -31,12 +31,17 @@ from nornir.core.inventory import Host
 from nornir.core.task import Result, Task
 
 from nornflow.builtins.constants import SKIP_FLAG
+from nornflow.exceptions import AssetAmbiguityError, AssetNotFoundError
 from nornflow.hooks import Hook, Jinja2ResolvableMixin
 from nornflow.hooks.exceptions import HookValidationError
 from nornflow.logger import logger
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
+
+
+def _if_hook_validation_error(field: str, message: str) -> HookValidationError:
+    return HookValidationError("IfHook", [(field, message)])
 
 
 def skip_if_condition_flagged(task_func: Callable) -> Callable:
@@ -168,39 +173,11 @@ class IfHook(Hook, Jinja2ResolvableMixin):
                 "IfHook", [("evaluation_error", f"Failed to evaluate condition: {e}")]
             ) from e
 
-    def _evaluate_filter_condition(self, host: Host) -> bool:
-        """Evaluate filter-based condition for the host."""
-        filter_name, filter_values = next(iter(self.value.items()))
-        filters_catalog = self.context.get("filters_catalog", {})
-
-        if hasattr(filters_catalog, "resolve"):
-            try:
-                filter_entry = filters_catalog.resolve(filter_name)
-            except AssetNotFoundError:
-                available = ", ".join(sorted(filters_catalog.keys()))
-                raise HookValidationError(
-                    "IfHook",
-                    [
-                        (
-                            filter_name,
-                            f"Filter '{filter_name}' not found in filters catalog. "
-                            f"Available filters: {available}",
-                        )
-                    ],
-                ) from None
-            except AssetAmbiguityError as exc:
-                raise HookValidationError(
-                    "IfHook",
-                    [
-                        (
-                            filter_name,
-                            f"Filter '{filter_name}' is ambiguous. "
-                            f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
-                        )
-                    ],
-                ) from exc
-            filter_func, param_names = filter_entry
-        elif filter_name not in filters_catalog:
+    def _lookup_filter_entry(self, filters_catalog: Any, filter_name: str) -> tuple[Any, list[str]]:
+        """Resolve a filter catalog reference to (callable, param_names)."""
+        try:
+            return filters_catalog.resolve(filter_name)
+        except AssetNotFoundError:
             available = ", ".join(sorted(filters_catalog.keys()))
             raise HookValidationError(
                 "IfHook",
@@ -211,9 +188,24 @@ class IfHook(Hook, Jinja2ResolvableMixin):
                         f"Available filters: {available}",
                     )
                 ],
-            )
-        else:
-            filter_func, param_names = filters_catalog[filter_name]
+            ) from None
+        except AssetAmbiguityError as exc:
+            raise HookValidationError(
+                "IfHook",
+                [
+                    (
+                        filter_name,
+                        f"Filter '{filter_name}' is ambiguous. "
+                        f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
+                    )
+                ],
+            ) from exc
+
+    def _evaluate_filter_condition(self, host: Host) -> bool:
+        """Evaluate filter-based condition for the host."""
+        filter_name, filter_values = next(iter(self.value.items()))
+        filters_catalog = self.context["filters_catalog"]
+        filter_func, param_names = self._lookup_filter_entry(filters_catalog, filter_name)
         filter_kwargs = self._build_filter_kwargs(param_names, filter_values)
 
         return filter_func(host, **filter_kwargs)
