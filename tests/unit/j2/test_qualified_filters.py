@@ -2,7 +2,7 @@
 
 import pytest
 
-from nornflow.catalogs import (
+from nornflow.constants import (
     BUILTIN_NAMESPACE,
     LOCAL_NAMESPACE,
     TIER_BUILTIN,

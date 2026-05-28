@@ -7,7 +7,7 @@ import pytest
 import nornflow.builtins.filters as builtin_filters
 import nornflow.builtins.tasks as builtin_tasks
 from nornflow.builtins.hooks import IfHook
-from nornflow.catalogs import BUILTIN_NAMESPACE, LOCAL_NAMESPACE
+from nornflow.constants import BUILTIN_NAMESPACE, LOCAL_NAMESPACE
 from nornflow.exceptions import AssetAmbiguityError, AssetNotFoundError
 from nornflow.nornflow import NornFlow
 

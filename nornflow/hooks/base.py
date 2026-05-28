@@ -3,7 +3,8 @@ from typing import Any, ClassVar, TYPE_CHECKING
 from nornir.core.inventory import Host
 from nornir.core.task import AggregatedResult, MultiResult, Task
 
-from nornflow.catalogs import BUILTIN_NAMESPACE, ClassCatalog, LOCAL_NAMESPACE, TIER_BUILTIN, TIER_LOCAL
+from nornflow.catalogs import ClassCatalog
+from nornflow.constants import BUILTIN_NAMESPACE, LOCAL_NAMESPACE, TIER_BUILTIN, TIER_LOCAL
 from nornflow.hooks.context import get_hook_registration
 from nornflow.hooks.exceptions import HookRegistrationError
 from nornflow.logger import logger

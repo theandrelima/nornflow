@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 import nornflow.builtins.hooks  # noqa: F401 — populate builtin hooks in HOOKS_CATALOG
-from nornflow.catalogs import BUILTIN_NAMESPACE
+from nornflow.constants import BUILTIN_NAMESPACE
 from nornflow.hooks import HOOKS_CATALOG
 from nornflow.nornflow import NornFlow
 from nornflow.settings import NornFlowSettings
