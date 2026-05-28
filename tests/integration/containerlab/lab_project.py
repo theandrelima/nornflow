@@ -7,17 +7,15 @@ from pathlib import Path
 
 import yaml
 
-NORNFLOW_ARISTA_PACKAGE = "nornflow_arista"
-NORNFLOW_ARISTA_VERSION = "0.1.0"
-LAB_INTEGRATION_WORKFLOW = "lab_integration.yaml"
-LAB_READONLY_BLUEPRINT = "lab_readonly_snapshot.yaml"
-
-LAB_HOSTS: dict[str, dict[str, object]] = {
-    "spine1": {"hostname": "172.29.163.101", "groups": ["eos", "spines"]},
-    "spine2": {"hostname": "172.29.163.102", "groups": ["eos", "spines"]},
-    "leaf1": {"hostname": "172.29.163.103", "groups": ["eos", "leafs"]},
-    "leaf2": {"hostname": "172.29.163.104", "groups": ["eos", "leafs"]},
-}
+from tests.integration.containerlab.constants import (
+    LAB_EAPI_PORT,
+    LAB_EAPI_TRANSPORT,
+    LAB_HOSTS,
+    LAB_INTEGRATION_WORKFLOW,
+    LAB_READONLY_BLUEPRINT,
+    NORNFLOW_ARISTA_PACKAGE,
+    NORNFLOW_ARISTA_VERSION,
+)
 
 
 @dataclass(frozen=True)
@@ -64,8 +62,8 @@ def _write_hosts_yaml(path: Path, username: str, password: str) -> None:
             "password": password,
             "groups": list(spec["groups"]),
             "data": {
-                "eapi_transport": "http",
-                "eapi_port": 80,
+                "eapi_transport": LAB_EAPI_TRANSPORT,
+                "eapi_port": LAB_EAPI_PORT,
             },
         }
     path.write_text(yaml.safe_dump(hosts, sort_keys=True))
