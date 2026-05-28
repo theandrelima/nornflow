@@ -5,11 +5,9 @@ from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
 from nornflow.builtins.processors import NornFlowFailureStrategyProcessor, NornFlowHookProcessor
-from nornflow.catalogs import (
+from nornflow.catalogs import CallableCatalog, ClassCatalog, FileCatalog
+from nornflow.constants import (
     BUILTIN_NAMESPACE,
-    CallableCatalog,
-    ClassCatalog,
-    FileCatalog,
     LOCAL_NAMESPACE,
     TIER_BUILTIN,
     TIER_LOCAL,

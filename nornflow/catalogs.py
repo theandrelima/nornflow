@@ -7,16 +7,17 @@ from typing import Any
 
 from pydantic_serdes.utils import load_file_to_dict
 
+from nornflow.constants import (
+    BUILTIN_NAMESPACE,
+    LOCAL_NAMESPACE,
+    TIER_BUILTIN,
+    TIER_LOCAL,
+    TIER_ORDER,
+    TIER_PACKAGE,
+)
 from nornflow.exceptions import AssetAmbiguityError, AssetNotFoundError, CoreError, ResourceError
 from nornflow.logger import logger
 from nornflow.utils import import_module_from_path
-
-BUILTIN_NAMESPACE = "nornflow"
-LOCAL_NAMESPACE = "local"
-TIER_BUILTIN = "builtin"
-TIER_LOCAL = "local"
-TIER_PACKAGE = "package"
-TIER_ORDER = (TIER_BUILTIN, TIER_LOCAL, TIER_PACKAGE)
 
 
 def qualified_key(namespace: str, bare_name: str) -> str:
@@ -27,6 +28,29 @@ def qualified_key(namespace: str, bare_name: str) -> str:
 def namespace_of(reference: str) -> str:
     """Return the namespace portion of a qualified reference."""
     return reference.split(".", 1)[0]
+
+
+def _apply_registration_defaults(
+    kwargs: dict[str, Any],
+    *,
+    is_builtin: bool,
+    is_package: bool = False,
+) -> None:
+    """Fill namespace and tier on kwargs when the caller did not pass them."""
+    if "namespace" in kwargs and "tier" in kwargs:
+        return
+
+    if is_builtin:
+        kwargs.setdefault("namespace", BUILTIN_NAMESPACE)
+        kwargs.setdefault("tier", TIER_BUILTIN)
+        return
+
+    if is_package:
+        kwargs.setdefault("tier", TIER_PACKAGE)
+        return
+
+    kwargs.setdefault("namespace", LOCAL_NAMESPACE)
+    kwargs.setdefault("tier", TIER_LOCAL)
 
 
 class Catalog(ABC, dict[str, Any]):
@@ -40,18 +64,25 @@ class Catalog(ABC, dict[str, Any]):
         """
         super().__init__()
         self.name = name
+
+        # Registration metadata keyed by qualified name (e.g. "nornflow.set").
+        # Example: {"nornflow.set": {"bare_name": "set", "namespace": "nornflow", "tier": "builtin", ...}}
         self.sources: dict[str, dict[str, Any]] = {}
+
+        # Bare name -> tier -> list of qualified keys sharing that bare name.
+        # Example: {"set": {"builtin": ["nornflow.set"], "local": ["local.set"]}}
         self._bare_index: dict[str, dict[str, list[str]]] = {}
+
+        # Bare name -> winning qualified key for bare resolution (when unambiguous).
+        # Example: {"set": "nornflow.set", "backup": "local.backup"}
         self._bare_owners: dict[str, str] = {}
+
+        # True after finalize_package_tier(); gates package-tier bare resolution.
         self._package_tier_finalized = False
 
     def __contains__(self, reference: str) -> bool:
         """Return True if a bare or qualified reference exists in the catalog."""
-        if reference in self._bare_index:
-            return True
-        if "." in reference:
-            return dict.__contains__(self, reference)
-        return False
+        return self._reference_exists(reference)
 
     def register_namespaced(
         self,
@@ -68,7 +99,7 @@ class Catalog(ABC, dict[str, Any]):
             item: Asset value to store.
             namespace: Catalog namespace (``nornflow``, ``local``, or package name).
             tier: Registration tier (``builtin``, ``local``, or ``package``).
-            **kwargs: Additional metadata stored in ``sources``.
+            **kwargs: Extra fields merged into ``sources`` (module_name, description, ...).
 
         Returns:
             The registered item.
@@ -122,26 +153,40 @@ class Catalog(ABC, dict[str, Any]):
     def _infer_namespace_and_tier(self, item: Any, kwargs: dict[str, Any]) -> tuple[str, str]:
         """Infer namespace and tier from metadata or item origin."""
         module_name = kwargs.get("module_name") or getattr(item, "__module__", None)
+
         if module_name and str(module_name).startswith("nornflow.builtins"):
             return BUILTIN_NAMESPACE, TIER_BUILTIN
+
         if kwargs.get("is_package"):
-            return kwargs.get("namespace", LOCAL_NAMESPACE), TIER_PACKAGE
+            namespace = kwargs.get("namespace")
+            if not namespace:
+                raise ResourceError(
+                    f"Package {self.name} registration requires namespace when is_package=True",
+                    resource_type=self.name,
+                    resource_name=kwargs.get("bare_name", "unknown"),
+                )
+            return namespace, TIER_PACKAGE
+
         return LOCAL_NAMESPACE, TIER_LOCAL
 
     def finalize_package_tier(self) -> None:
         """Assign bare owners for unambiguous single-package names after all packages load."""
-        self._package_tier_finalized = True
         for bare_name, tier_map in self._bare_index.items():
             if bare_name in self._bare_owners:
                 continue
+
             package_keys = tier_map.get(TIER_PACKAGE, [])
-            if len(package_keys) == 1:
-                self._bare_owners[bare_name] = package_keys[0]
+            if len(package_keys) != 1:
+                continue
+
+            self._bare_owners[bare_name] = package_keys[0]
+
+        self._package_tier_finalized = True
 
     def compute_collision_metadata(self) -> None:
         """Compute collision display metadata for every registered asset."""
         for bare_name, tier_map in self._bare_index.items():
-            all_keys: list[str] = []
+            all_keys = []
             for keys in tier_map.values():
                 all_keys.extend(keys)
 
@@ -210,13 +255,12 @@ class Catalog(ABC, dict[str, Any]):
             AssetNotFoundError: If the reference does not exist.
             AssetAmbiguityError: If a bare reference is same-tier ambiguous.
         """
-        if reference in self._bare_index:
-            bare_name = reference
-        elif "." in reference:
-            if not dict.__contains__(self, reference):
-                raise AssetNotFoundError(reference, self.name)
-            return reference
-        else:
+        qualified_key_match = self._qualified_key_if_present(reference)
+        if qualified_key_match is not None:
+            return qualified_key_match
+
+        bare_name = self._bare_name_if_registered(reference)
+        if bare_name is None:
             raise AssetNotFoundError(reference, self.name)
 
         tier_map = self._bare_index[bare_name]
@@ -232,21 +276,46 @@ class Catalog(ABC, dict[str, Any]):
             keys = tier_map.get(tier, [])
             if not keys:
                 continue
+
+            # Skip package tier until all packages registered and finalize_package_tier() ran.
             if tier == TIER_PACKAGE and not self._package_tier_finalized:
                 continue
+
             if len(keys) > 1:
                 raise AssetAmbiguityError(reference, self.name, keys, tier)
+
             return keys[0]
 
         raise AssetNotFoundError(reference, self.name)
+
+    def _reference_exists(self, reference: str) -> bool:
+        """Return True when reference is a known bare name or qualified catalog key."""
+        if self._bare_name_if_registered(reference) is not None:
+            return True
+        return self._qualified_key_if_present(reference) is not None
+
+    def _bare_name_if_registered(self, reference: str) -> str | None:
+        """Return bare_name when reference appears in the bare index."""
+        if reference in self._bare_index:
+            return reference
+        return None
+
+    def _qualified_key_if_present(self, reference: str) -> str | None:
+        """Return reference when it is an exact qualified key in this catalog."""
+        if "." not in reference:
+            return None
+        if dict.__contains__(self, reference):
+            return reference
+        return None
 
     def get_collision_peers(self, qualified_key: str) -> list[str]:
         """Return other qualified keys sharing the same bare name."""
         bare_name = self.sources.get(qualified_key, {}).get("bare_name")
         if not bare_name:
             return []
+
         tier_map = self._bare_index.get(bare_name, {})
-        peers: list[str] = []
+        peers = []
         for keys in tier_map.values():
             peers.extend(key for key in keys if key != qualified_key)
         return peers
@@ -254,20 +323,18 @@ class Catalog(ABC, dict[str, Any]):
     def get_bare_collisions(self, bare_name: str) -> list[str]:
         """Return all qualified keys registered under a bare name."""
         tier_map = self._bare_index.get(bare_name, {})
-        result: list[str] = []
+        result = []
         for keys in tier_map.values():
             result.extend(keys)
         return result
 
     def get_unambiguous_bare_names(self) -> list[str]:
         """Return bare names that resolve without ambiguity."""
-        names: list[str] = []
+        names = []
         for bare_name in self._bare_index:
             try:
                 self.resolve(bare_name)
-            except AssetAmbiguityError:
-                continue
-            except AssetNotFoundError:
+            except (AssetAmbiguityError, AssetNotFoundError):
                 continue
             names.append(bare_name)
         return names
@@ -384,14 +451,9 @@ class ClassCatalog(Catalog):
                 kwargs["module_name"] = getattr(item, "__module__", "") or ""
 
             module_name = kwargs["module_name"]
-            kwargs["is_builtin"] = module_name.startswith("nornflow.builtins")
-            if "namespace" not in kwargs or "tier" not in kwargs:
-                if kwargs["is_builtin"]:
-                    kwargs.setdefault("namespace", BUILTIN_NAMESPACE)
-                    kwargs.setdefault("tier", TIER_BUILTIN)
-                else:
-                    kwargs.setdefault("namespace", LOCAL_NAMESPACE)
-                    kwargs.setdefault("tier", TIER_LOCAL)
+            is_builtin = module_name.startswith("nornflow.builtins")
+            kwargs["is_builtin"] = is_builtin
+            _apply_registration_defaults(kwargs, is_builtin=is_builtin)
 
         return super().register(name, item, **kwargs)
 
@@ -417,15 +479,11 @@ class CallableCatalog(DiscoverableCatalog):
 
         is_builtin = bool(module_name and module_name.startswith("nornflow.builtins"))
         kwargs.setdefault("is_builtin", is_builtin)
-        if "namespace" not in kwargs or "tier" not in kwargs:
-            if is_builtin:
-                kwargs.setdefault("namespace", BUILTIN_NAMESPACE)
-                kwargs.setdefault("tier", TIER_BUILTIN)
-            elif kwargs.get("is_package"):
-                kwargs.setdefault("tier", TIER_PACKAGE)
-            else:
-                kwargs.setdefault("namespace", LOCAL_NAMESPACE)
-                kwargs.setdefault("tier", TIER_LOCAL)
+        _apply_registration_defaults(
+            kwargs,
+            is_builtin=is_builtin,
+            is_package=bool(kwargs.get("is_package")),
+        )
 
         result = super().register(
             name, item, module_path=module_path, module_name=module_name, **kwargs
@@ -464,7 +522,7 @@ class CallableCatalog(DiscoverableCatalog):
             predicate = callable
 
         count = 0
-        register_kwargs: dict[str, Any] = {}
+        register_kwargs = {}
         if namespace:
             register_kwargs["namespace"] = namespace
         if tier:
@@ -538,7 +596,7 @@ class CallableCatalog(DiscoverableCatalog):
 
     def get_sources_by_module(self) -> dict[str, list[str]]:
         """Get items grouped by their source modules."""
-        modules: dict[str, list[str]] = {}
+        modules = {}
 
         for name in self:
             module_name = self.sources.get(name, {}).get("module_name")
@@ -565,14 +623,11 @@ class FileCatalog(DiscoverableCatalog):
             kwargs.setdefault("description", description)
             is_builtin = item.resolve().is_relative_to(self.nornflow_builtins_dir)
             kwargs["is_builtin"] = is_builtin
-            if is_builtin:
-                kwargs.setdefault("namespace", BUILTIN_NAMESPACE)
-                kwargs.setdefault("tier", TIER_BUILTIN)
-            elif kwargs.get("is_package"):
-                kwargs.setdefault("tier", TIER_PACKAGE)
-            else:
-                kwargs.setdefault("namespace", LOCAL_NAMESPACE)
-                kwargs.setdefault("tier", TIER_LOCAL)
+            _apply_registration_defaults(
+                kwargs,
+                is_builtin=is_builtin,
+                is_package=bool(kwargs.get("is_package")),
+            )
 
         return super().register(name, item, **kwargs)
 

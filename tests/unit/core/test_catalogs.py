@@ -6,15 +6,13 @@ from unittest.mock import patch
 import pytest
 
 from nornflow.builtins.tasks import set as builtin_set_task
-from nornflow.catalogs import (
+from nornflow.catalogs import CallableCatalog, ClassCatalog, FileCatalog
+from nornflow.constants import (
     BUILTIN_NAMESPACE,
     LOCAL_NAMESPACE,
     TIER_BUILTIN,
     TIER_LOCAL,
     TIER_PACKAGE,
-    CallableCatalog,
-    ClassCatalog,
-    FileCatalog,
 )
 from nornflow.exceptions import AssetAmbiguityError, AssetNotFoundError, CoreError
 

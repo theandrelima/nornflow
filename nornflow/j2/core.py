@@ -5,9 +5,9 @@ from typing import Any
 from jinja2 import Environment, StrictUndefined, TemplateSyntaxError, UndefinedError
 
 from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
-from nornflow.catalogs import (
+from nornflow.catalogs import CallableCatalog
+from nornflow.constants import (
     BUILTIN_NAMESPACE,
-    CallableCatalog,
     LOCAL_NAMESPACE,
     TIER_BUILTIN,
     TIER_LOCAL,
