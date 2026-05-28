@@ -114,3 +114,9 @@ known-first-party = ["nornflow"]
 
 [project.scripts]
 nornflow = "nornflow.cli.entrypoint:app"
+
+[tool.pytest.ini_options]
+markers = [
+    "containerlab: live OrbStack/cEOS lab tests (requires NORNFLOW_LAB=1)",
+]
+addopts = "-m 'not containerlab'"
