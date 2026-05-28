@@ -9,7 +9,7 @@ from nornflow.hooks import HOOKS_CATALOG
 from nornflow.nornflow import NornFlow
 from nornflow.settings import NornFlowSettings
 
-from tests.integration.containerlab.lab_project import (
+from tests.integration.containerlab.constants import (
     LAB_INTEGRATION_WORKFLOW,
     LAB_READONLY_BLUEPRINT,
     NORNFLOW_ARISTA_PACKAGE,

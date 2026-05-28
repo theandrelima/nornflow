@@ -1,8 +1,10 @@
-# Static inventory template for the containerlab integration lab.
-# Copy values into your environment — credentials are injected at test runtime
-# from NORNFLOW_LAB_USER and NORNFLOW_LAB_PASSWORD (never commit real secrets).
+# Reference inventory for the live cEOS integration lab (not read by pytest).
+# At runtime, inventory is generated from LAB_HOSTS in constants.py; keep this
+# file aligned when you change hostnames or management IPs.
+# Credentials are injected at test runtime from NORNFLOW_LAB_USER and
+# NORNFLOW_LAB_PASSWORD (never commit real secrets).
 #
-# Device mgmt IPs (OrbStack / Containerlab spine-leaf lab):
+# Default spine-leaf topology (virtual Containerlab cEOS or equivalent):
 #   spine1: 172.29.163.101
 #   spine2: 172.29.163.102
 #   leaf1:  172.29.163.103

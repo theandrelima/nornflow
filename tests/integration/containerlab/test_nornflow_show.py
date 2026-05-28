@@ -5,11 +5,11 @@ import subprocess
 import pytest
 
 from tests.integration.containerlab.conftest import run_nornflow_cli
-from tests.integration.containerlab.lab_project import (
+from tests.integration.containerlab.constants import (
     LAB_INTEGRATION_WORKFLOW,
     LAB_READONLY_BLUEPRINT,
-    LabEnvironment,
 )
+from tests.integration.containerlab.lab_project import LabEnvironment
 
 
 def _combined_output(result: subprocess.CompletedProcess[str]) -> str:

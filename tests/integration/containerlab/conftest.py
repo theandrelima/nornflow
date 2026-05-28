@@ -6,8 +6,8 @@ from collections.abc import Iterator
 
 import pytest
 
+from tests.integration.containerlab.constants import LAB_INTEGRATION_WORKFLOW
 from tests.integration.containerlab.lab_project import (
-    LAB_INTEGRATION_WORKFLOW,
     LabEnvironment,
     destroy_lab_environment,
     provision_lab_environment,
