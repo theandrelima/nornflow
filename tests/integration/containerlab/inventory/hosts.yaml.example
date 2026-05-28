@@ -1,0 +1,45 @@
+# Static inventory template for the containerlab integration lab.
+# Copy values into your environment — credentials are injected at test runtime
+# from NORNFLOW_LAB_USER and NORNFLOW_LAB_PASSWORD (never commit real secrets).
+#
+# Device mgmt IPs (OrbStack / Containerlab spine-leaf lab):
+#   spine1: 172.29.163.101
+#   spine2: 172.29.163.102
+#   leaf1:  172.29.163.103
+#   leaf2:  172.29.163.104
+
+spine1:
+  hostname: 172.29.163.101
+  username: "<NORNFLOW_LAB_USER>"
+  password: "<NORNFLOW_LAB_PASSWORD>"
+  groups: [eos, spines]
+  data:
+    eapi_transport: http
+    eapi_port: 80
+
+spine2:
+  hostname: 172.29.163.102
+  username: "<NORNFLOW_LAB_USER>"
+  password: "<NORNFLOW_LAB_PASSWORD>"
+  groups: [eos, spines]
+  data:
+    eapi_transport: http
+    eapi_port: 80
+
+leaf1:
+  hostname: 172.29.163.103
+  username: "<NORNFLOW_LAB_USER>"
+  password: "<NORNFLOW_LAB_PASSWORD>"
+  groups: [eos, leafs]
+  data:
+    eapi_transport: http
+    eapi_port: 80
+
+leaf2:
+  hostname: 172.29.163.104
+  username: "<NORNFLOW_LAB_USER>"
+  password: "<NORNFLOW_LAB_PASSWORD>"
+  groups: [eos, leafs]
+  data:
+    eapi_transport: http
+    eapi_port: 80
