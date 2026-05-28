@@ -1,6 +1,5 @@
 from contextvars import ContextVar, Token
 
-
 _hook_registration: ContextVar[tuple[str, str] | None] = ContextVar("hook_registration", default=None)
 
 
