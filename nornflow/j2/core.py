@@ -7,11 +7,11 @@ from jinja2 import Environment, StrictUndefined, TemplateSyntaxError, UndefinedE
 from nornflow.builtins.jinja2_filters import ALL_BUILTIN_J2_FILTERS
 from nornflow.catalogs import (
     BUILTIN_NAMESPACE,
+    CallableCatalog,
     LOCAL_NAMESPACE,
     TIER_BUILTIN,
     TIER_LOCAL,
     TIER_PACKAGE,
-    CallableCatalog,
 )
 from nornflow.j2.constants import JINJA2_MARKERS, TRUTHY_STRING_VALUES
 from nornflow.j2.exceptions import Jinja2ServiceError, TemplateError, TemplateValidationError
@@ -72,7 +72,7 @@ class Jinja2Service:
     @staticmethod
     def _sync_environment_filters(instance: "Jinja2Service") -> None:
         """Register qualified and unambiguous bare filter names in the Jinja2 environment."""
-        catalog = instance._j2_filters_catalog
+        catalog = instance.j2_filters_catalog
         std_env = Environment(
             undefined=StrictUndefined,
             extensions=["jinja2.ext.loopcontrols"],
@@ -120,15 +120,15 @@ class Jinja2Service:
                 normalized_locations.append((LOCAL_NAMESPACE, entry, TIER_LOCAL))
 
         for namespace, dir_path, tier in normalized_locations:
-            instance._j2_filters_catalog.discover_items_in_dir(
+            instance.j2_filters_catalog.discover_items_in_dir(
                 dir_path,
                 predicate=is_public_callable,
                 namespace=namespace,
                 tier=tier,
             )
 
-        instance._j2_filters_catalog.finalize_package_tier()
-        instance._j2_filters_catalog.compute_collision_metadata()
+        instance.j2_filters_catalog.finalize_package_tier()
+        instance.j2_filters_catalog.compute_collision_metadata()
         cls._sync_environment_filters(instance)
 
     @classmethod
