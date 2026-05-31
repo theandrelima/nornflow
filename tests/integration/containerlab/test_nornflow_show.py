@@ -41,7 +41,7 @@ def _combined_output(result: subprocess.CompletedProcess[str]) -> str:
         ),
         (
             ["show", "--hooks"],
-            ["nornflow.if", "nornflow.single", "nornflow.set_to"],
+            ["nornflow.if", "nornflow.single", "nornflow.store_as"],
         ),
     ],
 )
