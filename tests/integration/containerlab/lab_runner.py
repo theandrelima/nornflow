@@ -55,7 +55,7 @@ def run_phase_b(settings_file: Path) -> None:
     _assert_key(j2_catalog, f"{NORNFLOW_ARISTA_PACKAGE}.eos_intf_canonical", "j2_filters")
     j2_catalog.resolve("nornflow_arista.eos_vlan_expand")
 
-    for hook_name in ("if", "single", "set_to"):
+    for hook_name in ("if", "single", "store_as"):
         _assert_key(HOOKS_CATALOG, f"{BUILTIN_NAMESPACE}.{hook_name}", "hooks")
 
     print(

@@ -128,17 +128,17 @@ def _write_local_blueprint(project_root: Path) -> Path:
         """\
 description: >
   Read-only snapshot for containerlab: version facts and LLDP neighbors.
-  Uses set_to to store results in runtime variables.
+  Uses store_as to store results in runtime variables.
 
 tasks:
   - name: nornflow_arista.get_facts
-    set_to:
+    store_as:
       facts: "_result"
 
   - name: nornflow_arista.get_lldp_neighbors
     args:
       detail: true
-    set_to:
+    store_as:
       lldp_neighbors: "_result"
 """
     )
@@ -162,7 +162,7 @@ def _write_lab_integration_workflow(project_root: Path) -> Path:
 workflow:
   name: Containerlab integration workflow
   description: >
-    Exercises workflow vars, package j2 filters, builtin hooks (if, single, set_to),
+    Exercises workflow vars, package j2 filters, builtin hooks (if, single, store_as),
     a local blueprint, and read-only nornflow_arista tasks against live cEOS.
   vars:
     lab_active: true
@@ -186,7 +186,7 @@ workflow:
       if: "{{ lab_active }}"
 
     - name: nornflow_arista.get_facts
-      set_to:
+      store_as:
         final_facts: "_result"
       if: "{{ lab_active }}"
 """
