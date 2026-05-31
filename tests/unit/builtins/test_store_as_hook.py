@@ -4,34 +4,34 @@ import pytest
 from nornir.core.inventory import Host
 from nornir.core.task import MultiResult, Result, Task
 
-from nornflow.builtins.hooks import SetToHook
+from nornflow.builtins.hooks import StoreAsHook
 from nornflow.hooks.exceptions import HookValidationError
 
 
-class TestSetToHook:
-    """Test suite for SetToHook."""
+class TestStoreAsHook:
+    """Test suite for StoreAsHook."""
 
     def test_hook_name_registration(self):
         """Test that hook has correct name for registration."""
-        assert SetToHook.hook_name == "set_to"
+        assert StoreAsHook.hook_name == "store_as"
 
     def test_run_once_per_task_flag(self):
         """Test that hook runs per host, not once per task."""
-        assert SetToHook.run_once_per_task is False
+        assert StoreAsHook.run_once_per_task is False
 
     def test_init_with_value(self):
         """Test hook initialization with a variable name."""
-        hook = SetToHook("my_variable")
+        hook = StoreAsHook("my_variable")
         assert hook.value == "my_variable"
 
     def test_init_without_value(self):
         """Test hook initialization without a value."""
-        hook = SetToHook()
+        hook = StoreAsHook()
         assert hook.value is None
 
     def test_execute_hook_validations_valid_task(self):
         """Test validation passes for compatible tasks."""
-        hook = SetToHook("var_name")
+        hook = StoreAsHook("var_name")
         mock_task_model = MagicMock()
         mock_task_model.name = "ping"
 
@@ -40,34 +40,34 @@ class TestSetToHook:
 
     def test_execute_hook_validations_invalid_set_task(self):
         """Test validation fails for 'set' task."""
-        hook = SetToHook("var_name")
+        hook = StoreAsHook("var_name")
         mock_task_model = MagicMock()
         mock_task_model.name = "set"
 
-        with pytest.raises(HookValidationError, match="Hook 'SetToHook' cannot be used with task 'set'"):
+        with pytest.raises(HookValidationError, match="Hook 'StoreAsHook' cannot be used with task 'set'"):
             hook.execute_hook_validations(mock_task_model)
 
     def test_execute_hook_validations_invalid_echo_task(self):
         """Test validation fails for 'echo' task."""
-        hook = SetToHook("var_name")
+        hook = StoreAsHook("var_name")
         mock_task_model = MagicMock()
         mock_task_model.name = "echo"
 
-        with pytest.raises(HookValidationError, match="Hook 'SetToHook' cannot be used with task 'echo'"):
+        with pytest.raises(HookValidationError, match="Hook 'StoreAsHook' cannot be used with task 'echo'"):
             hook.execute_hook_validations(mock_task_model)
 
-    def test_execute_hook_validations_invalid_set_to_task(self):
-        """Test validation fails for 'set_to' task."""
-        hook = SetToHook("var_name")
+    def test_execute_hook_validations_invalid_store_as_task(self):
+        """Test validation fails for 'store_as' task."""
+        hook = StoreAsHook("var_name")
         mock_task_model = MagicMock()
-        mock_task_model.name = "set_to"
+        mock_task_model.name = "store_as"
 
-        with pytest.raises(HookValidationError, match="Hook 'SetToHook' cannot be used with task 'set_to'"):
+        with pytest.raises(HookValidationError, match="Hook 'StoreAsHook' cannot be used with task 'store_as'"):
             hook.execute_hook_validations(mock_task_model)
 
     def test_task_instance_completed_stores_result(self):
         """Test that task_instance_completed stores result in runtime variable."""
-        hook = SetToHook("test_variable")
+        hook = StoreAsHook("test_variable")
         
         mock_task = MagicMock(spec=Task)
         mock_host = MagicMock(spec=Host)
@@ -89,7 +89,7 @@ class TestSetToHook:
 
     def test_task_instance_completed_no_value_does_nothing(self):
         """Test that task_instance_completed does nothing when value is None."""
-        hook = SetToHook(None)
+        hook = StoreAsHook(None)
         
         mock_task = MagicMock(spec=Task)
         mock_host = MagicMock(spec=Host)
@@ -105,7 +105,7 @@ class TestSetToHook:
 
     def test_task_instance_completed_no_result_does_nothing(self):
         """Test that task_instance_completed does nothing when result is None."""
-        hook = SetToHook("test_variable")
+        hook = StoreAsHook("test_variable")
         
         mock_task = MagicMock(spec=Task)
         mock_host = MagicMock(spec=Host)
@@ -120,7 +120,7 @@ class TestSetToHook:
 
     def test_task_instance_completed_no_vars_manager_does_nothing(self):
         """Test that task_instance_completed does nothing when vars_manager is not in context."""
-        hook = SetToHook("test_variable")
+        hook = StoreAsHook("test_variable")
         
         mock_task = MagicMock(spec=Task)
         mock_host = MagicMock(spec=Host)
@@ -135,7 +135,7 @@ class TestSetToHook:
 
     def test_task_instance_completed_no_context_does_nothing(self):
         """Test that task_instance_completed handles missing context gracefully."""
-        hook = SetToHook("test_variable")
+        hook = StoreAsHook("test_variable")
         
         mock_task = MagicMock(spec=Task)
         mock_host = MagicMock(spec=Host)
@@ -150,14 +150,14 @@ class TestSetToHook:
 
     def test_context_property_returns_empty_when_no_context(self):
         """Test context property returns empty dict when no context is set."""
-        hook = SetToHook("test_variable")
+        hook = StoreAsHook("test_variable")
         
         context = hook.context
         assert context == {}
 
     def test_task_instance_completed_with_complex_result(self):
         """Test storing complex result objects."""
-        hook = SetToHook("complex_var")
+        hook = StoreAsHook("complex_var")
         
         mock_task = MagicMock(spec=Task)
         mock_host = MagicMock(spec=Host)
@@ -177,7 +177,7 @@ class TestSetToHook:
 
     def test_other_processor_methods_do_nothing(self):
         """Test that other processor methods have no implementation."""
-        hook = SetToHook("test_var")
+        hook = StoreAsHook("test_var")
         mock_task = MagicMock()
         mock_host = MagicMock()
         mock_result = MagicMock()
@@ -191,7 +191,7 @@ class TestSetToHook:
 
     def test_should_execute_always_returns_true(self):
         """Test that hook executes for every host (run_once_per_task=False)."""
-        hook = SetToHook("test_var")
+        hook = StoreAsHook("test_var")
         mock_task = MagicMock()
 
         # Should always return True since run_once_per_task is False
@@ -201,7 +201,7 @@ class TestSetToHook:
 
     def test_task_instance_completed_handles_string_host_name(self):
         """Test that hook works correctly with string host names."""
-        hook = SetToHook("host_result")
+        hook = StoreAsHook("host_result")
         
         mock_task = MagicMock(spec=Task)
         mock_host = MagicMock(spec=Host)
@@ -224,7 +224,7 @@ class TestSetToHook:
 
     def test_execute_hook_validations_error_message_includes_incompatible_tasks(self):
         """Test that validation error message lists all incompatible tasks."""
-        hook = SetToHook("var_name")
+        hook = StoreAsHook("var_name")
         mock_task_model = MagicMock()
         mock_task_model.name = "set"
 
@@ -234,4 +234,4 @@ class TestSetToHook:
         error_message = str(exc_info.value)
         assert "set" in error_message
         assert "echo" in error_message
-        assert "set_to" in error_message
+        assert "store_as" in error_message

@@ -1,24 +1,24 @@
 from unittest.mock import MagicMock, patch
 
-from nornflow.builtins.hooks import SetToHook
+from nornflow.builtins.hooks import StoreAsHook
 from nornflow.hooks.loader import load_hooks
 
 
 class TestHookLoader:
     """Test suite for hook loading operations."""
 
-    @patch("nornflow.hooks.loader.HOOKS_CATALOG", {"set_to": SetToHook})
+    @patch("nornflow.hooks.loader.HOOKS_CATALOG", {"store_as": StoreAsHook})
     def test_load_hooks_with_hooks(self):
         """Test loading hooks from a hooks dictionary."""
         # Create hooks configuration dict
         hooks_dict = {
-            "set_to": "test_variable"
+            "store_as": "test_variable"
         }
-        
+
         hooks = load_hooks(hooks_dict)
-        
+
         assert len(hooks) == 1
-        assert isinstance(hooks[0], SetToHook)
+        assert isinstance(hooks[0], StoreAsHook)
         assert hooks[0].value == "test_variable"
 
     def test_load_hooks_empty_dict(self):

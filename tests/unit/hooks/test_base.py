@@ -139,20 +139,20 @@ class TestHook:
 
     def test_reusing_builtin_name_registers_qualified_local_copy(self):
         """Test that reusing a builtin hook name creates a separate local qualified entry."""
-        from nornflow.builtins.hooks import SetToHook
+        from nornflow.builtins.hooks import StoreAsHook
 
-        class FakeSetToHook(Hook):
-            hook_name = "set_to"
+        class FakeStoreAsHook(Hook):
+            hook_name = "store_as"
 
-        assert HOOKS_CATALOG.resolve("set_to") is SetToHook
-        assert HOOKS_CATALOG.resolve("local.set_to") is FakeSetToHook
+        assert HOOKS_CATALOG.resolve("store_as") is StoreAsHook
+        assert HOOKS_CATALOG.resolve("local.store_as") is FakeStoreAsHook
 
     def test_builtin_hooks_registered(self):
         """Test that built-in hooks are properly registered."""
-        from nornflow.builtins.hooks import IfHook, SetToHook, ShushHook
+        from nornflow.builtins.hooks import IfHook, ShushHook, StoreAsHook
 
         assert HOOKS_CATALOG.resolve("if") is IfHook
-        assert HOOKS_CATALOG.resolve("set_to") is SetToHook
+        assert HOOKS_CATALOG.resolve("store_as") is StoreAsHook
         assert HOOKS_CATALOG.resolve("shush") is ShushHook
 
     def test_user_hook_is_builtin_defaults_false(self):
@@ -164,5 +164,5 @@ class TestHook:
 
     def test_builtin_hooks_have_is_builtin_in_sources(self):
         """Test that builtin hooks are marked is_builtin=True in HOOKS_CATALOG.sources."""
-        for hook_name in ("if", "set_to", "shush", "single"):
+        for hook_name in ("if", "store_as", "shush", "single"):
             assert HOOKS_CATALOG.sources[f"nornflow.{hook_name}"]["is_builtin"] is True
