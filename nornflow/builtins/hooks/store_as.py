@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from nornflow.models import TaskModel
 
 
-class SetToHook(Hook):
+class StoreAsHook(Hook):
     """
     Store task execution results as runtime variables with optional data extraction.
 
@@ -21,8 +21,8 @@ class SetToHook(Hook):
     Supports both simple variable storage and selective data extraction from results.
 
     Usage modes:
-    1. Simple: set_to: "var_name" - stores complete result object
-    2. Extraction: set_to: {var_name: "extraction_path"} - extracts specific data
+    1. Simple: store_as: "var_name" - stores complete result object
+    2. Extraction: store_as: {var_name: "extraction_path"} - extracts specific data
 
     For extraction paths, directly reference the keys in the result data:
     - "vendor" - gets vendor from the result dict
@@ -37,21 +37,21 @@ class SetToHook(Hook):
 
     Examples:
         # Store complete result
-        set_to: "device_facts"
+        store_as: "device_facts"
 
         # Extract specific data (NO 'result.' prefix needed!)
-        set_to:
+        store_as:
           device_hostname: "hostname"
           device_vendor: "vendor"
           cpu_usage: "environment.cpu.0.%usage"
           task_failed: "_failed"
 
     Attributes:
-        hook_name: "set_to"
+        hook_name: "store_as"
         run_once_per_task: False (executes per host)
     """
 
-    hook_name = "set_to"
+    hook_name = "store_as"
     run_once_per_task = False
 
     def execute_hook_validations(self, task_model: "TaskModel") -> None:
@@ -68,15 +68,15 @@ class SetToHook(Hook):
         Raises:
             HookValidationError: If validation fails, with details on the specific issue.
         """
-        invalid_tasks = {"set", "echo", "set_to"}
+        invalid_tasks = {"set", "echo", "store_as"}
 
         if task_model.name in invalid_tasks:
             raise HookValidationError(
-                "SetToHook",
+                "StoreAsHook",
                 [
                     (
                         "task_compatibility",
-                        f"Hook 'SetToHook' cannot be used with task '{task_model.name}'. "
+                        f"Hook 'StoreAsHook' cannot be used with task '{task_model.name}'. "
                         f"Incompatible tasks: {invalid_tasks}",
                     )
                 ],
@@ -84,11 +84,11 @@ class SetToHook(Hook):
 
         if self.value is None:
             raise HookValidationError(
-                "SetToHook",
+                "StoreAsHook",
                 [
                     (
                         "value_required",
-                        "set_to hook requires a value (variable name or extraction specification)",
+                        "store_as hook requires a value (variable name or extraction specification)",
                     )
                 ],
             )
@@ -96,19 +96,19 @@ class SetToHook(Hook):
         if isinstance(self.value, str):
             if not self.value.strip():
                 raise HookValidationError(
-                    "SetToHook", [("empty_variable_name", "Variable name cannot be empty")]
+                    "StoreAsHook", [("empty_variable_name", "Variable name cannot be empty")]
                 )
         elif isinstance(self.value, dict):
             if not self.value:
                 raise HookValidationError(
-                    "SetToHook",
+                    "StoreAsHook",
                     [("empty_extraction_spec", "Extraction specification cannot be empty")],
                 )
 
             for var_name, extraction_path in self.value.items():
                 if not isinstance(var_name, str) or not var_name.strip():
                     raise HookValidationError(
-                        "SetToHook",
+                        "StoreAsHook",
                         [
                             (
                                 "invalid_variable_name",
@@ -119,7 +119,7 @@ class SetToHook(Hook):
 
                 if not isinstance(extraction_path, str) or not extraction_path.strip():
                     raise HookValidationError(
-                        "SetToHook",
+                        "StoreAsHook",
                         [
                             (
                                 "invalid_extraction_path",
@@ -129,11 +129,11 @@ class SetToHook(Hook):
                     )
         else:
             raise HookValidationError(
-                "SetToHook",
+                "StoreAsHook",
                 [
                     (
                         "invalid_value_type",
-                        f"set_to value must be a string or dict, got {type(self.value).__name__}",
+                        f"store_as value must be a string or dict, got {type(self.value).__name__}",
                     )
                 ],
             )
@@ -163,7 +163,7 @@ class SetToHook(Hook):
 
         vars_manager = self.context.get("vars_manager")
         if not vars_manager:
-            logger.warning(f"No vars_manager available for set_to hook on host '{host.name}'")
+            logger.warning(f"No vars_manager available for store_as hook on host '{host.name}'")
             return
 
         try:
@@ -199,7 +199,7 @@ class SetToHook(Hook):
                             f"on host '{host.name}': {e}"
                         )
         except Exception as e:
-            logger.exception(f"Error in set_to hook for host '{host.name}': {e}")
+            logger.exception(f"Error in store_as hook for host '{host.name}': {e}")
             raise
 
     def _extract_data_from_result(self, result: Result, extraction_path: str) -> Any:
@@ -231,7 +231,7 @@ class SetToHook(Hook):
 
             if current_obj is None:
                 raise HookValidationError(
-                    "SetToHook",
+                    "StoreAsHook",
                     [("null_result", f"Task result is None for extraction path '{extraction_path}'")],
                 )
 
@@ -242,7 +242,7 @@ class SetToHook(Hook):
             raise
         except Exception as e:
             raise HookValidationError(
-                "SetToHook", [("extraction_error", f"Failed to extract '{extraction_path}': {e}")]
+                "StoreAsHook", [("extraction_error", f"Failed to extract '{extraction_path}': {e}")]
             ) from e
 
     def _handle_special_prefixes(self, result: Result, extraction_path: str) -> Any | None:
@@ -271,7 +271,7 @@ class SetToHook(Hook):
         if not isinstance(current_obj, dict):
             available = self._get_available_keys(current_obj)
             raise HookValidationError(
-                "SetToHook",
+                "StoreAsHook",
                 [
                     (
                         "extraction_key_error",
@@ -289,7 +289,7 @@ class SetToHook(Hook):
 
         available = self._get_available_keys(current_obj)
         raise HookValidationError(
-            "SetToHook",
+            "StoreAsHook",
             [
                 (
                     "extraction_key_error",
@@ -310,7 +310,7 @@ class SetToHook(Hook):
             except Exception:
                 length = len(current_obj) if hasattr(current_obj, "__len__") else "unknown"
                 raise HookValidationError(
-                    "SetToHook",
+                    "StoreAsHook",
                     [
                         (
                             "extraction_index_error",
