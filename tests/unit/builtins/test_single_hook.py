@@ -284,7 +284,7 @@ class TestSingleHook:
     def test_execute_hook_validations_hooks_without_if(self, mock_task):
         """Test validation passes when hooks dict has other hooks but not 'if'."""
         hook = SingleHook(True)
-        mock_task.hooks = {"shush": True, "set_to": "my_var"}
+        mock_task.hooks = {"shush": True, "store_as": "my_var"}
 
         hook.execute_hook_validations(mock_task)
 
