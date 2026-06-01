@@ -1,0 +1,11 @@
+workflow:
+  name: store_as simple mode equivalence
+  tasks:
+    - name: nornflow.echo
+      args:
+        msg: "LAB_STORE_AS_SIMPLE_OK"
+      store_as: payload_a
+    - name: nornflow.echo
+      args:
+        msg: "{{ payload_a }}"
+      store_as: echo_back_a
