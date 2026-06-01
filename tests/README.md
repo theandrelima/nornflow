@@ -143,7 +143,9 @@ The Layer 2 suite runs in **phases**. Each phase builds on the previous one:
 
 1. Creates a temp directory with its own virtualenv.
 2. Installs **editable nornflow** from your checkout and **pinned `nornflow-arista`** from PyPI (version from `constants.py`).
-3. Writes a minimal temp project with static Nornir inventory (four hosts, HTTP eAPI) from `LAB_HOSTS` in `constants.py`.
+3. Runs **`nornflow init`** in the temp project, merges **static fixture assets** from `tests/integration/fixtures/common/` and `tests/integration/containerlab/fixtures/overlay/`, patches `nornflow.yaml` (e.g. `packages`), and writes **hosts.yaml** with credentials from env vars.
+
+Review workflows, blueprints, vars, and j2 filters in those fixture directories — they are copied verbatim into the temp project (not built from Python strings).
 
 Implemented in `provision_lab_environment()` (`lab_project.py`), triggered by the `lab_environment` session fixture.
 
@@ -151,6 +153,7 @@ Implemented in `provision_lab_environment()` (`lab_project.py`), triggered by th
 
 - In-process catalog validation via `lab_runner.py phase-b` (`test_catalog_and_package.py`).
 - `nornflow show` CLI checks for tasks, filters, workflows, blueprints, j2-filters, and hooks (`test_nornflow_show.py`).
+- `nornflow run vars_all_levels.yaml` — env, global, domain, workflow, CLI, and runtime vars plus j2 filters (`test_vars_all_levels.py`, echo-only; file under `workflows/lab/` for domain scoping).
 
 **Phase C — live workflow runs** (requires reachable lab):
 
