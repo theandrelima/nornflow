@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 from nornir.core.inventory import Host
@@ -6,6 +6,36 @@ from nornir.core.task import MultiResult, Result, Task
 
 from nornflow.builtins.hooks import StoreAsHook
 from nornflow.hooks.exceptions import HookError, HookValidationError
+
+
+def _make_host(name: str = "router1") -> Host:
+    """Create a minimal Nornir Host for store_as tests."""
+    return Host(name=name, hostname=name, data={})
+
+
+def _multiresult_for(host: Host, host_result: Result, task_name: str = "test_task") -> MultiResult:
+    """Build a per-host MultiResult containing a single host Result."""
+    multi = MultiResult(task_name)
+    multi.append(host_result)
+    return multi
+
+
+def _run_store_as(
+    hook_value,
+    host: Host,
+    host_result: Result,
+    vars_manager: MagicMock | None = None,
+) -> tuple[StoreAsHook, MagicMock]:
+    """Run task_instance_completed with vars_manager wired into hook context."""
+    hook = StoreAsHook(hook_value)
+    manager = vars_manager or MagicMock()
+    hook._current_context = {"vars_manager": manager}
+    hook.task_instance_completed(
+        MagicMock(spec=Task),
+        host,
+        _multiresult_for(host, host_result),
+    )
+    return hook, manager
 
 
 class TestStoreAsHook:
@@ -248,3 +278,223 @@ class TestStoreAsHook:
         assert "set" in error_message
         assert "echo" in error_message
         assert "store_as" in error_message
+
+    def test_failed_task_stores_failed_flag_true(self):
+        """Failed task stores Result.failed via wrapper path."""
+        host = _make_host()
+        host_result = Result(host=host, result=None, failed=True)
+        _, manager = _run_store_as({"flag": "failed"}, host, host_result)
+
+        manager.set_runtime_variable.assert_called_once_with("flag", True, host.name)
+
+    def test_successful_task_stores_failed_flag_false(self):
+        """Successful task stores Result.failed as false."""
+        host = _make_host()
+        host_result = Result(host=host, result={"ok": True}, failed=False)
+        _, manager = _run_store_as({"flag": "failed"}, host, host_result)
+
+        manager.set_runtime_variable.assert_called_once_with("flag", False, host.name)
+
+    def test_multi_host_failure_is_per_host(self):
+        """Each host gets its own stored failed flag from its Result."""
+        host_failed = _make_host("failed-host")
+        host_ok = _make_host("ok-host")
+        manager_failed = MagicMock()
+        manager_ok = MagicMock()
+
+        _run_store_as(
+            {"flag": "failed"},
+            host_failed,
+            Result(host=host_failed, result=None, failed=True),
+            manager_failed,
+        )
+        _run_store_as(
+            {"flag": "failed"},
+            host_ok,
+            Result(host=host_ok, result={"ok": True}, failed=False),
+            manager_ok,
+        )
+
+        manager_failed.set_runtime_variable.assert_called_once_with("flag", True, "failed-host")
+        manager_ok.set_runtime_variable.assert_called_once_with("flag", False, "ok-host")
+
+    def test_failed_task_stores_changed_and_result_paths(self):
+        """Failed task still stores wrapper paths changed and result."""
+        host = _make_host()
+        payload = {"partial": True}
+        host_result = Result(host=host, result=payload, failed=True, changed=True)
+        _, manager = _run_store_as({"was_changed": "changed", "payload": "result"}, host, host_result)
+
+        assert manager.set_runtime_variable.call_args_list == [
+            call("was_changed", True, host.name),
+            call("payload", payload, host.name),
+        ]
+
+    def test_failed_task_stores_simple_mode_on_failure(self):
+        """Simple mode stores Result.result even when the task failed."""
+        host = _make_host()
+        payload = {"partial": True}
+        host_result = Result(host=host, result=payload, failed=True)
+        _, manager = _run_store_as("capture_var", host, host_result)
+
+        manager.set_runtime_variable.assert_called_once_with("capture_var", payload, host.name)
+
+    def test_failed_task_stores_simple_mode_none_result(self):
+        """Simple mode stores None when failed task has Result.result is None."""
+        host = _make_host()
+        host_result = Result(host=host, result=None, failed=True)
+        _, manager = _run_store_as("capture_var", host, host_result)
+
+        manager.set_runtime_variable.assert_called_once_with("capture_var", None, host.name)
+
+    @pytest.mark.parametrize(
+        "task_result",
+        [
+            "show run output...",
+            {"output": "timeout", "vendor": "cisco"},
+            None,
+        ],
+    )
+    def test_simple_mode_equivalent_to_result_path(self, task_result):
+        """Simple mode stores the same value as extraction path result."""
+        host = _make_host()
+        host_result = Result(host=host, result=task_result, failed=task_result is None)
+
+        manager_simple = MagicMock()
+        _run_store_as("running_config", host, host_result, manager_simple)
+
+        manager_path = MagicMock()
+        _run_store_as({"running_config": "result"}, host, host_result, manager_path)
+
+        assert manager_simple.set_runtime_variable.call_args == manager_path.set_runtime_variable.call_args
+
+    def test_failed_task_payload_shorthand_stores_when_present(self):
+        """Payload shorthand works on failed tasks when the key exists."""
+        host = _make_host()
+        host_result = Result(host=host, result={"output": "timeout"}, failed=True)
+        _, manager = _run_store_as({"detail": "output"}, host, host_result)
+
+        manager.set_runtime_variable.assert_called_once_with("detail", "timeout", host.name)
+
+    def test_extraction_missing_key_raises(self):
+        """Missing extraction key raises HookValidationError from task_instance_completed."""
+        host = _make_host()
+        host_result = Result(host=host, result={"vendor": "cisco"}, failed=False)
+        hook = StoreAsHook({"bad": "missing_key"})
+        manager = MagicMock()
+        hook._current_context = {"vars_manager": manager}
+
+        with pytest.raises(HookValidationError):
+            hook.task_instance_completed(
+                MagicMock(spec=Task),
+                host,
+                _multiresult_for(host, host_result),
+            )
+
+        manager.set_runtime_variable.assert_not_called()
+
+    def test_extract_wrapper_attribute_name(self):
+        """Path name reads Result.name when set on the Result object."""
+        host = _make_host()
+        host_result = Result(host=host, result={"ignored": True}, name="deploy")
+        _, manager = _run_store_as({"task_name": "name"}, host, host_result)
+
+        manager.set_runtime_variable.assert_called_once_with("task_name", "deploy", host.name)
+
+    def test_extract_wrapper_attribute_severity_level(self):
+        """Path severity_level reads Result.severity_level."""
+        host = _make_host()
+        host_result = Result(host=host, result={}, severity_level=20)
+        _, manager = _run_store_as({"level": "severity_level"}, host, host_result)
+
+        manager.set_runtime_variable.assert_called_once_with("level", 20, host.name)
+
+    def test_extract_invalid_path_raises(self):
+        """Unknown shorthand path raises HookValidationError."""
+        host = _make_host()
+        host_result = Result(host=host, result={}, failed=False)
+        hook = StoreAsHook({"x": "this_key_definitely_does_not_exist"})
+        manager = MagicMock()
+        hook._current_context = {"vars_manager": manager}
+
+        with pytest.raises(HookValidationError):
+            hook.task_instance_completed(
+                MagicMock(spec=Task),
+                host,
+                _multiresult_for(host, host_result),
+            )
+
+    def test_payload_shorthand_equals_result_dot_key(self):
+        """Shorthand vendor and explicit result.vendor store the same value."""
+        host = _make_host()
+        host_result = Result(host=host, result={"vendor": "arista"})
+        manager_shorthand = MagicMock()
+        _run_store_as({"vendor_a": "vendor"}, host, host_result, manager_shorthand)
+
+        manager_explicit = MagicMock()
+        _run_store_as({"vendor_b": "result.vendor"}, host, host_result, manager_explicit)
+
+        assert manager_shorthand.set_runtime_variable.call_args == call("vendor_a", "arista", host.name)
+        assert manager_explicit.set_runtime_variable.call_args == call("vendor_b", "arista", host.name)
+
+    def test_wrapper_wins_on_collision(self):
+        """Bare vendor follows Result attribute; result.vendor follows payload key."""
+        host = _make_host()
+        host_result = Result(
+            host=host,
+            result={"vendor": "payload"},
+            vendor="wrapper",
+        )
+        manager_bare = MagicMock()
+        _run_store_as({"from_wrapper": "vendor"}, host, host_result, manager_bare)
+
+        manager_explicit = MagicMock()
+        _run_store_as({"from_payload": "result.vendor"}, host, host_result, manager_explicit)
+
+        manager_bare.set_runtime_variable.assert_called_once_with("from_wrapper", "wrapper", host.name)
+        manager_explicit.set_runtime_variable.assert_called_once_with("from_payload", "payload", host.name)
+
+    def test_wrapper_paths_processed_before_payload_raises(self):
+        """Wrapper path stores before shorthand path hard-fails (YAML order irrelevant)."""
+        host = _make_host()
+        host_result = Result(host=host, result=None, failed=True)
+        hook = StoreAsHook({"bad": "missing_payload_key", "flag": "failed"})
+        manager = MagicMock()
+        hook._current_context = {"vars_manager": manager}
+
+        with pytest.raises(HookValidationError):
+            hook.task_instance_completed(
+                MagicMock(spec=Task),
+                host,
+                _multiresult_for(host, host_result),
+            )
+
+        manager.set_runtime_variable.assert_called_once_with("flag", True, host.name)
+
+    def test_failed_mixed_dict_stores_failed_before_payload_raises(self):
+        """Alias: failed flag stored before bad payload path aborts."""
+        self.test_wrapper_paths_processed_before_payload_raises()
+
+    def test_failed_multiresult_does_not_block_successful_host(self):
+        """Aggregate MultiResult.failed does not skip store_as for a successful host."""
+        host_ok = _make_host("ok-host")
+        host_failed = _make_host("failed-host")
+        multi = MultiResult("test_task")
+        multi.append(Result(host=host_ok, result="ok", failed=False))
+        multi.append(Result(host=host_failed, result="err", failed=True))
+        assert multi.failed is True
+
+        hook = StoreAsHook("capture_var")
+        manager = MagicMock()
+        hook._current_context = {"vars_manager": manager}
+        hook.task_instance_completed(MagicMock(spec=Task), host_ok, multi)
+
+        manager.set_runtime_variable.assert_called_once_with("capture_var", "ok", "ok-host")
+
+    def test_skipped_host_does_not_store_on_failure(self):
+        """Skipped hosts do not store variables even when other paths would apply."""
+        host = _make_host()
+        host_result = Result(host=host, result={"output": "x"}, failed=True, skipped=True)
+        _, manager = _run_store_as({"flag": "failed"}, host, host_result)
+
+        manager.set_runtime_variable.assert_not_called()
