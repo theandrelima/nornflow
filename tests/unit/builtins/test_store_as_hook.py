@@ -5,7 +5,7 @@ from nornir.core.inventory import Host
 from nornir.core.task import MultiResult, Result, Task
 
 from nornflow.builtins.hooks import StoreAsHook
-from nornflow.hooks.exceptions import HookValidationError
+from nornflow.hooks.exceptions import HookError, HookValidationError
 
 
 class TestStoreAsHook:
@@ -118,35 +118,48 @@ class TestStoreAsHook:
 
         mock_vars_manager.set_runtime_variable.assert_not_called()
 
-    def test_task_instance_completed_no_vars_manager_does_nothing(self):
-        """Test that task_instance_completed does nothing when vars_manager is not in context."""
+    def test_task_instance_completed_no_vars_manager_raises(self):
+        """Test that missing vars_manager raises HookError."""
         hook = StoreAsHook("test_variable")
-        
+
         mock_task = MagicMock(spec=Task)
         mock_host = MagicMock(spec=Host)
         mock_host.name = "router1"
         mock_result = MagicMock(spec=MultiResult)
-        
-        # No vars_manager in context
+
         hook._current_context = {}
 
-        # Should not raise any exceptions
-        hook.task_instance_completed(mock_task, mock_host, mock_result)
+        with pytest.raises(HookError, match="Variables manager not available"):
+            hook.task_instance_completed(mock_task, mock_host, mock_result)
 
-    def test_task_instance_completed_no_context_does_nothing(self):
-        """Test that task_instance_completed handles missing context gracefully."""
+    def test_task_instance_completed_no_host_result_raises(self):
+        """Test that empty per-host MultiResult raises HookError."""
         hook = StoreAsHook("test_variable")
-        
+
+        mock_task = MagicMock(spec=Task)
+        mock_host = MagicMock(spec=Host)
+        mock_host.name = "router1"
+        mock_result = MultiResult("test_task")
+
+        mock_vars_manager = MagicMock()
+        hook._current_context = {"vars_manager": mock_vars_manager}
+
+        with pytest.raises(HookError, match="No Result for host 'router1'"):
+            hook.task_instance_completed(mock_task, mock_host, mock_result)
+
+    def test_task_instance_completed_no_context_raises(self):
+        """Test that missing hook context raises HookError."""
+        hook = StoreAsHook("test_variable")
+
         mock_task = MagicMock(spec=Task)
         mock_host = MagicMock(spec=Host)
         mock_host.name = "router1"
         mock_result = MagicMock(spec=MultiResult)
-        
-        # No context set
+
         hook._current_context = None
 
-        # Should not raise any exceptions
-        hook.task_instance_completed(mock_task, mock_host, mock_result)
+        with pytest.raises(HookError, match="Variables manager not available"):
+            hook.task_instance_completed(mock_task, mock_host, mock_result)
 
     def test_context_property_returns_empty_when_no_context(self):
         """Test context property returns empty dict when no context is set."""
