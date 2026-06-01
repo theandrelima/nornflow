@@ -130,12 +130,34 @@ pytest tests/integration/containerlab \
 
 ### What the suite does
 
+The Layer 2 suite runs in **phases**. Each phase builds on the previous one:
+
+| Phase | What | Device I/O |
+|-------|------|------------|
+| **A** | Provision isolated venv + temp NornFlow project | No |
+| **B** | Catalog load + `nornflow show` smoke tests | No |
+| **C** | `nornflow run` workflows against live cEOS | Yes |
+| **D**,**E...** | Not implemented (see [Out of scope](#out-of-scope-v1)) | — |
+
+**Phase A — provision** (session fixture, once per pytest run):
+
 1. Creates a temp directory with its own virtualenv.
 2. Installs **editable nornflow** from your checkout and **pinned `nornflow-arista`** from PyPI (version from `constants.py`).
 3. Writes a minimal temp project with static Nornir inventory (four hosts, HTTP eAPI) from `LAB_HOSTS` in `constants.py`.
-4. **Phase B** — in-process catalog validation plus `nornflow show` for tasks, filters, workflows, blueprints, j2-filters, and hooks (no device I/O).
-5. **Phase C** — runs `nornflow run lab_integration.yaml`: plain workflow vars, package j2 filters in task args, builtin hooks (`if`, `single`, `set_to`), local blueprint with read-only package getters, and a final `get_facts` on all hosts.
-6. Deletes the temp tree when finished (pass or fail).
+
+Implemented in `provision_lab_environment()` (`lab_project.py`), triggered by the `lab_environment` session fixture.
+
+**Phase B — catalog smoke tests** (no device I/O):
+
+- In-process catalog validation via `lab_runner.py phase-b` (`test_catalog_and_package.py`).
+- `nornflow show` CLI checks for tasks, filters, workflows, blueprints, j2-filters, and hooks (`test_nornflow_show.py`).
+
+**Phase C — live workflow runs** (requires reachable lab):
+
+- `nornflow run lab_integration.yaml` — workflow vars, package j2 filters, hooks (`if`, `single`, `store_as`), local blueprint, read-only `get_facts` (`test_readonly_getters.py`).
+- `nornflow run lab_store_as_failure.yaml` — failure-path `store_as` + conditional echo (`test_store_as_failure_path.py`).
+
+**Teardown:** deletes the temp tree when the session finishes (pass or fail).
 
 ---
 
@@ -163,17 +185,23 @@ Reference inventory (no secrets): `tests/integration/containerlab/inventory/host
 - `NORNFLOW_LAB` is not `1` — expected for normal `pytest` / CI.
 - You ran without `--override-ini addopts=` and `-m containerlab` — default pytest excludes the `containerlab` marker.
 
+### Phase A fails (provision)
+
+- `uv venv` / `uv pip install` errors — check network access to PyPI and that `uv` is on your PATH.
+- PyPI or version pin issue installing `nornflow-arista` at the version in `constants.py`.
+- Failure writing the temp project under the session temp directory (permissions, disk space).
+
+### Phase B fails (catalog / show)
+
+- Package load or catalog resolution error — run with `-v` and inspect stderr from the lab venv subprocess.
+- Missing expected catalog keys in `test_catalog_and_package.py` or `test_nornflow_show.py` — often a breaking change in builtin or `nornflow-arista` asset names.
+
 ### Timeouts / connection failures (Phase C)
 
 - No route to the lab management subnet from the pytest host — fix routing, VPN, or port forwarding for your environment.
 - Lab not running or nodes still booting — confirm containers/VMs are up and eAPI is enabled.
 - Wrong credentials — verify with the curl preflight above.
 - **IP mismatch** — if your lab uses different addresses, update `LAB_HOSTS` in `constants.py` (see [Customizing the lab](#customizing-the-lab)).
-
-### Phase B fails
-
-- PyPI or network issue installing `nornflow-arista` at the version pinned in `constants.py`.
-- Package load error — run with `-v` and inspect stderr from the lab venv subprocess.
 
 ---
 
