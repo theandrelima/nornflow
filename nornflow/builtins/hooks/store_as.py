@@ -1,6 +1,6 @@
 # ruff: noqa: PERF203
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, NoReturn, TYPE_CHECKING
 
 from nornir.core.inventory import Host
 from nornir.core.task import MultiResult, Result, Task
@@ -11,6 +11,31 @@ from nornflow.logger import logger
 
 if TYPE_CHECKING:
     from nornflow.models import TaskModel
+
+_HOOK_CLASS = "StoreAsHook"
+_INCOMPATIBLE_TASKS = frozenset({"set", "echo", "store_as"})
+
+
+def _raise_validation(
+    error_code: str,
+    message: str,
+    *,
+    cause: BaseException | None = None,
+) -> NoReturn:
+    """Raise HookValidationError for StoreAsHook with a single coded error.
+
+    Args:
+        error_code: Short identifier for the validation failure.
+        message: Human-readable error detail.
+        cause: Optional exception to chain as ``__cause__``.
+
+    Raises:
+        HookValidationError: Always raised; this function never returns.
+    """
+    exc = HookValidationError(_HOOK_CLASS, [(error_code, message)])
+    if cause is not None:
+        raise exc from cause
+    raise exc
 
 
 class StoreAsHook(Hook):
@@ -85,74 +110,46 @@ class StoreAsHook(Hook):
         Raises:
             HookValidationError: If validation fails, with details on the specific issue.
         """
-        invalid_tasks = {"set", "echo", "store_as"}
+        invalid_tasks = _INCOMPATIBLE_TASKS
 
         if task_model.name in invalid_tasks:
-            raise HookValidationError(
-                "StoreAsHook",
-                [
-                    (
-                        "task_compatibility",
-                        f"Hook 'StoreAsHook' cannot be used with task '{task_model.name}'. "
-                        f"Incompatible tasks: {invalid_tasks}",
-                    )
-                ],
+            _raise_validation(
+                "task_compatibility",
+                f"Hook '{_HOOK_CLASS}' cannot be used with task '{task_model.name}'. "
+                f"Incompatible tasks: {invalid_tasks}",
             )
 
         if self.value is None:
-            raise HookValidationError(
-                "StoreAsHook",
-                [
-                    (
-                        "value_required",
-                        "store_as hook requires a value (variable name or extraction specification)",
-                    )
-                ],
+            _raise_validation(
+                "value_required",
+                "store_as hook requires a value (variable name or extraction specification)",
             )
 
         if isinstance(self.value, str):
             if not self.value.strip():
-                raise HookValidationError(
-                    "StoreAsHook", [("empty_variable_name", "Variable name cannot be empty")]
-                )
+                _raise_validation("empty_variable_name", "Variable name cannot be empty")
         elif isinstance(self.value, dict):
             if not self.value:
-                raise HookValidationError(
-                    "StoreAsHook",
-                    [("empty_extraction_spec", "Extraction specification cannot be empty")],
+                _raise_validation(
+                    "empty_extraction_spec", "Extraction specification cannot be empty"
                 )
 
             for var_name, extraction_path in self.value.items():
                 if not isinstance(var_name, str) or not var_name.strip():
-                    raise HookValidationError(
-                        "StoreAsHook",
-                        [
-                            (
-                                "invalid_variable_name",
-                                f"Variable name must be a non-empty string, got: {var_name}",
-                            )
-                        ],
+                    _raise_validation(
+                        "invalid_variable_name",
+                        f"Variable name must be a non-empty string, got: {var_name}",
                     )
 
                 if not isinstance(extraction_path, str) or not extraction_path.strip():
-                    raise HookValidationError(
-                        "StoreAsHook",
-                        [
-                            (
-                                "invalid_extraction_path",
-                                f"Extraction path for '{var_name}' must be a non-empty string",
-                            )
-                        ],
+                    _raise_validation(
+                        "invalid_extraction_path",
+                        f"Extraction path for '{var_name}' must be a non-empty string",
                     )
         else:
-            raise HookValidationError(
-                "StoreAsHook",
-                [
-                    (
-                        "invalid_value_type",
-                        f"store_as value must be a string or dict, got {type(self.value).__name__}",
-                    )
-                ],
+            _raise_validation(
+                "invalid_value_type",
+                f"store_as value must be a string or dict, got {type(self.value).__name__}",
             )
 
     def task_instance_completed(self, task: Task, host: Host, result: MultiResult) -> None:
@@ -261,21 +258,15 @@ class StoreAsHook(Hook):
         try:
             segments = self._parse_extraction_path(extraction_path)
             if not segments:
-                raise HookValidationError(
-                    "StoreAsHook",
-                    [("invalid_extraction_path", f"Extraction path '{extraction_path}' is empty")],
+                _raise_validation(
+                    "invalid_extraction_path", f"Extraction path '{extraction_path}' is empty"
                 )
 
             first = segments[0]
             if first["type"] != "key":
-                raise HookValidationError(
-                    "StoreAsHook",
-                    [
-                        (
-                            "invalid_extraction_path",
-                            f"Extraction path '{extraction_path}' must start with a key segment",
-                        )
-                    ],
+                _raise_validation(
+                    "invalid_extraction_path",
+                    f"Extraction path '{extraction_path}' must start with a key segment",
                 )
 
             name = first["value"]
@@ -287,9 +278,8 @@ class StoreAsHook(Hook):
 
             # Shorthand path into Result.result, but the task returned nothing to traverse.
             if result.result is None:
-                raise HookValidationError(
-                    "StoreAsHook",
-                    [("null_result", f"Task result is None for extraction path '{extraction_path}'")],
+                _raise_validation(
+                    "null_result", f"Task result is None for extraction path '{extraction_path}'"
                 )
 
             # Shorthand: first segment is not on Result — traverse Result.result with the full path.
@@ -298,9 +288,11 @@ class StoreAsHook(Hook):
         except HookValidationError:
             raise
         except Exception as e:
-            raise HookValidationError(
-                "StoreAsHook", [("extraction_error", f"Failed to extract '{extraction_path}': {e}")]
-            ) from e
+            _raise_validation(
+                "extraction_error",
+                f"Failed to extract '{extraction_path}': {e}",
+                cause=e,
+            )
 
     def _extract_from_segments(
         self, current_obj: Any, segments: list[dict[str, str]], extraction_path: str
@@ -325,15 +317,10 @@ class StoreAsHook(Hook):
             return getattr(current_obj, key)
 
         available = self._get_available_keys(current_obj)
-        raise HookValidationError(
-            "StoreAsHook",
-            [
-                (
-                    "extraction_key_error",
-                    f"Key '{key}' not found in extraction path '{extraction_path}'. "
-                    f"Object type: {type(current_obj).__name__}. Available: {available}",
-                )
-            ],
+        _raise_validation(
+            "extraction_key_error",
+            f"Key '{key}' not found in extraction path '{extraction_path}'. "
+            f"Object type: {type(current_obj).__name__}. Available: {available}",
         )
 
     def _handle_index_segment(self, current_obj: Any, index_str: str, extraction_path: str) -> Any:
@@ -346,16 +333,12 @@ class StoreAsHook(Hook):
                 return current_obj[index_str]
             except Exception:
                 length = len(current_obj) if hasattr(current_obj, "__len__") else "unknown"
-                raise HookValidationError(
-                    "StoreAsHook",
-                    [
-                        (
-                            "extraction_index_error",
-                            f"Index [{index_str}] not accessible in extraction path "
-                            f"'{extraction_path}'. Length: {length}",
-                        )
-                    ],
-                ) from e
+                _raise_validation(
+                    "extraction_index_error",
+                    f"Index [{index_str}] not accessible in extraction path "
+                    f"'{extraction_path}'. Length: {length}",
+                    cause=e,
+                )
 
     def _parse_extraction_path(self, path: str) -> list[dict[str, str]]:
         """
