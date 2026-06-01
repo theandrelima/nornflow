@@ -1,0 +1,16 @@
+workflow:
+  name: Containerlab store_as failure path
+  failure_strategy: run-all
+  tasks:
+    - name: nornflow.write_file
+      args:
+        filename: ""
+        content: "x"
+      store_as:
+        step_failed: failed
+
+    - name: nornflow.echo
+      if: "{{ step_failed }}"
+      args:
+        msg: "NORNFLOW_LAB_STORE_AS_FAILURE_OK"
+      store_as: rollback_msg

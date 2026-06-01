@@ -1,0 +1,28 @@
+workflow:
+  name: Containerlab integration workflow
+  description: >
+    Exercises workflow vars, package j2 filters, builtin hooks (if, single, store_as),
+    a local blueprint, and read-only nornflow_arista tasks against live cEOS.
+  vars:
+    lab_active: true
+  tasks:
+    - name: nornflow.echo
+      args:
+        msg: >-
+          {{ host.name }}: vlans={{ '10,20-22' | nornflow_arista.eos_vlan_expand | join(',') }}
+          intf={{ 'gi0/1' | nornflow_arista.eos_intf_canonical }}
+      if: "{{ lab_active }}"
+
+    - blueprint: lab_readonly_snapshot.yaml
+      single: true
+
+    - name: nornflow.set
+      args:
+        lab_checked: "{{ host.name }}-ok"
+        lab_vlans: "{{ '10,20-22' | nornflow_arista.eos_vlan_expand | join(',') }}"
+      if: "{{ lab_active }}"
+
+    - name: nornflow_arista.get_facts
+      store_as:
+        final_facts: result
+      if: "{{ lab_active }}"
