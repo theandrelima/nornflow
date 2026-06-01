@@ -190,7 +190,7 @@ workflow:
     - name: netmiko_send_command
       args:
         command_string: "show running-config"
-      set_to: "running_config"
+      store_as: running_config
     
     - name: write_file
       args:
@@ -260,12 +260,12 @@ tasks:
   - name: netmiko_send_command
     args:
       command_string: "show version"
-    set_to: version_output
+    store_as: version_output
   
   - name: netmiko_send_command
     args:
       command_string: "show interfaces status"
-    set_to: interfaces_output
+    store_as: interfaces_output
 ```
 
 ### Use in Workflow

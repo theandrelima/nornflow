@@ -470,7 +470,7 @@ Built-ins register first and **claim bare names unconditionally**. A local or pa
 |---|---|---|
 | Tasks | `echo`, `set`, `write_file`, `pause` | Bare resolves to `nornflow.*` when present |
 | Filters | `hosts`, `groups` | Bare resolves to `nornflow.*` when present |
-| Hooks | `if`, `set_to`, `shush`, `single` | Bare resolves to `nornflow.*` when present |
+| Hooks | `if`, `store_as`, `shush`, `single` | Bare resolves to `nornflow.*` when present |
 | Jinja2 Filters | NornFlow's built-in j2 filters | Bare resolves to `nornflow.*` when present |
 | Workflows | — no builtins — | n/a |
 | Blueprints | — no builtins — | n/a |
@@ -593,9 +593,9 @@ tasks:
       interface: "GigabitEthernet0/1"
       description: "Uplink to {{ host.data.upstream_device }}"
       
-  # Task with result capture
+  # Task with result storage (simple mode — stores Result.result)
   - name: show_version
-    set_to: version_info  # Stores result in 'version_info' variable
+    store_as: version_info
 ```
 
 ### Task Arguments & Results
@@ -605,16 +605,17 @@ tasks:
 - Supports Jinja2 templating for dynamic values
 - Can reference variables and host data
 
-**Capturing Results:**
-- Use `set_to` to store task results in variables
-- Results are available to subsequent tasks
+**Storing results:**
+- Use `store_as` to store the task return value (`Result.result`) or extracted fields in runtime variables
+- Values are available to subsequent tasks on the same host
 - Stored per-device in isolated contexts
+- `store_as` runs on both successful and failed tasks (unless the host was skipped)
 
 **Example:**
 ```yaml
 tasks:
   - name: show_version
-    set_to: version_info  # Stores the result in the variable 'version_info'. The var will be either created or updated on a per-device context basis.
+    store_as: version_info
 
   - name: echo
     args:
@@ -769,21 +770,22 @@ tasks:
     if: "{{ host.data.backup_enabled and environment == 'prod' }}"
 ```
 
-**`set_to` Hook - Result Storage**
+**`store_as` Hook - Result Storage**
 
-Captures task execution results and stores them as runtime variables for use in subsequent tasks.
+Stores the task return value or extracted fields as runtime variables for use in later tasks. Simple mode (`store_as: var_name`) stores `Result.result` — not the full Nornir `Result` object. See the [Hooks Guide](./hooks_guide.md#the-store_as-hook) for path syntax and failure-path examples.
 
 ```yaml
 tasks:
-  # Store complete result
+  # Simple mode — same as store_as: { device_facts: result }
   - name: get_facts
-    set_to: device_facts
+    store_as: device_facts
   
-  # Extract specific data from result
+  # Extraction mode
   - name: get_environment
-    set_to:
+    store_as:
       cpu_usage: "environment.cpu.0.%usage"
       serial: "serial_number"
+      step_failed: failed
   
   # Use stored data in later tasks
   - name: echo
@@ -800,7 +802,7 @@ tasks:
   # Static suppression
   - name: noisy_task
     shush: true
-    set_to: task_result  # Result still available
+    store_as: task_result  # Return value still available to later tasks
   
   # Dynamic suppression based on variables
   - name: conditional_quiet

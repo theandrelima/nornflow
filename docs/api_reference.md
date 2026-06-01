@@ -395,14 +395,14 @@ from nornflow.models import TaskModel
 task = TaskModel(
     name="netmiko_send_command",
     args={"command_string": "show version"},
-    set_to="version_output"
+    store_as="version_output"
 )
 ```
 
 **Key Fields:**
 - `name`: Task name from catalog (required)
 - `args`: Task arguments (optional)
-- `set_to`: Variable storage configuration (optional hook)
+- `store_as`: Variable storage configuration (optional hook)
 - `if`: Conditional execution hook (optional hook)
 - `shush`: Output suppression hook (optional hook)
 - `single`: Single-host execution hook (optional hook)
@@ -450,7 +450,7 @@ class MyCustomHook(Hook):
 
 | Attribute | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `hook_name` | `str` | **Yes** | The YAML key that activates this hook (e.g., `"if"`, `"set_to"`). Without this, the class is never registered. |
+| `hook_name` | `str` | **Yes** | The YAML key that activates this hook (e.g., `"if"`, `"store_as"`). Without this, the class is never registered. |
 | `run_once_per_task` | `bool` | No (default `False`) | If `True`, hook logic runs only for the first host per task; subsequent hosts skip execution. Use for task-wide concerns (e.g., suppressing output, logging). If `False`, runs independently per host. |
 | `requires_deferred_templates` | `bool` | No (default `False`) | If `True`, signals `NornFlowVariableProcessor` to defer resolution of task argument templates until after the hook's pre-execution logic completes. See [Hook-Driven Template Resolution](./hooks_guide.md#hook-driven-template-resolution). |
 
@@ -541,6 +541,17 @@ NornFlow recursively scans all configured directories for `.py` files and import
 
 **Hook-specific registration constraint:**
 - Hook subclasses that do not define `hook_name` as a non-empty string raise `HookRegistrationError` at class definition time
+
+**Built-in hook catalog (YAML key → class):**
+
+| YAML key | Class | Summary |
+|----------|-------|---------|
+| `if` | `IfHook` | Conditional task execution per host |
+| `store_as` | `StoreAsHook` | Store task return value or extracted fields as runtime variables |
+| `shush` | `ShushHook` | Suppress task output display |
+| `single` | `SingleHook` | Run task on one host only |
+
+See the [Hooks Guide](./hooks_guide.md#nornflows-built-in-hooks) for configuration examples.
 
 Built-in protection and non-builtin override behavior follow the [universal registration rules](#universal-registration-rules) that apply to all asset types.
 
