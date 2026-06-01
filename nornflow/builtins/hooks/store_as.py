@@ -1,4 +1,3 @@
-# ruff: noqa: PERF203
 
 from typing import Any, NoReturn, TYPE_CHECKING
 
@@ -152,7 +151,9 @@ class StoreAsHook(Hook):
                 f"store_as value must be a string or dict, got {type(self.value).__name__}",
             )
 
-    def task_instance_completed(self, task: Task, host: Host, result: MultiResult) -> None:
+    def task_instance_completed(  # noqa: PLR0912
+        self, task: Task, host: Host, result: MultiResult
+    ) -> None:
         """
         Process task results and store them as runtime variables for the host.
 
