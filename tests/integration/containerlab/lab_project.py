@@ -133,13 +133,13 @@ description: >
 tasks:
   - name: nornflow_arista.get_facts
     store_as:
-      facts: "_result"
+      facts: result
 
   - name: nornflow_arista.get_lldp_neighbors
     args:
       detail: true
     store_as:
-      lldp_neighbors: "_result"
+      lldp_neighbors: result
 """
     )
     return blueprint_file
@@ -187,7 +187,7 @@ workflow:
 
     - name: nornflow_arista.get_facts
       store_as:
-        final_facts: "_result"
+        final_facts: result
       if: "{{ lab_active }}"
 """
     )
