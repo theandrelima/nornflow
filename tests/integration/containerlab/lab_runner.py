@@ -13,6 +13,7 @@ from tests.integration.containerlab.constants import (
     LAB_INTEGRATION_WORKFLOW,
     LAB_READONLY_BLUEPRINT,
     LAB_STORE_AS_FAILURE_WORKFLOW,
+    LAB_VARS_ALL_LEVELS_WORKFLOW,
     NORNFLOW_ARISTA_PACKAGE,
 )
 
@@ -46,6 +47,7 @@ def run_phase_b(settings_file: Path) -> None:
     workflows = nornflow.workflows_catalog
     _assert_key(workflows, f"local.{LAB_INTEGRATION_WORKFLOW}", "workflows")
     _assert_key(workflows, f"local.{LAB_STORE_AS_FAILURE_WORKFLOW}", "workflows")
+    _assert_key(workflows, f"local.{LAB_VARS_ALL_LEVELS_WORKFLOW}", "workflows")
     _assert_key(workflows, f"{NORNFLOW_ARISTA_PACKAGE}.daily_snapshot.yaml", "workflows")
 
     blueprints = nornflow.blueprints_catalog
@@ -55,7 +57,9 @@ def run_phase_b(settings_file: Path) -> None:
     j2_catalog = nornflow.j2_filters_catalog
     _assert_key(j2_catalog, f"{NORNFLOW_ARISTA_PACKAGE}.eos_vlan_expand", "j2_filters")
     _assert_key(j2_catalog, f"{NORNFLOW_ARISTA_PACKAGE}.eos_intf_canonical", "j2_filters")
+    _assert_key(j2_catalog, "local.lab_prefix", "j2_filters")
     j2_catalog.resolve("nornflow_arista.eos_vlan_expand")
+    j2_catalog.resolve("local.lab_prefix")
 
     for hook_name in ("if", "single", "store_as"):
         _assert_key(HOOKS_CATALOG, f"{BUILTIN_NAMESPACE}.{hook_name}", "hooks")

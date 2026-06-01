@@ -21,11 +21,17 @@ class LabHostSpec(TypedDict):
 NORNFLOW_ARISTA_PACKAGE = "nornflow_arista"
 NORNFLOW_ARISTA_VERSION = "0.1.0"
 
-# Generated local workflow and blueprint filenames (under temp project).
+# Static fixture asset filenames (under tests/integration/containerlab/fixtures/overlay/).
 LAB_INTEGRATION_WORKFLOW = "lab_integration.yaml"
 LAB_STORE_AS_FAILURE_WORKFLOW = "lab_store_as_failure.yaml"
 LAB_STORE_AS_FAILURE_MARKER = "NORNFLOW_LAB_STORE_AS_FAILURE_OK"
 LAB_READONLY_BLUEPRINT = "lab_readonly_snapshot.yaml"
+# File lives under workflows/lab/ for domain vars; catalog key is the filename only.
+LAB_VARS_ALL_LEVELS_WORKFLOW = "vars_all_levels.yaml"
+
+# Env var name set at test runtime for vars-all-levels workflow (NORNFLOW_VAR_env_marker).
+LAB_VARS_ENV_VAR = "env_marker"
+LAB_VARS_ENV_VALUE = "ENV_OK"
 
 # Default four-node spine–leaf topology (management IPs or DNS names).
 LAB_HOSTS: dict[str, LabHostSpec] = {
