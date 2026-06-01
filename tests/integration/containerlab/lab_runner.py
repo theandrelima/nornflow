@@ -12,6 +12,7 @@ from nornflow.settings import NornFlowSettings
 from tests.integration.containerlab.constants import (
     LAB_INTEGRATION_WORKFLOW,
     LAB_READONLY_BLUEPRINT,
+    LAB_STORE_AS_FAILURE_WORKFLOW,
     NORNFLOW_ARISTA_PACKAGE,
 )
 
@@ -44,6 +45,7 @@ def run_phase_b(settings_file: Path) -> None:
 
     workflows = nornflow.workflows_catalog
     _assert_key(workflows, f"local.{LAB_INTEGRATION_WORKFLOW}", "workflows")
+    _assert_key(workflows, f"local.{LAB_STORE_AS_FAILURE_WORKFLOW}", "workflows")
     _assert_key(workflows, f"{NORNFLOW_ARISTA_PACKAGE}.daily_snapshot.yaml", "workflows")
 
     blueprints = nornflow.blueprints_catalog

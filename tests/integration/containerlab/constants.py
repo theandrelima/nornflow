@@ -23,6 +23,8 @@ NORNFLOW_ARISTA_VERSION = "0.1.0"
 
 # Generated local workflow and blueprint filenames (under temp project).
 LAB_INTEGRATION_WORKFLOW = "lab_integration.yaml"
+LAB_STORE_AS_FAILURE_WORKFLOW = "lab_store_as_failure.yaml"
+LAB_STORE_AS_FAILURE_MARKER = "NORNFLOW_LAB_STORE_AS_FAILURE_OK"
 LAB_READONLY_BLUEPRINT = "lab_readonly_snapshot.yaml"
 
 # Default four-node spine–leaf topology (management IPs or DNS names).

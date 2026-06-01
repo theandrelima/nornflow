@@ -13,6 +13,8 @@ from tests.integration.containerlab.constants import (
     LAB_HOSTS,
     LAB_INTEGRATION_WORKFLOW,
     LAB_READONLY_BLUEPRINT,
+    LAB_STORE_AS_FAILURE_MARKER,
+    LAB_STORE_AS_FAILURE_WORKFLOW,
     NORNFLOW_ARISTA_PACKAGE,
     NORNFLOW_ARISTA_VERSION,
 )
@@ -194,6 +196,41 @@ workflow:
     return workflow_file
 
 
+def _write_lab_store_as_failure_workflow(project_root: Path) -> Path:
+    """Write a workflow that fails step 1 and conditionally echoes via store_as.
+
+    Args:
+        project_root: Root of the generated project.
+
+    Returns:
+        Path to the failure-path workflow YAML file.
+    """
+    workflows_dir = project_root / "workflows"
+    workflows_dir.mkdir(parents=True, exist_ok=True)
+    workflow_file = workflows_dir / LAB_STORE_AS_FAILURE_WORKFLOW
+    workflow_file.write_text(
+        """\
+workflow:
+  name: Containerlab store_as failure path
+  failure_strategy: run-all
+
+  tasks:
+    - name: nornflow.write_file
+      args:
+        filename: ""
+        content: "x"
+      store_as:
+        step_failed: failed
+
+    - name: nornflow.echo
+      if: "{{ step_failed }}"
+      args:
+        msg: """
+        + f'"{LAB_STORE_AS_FAILURE_MARKER}"\n'
+    )
+    return workflow_file
+
+
 def _write_nornflow_settings(project_root: Path, nornir_config_file: Path) -> Path:
     """Write nornflow.yaml for a package-only temp project.
 
@@ -239,6 +276,7 @@ def build_lab_project(project_root: Path, username: str, password: str) -> Path:
     _write_hosts_yaml(project_root / "nornir_configs" / "inventory" / "hosts.yaml", username, password)
     _write_local_blueprint(project_root)
     _write_lab_integration_workflow(project_root)
+    _write_lab_store_as_failure_workflow(project_root)
     return _write_nornflow_settings(project_root, config_file)
 
 
