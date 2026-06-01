@@ -297,7 +297,7 @@ def _run_command(args: list[str], *, cwd: Path | None = None) -> None:
 
 
 def provision_lab_environment(root: Path, username: str, password: str) -> LabEnvironment:
-    """Create venv, install packages, and write the temp NornFlow project.
+    """Phase A: create venv, install packages, and write the temp NornFlow project.
 
     Args:
         root: Session temp directory.
