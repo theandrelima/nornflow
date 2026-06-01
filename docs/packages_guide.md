@@ -239,7 +239,7 @@ Hooks follow the same namespace model as all other asset types. Built-in hooks l
 
 The only hook-specific behavior is in `Hook.__init_subclass__`: any `Hook` subclass that does not define `hook_name` as a non-empty string raises `HookRegistrationError` at class definition time.
 
-Bare `set_to` resolves to the built-in hook. A package hook named `set_to` is reachable as `my_pkg.set_to`. Reusing a built-in hook name in a package no longer halts initialization.
+Bare `store_as` resolves to the built-in hook. A package hook named `store_as` is reachable as `my_pkg.store_as`. Reusing a built-in hook name in a package no longer halts initialization.
 
 ## Error Reference
 
