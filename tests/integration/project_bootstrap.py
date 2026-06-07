@@ -2,12 +2,39 @@
 
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
 import yaml
 
 FIXTURES_COMMON = Path(__file__).resolve().parent / "fixtures" / "common"
+
+
+def dev_nornflow_cli() -> Path:
+    """Return the nornflow CLI from PATH or the active virtualenv.
+
+    Returns:
+        Path to an existing ``nornflow`` executable.
+
+    Raises:
+        FileNotFoundError: When no nornflow executable is found.
+    """
+    candidates: list[Path] = []
+    on_path = shutil.which("nornflow")
+    if on_path:
+        candidates.append(Path(on_path))
+    candidates.append(Path(sys.executable).parent / "nornflow")
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+
+    searched = ", ".join(str(path) for path in candidates)
+    raise FileNotFoundError(
+        f"nornflow CLI not found (checked: {searched}). "
+        "Install the package in editable mode so the console script is available."
+    )
 
 
 def merge_overlay(overlay_root: Path, project_root: Path) -> None:
@@ -50,7 +77,11 @@ def run_nornflow_init(nornflow_executable: Path, project_root: Path) -> None:
 
     Raises:
         RuntimeError: When init exits non-zero.
+        FileNotFoundError: When nornflow_executable does not exist.
     """
+    if not nornflow_executable.is_file():
+        raise FileNotFoundError(f"nornflow executable not found: {nornflow_executable}")
+
     project_root.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
         [str(nornflow_executable), "init"],

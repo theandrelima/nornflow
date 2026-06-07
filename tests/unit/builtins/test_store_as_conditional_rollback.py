@@ -1,7 +1,5 @@
 """Unit test: conditional rollback workflow via store_as failed flag + if hook."""
 
-import shutil
-import sys
 from pathlib import Path
 
 import nornflow.builtins.hooks  # noqa: F401
@@ -13,16 +11,9 @@ from nornflow.nornflow import NornFlow
 from nornflow.settings import NornFlowSettings
 
 from tests.integration.fixtures.constants import STORE_AS_FAILURE_MARKER, WORKFLOW_STORE_AS_FAILURE
-from tests.integration.project_bootstrap import FIXTURES_COMMON, bootstrap_nornflow_project
+from tests.integration.project_bootstrap import FIXTURES_COMMON, bootstrap_nornflow_project, dev_nornflow_cli
 
 HOST_NAME = "localhost"
-
-
-def _dev_nornflow_cli() -> Path:
-    cli = shutil.which("nornflow")
-    if cli:
-        return Path(cli)
-    return Path(sys.executable).parent / "nornflow"
 
 
 def _write_single_host(hosts_path: Path) -> None:
@@ -32,10 +23,15 @@ def _write_single_host(hosts_path: Path) -> None:
 @pytest.fixture(scope="module")
 def rollback_lab(tmp_path_factory: pytest.TempPathFactory) -> NornFlowSettings:
     """Bootstrapped project with static store_as failure-path workflow."""
+    try:
+        nornflow_cli = dev_nornflow_cli()
+    except FileNotFoundError as exc:
+        pytest.skip(str(exc))
+
     lab_root = tmp_path_factory.mktemp("store_as_rollback_unit")
     settings_file = bootstrap_nornflow_project(
         lab_root,
-        nornflow_executable=_dev_nornflow_cli(),
+        nornflow_executable=nornflow_cli,
         overlay_dirs=[FIXTURES_COMMON],
         write_hosts=_write_single_host,
     )
