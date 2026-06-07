@@ -212,7 +212,7 @@ Common cases:
 
 For path rules, simple-mode equivalence, and a failure-path workflow example, see the [`store_as` hook documentation](./hooks_guide.md#the-store_as-hook).
 
-Note: **`store_as` still runs on failed tasks** when paths are valid — for example `failed: true` is stored after a task failure. Failure strategy and `store_as` address different concerns: the former controls *what runs next*; the latter controls *what gets stored* and *whether bad paths abort the run*.
+Note: **`store_as` still runs on failed tasks** when paths are valid; for example `failed: true` is stored after a task failure. Failure strategy and `store_as` address different concerns: the former controls *what runs next*; the latter controls *what gets stored* and *whether bad paths abort the run*.
 
 ## Best Practices
 
