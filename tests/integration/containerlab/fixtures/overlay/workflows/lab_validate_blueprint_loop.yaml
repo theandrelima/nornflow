@@ -1,0 +1,4 @@
+workflow:
+  name: Containerlab validate blueprint loop
+  tasks:
+    - blueprint: lab_validate_loop_a.yaml
