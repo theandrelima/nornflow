@@ -223,7 +223,7 @@ tasks:
 
 **Path shorthand:** if the first segment is **not** a top-level `Result` attribute, lookup starts inside the `Result.result` value. For example, `uptime_seconds: "environment.uptime"` reads `Result.result["environment"]["uptime"]` from the task return value.
 
-**`Result` attributes:** use paths like `failed`, `changed`, `result` (or any other customer attr name) when you need to be specific about where the lookup should start in the Nornir `Result` object.
+**`Result` attributes:** use paths like `failed`, `changed`, `result` (or any other custom attribute name on the Nornir `Result` object) when you need to be specific about where the lookup should start.
 
 **Explicit return-value access:** prefix a path with `result.` when the first segment could match both a `Result` attribute and a key in the return value. For `uptime_seconds` in the example above:
 
