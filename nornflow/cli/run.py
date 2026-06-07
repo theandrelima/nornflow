@@ -2,7 +2,6 @@ import ast
 import re
 import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import typer
@@ -343,12 +342,7 @@ def get_nornflow_builder(
         builder.with_kwargs(dry_run=dry_run)
 
     if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_YAML_EXTENSIONS):
-        target_path = Path(target)
-        if target_path.exists():
-            absolute_path = target_path.resolve()
-            builder.with_workflow_path(str(absolute_path))
-        else:
-            builder.with_workflow_name(target)
+        builder.with_workflow_reference(target)
     else:
         timestamp = datetime.now().strftime("%d-%m-%Y %H-%M-%S")
         workflow_dict = {
