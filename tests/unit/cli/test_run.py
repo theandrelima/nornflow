@@ -355,21 +355,12 @@ class TestNornflowBuilderIntegration:
         assert call_args["workflow"]["name"].startswith("Task test_task - exec")
         assert call_args["workflow"]["tasks"] == [{"name": "test_task", "args": {"arg1": "value1"}}]
 
-    @patch("nornflow.cli.run.Path")
     @patch("nornflow.cli.run.NornFlowBuilder")
-    def test_get_nornflow_builder_workflow_path(self, mock_builder_cls, mock_path_cls):
+    def test_get_nornflow_builder_workflow_path(self, mock_builder_cls):
         """Test building a NornFlow object for a workflow file path."""
-        # Setup mock path to simulate existing file
-        mock_path = MagicMock()
-        mock_path.exists.return_value = True
-        mock_path.resolve.return_value = "absolute/path/to/workflow.yaml"
-        mock_path_cls.return_value = mock_path
-
-        # Setup mock builder
         mock_builder = MagicMock()
         mock_builder_cls.return_value = mock_builder
 
-        # Call function
         get_nornflow_builder(
             "workflow.yaml",
             None,
@@ -377,29 +368,19 @@ class TestNornflowBuilderIntegration:
             ""  # Use empty string to skip settings loading
         )
 
-        # Verify builder methods were called
         mock_builder.with_settings_path.assert_not_called()  # Since settings_file is empty
         mock_builder.with_filters.assert_called_once_with({"hosts": ["host1"]})
-        mock_builder.with_workflow_path.assert_called_once_with("absolute/path/to/workflow.yaml")
+        mock_builder.with_workflow_reference.assert_called_once_with("workflow.yaml")
 
-    @patch("nornflow.cli.run.Path")
     @patch("nornflow.cli.run.NornFlowBuilder")
-    def test_get_nornflow_builder_workflow_name_with_yaml_extension(self, mock_builder_cls, mock_path_cls):
+    def test_get_nornflow_builder_workflow_name_with_yaml_extension(self, mock_builder_cls):
         """Test building with a workflow name that has .yaml extension but doesn't exist as file."""
-        # Setup mock path for non-existent yaml file
-        mock_path = MagicMock()
-        mock_path.exists.return_value = False
-        mock_path_cls.return_value = mock_path
-
-        # Setup mock builder
         mock_builder = MagicMock()
         mock_builder_cls.return_value = mock_builder
 
-        # Call function
         get_nornflow_builder("nonexistent.yaml", None, None, "")
 
-        # Should call with_workflow_name since file doesn't exist
-        mock_builder.with_workflow_name.assert_called_once_with("nonexistent.yaml")
+        mock_builder.with_workflow_reference.assert_called_once_with("nonexistent.yaml")
 
     @patch("nornflow.cli.run.NornFlowBuilder")
     def test_get_nornflow_builder_task_name_without_extension(self, mock_builder_cls):
@@ -556,17 +537,9 @@ class TestProcessorIntegration:
 class TestCLIWorkflowOverrides:
     """Test CLI overrides for workflow settings."""
 
-    @patch("nornflow.cli.run.Path")
     @patch("nornflow.cli.run.NornFlowBuilder")
-    def test_inventory_filters_override(self, mock_builder_cls, mock_path_cls):
+    def test_inventory_filters_override(self, mock_builder_cls):
         """Test that CLI inventory filters override workflow filters."""
-        # Setup mock path
-        mock_path = MagicMock()
-        mock_path.exists.return_value = True
-        mock_path.resolve.return_value = "/path/to/workflow.yaml"
-        mock_path_cls.return_value = mock_path
-
-        # Setup mock builder
         mock_builder = MagicMock()
         mock_builder_cls.return_value = mock_builder
 
