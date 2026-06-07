@@ -29,6 +29,11 @@ LAB_READONLY_BLUEPRINT = "lab_readonly_snapshot.yaml"
 # File lives under workflows/lab/ for domain vars; catalog key is the filename only.
 LAB_VARS_ALL_LEVELS_WORKFLOW = "vars_all_levels.yaml"
 
+LAB_VALIDATE_OK_WORKFLOW = "lab_validate_ok.yaml"
+LAB_VALIDATE_BAD_TASK_WORKFLOW = "lab_validate_bad_task.yaml"
+LAB_VALIDATE_BAD_ARGS_WORKFLOW = "lab_validate_bad_args.yaml"
+LAB_VALIDATE_BLUEPRINT_LOOP_WORKFLOW = "lab_validate_blueprint_loop.yaml"
+
 # Env var name set at test runtime for vars-all-levels workflow (NORNFLOW_VAR_env_marker).
 LAB_VARS_ENV_VAR = "env_marker"
 LAB_VARS_ENV_VALUE = "ENV_OK"
