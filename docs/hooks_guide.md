@@ -282,7 +282,7 @@ tasks:
     store_as: running_config  
 ```
 
-**What gets stored:** the data the task returned (string, dict, list, or `None`). This is **not** the full Nornir `Result` object (`failed`, `changed`, and similar fields stay on `Result`, not in your variable). For the specific example above, `store_as` would take the `Result.result` returned by the `netmiko_send_command(command_string='show running-config')` and save it into a var named 'running_config' for each host where it ran successfully.
+**What gets stored:** the data the task returned (string, dict, list, or `None`). This is **not** the full Nornir `Result` object (`failed`, `changed`, and similar fields stay on `Result`, not in your variable). For the specific example above, `store_as` would take the `Result.result` returned by the `netmiko_send_command(command_string='show running-config')` and save it into a var named `running_config` for each host where the task ran (success or failure).
 
 **Same thing, extraction syntax:**
 It's also important to understand that:
@@ -314,7 +314,7 @@ tasks:
       task_failed: failed
 ```
 
-Each path is resolved per host; each value is stored under the name you choose as each of the nested keys under `sotre_as`.
+Each path is resolved per host; each top-level key under `store_as` is the runtime variable name, and its value is the extraction path.
 
 #### How paths pick a starting point
 
