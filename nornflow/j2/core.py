@@ -86,13 +86,29 @@ class Jinja2Service:
         instance.environment.filters.update(filters)
 
     @classmethod
+    def reset(cls) -> None:
+        """Clear the singleton so the next use rebuilds environment and catalogs.
+
+        Intended for tests and embedded use when multiple ``NornFlow`` instances are
+        created sequentially in one process.
+        """
+        with cls._lock:
+            if cls._instance is not None:
+                cls._instance.compile_template.cache_clear()
+            cls._instance = None
+            cls._initialized = False
+
+    @classmethod
     def initialize_with_settings(
         cls, settings: NornFlowSettings, package_loader: PackageLoader | None = None
     ) -> None:
         """Initialize the service with NornFlow settings, registering custom filters.
 
         Registers j2_filters from local directories first, then from packages.
+        Rebuilds the singleton on each call so filter catalogs do not leak between
+        successive ``NornFlow`` initializations in the same process.
         """
+        cls.reset()
         locations = [(LOCAL_NAMESPACE, str(path), TIER_LOCAL) for path in settings.local_j2_filters]
         if package_loader:
             locations.extend(
