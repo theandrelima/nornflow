@@ -11,6 +11,7 @@ NornFlow provides flexible failure handling strategies that control how the work
 - [Behavior Examples](#behavior-examples)
 - [Failure Summary](#failure-summary)
 - [Understanding Threading Behavior](#understanding-threading-behavior)
+- [What Failure Strategies Do Not Cover](#what-failure-strategies-do-not-cover)
 - [Best Practices](#best-practices)
 
 ## Available Strategies
@@ -192,6 +193,26 @@ When working with failure strategies, it's important to understand NornFlow's th
 - The `skip-failed` strategy lets Nornir's default behavior handle removing failed hosts from subsequent tasks
 
 This threading model explains why, even with `fail-fast`, some tasks might complete after a failure is detected. Only new tasks are prevented from starting.
+
+## What Failure Strategies Do Not Cover
+
+Failure strategies control whether NornFlow **continues running tasks and hosts** after a task reports `failed=True`. They do **not** change how hooks validate their own configuration or extracted data.
+
+### `store_as` extraction errors (hard-fail)
+
+When a task uses `store_as` in **extraction mode** and a path cannot be resolved, NornFlow raises an Exception and the workflow **stops**. No failure strategy (`skip-failed`, `fail-fast`, or `run-all`) overrides this.
+
+Common cases:
+
+- A path references a key that does not exist in the task return value
+- A shorthand path needs `Result.result`, but the task returned `None`
+- The path syntax is invalid
+
+**Practical guidance:** on tasks that may fail, use `store_as: { step_failed: failed }` when you only need the failure flag for branching. Do not add optional payload paths on the same task unless those keys are guaranteed to exist even on failure.
+
+For path rules, simple-mode equivalence, and a failure-path workflow example, see the [`store_as` hook documentation](./hooks_guide.md#the-store_as-hook).
+
+Note: **`store_as` still runs on failed tasks** when paths are valid — for example `failed: true` is stored after a task failure. Failure strategy and `store_as` address different concerns: the former controls *what runs next*; the latter controls *what gets stored* and *whether bad paths abort the run*.
 
 ## Best Practices
 

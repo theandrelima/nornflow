@@ -11,11 +11,15 @@ from tests.integration.containerlab.constants import (
     LAB_EAPI_PORT,
     LAB_EAPI_TRANSPORT,
     LAB_HOSTS,
-    LAB_INTEGRATION_WORKFLOW,
-    LAB_READONLY_BLUEPRINT,
     NORNFLOW_ARISTA_PACKAGE,
     NORNFLOW_ARISTA_VERSION,
 )
+from tests.integration.project_bootstrap import (
+    FIXTURES_COMMON,
+    bootstrap_nornflow_project,
+)
+
+CONTAINERLAB_OVERLAY = Path(__file__).resolve().parent / "fixtures" / "overlay"
 
 
 @dataclass(frozen=True)
@@ -46,8 +50,8 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def _write_hosts_yaml(path: Path, username: str, password: str) -> None:
-    """Write static Nornir hosts with eAPI connection data.
+def write_lab_hosts_yaml(path: Path, username: str, password: str) -> None:
+    """Write Nornir hosts with eAPI connection data from LAB_HOSTS.
 
     Args:
         path: Destination hosts.yaml path.
@@ -69,177 +73,30 @@ def _write_hosts_yaml(path: Path, username: str, password: str) -> None:
     path.write_text(yaml.safe_dump(hosts, sort_keys=True))
 
 
-def _write_nornir_tree(project_root: Path) -> Path:
-    """Write Nornir config and inventory under nornir_configs/.
+def build_lab_project(
+    project_root: Path,
+    nornflow_cli: Path,
+    username: str,
+    password: str,
+) -> Path:
+    """Create the on-disk NornFlow project via init, fixtures, and hosts injection.
 
     Args:
-        project_root: Root of the generated project.
-
-    Returns:
-        Path to config.yaml.
-    """
-    config_dir = project_root / "nornir_configs"
-    inventory_dir = config_dir / "inventory"
-    inventory_dir.mkdir(parents=True, exist_ok=True)
-
-    (inventory_dir / "groups.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "eos": {},
-                "spines": {},
-                "leafs": {},
-            },
-            sort_keys=True,
-        )
-    )
-    (inventory_dir / "defaults.yaml").write_text("{}\n")
-
-    config_file = config_dir / "config.yaml"
-    config_file.write_text(
-        """\
-inventory:
-  plugin: SimpleInventory
-  options:
-    host_file: 'nornir_configs/inventory/hosts.yaml'
-    group_file: 'nornir_configs/inventory/groups.yaml'
-    defaults_file: 'nornir_configs/inventory/defaults.yaml'
-runner:
-  plugin: threaded
-  options:
-    num_workers: 4
-"""
-    )
-    return config_file
-
-
-def _write_local_blueprint(project_root: Path) -> Path:
-    """Write a minimal local blueprint using package read-only getters.
-
-    Args:
-        project_root: Root of the generated project.
-
-    Returns:
-        Path to the blueprint YAML file.
-    """
-    blueprints_dir = project_root / "blueprints"
-    blueprints_dir.mkdir(parents=True, exist_ok=True)
-    blueprint_file = blueprints_dir / LAB_READONLY_BLUEPRINT
-    blueprint_file.write_text(
-        """\
-description: >
-  Read-only snapshot for containerlab: version facts and LLDP neighbors.
-  Uses set_to to store results in runtime variables.
-
-tasks:
-  - name: nornflow_arista.get_facts
-    set_to:
-      facts: "_result"
-
-  - name: nornflow_arista.get_lldp_neighbors
-    args:
-      detail: true
-    set_to:
-      lldp_neighbors: "_result"
-"""
-    )
-    return blueprint_file
-
-
-def _write_lab_integration_workflow(project_root: Path) -> Path:
-    """Write a workflow exercising vars, j2 filters, hooks, and a local blueprint.
-
-    Args:
-        project_root: Root of the generated project.
-
-    Returns:
-        Path to the workflow YAML file.
-    """
-    workflows_dir = project_root / "workflows"
-    workflows_dir.mkdir(parents=True, exist_ok=True)
-    workflow_file = workflows_dir / LAB_INTEGRATION_WORKFLOW
-    workflow_file.write_text(
-        """\
-workflow:
-  name: Containerlab integration workflow
-  description: >
-    Exercises workflow vars, package j2 filters, builtin hooks (if, single, set_to),
-    a local blueprint, and read-only nornflow_arista tasks against live cEOS.
-  vars:
-    lab_active: true
-  tasks:
-    - name: nornflow.echo
-      args:
-        msg: >-
-          {{ host.name }}: vlans={{ '10,20-22' | nornflow_arista.eos_vlan_expand | join(',') }}
-          intf={{ 'gi0/1' | nornflow_arista.eos_intf_canonical }}
-      if: "{{ lab_active }}"
-
-    - blueprint: """
-        + LAB_READONLY_BLUEPRINT
-        + """
-      single: true
-
-    - name: nornflow.set
-      args:
-        lab_checked: "{{ host.name }}-ok"
-        lab_vlans: "{{ '10,20-22' | nornflow_arista.eos_vlan_expand | join(',') }}"
-      if: "{{ lab_active }}"
-
-    - name: nornflow_arista.get_facts
-      set_to:
-        final_facts: "_result"
-      if: "{{ lab_active }}"
-"""
-    )
-    return workflow_file
-
-
-def _write_nornflow_settings(project_root: Path, nornir_config_file: Path) -> Path:
-    """Write nornflow.yaml for a package-only temp project.
-
-    Args:
-        project_root: Root of the generated project.
-        nornir_config_file: Path to the Nornir config file.
-
-    Returns:
-        Path to nornflow.yaml.
-    """
-    settings_file = project_root / "nornflow.yaml"
-    settings = {
-        "nornir_config_file": str(nornir_config_file.relative_to(project_root)),
-        "packages": [NORNFLOW_ARISTA_PACKAGE],
-        "local_tasks": [],
-        "local_workflows": ["workflows"],
-        "local_filters": [],
-        "local_hooks": [],
-        "local_blueprints": ["blueprints"],
-        "local_j2_filters": [],
-        "logger": {
-            "directory": ".nornflow/logs",
-            "level": "INFO",
-        },
-    }
-    settings_file.write_text(yaml.safe_dump(settings, sort_keys=True))
-    return settings_file
-
-
-def build_lab_project(project_root: Path, username: str, password: str) -> Path:
-    """Create the on-disk NornFlow project layout.
-
-    Args:
-        project_root: Directory where nornflow.yaml and Nornir files are written.
+        project_root: Directory where the project is created.
+        nornflow_cli: nornflow CLI from the lab venv.
         username: Device login user.
         password: Device login password.
 
     Returns:
-        Path to the generated nornflow.yaml file.
+        Path to nornflow.yaml.
     """
-    project_root.mkdir(parents=True, exist_ok=True)
-    config_file = _write_nornir_tree(project_root)
-    _write_hosts_yaml(project_root / "nornir_configs" / "inventory" / "hosts.yaml", username, password)
-    _write_local_blueprint(project_root)
-    _write_lab_integration_workflow(project_root)
-    return _write_nornflow_settings(project_root, config_file)
+    return bootstrap_nornflow_project(
+        project_root,
+        nornflow_executable=nornflow_cli,
+        overlay_dirs=[FIXTURES_COMMON, CONTAINERLAB_OVERLAY],
+        settings_patch={"packages": [NORNFLOW_ARISTA_PACKAGE]},
+        write_hosts=lambda hosts_path: write_lab_hosts_yaml(hosts_path, username, password),
+    )
 
 
 def _run_command(args: list[str], *, cwd: Path | None = None) -> None:
@@ -259,7 +116,7 @@ def _run_command(args: list[str], *, cwd: Path | None = None) -> None:
 
 
 def provision_lab_environment(root: Path, username: str, password: str) -> LabEnvironment:
-    """Create venv, install packages, and write the temp NornFlow project.
+    """Phase A: create venv, install packages, and bootstrap the temp NornFlow project.
 
     Args:
         root: Session temp directory.
@@ -276,6 +133,7 @@ def provision_lab_environment(root: Path, username: str, password: str) -> LabEn
 
     _run_command(["uv", "venv", str(venv_dir)])
     python = venv_dir / "bin" / "python"
+    nornflow_cli = venv_dir / "bin" / "nornflow"
     _run_command(
         [
             "uv",
@@ -289,7 +147,7 @@ def provision_lab_environment(root: Path, username: str, password: str) -> LabEn
         ]
     )
 
-    settings_file = build_lab_project(project_root, username, password)
+    settings_file = build_lab_project(project_root, nornflow_cli, username, password)
 
     return LabEnvironment(
         root=root,
@@ -297,7 +155,7 @@ def provision_lab_environment(root: Path, username: str, password: str) -> LabEn
         project_root=project_root,
         settings_file=settings_file,
         python=python,
-        nornflow_cli=venv_dir / "bin" / "nornflow",
+        nornflow_cli=nornflow_cli,
         runner_script=runner_script,
     )
 

@@ -109,7 +109,7 @@ class NornFlowVariablesManager:
     during workflow execution.
 
     NornFlow Default Namespace Variable Precedence (Highest to Lowest):
-    1. Runtime Variables (dynamically set by the 'set' task or 'set_to' keyword)
+    1. Runtime Variables (dynamically set by the 'set' task or 'store_as' keyword)
     2. CLI Variables
     3. Inline Workflow Variables (defined in the `workflow.vars` section)
     4. Domain-specific Default Variables (from `{vars_dir}/{domain}/defaults.yaml`)

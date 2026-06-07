@@ -1,0 +1,17 @@
+"""Shared markers and asset names for integration fixture workflows."""
+
+STORE_AS_ECHO_MESSAGE = "LAB_STORE_AS_SIMPLE_OK"
+STORE_AS_FAILURE_MARKER = "NORNFLOW_STORE_AS_FAILURE_OK"
+
+WORKFLOW_STORE_AS_SIMPLE = "store_as_simple_mode.yaml"
+WORKFLOW_STORE_AS_RESULT_PATH = "store_as_result_path.yaml"
+WORKFLOW_STORE_AS_FAILURE = "store_as_failure_path.yaml"
+
+VARS_ENV_MARKER = "ENV_OK"
+VARS_GLOBAL_MARKER = "GLOBAL_OK"
+VARS_DOMAIN_MARKER = "DOMAIN_OK"
+VARS_WORKFLOW_MARKER = "WORKFLOW_OK"
+VARS_CLI_MARKER = "CLI_OK"
+VARS_RUNTIME_MARKER = "RUNTIME_OK"
+
+WORKFLOW_VARS_ALL_LEVELS = "vars_all_levels.yaml"

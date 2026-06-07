@@ -8,6 +8,8 @@ from tests.integration.containerlab.conftest import run_nornflow_cli
 from tests.integration.containerlab.constants import (
     LAB_INTEGRATION_WORKFLOW,
     LAB_READONLY_BLUEPRINT,
+    LAB_STORE_AS_FAILURE_WORKFLOW,
+    LAB_VARS_ALL_LEVELS_WORKFLOW,
 )
 from tests.integration.containerlab.lab_project import LabEnvironment
 
@@ -29,7 +31,12 @@ def _combined_output(result: subprocess.CompletedProcess[str]) -> str:
         ),
         (
             ["show", "--workflows"],
-            [LAB_INTEGRATION_WORKFLOW, "nornflow_arista.daily_snapshot.yaml"],
+            [
+                LAB_INTEGRATION_WORKFLOW,
+                LAB_STORE_AS_FAILURE_WORKFLOW,
+                LAB_VARS_ALL_LEVELS_WORKFLOW,
+                "nornflow_arista.daily_snapshot.yaml",
+            ],
         ),
         (
             ["show", "--blueprints"],
@@ -37,11 +44,15 @@ def _combined_output(result: subprocess.CompletedProcess[str]) -> str:
         ),
         (
             ["show", "--j2-filters"],
-            ["nornflow_arista.eos_vlan_expand", "nornflow_arista.eos_intf_canonical"],
+            [
+                "nornflow_arista.eos_vlan_expand",
+                "nornflow_arista.eos_intf_canonical",
+                "local.lab_prefix",
+            ],
         ),
         (
             ["show", "--hooks"],
-            ["nornflow.if", "nornflow.single", "nornflow.set_to"],
+            ["nornflow.if", "nornflow.single", "nornflow.store_as"],
         ),
     ],
 )

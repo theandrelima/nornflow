@@ -77,21 +77,21 @@ class TestTaskModel:
         assert isinstance(task.args, dict)
         assert task.args["key"] == ("list", "values")  # Converted to tuple
 
-    def test_validate_set_to(self):
-        """Test set_to validation creates SetToHook."""
-        from nornflow.builtins.hooks import SetToHook
-        
+    def test_validate_store_as(self):
+        """Test store_as validation creates StoreAsHook."""
+        from nornflow.builtins.hooks import StoreAsHook
+
         # In the refactored hook framework, hooks are configured through a hooks dictionary
         # where keys are hook names and values are the hook parameter values
-        task = TaskModel(name="test_task", hooks=HashableDict({"set_to": "var_name"}))
-        
+        task = TaskModel(name="test_task", hooks=HashableDict({"store_as": "var_name"}))
+
         # The task's get_hooks method should return the hook instances
         hooks = task.get_hooks()
-        
-        # Check that a SetToHook was created and is in the hooks
-        set_to_hooks = [hook for hook in hooks if isinstance(hook, SetToHook)]
-        assert len(set_to_hooks) == 1
-        assert set_to_hooks[0].value == "var_name"
+
+        # Check that a StoreAsHook was created and is in the hooks
+        store_as_hooks = [hook for hook in hooks if isinstance(hook, StoreAsHook)]
+        assert len(store_as_hooks) == 1
+        assert store_as_hooks[0].value == "var_name"
 
     def test_create_auto_increment_id(self):
         """Test create method auto-increments id."""

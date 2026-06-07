@@ -82,7 +82,7 @@ class NornFlow:
     4. Default processor if none of the above are specified
 
     Variable precedence follows this order (highest to lowest priority):
-    1. Runtime Variables (dynamically set by the 'set' task or 'set_to' hook)
+    1. Runtime Variables (dynamically set by the 'set' task or 'store_as' hook)
     2. CLI Variables (passed via --vars option or set programmatically)
     3. Inline Workflow Variables (defined in workflow YAML under vars: section)
     4. Domain-specific Default Variables (from vars_dir/<domain>/defaults.yaml)

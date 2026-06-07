@@ -9,7 +9,7 @@
 - [Hook-Driven Template Resolution](#hook-driven-template-resolution)
 - [Built-in Hooks](#nornflows-built-in-hooks)
   - [The `if` Hook](#the-if-hook)
-  - [The `set_to` Hook](#the-set_to-hook)
+  - [The `store_as` Hook](#the-store_as-hook)
   - [The `shush` Hook](#the-shush-hook)
   - [The `single` Hook](#the-single-hook)
 - [Hook Configuration](#hook-configuration)
@@ -258,70 +258,153 @@ tasks:
 
 Without deferred processing, this would fail on hosts missing `feature_template`. With deferred processing, only hosts that pass the `if` condition have their templates resolved.
 
-### The `set_to` Hook
+### The `store_as` Hook
 
-You are encouraged to refer to the source code for the `set_to` Hook [here](../nornflow/builtins/hooks/set_to.py), but here is a summary of how it works:
+See the implementation in [`store_as.py`](../nornflow/builtins/hooks/store_as.py).
 
-1. **Validation**: Checks configuration format during task preparation
-2. **task_instance_completed**: Runs after task completes on each host
-3. **Storage**: Stores extracted value as runtime variable for the host
+The `store_as` hook saves task output into **runtime variables** so later tasks can use it in Jinja templates. It runs after each host finishes a task (unless that host was skipped by the `if` or `single` hook).
 
-The actual data captured depends on the configuration format used for the `set_to` hook:  
-   - In *simple mode*, the entire Nornir's `Result` object returned by a task execution is captured and assigned
-   - In *extraction mode*, you specify exactly what nested data out of the `Result` object you want to capture and assign to your variable.
+**Behavior you should know:**
 
-#### Configuration Formats
+- **`store_as` runs when a task succeeds or fails** — a failed task can still populate variables.
+- **Skipped hosts store nothing** — if the task did not run for a host, no variable is written for that host.
+- **Bad extraction paths stop the workflow** — invalid paths raise `HookValidationError`. This is **not** controlled by [failure strategy](./failure_strategies.md#what-failure-strategies-do-not-cover).
 
-**Simple Mode (stores the complete Nornir's `Result` object)**
+#### Simple mode
+
+Store the task's return value (i.e. Nornir's `Result.result` field) in one variable:
+
 ```yaml
 tasks:
   - name: netmiko_send_command
     args:
-      command_string: "show version"
-    set_to: device_facts # stores the entire Result object returned by `netmiko_send_command` to a 'device_facts' var
+      command_string: "show running-config"
+    store_as: running_config  
 ```
 
-**Extraction Mode (extracts specific data from the Nornir's `Result.result` object)**
+**What gets stored:** the data the task returned (string, dict, list, or `None`). This is **not** the full Nornir `Result` object (`failed`, `changed`, and similar fields stay on `Result`, not in your variable). For the specific example above, `store_as` would take the `Result.result` returned by the `netmiko_send_command(command_string='show running-config')` and save it into a var named `running_config` for each host where the task ran (success or failure).
+
+**Same thing, extraction syntax:**
+It's also important to understand that:
+```yaml
+store_as: running_config  
+```
+
+Is just a shorthand for:
+
+```yaml
+store_as:
+  running_config: result
+```
+
+We call the first form 'simple mode' and the latter 'extraction mode'. Both forms store the identical value for the same task output. Use whichever reads clearer in your workflow.
+
+#### Extraction mode
+
+Map variable names to paths that pick nested data from the task outcome:
+
 ```yaml
 tasks:
   - name: napalm_get
     args:
       getters: ["facts", "interfaces"]
-    set_to:
-      mgmt_ip: "interfaces.Management1.ipv4.address" # stores the IPv4 Address deeply nested in the Result object returned by the `napalm_get` task to a var named 'mgmt_ip'
+    store_as:
+      device_vendor: vendor
+      mgmt_ip: "interfaces.Management1.ipv4.address"
+      task_failed: failed
 ```
 
-#### Extraction Path Syntax
+Each path is resolved per host; each top-level key under `store_as` is the runtime variable name, and its value is the extraction path.
 
-Access data from `Result.result` dictionary using:
+#### How paths pick a starting point
 
-**Dot notation for nested dicts:**
+The **first segment** of a path (the part before the first `.`) decides where lookup begins:
 
-The below would update/create two NornFlow vars named "**vendor**" (with the value extracted from `Result.result['vendor']`) and "**cpu**" (with the value extracted from `Result.result['environment']['cup']['usage']`)
+| First segment | Meaning | Examples |
+|---------------|---------|----------|
+| A **top-level `Result` attribute** | Start on the Nornir `Result` object | `failed`, `changed`, `result`, `name` |
+| **Anything else** | **Shorthand** — start inside the task return value (`Result.result`) | `vendor`, `hostname`, `environment.cpu.usage` |
+
+**Typical case:** you want a field from what the task returned -> use shorthand (`vendor`, `hostname`, …).
+
+**Use a `Result` attribute** when you need task metadata:
+
+- `failed` — whether this task failed on this host
+- `changed` — whether the task reported a change
+- `result` — the full task return value (same as simple mode)
+
+**Use `result.<key>`** when the bare name could mean both a `Result` attribute and a key inside the return value (see collisions below).
+
+#### Shorthand vs explicit `result.*`
+
+When the first segment is **not** a `Result` attribute, these store the same value:
 
 ```yaml
-set_to:
+store_as:
+  from_shorthand: vendor
+  from_explicit: result.vendor
+```
+
+Both read the `vendor` field from the task's returned `Result.result` dict.
+
+#### Name collisions
+
+If the same name exists on **both** the Nornir `Result` object **and** inside `Result.result`, the **bare path uses the `Result` attribute**:
+
+```yaml
+# If Result.vendor exists AND the return dict has key "vendor":
+store_as:
+  from_wrapper: vendor           # → Result.vendor
+  from_return_value: result.vendor  # → return Result.result["vendor"]
+```
+
+When in doubt, use the extraction mode with the fully qualified name, starting explicitly from the `Result` attribute you want the lookup to begin with.
+
+#### Path syntax
+
+Combine dot notation and bracket indexes:
+
+```yaml
+store_as:
   vendor: "vendor"
   cpu: "environment.cpu.usage"
-```
-
-**Bracket notation for lists:**
-
-The below would update/create two NornFlow vars named "**first_cpu**" (with the value extracted from `Result.ressult['environment']['cpu'][0]['usage']`) and "**interface_ip**" (with the value extracted from `Result.result['interfaces']['eth0']['ipv4'][0]['address']`). 
-
-```yaml
-set_to:
   first_cpu: "environment.cpu[0].usage"
   interface_ip: "interfaces.eth0.ipv4[0].address"
+  task_failed: "failed"
+  full_return: "result"
 ```
 
-**Special prefixes for Result attributes:**
+If a segment is missing, or shorthand needs `Result.result` but it is `None`, the hook raises `HookValidationError` and the workflow stops.
+
+#### Failure-path example
+
+Store failure state, then branch with `if`:
+
 ```yaml
-set_to:
-  task_failed: "_failed" # the `Result.failed` object
-  task_changed: "_changed" # the `Result.changed` object
-  complete_result: "_result" # the `Result.result` object
+workflow:
+  name: Conditional rollback
+  failure_strategy: run-all
+  tasks:
+    - name: nornflow.write_file
+      args:
+        filename: ""
+        content: "x"
+      store_as:
+        step_failed: failed # Nornir's Result object includes a bool attr named 'failed'
+
+    - name: nornflow.echo
+      if: "{{ step_failed }}"
+      args:
+        msg: "Running rollback because the previous step failed"
 ```
+
+On a failed host, `step_failed` is `true` and the echo runs. On a successful host, `step_failed` is `false` and the echo is skipped.
+
+#### Lifecycle summary
+
+1. **Validation** — configuration format is checked during workflow preparation.
+2. **task_instance_completed** — runs after the task finishes on each host (unless skipped).
+3. **Storage** — extracted values are written to the runtime variable manager for that host.
 
 ### The `shush` Hook
 
@@ -356,11 +439,11 @@ vars:
 tasks:
   - name: backup_config
     shush: "{{ not debug_mode }}"  # Suppress unless debugging
-    set_to: config_backup
+    store_as: config_backup
     
   - name: get_facts
     shush: "{{ quiet_mode }}"  # Suppress based on variable
-    set_to: device_facts
+    store_as: device_facts
     
   - name: show_interfaces
     shush: "{{ host.platform == 'ios'}}"  # dynamic condition
@@ -520,7 +603,7 @@ tasks:
     args:                  # Task arguments
       arg1: true
       arg2: "device"
-    set_to: result_var     # Hook configuration
+    store_as: result_var     # Hook configuration
 
 # ❌ Incorrect - hooks inside args block
 tasks:
@@ -528,7 +611,7 @@ tasks:
     args:
       arg1: true
       arg2: "device"
-      set_to: result_var       # Wrong! This is passed to task function
+      store_as: result_var       # Wrong! This is passed to task function
 ```
 
 ### Multiple Hooks per Task
@@ -539,14 +622,14 @@ Tasks can use multiple hooks simultaneously:
 tasks:
   - name: get_data
     if: "{{ should_run }}"
-    set_to: captured_data
+    store_as: captured_data
     shush: true
 ```
 
 **Execution order:**
 1. `if` hook evaluates condition (task_instance_started)
 2. If condition passes, task executes
-3. `set_to` hook captures results (task_instance_completed)
+3. `store_as` hook captures results (task_instance_completed)
 4. `shush` hook affects output display
 
 ## Creating Your Custom Hooks
@@ -764,7 +847,7 @@ class MyHook(Hook):
 
 ```
 
-Use this when your hook needs to evaluate conditions or perform actions specific to each individual host. Examples: conditional execution based on host attributes (`if`), storing per-host results (`set_to`), or per-host validation.
+Use this when your hook needs to evaluate conditions or perform actions specific to each individual host. Examples: conditional execution based on host attributes (`if`), storing per-host results (`store_as`), or per-host validation.
 
 
 ### Context Access

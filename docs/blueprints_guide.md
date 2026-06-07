@@ -109,12 +109,12 @@ tasks:
   - name: netmiko_send_command
     args:
       command_string: "show ip interface brief"
-    set_to: interfaces
+    store_as: interfaces
   
   - name: netmiko_send_command
     args:
       command_string: "show ip route summary"
-    set_to: routes
+    store_as: routes
   
   - name: echo
     args:
@@ -135,7 +135,7 @@ tasks:
   - name: netmiko_send_command
     args:
       command_string: "show ip interface brief"
-    set_to: interfaces
+    store_as: interfaces
 ```
 
 **Example output from `nornflow show -b` *(see 'Description' column)* :** 
@@ -402,7 +402,7 @@ During assembly-time, blueprints have access to these variable sources (highest 
 5. **Environment Variables** (`NORNFLOW_VAR_*`)
 
 **NOT available at assembly-time:**
-- Runtime variables (set by `set` task or `set_to` hook)
+- Runtime variables (set by `set` task or `store_as` hook)
 - Host inventory data (`host.*` namespace)
 
 **Example:**

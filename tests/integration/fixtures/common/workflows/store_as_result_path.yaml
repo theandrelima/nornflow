@@ -1,0 +1,12 @@
+workflow:
+  name: store_as result path equivalence
+  tasks:
+    - name: nornflow.echo
+      args:
+        msg: "LAB_STORE_AS_SIMPLE_OK"
+      store_as:
+        payload_b: result
+    - name: nornflow.echo
+      args:
+        msg: "{{ payload_b }}"
+      store_as: echo_back_b

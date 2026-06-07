@@ -19,6 +19,8 @@
 
 ## Overview
 
+> **Reference package:** [nornflow-arista](https://github.com/NornFlow/nornflow_arista) is the first NornFlow-compatible companion package. Use it as a practical example when learning the feature or authoring your own package — it demonstrates the directory layout, eAPI connection wiring, and how tasks, workflows, blueprints, filters, hooks, Jinja2 filters, and processors plug into NornFlow.
+
 The `packages` setting lets you pull NornFlow resources — tasks, workflows, blueprints, filters, hooks, Jinja2 filters, and processors — from external Python packages installed in your environment.
 
 The workflow is simple: install a NornFlow-compatible package, declare it in `nornflow.yaml`, and NornFlow discovers and catalogs its resources using the exact same mechanisms it uses for your local directories.
@@ -239,7 +241,7 @@ Hooks follow the same namespace model as all other asset types. Built-in hooks l
 
 The only hook-specific behavior is in `Hook.__init_subclass__`: any `Hook` subclass that does not define `hook_name` as a non-empty string raises `HookRegistrationError` at class definition time.
 
-Bare `set_to` resolves to the built-in hook. A package hook named `set_to` is reachable as `my_pkg.set_to`. Reusing a built-in hook name in a package no longer halts initialization.
+Bare `store_as` resolves to the built-in hook. A package hook named `store_as` is reachable as `my_pkg.store_as`. Reusing a built-in hook name in a package no longer halts initialization.
 
 ## Error Reference
 

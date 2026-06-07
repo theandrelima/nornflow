@@ -45,7 +45,7 @@ def _require_lab_credentials() -> tuple[str, str]:
 
 @pytest.fixture(scope="session")
 def lab_environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[LabEnvironment]:
-    """Provision an isolated venv + temp project; tear down after the session.
+    """Phase A: provision isolated venv + temp project; tear down after the session.
 
     Yields:
         LabEnvironment with venv, project paths, and lab_runner location.
