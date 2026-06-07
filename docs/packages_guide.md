@@ -19,9 +19,9 @@
 
 ## Overview
 
-> **Reference package:** [nornflow-arista](https://github.com/NornFlow/nornflow_arista) is the first NornFlow-compatible companion package. Use it as a practical example when learning the feature or authoring your own package — it demonstrates the directory layout, eAPI connection wiring, and how tasks, workflows, blueprints, filters, hooks, Jinja2 filters, and processors plug into NornFlow.
+> **Reference package:** [nornflow-arista](https://github.com/NornFlow/nornflow_arista) is the first NornFlow-compatible companion package. Use it as a practical example when learning the feature or authoring your own package. It demonstrates the directory layout, eAPI connection wiring, and how tasks, workflows, blueprints, filters, hooks, Jinja2 filters, and processors plug into NornFlow.
 
-The `packages` setting lets you pull NornFlow resources — tasks, workflows, blueprints, filters, hooks, Jinja2 filters, and processors — from external Python packages installed in your environment.
+The `packages` setting lets you pull NornFlow resources (tasks, workflows, blueprints, filters, hooks, Jinja2 filters, and processors) from external Python packages installed in your environment.
 
 The workflow is simple: install a NornFlow-compatible package, declare it in `nornflow.yaml`, and NornFlow discovers and catalogs its resources using the exact same mechanisms it uses for your local directories.
 
@@ -35,11 +35,11 @@ packages:
   - name: nornflow_acme_toolkit
 ```
 
-That's it. NornFlow does **not** install packages itself — it only imports from packages that are already available in the Python environment.
+That's it. NornFlow does **not** install packages itself; it only imports from packages that are already available in the Python environment.
 
-> **Naming convention:** We strongly recommend that NornFlow-compatible packages use a `nornflow_` prefix in their name (e.g., `nornflow_acme_toolkit`, `nornflow_net_hooks`). This is not enforced — NornFlow will accept any valid Python package name — but the prefix immediately signals to users that a package is designed to work with NornFlow, and makes packages easier to find and identify in the ecosystem.
+> **Naming convention:** We strongly recommend that NornFlow-compatible packages use a `nornflow_` prefix in their name (e.g., `nornflow_acme_toolkit`, `nornflow_net_hooks`). This is not enforced. NornFlow will accept any valid Python package name, but the prefix immediately signals to users that a package is designed to work with NornFlow, and makes packages easier to find and identify in the ecosystem.
 
-> **Scope limitation:** This feature is exclusively for **NornFlow-compatible packages** — packages that follow NornFlow's own directory layout convention (described below). Generic Nornir ecosystem packages like `nornir_napalm` or `nornir_netmiko` do not follow this convention and are not compatible with this feature. To use resources from arbitrarily-structured packages, wrap them in local tasks, filters, etc.
+> **Scope limitation:** This feature is exclusively for **NornFlow-compatible packages**: packages that follow NornFlow's own directory layout convention (described below). Generic Nornir ecosystem packages like `nornir_napalm` or `nornir_netmiko` do not follow this convention and are not compatible with this feature. To use resources from arbitrarily-structured packages, wrap them in local tasks, filters, etc.
 
 ## Configuration
 
@@ -80,17 +80,17 @@ tasks, workflows, blueprints, filters, hooks, j2_filters, processors
 | Rule | Behavior |
 |------|----------|
 | `name` is empty or whitespace | `SettingsError` at settings load time |
-| `include` is present but empty (`[]`) | `SettingsError` — if you specify `include`, it must contain at least one item |
-| `include` contains an invalid resource type string | `SettingsError` — only the seven valid identifiers are accepted |
+| `include` is present but empty (`[]`) | `SettingsError` if you specify `include` without at least one item |
+| `include` contains an invalid resource type string | `SettingsError` if the list contains anything other than the seven valid identifiers |
 | `include` is omitted entirely | All resource types are imported from that package |
-| Duplicate package names in the list | `SettingsError` — each package may only appear once |
+| Duplicate package names in the list | `SettingsError` because each package may only appear once |
 
 If you have nothing to import, you could do:
 ```yaml
 packages: []
 ```
 
-Or simply omit the `packages` key entirely — the default is an empty list.
+Or simply omit the `packages` key entirely; the default is an empty list.
 
 ### Environment Variable Support
 
@@ -141,10 +141,10 @@ nornflow_acme_toolkit/                 # Installed Python package root
 
 **Key rules:**
 
-- **All seven subdirectories are optional.** A package may provide any combination — all seven, just one, or anything in between. If a package provides none of them, NornFlow logs a warning during initialization (a package with zero discoverable resources is likely a misconfiguration).
-- **Python resource directories** (`tasks/`, `filters/`, `hooks/`, `j2_filters/`, `processors/`) must be proper Python packages — they must contain `__init__.py`.
+- **All seven subdirectories are optional.** A package may provide any combination: all seven, just one, or anything in between. If a package provides none of them, NornFlow logs a warning during initialization (a package with zero discoverable resources is likely a misconfiguration).
+- **Python resource directories** (`tasks/`, `filters/`, `hooks/`, `j2_filters/`, `processors/`) must be proper Python packages; they must contain `__init__.py`.
 - **File-based resource directories** (`workflows/`, `blueprints/`) contain YAML files directly (`.yaml` / `.yml`). No `__init__.py` required.
-- **Missing subdirectory logging is context-aware:** If your `include` list explicitly names a resource type but the package has no corresponding subdirectory, NornFlow logs a `WARNING` — you asked for something the package doesn't have, which likely indicates a misconfiguration. If `include` is omitted (scan-everything mode), a missing subdirectory is logged at `DEBUG` — the package simply doesn't provide that type, and that's normal.
+- **Missing subdirectory logging is context-aware:** If your `include` list explicitly names a resource type but the package has no corresponding subdirectory, NornFlow logs a `WARNING` because you asked for something the package doesn't have, which likely indicates a misconfiguration. If `include` is omitted (scan-everything mode), a missing subdirectory is logged at `DEBUG`; the package simply doesn't provide that type, and that's normal.
 
 ## Discovery and Loading
 
@@ -173,13 +173,13 @@ Input: package_name="nornflow_acme_toolkit", resource_type="tasks"
 
 This works for regular `pip install`, editable installs (`pip install -e .`), and packages installed via `uv`, `poetry`, `pdm`, etc.
 
-This does **not** work for Python namespace packages (no `__init__.py`, no `__file__` attribute) — those are skipped with a warning.
+This does **not** work for Python namespace packages (no `__init__.py`, no `__file__` attribute). Those are skipped with a warning.
 
-Once a resource directory is resolved, NornFlow uses **the exact same discovery mechanisms** as for local directories — the same predicates, the same catalog methods, the same registration logic. There is no special package-discovery code path.
+Once a resource directory is resolved, NornFlow uses **the exact same discovery mechanisms** as for local directories: the same predicates, the same catalog methods, the same registration logic. There is no special package-discovery code path.
 
 ### Loading Order and Precedence
 
-The following loading order applies uniformly to **all asset types** — tasks, filters, workflows, blueprints, hooks, J2 filters, and processors:
+The following loading order applies uniformly to **all asset types** (tasks, filters, workflows, blueprints, hooks, J2 filters, and processors):
 
 ```
 ┌─────────────────────────────────┐
@@ -198,14 +198,14 @@ The following loading order applies uniformly to **all asset types** — tasks, 
 
 - **Registration never fails** because two namespaces share a bare name. Collisions are tracked for `nornflow show`.
 - **Bare resolution priority:** built-in > local > package (single package owner only).
-- **Qualified references** (`namespace.name`) always target the exact namespace — never ambiguous.
+- **Qualified references** (`namespace.name`) always target the exact namespace and are never ambiguous.
 - **Package vs package** with the same bare name: both register successfully; bare usage raises `AssetAmbiguityError` at resolve time; qualified refs always work.
 
 ### Name Conflict Resolution
 
 Assets are stored under qualified keys (`namespace.name`). Bare references resolve by tier priority when unambiguous.
 
-**Cross-tier reuse (allowed — use qualified to pick a specific namespace):**
+**Cross-tier reuse (allowed; use qualified to pick a specific namespace):**
 ```
 Built-in:  nornflow.echo
 Local:     local.echo
@@ -215,7 +215,7 @@ Bare "echo"           → nornflow.echo (built-in wins)
 Qualified "local.echo" → local task
 ```
 
-**Package vs package (latent collision — show warns, qualified refs work):**
+**Package vs package (latent collision: `show` warns, qualified refs work):**
 ```
 nornflow_arista.get_facts
 nornflow_cisco.get_facts
@@ -233,7 +233,7 @@ Bare "backup" → local.backup
 "nornflow_acme.backup" → package task
 ```
 
-There is no strict mode and no init-time failure for collisions. Inspect conflicts with `nornflow show --tasks` (and other catalog flags) — the **Collision** column lists co-holders and whether bare resolution is `(bare → winner)` or `(bare ambiguous)`.
+There is no strict mode and no init-time failure for collisions. Inspect conflicts with `nornflow show --tasks` (and other catalog flags). The **Collision** column lists co-holders and whether bare resolution is `(bare → winner)` or `(bare ambiguous)`.
 
 ### Hook Registration Note
 
@@ -259,11 +259,11 @@ Bare `store_as` resolves to the built-in hook. A package hook named `store_as` i
 | Qualified or missing reference | `AssetNotFoundError` | Catalog resolve at runtime |
 | Hook subclass missing or invalid `hook_name` | `HookRegistrationError` | At import time (class definition) |
 
-**Fail-fast on missing packages:** If a declared package cannot be imported, NornFlow raises `ResourceError` immediately. The user explicitly asked for that package — not having it installed is a hard failure, not a warning.
+**Fail-fast on missing packages:** If a declared package cannot be imported, NornFlow raises `ResourceError` immediately. The user explicitly asked for that package. Not having it installed is a hard failure, not a warning.
 
 ## Limitations
 
-1. **NornFlow-native packages only.** Packages must follow the directory layout convention described above. Generic Nornir ecosystem packages with arbitrary internal structures are not supported — wrap their resources in local tasks, filters, or hooks instead.
+1. **NornFlow-native packages only.** Packages must follow the directory layout convention described above. Generic Nornir ecosystem packages with arbitrary internal structures are not supported. Wrap their resources in local tasks, filters, or hooks instead.
 
 2. **No package installation.** NornFlow does not install packages. You manage your own environment.
 

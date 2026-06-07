@@ -261,7 +261,7 @@ Set dry-run mode for the Nornir instance.
 
 ## Catalog System
 
-NornFlow uses typed catalog registries to manage all discovered assets. Every asset type — tasks, workflows, blueprints, filters, hooks, J2 filters, and processors — is registered into a catalog during initialization. All catalog types enforce the same registration rules.
+NornFlow uses typed catalog registries to manage all discovered assets. Every asset type (tasks, workflows, blueprints, filters, hooks, J2 filters, and processors) is registered into a catalog during initialization. All catalog types enforce the same registration rules.
 
 ### Catalog Types
 
@@ -276,7 +276,7 @@ NornFlow uses typed catalog registries to manage all discovered assets. Every as
 Catalog assets are registered under qualified keys and resolved through `Catalog.resolve()`:
 
 - **Namespaces:** `nornflow` (built-ins), `local` (local directories), `<package_name>` (imported packages)
-- **Bare references:** tier priority — built-in > local > package (single owner)
+- **Bare references:** tier priority: built-in > local > package (single owner)
 - **Qualified references:** exact match on `namespace.name`; never ambiguous
 - **Collisions:** tracked at load time, shown in `nornflow show`; never fail initialization
 - **Ambiguity errors:** `AssetAmbiguityError` when a bare reference is same-tier ambiguous at resolve time
@@ -284,7 +284,7 @@ Catalog assets are registered under qualified keys and resolved through `Catalog
 
 Loading order: built-ins → local → packages (in `packages` list order).
 
-See the [Packages Guide — Loading Order and Precedence](./packages_guide.md#loading-order-and-precedence) for diagrams and examples.
+See the [Packages Guide: Loading Order and Precedence](./packages_guide.md#loading-order-and-precedence) for diagrams and examples.
 
 ## Model Classes
 
@@ -423,7 +423,7 @@ from nornir.core.inventory import Host
 from typing import Any
 
 class MyCustomHook(Hook):
-    hook_name = "my_custom"       # Required — defines the YAML key that activates this hook
+    hook_name = "my_custom"       # Required: defines the YAML key that activates this hook
     run_once_per_task = False     # False = runs per host (default); True = runs once for the task
     
     def __init__(self, value: Any):
@@ -454,7 +454,7 @@ class MyCustomHook(Hook):
 | `run_once_per_task` | `bool` | No (default `False`) | If `True`, hook logic runs only for the first host per task; subsequent hosts skip execution. Use for task-wide concerns (e.g., suppressing output, logging). If `False`, runs independently per host. |
 | `requires_deferred_templates` | `bool` | No (default `False`) | If `True`, signals `NornFlowVariableProcessor` to defer resolution of task argument templates until after the hook's pre-execution logic completes. See [Hook-Driven Template Resolution](./hooks_guide.md#hook-driven-template-resolution). |
 
-**Lifecycle methods** (override only what you need — the base class provides empty default implementations for all):
+**Lifecycle methods** (override only what you need; the base class provides empty default implementations for all):
 
 | Method | Scope | Description |
 |--------|-------|-------------|
@@ -514,11 +514,11 @@ def get_resolved_value(
 - Otherwise → returns `self.value` as-is
 - If `as_bool=True` → converts result to boolean using NornFlow's truthy string set (`"true"`, `"yes"`, `"1"`, `"on"`, `"y"`, `"t"`, `"enabled"`)
 
-The mixin also automatically validates Jinja2 expression syntax during workflow preparation (when markers are detected). Override `execute_hook_validations()` to add hook-specific constraints — always call `super().execute_hook_validations(task_model)` first to preserve mixin validation.
+The mixin also automatically validates Jinja2 expression syntax during workflow preparation (when markers are detected). Override `execute_hook_validations()` to add hook-specific constraints. Always call `super().execute_hook_validations(task_model)` first to preserve mixin validation.
 
 ### Hook Registration
 
-Registration is automatic — it happens at import time via `__init_subclass__` when Python loads a class that inherits from `Hook` and defines `hook_name`:
+Registration is automatic: it happens at import time via `__init_subclass__` when Python loads a class that inherits from `Hook` and defines `hook_name`:
 
 ```python
 # hooks/my_hook.py

@@ -418,9 +418,9 @@ View with: `nornflow show --j2-filters`
 
 NornFlow performs recursive searches in all configured directories, loading assets in this fixed order for each catalog:
 
-1. **Built-in assets** — Always loaded first (where applicable)
-2. **Package assets** — Loaded in the order packages are declared in `packages`
-3. **Local assets** — Loaded from `local_*` directories in the order specified
+1. **Built-in assets**: always loaded first (where applicable)
+2. **Package assets**: loaded in the order packages are declared in `packages`
+3. **Local assets**: loaded from `local_*` directories in the order specified
 
 - **Automatic discovery** happens during NornFlow initialization
 - **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters`, `--workflows`, `--blueprints`, `--hooks`, and `--j2-filters` options.
@@ -455,10 +455,10 @@ Every catalog asset is stored under a **qualified key** (`namespace.name`):
 
 You can reference assets in two ways:
 
-- **Bare name** (e.g. `echo`, `deploy.yaml`) — resolves by tier priority when unambiguous
-- **Qualified name** (e.g. `local.echo`, `nornflow_arista.get_facts`) — exact match only
+- **Bare name** (e.g. `echo`, `deploy.yaml`): resolves by tier priority when unambiguous
+- **Qualified name** (e.g. `local.echo`, `nornflow_arista.get_facts`): exact match only
 
-Packages and local assets **may reuse built-in names** — they remain reachable via qualified references. Local assets claim bare names only when no built-in already owns that bare name.
+Packages and local assets **may reuse built-in names**. They remain reachable via qualified references. Local assets claim bare names only when no built-in already owns that bare name.
 
 When two packages register the same bare name, initialization still succeeds. Collisions are tracked and shown in `nornflow show`. A bare reference fails with `AssetAmbiguityError` only when an executing workflow actually uses that ambiguous bare name.
 
@@ -472,12 +472,12 @@ Built-ins register first and **claim bare names unconditionally**. A local or pa
 | Filters | `hosts`, `groups` | Bare resolves to `nornflow.*` when present |
 | Hooks | `if`, `store_as`, `shush`, `single` | Bare resolves to `nornflow.*` when present |
 | Jinja2 Filters | NornFlow's built-in j2 filters | Bare resolves to `nornflow.*` when present |
-| Workflows | — no builtins — | n/a |
-| Blueprints | — no builtins — | n/a |
+| Workflows | (no builtins) | n/a |
+| Blueprints | (no builtins) | n/a |
 
 For workflows and blueprints, bare names are typically filenames (e.g. `deploy.yaml`). Qualified references look like `local.deploy.yaml`.
 
-Use `nornflow show --tasks` (and other `--*` catalog flags) to inspect the **Collision** column — it lists every namespace sharing a bare name and indicates whether bare resolution is unambiguous.
+Use `nornflow show --tasks` (and other `--*` catalog flags) to inspect the **Collision** column. It lists every namespace sharing a bare name and indicates whether bare resolution is unambiguous.
 
 ## Domains
 
@@ -593,7 +593,7 @@ tasks:
       interface: "GigabitEthernet0/1"
       description: "Uplink to {{ host.data.upstream_device }}"
       
-  # Task with result storage (simple mode — stores Result.result)
+  # Task with result storage (simple mode stores Result.result)
   - name: show_version
     store_as: version_info
 ```
@@ -772,11 +772,11 @@ tasks:
 
 **`store_as` Hook - Result Storage**
 
-Stores the task return value or extracted fields as runtime variables for use in later tasks. Simple mode (`store_as: var_name`) stores `Result.result` — not the full Nornir `Result` object. See the [Hooks Guide](./hooks_guide.md#the-store_as-hook) for path syntax and failure-path examples.
+Stores the task return value or extracted fields as runtime variables for use in later tasks. Simple mode (`store_as: var_name`) stores `Result.result`, not the full Nornir `Result` object. See the [Hooks Guide](./hooks_guide.md#the-store_as-hook) for path syntax and failure-path examples.
 
 ```yaml
 tasks:
-  # Simple mode — same as store_as: { device_facts: result }
+  # Simple mode: same as store_as: { device_facts: result }
   - name: get_facts
     store_as: device_facts
   
