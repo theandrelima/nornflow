@@ -237,7 +237,7 @@ workflow:
 
 > ⚠️ **Important: Understanding Relative Path Resolution**
 > 
-> When using **relative paths** for blueprints (not catalog names), the path is resolved against the **current working directory** where the nornflow command is executed — NOT the workflow file location or the blueprint file location.
+> When using **relative paths** for blueprints (not catalog names), the path is resolved against the **current working directory** where the nornflow command is executed, NOT the workflow file location or the blueprint file location.
 > 
 > In practice, you **SHOULD** always run nornflow commands from your project root directory (where `nornflow.yaml` is located), so relative paths effectively resolve from there.
 > 
@@ -245,7 +245,7 @@ workflow:
 
 > 🚫 **Packages restriction: catalog names only**
 >
-> If your blueprints are distributed as part of a NornFlow-compatible package, **path-based references (relative or absolute) must never be used** — neither in the workflow referencing the blueprint, nor inside the blueprint itself when referencing other blueprints. Packages are installed to arbitrary locations on the filesystem, so any path-based reference will break for anyone consuming the package. **Always use catalog names** (prefer qualified over bare names) when working with packaged blueprints. See the [Packages Guide](./packages_guide.md) for full details.
+> If your blueprints are distributed as part of a NornFlow-compatible package, **path-based references (relative or absolute) must never be used**, neither in the workflow referencing the blueprint nor inside the blueprint itself when referencing other blueprints. Packages are installed to arbitrary locations on the filesystem, so any path-based reference will break for anyone consuming the package. **Always use catalog names** (prefer qualified over bare names) when working with packaged blueprints. See the [Packages Guide](./packages_guide.md) for full details.
 
 **Example with uncatalogued blueprints:**
 

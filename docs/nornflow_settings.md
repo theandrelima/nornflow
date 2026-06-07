@@ -33,7 +33,7 @@ NornFlow will try to find a settings YAML file in the following order:
 
 ## Environment Variable Support
 
-Most settings can be overridden using environment variables with the `NORNFLOW_SETTINGS_` prefix. The **`packages`** setting is an exception — it cannot be overridden via environment variables and must be set in the settings YAML file (see [`packages`](#packages)).
+Most settings can be overridden using environment variables with the `NORNFLOW_SETTINGS_` prefix. The **`packages`** setting is an exception: it cannot be overridden via environment variables and must be set in the settings YAML file (see [`packages`](#packages)).
 
 ```bash
 # Override nornir_config_file
@@ -305,7 +305,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   ```
 - **Deep Dive**: [Packages Guide](./packages_guide.md)
 
-> **Note**: Environment variable override is not supported for this setting — package declarations are structural project decisions that belong in `nornflow.yaml`.
+> **Note**: Environment variable override is not supported for this setting. Package declarations are structural project decisions that belong in `nornflow.yaml`.
 
 ## NornFlow Settings vs Nornir Configs
 

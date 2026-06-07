@@ -284,8 +284,8 @@ NornFlow automatically discovers and builds catalogs of available tasks, workflo
 The task catalog contains all available Nornir tasks that can be used in workflows. Tasks are discovered from:
 
 1. **Built-in tasks** - Always available (e.g., `echo` & `set`)
-2. **Package tasks** - Contributed by packages declared in the `packages` setting
-3. **Local directories** - Specified in `local_tasks` setting
+2. **Local directories** - Specified in `local_tasks` setting
+3. **Package tasks** - Contributed by packages declared in the `packages` setting
 
 ```yaml
 # nornflow.yaml
@@ -314,8 +314,8 @@ def my_task(task: Task, **kwargs) -> Result:
 
 The workflow catalog contains all discovered workflow YAML files. Workflows are discovered from:
 
-1. **Package workflows** - Contributed by packages declared in the `packages` setting
-2. **Local directories** - Specified in `local_workflows` setting
+1. **Local directories** - Specified in `local_workflows` setting
+2. **Package workflows** - Contributed by packages declared in the `packages` setting
 
 ```yaml
 # nornflow.yaml
@@ -331,8 +331,8 @@ All files with `.yaml` or `.yml` extensions in these directories (including subd
 The filter catalog contains inventory filter functions that can be used in workflow definitions. Filters are discovered from:
 
 1. **Built-in filters** - currently `hosts` and `groups` filters
-2. **Package filters** - Contributed by packages declared in the `packages` setting
-3. **Local directories** - Specified in `local_filters` setting
+2. **Local directories** - Specified in `local_filters` setting
+3. **Package filters** - Contributed by packages declared in the `packages` setting
 
 ```yaml
 # nornflow.yaml
@@ -361,8 +361,8 @@ def site_filter(host: Host, region: str) -> bool:
 
 The blueprint catalog contains all discovered blueprint YAML files. Blueprints are discovered from:
 
-1. **Package blueprints** - Contributed by packages declared in the `packages` setting
-2. **Local directories** - Specified in `local_blueprints` setting
+1. **Local directories** - Specified in `local_blueprints` setting
+2. **Package blueprints** - Contributed by packages declared in the `packages` setting
 
 ```yaml
 # nornflow.yaml
@@ -378,8 +378,8 @@ All files with `.yaml` or `.yml` extensions in these directories (including subd
 The Jinja2 filters catalog contains all available Jinja2 filters that can be used in templates throughout NornFlow. Filters are discovered from:
 
 1. **Built-in filters** - NornFlow's custom filters and Python wrapper filters (always available)
-2. **Package j2_filters** - Contributed by packages declared in the `packages` setting
-3. **Local directories** - Specified in `local_j2_filters` setting
+2. **Local directories** - Specified in `local_j2_filters` setting
+3. **Package j2_filters** - Contributed by packages declared in the `packages` setting
 
 ```yaml
 # nornflow.yaml
@@ -418,16 +418,16 @@ View with: `nornflow show --j2-filters`
 
 NornFlow performs recursive searches in all configured directories, loading assets in this fixed order for each catalog:
 
-1. **Built-in assets** — Always loaded first (where applicable)
-2. **Package assets** — Loaded in the order packages are declared in `packages`
-3. **Local assets** — Loaded from `local_*` directories in the order specified
+1. **Built-in assets**: always loaded first (where applicable)
+2. **Local assets**: loaded from `local_*` directories in the order specified
+3. **Package assets**: loaded in the order packages are declared in `packages`
 
 - **Automatic discovery** happens during NornFlow initialization
 - **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters`, `--workflows`, `--blueprints`, `--hooks`, and `--j2-filters` options.
 
-#### Loading Order vs. Override Priority
+#### Loading Order vs. Bare-Name Priority
 
-These are two distinct concepts and it's important not to conflate them:
+Registration order and bare-name resolution both follow the same tier sequence for a predictable mental model: **built-ins → local → packages**. Loading order is when each tier is registered; bare-name priority is which tier wins when you reference a name without a namespace prefix.
 
 **Loading order** is the sequence in which assets are registered into the catalog:
 
@@ -455,10 +455,10 @@ Every catalog asset is stored under a **qualified key** (`namespace.name`):
 
 You can reference assets in two ways:
 
-- **Bare name** (e.g. `echo`, `deploy.yaml`) — resolves by tier priority when unambiguous
-- **Qualified name** (e.g. `local.echo`, `nornflow_arista.get_facts`) — exact match only
+- **Bare name** (e.g. `echo`, `deploy.yaml`): resolves by tier priority when unambiguous
+- **Qualified name** (e.g. `local.echo`, `nornflow_arista.get_facts`): exact match only
 
-Packages and local assets **may reuse built-in names** — they remain reachable via qualified references. Local assets claim bare names only when no built-in already owns that bare name.
+Packages and local assets **may reuse built-in names**. They remain reachable via qualified references. Local assets claim bare names only when no built-in already owns that bare name.
 
 When two packages register the same bare name, initialization still succeeds. Collisions are tracked and shown in `nornflow show`. A bare reference fails with `AssetAmbiguityError` only when an executing workflow actually uses that ambiguous bare name.
 
@@ -472,12 +472,12 @@ Built-ins register first and **claim bare names unconditionally**. A local or pa
 | Filters | `hosts`, `groups` | Bare resolves to `nornflow.*` when present |
 | Hooks | `if`, `store_as`, `shush`, `single` | Bare resolves to `nornflow.*` when present |
 | Jinja2 Filters | NornFlow's built-in j2 filters | Bare resolves to `nornflow.*` when present |
-| Workflows | — no builtins — | n/a |
-| Blueprints | — no builtins — | n/a |
+| Workflows | (no builtins) | n/a |
+| Blueprints | (no builtins) | n/a |
 
 For workflows and blueprints, bare names are typically filenames (e.g. `deploy.yaml`). Qualified references look like `local.deploy.yaml`.
 
-Use `nornflow show --tasks` (and other `--*` catalog flags) to inspect the **Collision** column — it lists every namespace sharing a bare name and indicates whether bare resolution is unambiguous.
+Use `nornflow show --tasks` (and other `--*` catalog flags) to inspect the **Collision** column. It lists every namespace sharing a bare name and indicates whether bare resolution is unambiguous.
 
 ## Domains
 
@@ -593,7 +593,7 @@ tasks:
       interface: "GigabitEthernet0/1"
       description: "Uplink to {{ host.data.upstream_device }}"
       
-  # Task with result storage (simple mode — stores Result.result)
+  # Task with result storage (simple mode stores Result.result)
   - name: show_version
     store_as: version_info
 ```
@@ -772,11 +772,11 @@ tasks:
 
 **`store_as` Hook - Result Storage**
 
-Stores the task return value or extracted fields as runtime variables for use in later tasks. Simple mode (`store_as: var_name`) stores `Result.result` — not the full Nornir `Result` object. See the [Hooks Guide](./hooks_guide.md#the-store_as-hook) for path syntax and failure-path examples.
+Stores the task return value or extracted fields as runtime variables for use in later tasks. Simple mode (`store_as: var_name`) stores `Result.result`, not the full Nornir `Result` object. See the [Hooks Guide](./hooks_guide.md#the-store_as-hook) for path syntax and failure-path examples.
 
 ```yaml
 tasks:
-  # Simple mode — same as store_as: { device_facts: result }
+  # Simple mode: same as store_as: { device_facts: result }
   - name: get_facts
     store_as: device_facts
   

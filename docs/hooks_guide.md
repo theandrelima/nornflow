@@ -266,9 +266,9 @@ The `store_as` hook saves task output into **runtime variables** so later tasks 
 
 **Behavior you should know:**
 
-- **`store_as` runs when a task succeeds or fails** — a failed task can still populate variables.
-- **Skipped hosts store nothing** — if the task did not run for a host, no variable is written for that host.
-- **Bad extraction paths stop the workflow** — invalid paths raise `HookValidationError`. This is **not** controlled by [failure strategy](./failure_strategies.md#what-failure-strategies-do-not-cover).
+- **`store_as` runs when a task succeeds or fails**: a failed task can still populate variables.
+- **Skipped hosts store nothing**: if the task did not run for a host, no variable is written for that host.
+- **Bad extraction paths stop the workflow**: invalid paths raise `HookValidationError`. This is **not** controlled by [failure strategy](./failure_strategies.md#what-failure-strategies-do-not-cover).
 
 #### Simple mode
 
@@ -323,15 +323,15 @@ The **first segment** of a path (the part before the first `.`) decides where lo
 | First segment | Meaning | Examples |
 |---------------|---------|----------|
 | A **top-level `Result` attribute** | Start on the Nornir `Result` object | `failed`, `changed`, `result`, `name` |
-| **Anything else** | **Shorthand** — start inside the task return value (`Result.result`) | `vendor`, `hostname`, `environment.cpu.usage` |
+| **Anything else** | **Shorthand**: start inside the task return value (`Result.result`) | `vendor`, `hostname`, `environment.cpu.usage` |
 
 **Typical case:** you want a field from what the task returned -> use shorthand (`vendor`, `hostname`, …).
 
 **Use a `Result` attribute** when you need task metadata:
 
-- `failed` — whether this task failed on this host
-- `changed` — whether the task reported a change
-- `result` — the full task return value (same as simple mode)
+- `failed`: whether this task failed on this host
+- `changed`: whether the task reported a change
+- `result`: the full task return value (same as simple mode)
 
 **Use `result.<key>`** when the bare name could mean both a `Result` attribute and a key inside the return value (see collisions below).
 
@@ -402,9 +402,9 @@ On a failed host, `step_failed` is `true` and the echo runs. On a successful hos
 
 #### Lifecycle summary
 
-1. **Validation** — configuration format is checked during workflow preparation.
-2. **task_instance_completed** — runs after the task finishes on each host (unless skipped).
-3. **Storage** — extracted values are written to the runtime variable manager for that host.
+1. **Validation**: configuration format is checked during workflow preparation.
+2. **task_instance_completed**: runs after the task finishes on each host (unless skipped).
+3. **Storage**: extracted values are written to the runtime variable manager for that host.
 
 ### The `shush` Hook
 
@@ -567,7 +567,7 @@ single: "shouldnt_work"   # Not in truthy values → False → runs on ALL hosts
 single: "maybe"           # Not in truthy values → False → runs on ALL hosts
 ```
 
-> **Important:** NornFlow does NOT use Python's general string truthiness (where any non-empty string is `True`). Instead, it checks against a specific set of truthy string values. Be aware that when `single` evaluates to `False`, the hook has **no effect** — the task runs on **all hosts** as if `single` was not configured at all. This is different from the `if` hook, where `False` means the task is **skipped**.
+> **Important:** NornFlow does NOT use Python's general string truthiness (where any non-empty string is `True`). Instead, it checks against a specific set of truthy string values. Be aware that when `single` evaluates to `False`, the hook has **no effect**: the task runs on **all hosts** as if `single` was not configured at all. This is different from the `if` hook, where `False` means the task is **skipped**.
 
 #### Mutual Exclusion
 
