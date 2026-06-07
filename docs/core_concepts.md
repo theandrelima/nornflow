@@ -284,8 +284,8 @@ NornFlow automatically discovers and builds catalogs of available tasks, workflo
 The task catalog contains all available Nornir tasks that can be used in workflows. Tasks are discovered from:
 
 1. **Built-in tasks** - Always available (e.g., `echo` & `set`)
-2. **Package tasks** - Contributed by packages declared in the `packages` setting
-3. **Local directories** - Specified in `local_tasks` setting
+2. **Local directories** - Specified in `local_tasks` setting
+3. **Package tasks** - Contributed by packages declared in the `packages` setting
 
 ```yaml
 # nornflow.yaml
@@ -314,8 +314,8 @@ def my_task(task: Task, **kwargs) -> Result:
 
 The workflow catalog contains all discovered workflow YAML files. Workflows are discovered from:
 
-1. **Package workflows** - Contributed by packages declared in the `packages` setting
-2. **Local directories** - Specified in `local_workflows` setting
+1. **Local directories** - Specified in `local_workflows` setting
+2. **Package workflows** - Contributed by packages declared in the `packages` setting
 
 ```yaml
 # nornflow.yaml
@@ -331,8 +331,8 @@ All files with `.yaml` or `.yml` extensions in these directories (including subd
 The filter catalog contains inventory filter functions that can be used in workflow definitions. Filters are discovered from:
 
 1. **Built-in filters** - currently `hosts` and `groups` filters
-2. **Package filters** - Contributed by packages declared in the `packages` setting
-3. **Local directories** - Specified in `local_filters` setting
+2. **Local directories** - Specified in `local_filters` setting
+3. **Package filters** - Contributed by packages declared in the `packages` setting
 
 ```yaml
 # nornflow.yaml
@@ -361,8 +361,8 @@ def site_filter(host: Host, region: str) -> bool:
 
 The blueprint catalog contains all discovered blueprint YAML files. Blueprints are discovered from:
 
-1. **Package blueprints** - Contributed by packages declared in the `packages` setting
-2. **Local directories** - Specified in `local_blueprints` setting
+1. **Local directories** - Specified in `local_blueprints` setting
+2. **Package blueprints** - Contributed by packages declared in the `packages` setting
 
 ```yaml
 # nornflow.yaml
@@ -378,8 +378,8 @@ All files with `.yaml` or `.yml` extensions in these directories (including subd
 The Jinja2 filters catalog contains all available Jinja2 filters that can be used in templates throughout NornFlow. Filters are discovered from:
 
 1. **Built-in filters** - NornFlow's custom filters and Python wrapper filters (always available)
-2. **Package j2_filters** - Contributed by packages declared in the `packages` setting
-3. **Local directories** - Specified in `local_j2_filters` setting
+2. **Local directories** - Specified in `local_j2_filters` setting
+3. **Package j2_filters** - Contributed by packages declared in the `packages` setting
 
 ```yaml
 # nornflow.yaml
@@ -419,15 +419,15 @@ View with: `nornflow show --j2-filters`
 NornFlow performs recursive searches in all configured directories, loading assets in this fixed order for each catalog:
 
 1. **Built-in assets**: always loaded first (where applicable)
-2. **Package assets**: loaded in the order packages are declared in `packages`
-3. **Local assets**: loaded from `local_*` directories in the order specified
+2. **Local assets**: loaded from `local_*` directories in the order specified
+3. **Package assets**: loaded in the order packages are declared in `packages`
 
 - **Automatic discovery** happens during NornFlow initialization
 - **View catalogs** - Use `nornflow show --catalogs` to see all discovered items, or specific `--tasks`, `--filters`, `--workflows`, `--blueprints`, `--hooks`, and `--j2-filters` options.
 
-#### Loading Order vs. Override Priority
+#### Loading Order vs. Bare-Name Priority
 
-These are two distinct concepts and it's important not to conflate them:
+Registration order and bare-name resolution both follow the same tier sequence for a predictable mental model: **built-ins → local → packages**. Loading order is when each tier is registered; bare-name priority is which tier wins when you reference a name without a namespace prefix.
 
 **Loading order** is the sequence in which assets are registered into the catalog:
 
