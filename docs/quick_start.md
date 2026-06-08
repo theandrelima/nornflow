@@ -203,6 +203,11 @@ Run it:
 nornflow run backup_configs.yaml
 ```
 
+Validate task-level errors from a workflow without executing tasks or contacting devices:
+```bash
+nornflow validate backup_configs.yaml
+```
+
 ## Using Variables
 
 ### Workflow-Level Variables

@@ -1,0 +1,5 @@
+workflow:
+  name: Containerlab validate bad args
+  tasks:
+    - name: nornflow.echo
+      args: {}

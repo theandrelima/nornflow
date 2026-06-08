@@ -153,6 +153,7 @@ Implemented in `provision_lab_environment()` (`lab_project.py`), triggered by th
 
 - In-process catalog validation via `lab_runner.py phase-b` (`test_catalog_and_package.py`).
 - `nornflow show` CLI checks for tasks, filters, workflows, blueprints, j2-filters, and hooks (`test_nornflow_show.py`).
+- `nornflow validate` static workflow checks — success and failure fixtures (`test_validate.py`).
 - `nornflow run vars_all_levels.yaml`: env, global, domain, workflow, CLI, and runtime vars plus j2 filters (`test_vars_all_levels.py`, echo-only; file under `workflows/lab/` for domain scoping).
 
 **Phase C: live workflow runs** (requires reachable lab):

@@ -56,7 +56,10 @@ class WorkflowModel(NornFlowBaseModel):
             logger.error("Workflow creation failed: missing 'workflow' key in dict_args")
             raise WorkflowError("Workflow file must have 'workflow' as a root-level key.")
 
-        workflow_dict = dict_args["workflow"]
+        #shallow-copy of dict_args["workflow"] to avoid mutating that object
+        workflow_dict = dict(dict_args["workflow"])
+        if workflow_dict.get("tasks"):
+            workflow_dict["tasks"] = list(workflow_dict["tasks"])
 
         if "tasks" not in workflow_dict:
             workflow_dict["tasks"] = []

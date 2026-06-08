@@ -5,7 +5,10 @@ This module defines the core exceptions used throughout the NornFlow application
 organized hierarchically with clear inheritance paths.
 """
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from nornflow.validation import ValidationIssue
 
 ###############################################################################
 # ROOT EXCEPTION
@@ -148,6 +151,14 @@ class TaskError(WorkflowError):
 
     def __init__(self, message: str = "", task_name: str = "", **kwargs):
         super().__init__(message, task_name=task_name, **kwargs)
+
+
+class WorkflowValidationError(WorkflowError):
+    """Raised when static workflow validation finds one or more task-level problems."""
+
+    def __init__(self, issues: "list[ValidationIssue]"):
+        self.issues = issues
+        super().__init__(f"Workflow validation failed with {len(issues)} error(s)")
 
 
 class FilterError(WorkflowError):

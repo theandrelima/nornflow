@@ -1,0 +1,2 @@
+tasks:
+  - blueprint: lab_validate_loop_a.yaml

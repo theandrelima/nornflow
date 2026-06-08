@@ -70,3 +70,7 @@ class CLIRunError(NornFlowCLIError):
 
 class CLIInitError(NornFlowCLIError):
     """Raised when there are errors initializing resources via CLI."""
+
+
+class CLIValidateError(NornFlowCLIError):
+    """Raised when static workflow validation fails via CLI."""

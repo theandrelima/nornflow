@@ -21,6 +21,18 @@ class TestWorkflowModel:
         assert workflow.name == "test_workflow"
         assert len(workflow.tasks) == 1
 
+    def test_create_does_not_mutate_input_workflow_dict(self, tmp_path):
+        """Blueprint expansion must not replace tasks in the caller's workflow dict."""
+        tasks = [{"name": "nornflow.echo", "args": {"msg": "hi"}}]
+        workflow_section = {"name": "immutable", "tasks": tasks}
+        workflow_dict = {"workflow": workflow_section}
+
+        WorkflowModel.create(workflow_dict)
+
+        assert len(tasks) == 1
+        assert isinstance(tasks[0], dict)
+        assert tasks[0]["name"] == "nornflow.echo"
+
     def test_create_missing_workflow_key(self):
         """Test error when workflow key missing."""
         with pytest.raises(WorkflowError, match="'workflow' as a root-level key"):

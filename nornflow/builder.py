@@ -3,8 +3,8 @@ from typing import Any
 
 from pydantic_serdes.utils import load_file_to_dict
 
-from nornflow.constants import FailureStrategy
-from nornflow.exceptions import InitializationError, ResourceError, SettingsError
+from nornflow.constants import FailureStrategy, NORNFLOW_SUPPORTED_YAML_EXTENSIONS
+from nornflow.exceptions import InitializationError, ResourceError, SettingsError, WorkflowError
 from nornflow.logger import logger
 from nornflow.models import WorkflowModel
 from nornflow.nornflow import NornFlow
@@ -162,6 +162,34 @@ class NornFlowBuilder:
         """
         self._workflow = (workflow_name, "name")
         return self
+
+    def with_workflow_reference(self, reference: str) -> "NornFlowBuilder":
+        """Set workflow from a YAML file path or workflows catalog name.
+
+        If reference resolves to an existing path, load that file. Otherwise resolve
+        the name through the workflows catalog (same behavior as 'nornflow run').
+
+        Args:
+            reference: Path to a workflow YAML if it exists on disk; otherwise the workflow's
+            catalog name (typically the .yaml filename).
+
+        Returns:
+            The builder instance for method chaining.
+
+        Raises:
+            WorkflowError: If reference does not end with a supported YAML extension.
+        """
+        if not any(reference.endswith(ext) for ext in NORNFLOW_SUPPORTED_YAML_EXTENSIONS):
+            raise WorkflowError(
+                f"Workflow reference must end with one of {NORNFLOW_SUPPORTED_YAML_EXTENSIONS}: "
+                f"{reference}",
+                component="NornFlowBuilder",
+            )
+
+        target_path = Path(reference)
+        if target_path.exists():
+            return self.with_workflow_path(str(target_path.resolve()))
+        return self.with_workflow_name(reference)
 
     def with_processors(self, processors: list[dict[str, Any]]) -> "NornFlowBuilder":
         """
