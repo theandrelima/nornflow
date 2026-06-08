@@ -1,6 +1,6 @@
 import typer
 
-from nornflow.cli import init, run, show
+from nornflow.cli import init, run, show, validate
 
 app = typer.Typer(
     help="NornFlow is a workflow orchestration tool for Network Automation built around Nornir.",
@@ -34,6 +34,7 @@ def main(
 app.command()(init.init)
 app.command()(run.run)
 app.command()(show.show)
+app.command()(validate.validate)
 
 if __name__ == "__main__":
     app()
