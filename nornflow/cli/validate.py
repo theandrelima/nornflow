@@ -99,12 +99,12 @@ def validate(
     except WorkflowValidationError as exc:
         show_validation_issues(workflow, exc)
         sys.exit(1)
+    except CLIValidateError as exc:
+        exc.show()
+        sys.exit(exc.code)
     except NornFlowError as exc:
         CLIValidateError(
             message=f"Validation failed for '{workflow}': {exc}",
             original_exception=exc,
         ).show()
         sys.exit(1)
-    except CLIValidateError as exc:
-        exc.show()
-        sys.exit(exc.code)
