@@ -46,6 +46,7 @@ from nornflow.utils import (
     print_workflow_overview,
     process_filter,
 )
+from nornflow.validation import validate_workflow_tasks
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
 
@@ -1254,6 +1255,32 @@ class NornFlow:
             return 101
 
         return 0
+
+    def validate_workflow(self, workflow: WorkflowModel | None = None) -> None:
+        """Validate a fully assembled workflow without executing tasks or Nornir I/O.
+
+        Precondition: the workflow must already be loaded and fully assembled. Use
+        NornFlowBuilder.with_workflow_path() and build(), or WorkflowModel.create()
+        with blueprint kwargs, before calling this. Do not call on raw dicts,
+        unexpanded blueprints, or an unresolved workflow name string.
+
+        Assembly errors are raised during create() or build(). This method runs a
+        second pass via validate_workflow_tasks().
+
+        Args:
+            workflow: Workflow to validate; defaults to the instance workflow.
+
+        Raises:
+            WorkflowError: When no workflow is loaded or there are no tasks after
+                expansion.
+            WorkflowValidationError: When one or more task-level problems were found.
+        """
+        target = workflow if workflow is not None else self._workflow
+
+        if target is None:
+            raise WorkflowError("No workflow loaded to validate", component="NornFlow")
+
+        validate_workflow_tasks(self, target)
 
     def run(self) -> int:
         """
