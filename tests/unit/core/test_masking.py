@@ -1,6 +1,10 @@
+import logging
+
 import pytest
 
+from nornflow.logger import MicrosecondFormatter
 from nornflow.masking import (
+    LARGE_TEXT_THRESHOLD,
     REDACTED,
     is_sensitive_key,
     mask_for_display,
@@ -100,6 +104,36 @@ class TestMaskText:
         assert "xyz" not in result
         assert "router1" in result
         assert result.count(REDACTED) == 2
+
+    def test_large_string_without_keywords_skips_regex(self):
+        """Large blobs with no protected keywords return unchanged."""
+        text = "x" * (LARGE_TEXT_THRESHOLD + 1000)
+        assert mask_text(text) == text
+
+    def test_large_string_with_keyword_still_masks(self):
+        text = "x" * LARGE_TEXT_THRESHOLD + " password=leaked_secret"
+        result = mask_text(text)
+        assert "leaked_secret" not in result
+        assert REDACTED in result
+
+
+class TestMicrosecondFormatter:
+    """Tests for log formatter masking."""
+
+    def test_format_masks_sensitive_message(self):
+        formatter = MicrosecondFormatter("%(message)s")
+        record = logging.LogRecord(
+            name="nornflow",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="password=secret123",
+            args=(),
+            exc_info=None,
+        )
+        result = formatter.format(record)
+        assert "secret123" not in result
+        assert REDACTED in result
 
 
 class TestMaskStructure:

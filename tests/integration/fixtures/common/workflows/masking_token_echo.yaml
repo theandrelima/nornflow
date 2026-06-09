@@ -1,0 +1,8 @@
+workflow:
+  name: output masking echo
+  vars:
+    api_token: INTEGRATION_SECRET_TOKEN_XYZ
+  tasks:
+    - name: nornflow.echo
+      args:
+        msg: "api_token={{ api_token }}"

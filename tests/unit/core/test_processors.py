@@ -4,6 +4,7 @@ import pytest
 
 from nornflow.builtins.constants import SILENT_SKIP_FLAG
 from nornflow.builtins.processors.default_processor import DefaultNornFlowProcessor
+from nornflow.masking import REDACTED
 from nornflow.exceptions import ProcessorError
 from nornflow.models import WorkflowModel
 from nornflow import NornFlow
@@ -244,3 +245,28 @@ class TestDefaultNornFlowProcessorSilentSkip:
             processor.task_instance_completed(mock_task, mock_host, mock_result)
 
         assert processor.skipped_executions == initial_skipped
+
+
+class TestDefaultNornFlowProcessorOutputMasking:
+    """Test sensitive data masking in task output."""
+
+    def test_format_task_output_masks_secrets(self):
+        processor = DefaultNornFlowProcessor()
+        mock_result = MagicMock()
+        mock_result.result = "api_token=supersecret123"
+
+        output = processor._format_task_output(mock_result, suppress_output=False)
+
+        assert "supersecret123" not in output
+        assert REDACTED in output
+
+    def test_format_task_output_skips_mask_when_shushed(self):
+        processor = DefaultNornFlowProcessor()
+        mock_result = MagicMock()
+        mock_result.result = "api_token=supersecret123"
+
+        output = processor._format_task_output(mock_result, suppress_output=True)
+
+        assert "supersecret123" not in output
+        assert "[Shushed!]" in output
+        assert REDACTED not in output
