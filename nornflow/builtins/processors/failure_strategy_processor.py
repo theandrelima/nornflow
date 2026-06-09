@@ -9,6 +9,7 @@ from tabulate import tabulate
 
 from nornflow.constants import FailureStrategy
 from nornflow.logger import logger
+from nornflow.masking import mask_text
 
 # Initialize colorama
 init(autoreset=True)
@@ -81,7 +82,7 @@ class NornFlowFailureStrategyProcessor(Processor):
                         )
                         print(f"{Fore.RED}Task '{task.name}' failed on host '{host.name}'")
                         if result.exception:
-                            print(f"{Fore.RED}Error: {result.exception}")
+                            print(f"{Fore.RED}Error: {mask_text(str(result.exception))}")
                         print(f"{Fore.RED}Signaling all threads to stop...")
                         print(
                             f"{Fore.RED}NOTE: Tasks already started will continue "
@@ -111,7 +112,11 @@ class NornFlowFailureStrategyProcessor(Processor):
                 print()
                 error_table = []
                 for task_name, host_name, host_result in self.collected_errors:
-                    error_msg = str(host_result.exception) if host_result.exception else "Unknown error"
+                    error_msg = (
+                        mask_text(str(host_result.exception))
+                        if host_result.exception
+                        else "Unknown error"
+                    )
                     error_table.append([task_name, host_name, error_msg])
                 if error_table:
                     print(tabulate(error_table, headers=["Task", "Host", "Error"], tablefmt="simple"))
