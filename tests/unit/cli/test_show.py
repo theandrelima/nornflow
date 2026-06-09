@@ -476,3 +476,57 @@ class TestTableRenderers:
         assert len(result) == 2
         for row in result:
             assert len(row) == 2
+
+
+class TestMaskingInShow:
+    """Verify that render_table_data masks sensitive values before display."""
+
+    def test_nested_token_is_masked(self):
+        """nautobot_token nested inside inventory options must never appear in output."""
+        mock_nornflow = MagicMock()
+        mock_nornflow.nornir_configs = {
+            "inventory": {
+                "plugin": "NautobotInventory",
+                "options": {
+                    "nautobot_url": "http://localhost:8080",
+                    "nautobot_token": "3ff4118f836dfa3c2fc1b4bc0db7afccfb87dcd3",
+                },
+            }
+        }
+
+        result = render_nornir_cfgs_table_data(mock_nornflow)
+
+        rendered = str(result)
+        assert "3ff4118f836dfa3c2fc1b4bc0db7afccfb87dcd3" not in rendered
+        assert "***REDACTED***" in rendered
+
+    def test_url_is_not_masked(self):
+        """Non-sensitive values such as nautobot_url must pass through unchanged."""
+        mock_nornflow = MagicMock()
+        mock_nornflow.nornir_configs = {
+            "inventory": {
+                "options": {
+                    "nautobot_url": "http://localhost:8080",
+                    "nautobot_token": "secret",
+                }
+            }
+        }
+
+        result = render_nornir_cfgs_table_data(mock_nornflow)
+
+        assert "http://localhost:8080" in str(result)
+
+    def test_top_level_sensitive_key_in_settings_is_masked(self):
+        """A top-level sensitive key in settings.as_dict must be masked."""
+        mock_nornflow = MagicMock()
+        mock_nornflow.settings.as_dict = {
+            "nornir_config_file": "nornir_configs/config.yaml",
+            "db_password": "hunter2",
+        }
+
+        result = render_settings_table_data(mock_nornflow)
+
+        rendered = str(result)
+        assert "hunter2" not in rendered
+        assert "***REDACTED***" in rendered
+        assert "nornir_configs/config.yaml" in rendered
