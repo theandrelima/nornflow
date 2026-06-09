@@ -10,6 +10,7 @@ from nornflow.builtins.processors import (
     NornFlowFailureStrategyProcessor,
 )
 from nornflow.constants import FailureStrategy
+from nornflow.masking import REDACTED
 from nornflow.models import WorkflowModel
 from nornflow.settings import NornFlowSettings
 
@@ -317,6 +318,24 @@ class TestNornFlowFailureStrategyProcessor:
         mock_tabulate.assert_called_once()
         call_args = mock_tabulate.call_args
         assert call_args[1]["headers"] == ["Task", "Host", "Error"]
+
+    @patch("nornflow.builtins.processors.failure_strategy_processor.tabulate")
+    @patch("builtins.print")
+    def test_print_final_workflow_summary_masks_secrets_in_errors(
+        self, mock_print, mock_tabulate
+    ):
+        """Error messages with sensitive key=value patterns are masked before display."""
+        processor = NornFlowFailureStrategyProcessor(FailureStrategy.SKIP_FAILED)
+
+        mock_result = MagicMock()
+        mock_result.exception = Exception("api_token=supersecret123")
+        processor.collected_errors = [("task1", "host1", mock_result)]
+
+        processor.print_final_workflow_summary()
+
+        error_table = mock_tabulate.call_args[0][0]
+        assert "supersecret123" not in error_table[0][2]
+        assert REDACTED in error_table[0][2]
 
     @patch("builtins.print")
     def test_print_final_workflow_summary_no_errors(self, mock_print):
