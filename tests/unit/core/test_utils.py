@@ -733,19 +733,19 @@ class TestFormatVariableValue:
         """Test password is masked."""
         result = format_variable_value("password", "secret123")
 
-        assert result == "********"
+        assert result == "***REDACTED***"
 
     def test_format_protected_token(self):
         """Test token is masked."""
         result = format_variable_value("api_token", "abc123")
 
-        assert result == "********"
+        assert result == "***REDACTED***"
 
     def test_format_protected_secret(self):
         """Test secret is masked."""
         result = format_variable_value("secret_key", "sensitive")
 
-        assert result == "********"
+        assert result == "***REDACTED***"
 
     def test_format_tuple_value(self):
         """Test tuple is formatted as list."""
@@ -757,7 +757,7 @@ class TestFormatVariableValue:
         """Test protection is case-insensitive."""
         result = format_variable_value("PASSWORD", "secret")
 
-        assert result == "********"
+        assert result == "***REDACTED***"
 
     def test_format_integer(self):
         """Test formatting integer value."""
@@ -787,7 +787,7 @@ class TestFormatVariableValue:
         """Test partial keyword match masks value."""
         result = format_variable_value("my_password_var", "value")
 
-        assert result == "********"
+        assert result == "***REDACTED***"
 
 
 class TestPrintWorkflowOverview:
