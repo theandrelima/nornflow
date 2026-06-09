@@ -14,9 +14,7 @@ Three public entry points cover all output sinks:
 import re
 from typing import Any
 
-from nornflow.constants import PROTECTED_KEYWORDS
-
-REDACTED = "***REDACTED***"
+from nornflow.constants import LARGE_TEXT_THRESHOLD, PROTECTED_KEYWORDS, REDACTED
 
 # Frozenset for O(1) lookup; normalized to lowercase once at import time.
 _KEYWORDS_SET: frozenset[str] = frozenset(kw.lower() for kw in PROTECTED_KEYWORDS)
@@ -78,9 +76,19 @@ def mask_text(text: str, *, reveal: bool = False) -> str:
         String with sensitive values replaced by REDACTED, or the original string
         if reveal is True or input is not a str.
     """
-    if reveal or not isinstance(text, str):
+    if reveal or not isinstance(text, str) or not text:
         return text
+
+    if len(text) >= LARGE_TEXT_THRESHOLD and not _text_may_contain_secrets(text):
+        return text
+
     return _get_mask_text_pattern().sub(rf"\1\2\3{REDACTED}\5", text)
+
+
+def _text_may_contain_secrets(text: str) -> bool:
+    """Cheap pre-check: True if any protected keyword appears as a substring."""
+    text_lower = text.lower()
+    return any(keyword in text_lower for keyword in _KEYWORDS_SET)
 
 
 def mask_structure(

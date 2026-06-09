@@ -9,6 +9,7 @@ from nornir.core.processor import Processor
 from nornir.core.task import Result, Task
 
 from nornflow.builtins.constants import SILENT_SKIP_FLAG
+from nornflow.masking import mask_text
 
 # Initialize colorama
 init(autoreset=True)
@@ -101,7 +102,8 @@ class DefaultNornFlowProcessor(Processor):
             Formatted output string with appropriate styling
         """
         if not suppress_output and result.result:
-            return f"\n{Fore.WHITE}Output:\n{result.result}"
+            output = mask_text(str(result.result))
+            return f"\n{Fore.WHITE}Output:\n{output}"
         if suppress_output:
             return f"\n{Fore.WHITE}Output: {Style.DIM}[Shushed!]{Style.RESET_ALL}"
         return ""

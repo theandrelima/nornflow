@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from nornflow.constants import NORNFLOW_DEFAULT_LOGGER
-from nornflow.masking import REDACTED, mask_text
+from nornflow.masking import mask_text
 
 
 
@@ -105,10 +105,12 @@ class NornFlowLogger:
         # Console handler for ERROR level and above (always active for visibility)
         console_handler = logging.StreamHandler(sys.stderr)
         console_handler.setLevel(logging.ERROR)
-        console_formatter = logging.Formatter(
-            "%(asctime)s [%(levelname)s] [%(name)s] - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        console_handler.setFormatter(
+            MicrosecondFormatter(
+                "%(asctime)s [%(levelname)s] [%(name)s] - %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
         )
-        console_handler.setFormatter(console_formatter)
         self._logger.addHandler(console_handler)
 
         # Execution context

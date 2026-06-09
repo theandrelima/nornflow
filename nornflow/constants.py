@@ -100,6 +100,12 @@ NORNFLOW_SUPPORTED_YAML_EXTENSIONS = (".yaml", ".yml")
 # Default inventory filter keys
 JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")
 
+# Output masking
+REDACTED = "***REDACTED***"
+# Strings below this size always run the regex pass; larger strings use a keyword
+# substring pre-check first to avoid scanning huge blobs with no secrets.
+LARGE_TEXT_THRESHOLD = 8192
+
 # Keywords in variable names that should be masked in display
 PROTECTED_KEYWORDS = [
     # Authentication

@@ -25,7 +25,8 @@ from nornflow.constants import (
     JINJA_PATTERN,
     NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
 )
-from nornflow.masking import REDACTED, is_sensitive_key
+from nornflow.constants import REDACTED
+from nornflow.masking import is_sensitive_key
 from nornflow.exceptions import (
     CoreError,
     ProcessorError,
