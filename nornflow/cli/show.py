@@ -16,6 +16,7 @@ from nornflow.cli.constants import CWD
 from nornflow.cli.exceptions import CLIShowError
 from nornflow.exceptions import NornFlowError
 from nornflow.logger import logger
+from nornflow.masking import mask_structure
 
 app = typer.Typer()
 
@@ -456,7 +457,7 @@ def render_nornir_cfgs_table_data(nornflow: "NornFlow") -> list[list[str]]:
 def render_table_data(
     data: dict[str, Any], key_color: str = "cyan", value_color: str = "yellow"
 ) -> list[list[str]]:
-    """Render a dictionary as a list of lists.
+    """Render a dictionary as a list of lists, masking sensitive values before display.
 
     Args:
         data: The dictionary to render.
@@ -464,10 +465,11 @@ def render_table_data(
         value_color: The color for the values.
 
     Returns:
-        The table data.
+        The table data with sensitive values replaced by REDACTED.
     """
+    masked = mask_structure(data)
     table_data = []
-    for key, value in data.items():
+    for key, value in masked.items():
         colored_key = colored(key, key_color, attrs=["bold"])
         formatted_value = format_value(value, value_color)
         table_data.append([colored_key, formatted_value])

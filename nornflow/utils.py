@@ -24,8 +24,8 @@ from nornflow.constants import (
     FailureStrategy,
     JINJA_PATTERN,
     NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
-    PROTECTED_KEYWORDS,
 )
+from nornflow.masking import REDACTED, is_sensitive_key
 from nornflow.exceptions import (
     CoreError,
     ProcessorError,
@@ -399,10 +399,10 @@ def format_variable_value(key: str, value: Any) -> str:
         value: The variable value.
 
     Returns:
-        The formatted display string.
+        The formatted display string, with REDACTED substituted for sensitive values.
     """
-    if any(keyword in key.lower() for keyword in PROTECTED_KEYWORDS):
-        return "********"
+    if is_sensitive_key(key):
+        return REDACTED
     display_value = str(value)
     if isinstance(value, tuple):
         display_value = display_value.replace("(", "[").replace(")", "]")

@@ -27,33 +27,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from nornflow.constants import NORNFLOW_DEFAULT_LOGGER, PROTECTED_KEYWORDS
+from nornflow.constants import NORNFLOW_DEFAULT_LOGGER
+from nornflow.masking import REDACTED, mask_text
 
-REDACTED = "***REDACTED***"
-
-
-def _get_sanitize_pattern() -> re.Pattern:
-    """Get or build the compiled regex pattern for sensitive data detection."""
-    if not hasattr(_get_sanitize_pattern, "_pattern"):
-        keywords = "|".join(re.escape(kw) for kw in PROTECTED_KEYWORDS)
-        _get_sanitize_pattern._pattern = re.compile(  # noqa: SLF001
-            rf"({keywords})(\s*[:=]\s*)(['\"]?)(\S+?)(\3)(?=\s|,|}}|\]|$)", re.IGNORECASE
-        )
-    return _get_sanitize_pattern._pattern  # noqa: SLF001
-
-
-def sanitize_log_message(message: str) -> str:
-    """Sanitize sensitive data from a log message.
-
-    Args:
-        message: The log message to sanitize.
-
-    Returns:
-        Message with sensitive values replaced by REDACTED.
-    """
-    if not isinstance(message, str):
-        return message
-    return _get_sanitize_pattern().sub(rf"\1\2\3{REDACTED}\5", message)
 
 
 def sanitize_filename(name: str) -> str:
@@ -93,11 +69,11 @@ class MicrosecondFormatter(logging.Formatter):
         return s
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format the log record with sanitized message."""
-        record.msg = sanitize_log_message(str(record.msg))
+        """Format the log record with masked message."""
+        record.msg = mask_text(str(record.msg))
         if record.args:
             record.args = tuple(
-                sanitize_log_message(arg) if isinstance(arg, str) else arg for arg in record.args
+                mask_text(arg) if isinstance(arg, str) else arg for arg in record.args
             )
         return super().format(record)
 
