@@ -60,7 +60,24 @@ def sanitize_filename(name: str) -> str:
 
 
 class MicrosecondFormatter(logging.Formatter):
-    """Custom formatter with microsecond timestamps and sensitive data sanitization."""
+    """Custom formatter with microsecond timestamps and optional sensitive data redaction."""
+
+    def __init__(
+        self,
+        fmt: str | None = None,
+        datefmt: str | None = None,
+        *,
+        redaction_enabled: bool = True,
+    ) -> None:
+        """Initialize the formatter.
+
+        Args:
+            fmt: Log format string.
+            datefmt: Optional strftime format for timestamps.
+            redaction_enabled: When True, apply mask_text to log message content.
+        """
+        super().__init__(fmt, datefmt)
+        self.redaction_enabled = redaction_enabled
 
     def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:  # noqa: N802
         """Format the time with microseconds support."""
@@ -69,11 +86,12 @@ class MicrosecondFormatter(logging.Formatter):
         return s
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format the log record with masked message."""
-        record.msg = mask_text(str(record.msg))
+        """Format the log record, redacting sensitive content when enabled."""
+        reveal = not self.redaction_enabled
+        record.msg = mask_text(str(record.msg), reveal=reveal)
         if record.args:
             record.args = tuple(
-                mask_text(arg) if isinstance(arg, str) else arg for arg in record.args
+                mask_text(arg, reveal=reveal) if isinstance(arg, str) else arg for arg in record.args
             )
         return super().format(record)
 
@@ -101,12 +119,13 @@ class NornFlowLogger:
         # Core logger
         self._logger = logging.getLogger("nornflow")
         self._logger.setLevel(logging.DEBUG)
+        self._logs_redaction_enabled = True
 
         # Console handler for ERROR level and above (always active for visibility)
         console_handler = logging.StreamHandler(sys.stderr)
         console_handler.setLevel(logging.ERROR)
         console_handler.setFormatter(
-            MicrosecondFormatter(
+            self._create_formatter(
                 "%(asctime)s [%(levelname)s] [%(name)s] - %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S",
             )
@@ -117,12 +136,42 @@ class NornFlowLogger:
         self._execution_context = None
         self._file_handler = None
 
+    def _create_formatter(self, fmt: str, datefmt: str | None = None) -> MicrosecondFormatter:
+        """Build a MicrosecondFormatter using the current logs redaction setting.
+
+        Args:
+            fmt: Log format string.
+            datefmt: Optional strftime format for timestamps.
+
+        Returns:
+            Configured MicrosecondFormatter instance.
+        """
+        return MicrosecondFormatter(
+            fmt,
+            datefmt=datefmt,
+            redaction_enabled=self._logs_redaction_enabled,
+        )
+
+    def set_logs_redaction(self, logs_redaction_enabled: bool) -> None:
+        """Enable or disable redaction for all active log handlers.
+
+        Args:
+            logs_redaction_enabled: When False, log messages are written without redaction.
+        """
+        self._logs_redaction_enabled = logs_redaction_enabled
+        for handler in self._logger.handlers:
+            formatter = handler.formatter
+            if isinstance(formatter, MicrosecondFormatter):
+                formatter.redaction_enabled = logs_redaction_enabled
+
     def set_execution_context(
         self,
         execution_name: str,
         execution_type: str,
         log_dir: str | Path | None = None,
         log_level: str = "INFO",
+        *,
+        logs_redaction_enabled: bool = True,
     ) -> None:
         """
         Set the execution context for logging.
@@ -134,7 +183,10 @@ class NornFlowLogger:
             execution_type: Type of execution ("workflow", "task", etc.)
             log_dir: Directory to store log files. If None, uses default.
             log_level: Logging level (e.g., "DEBUG", "INFO").
+            logs_redaction_enabled: When False, log file and stderr log output skip redaction.
         """
+        self.set_logs_redaction(logs_redaction_enabled)
+
         # Remove existing file handler if present
         if self._file_handler:
             self._logger.removeHandler(self._file_handler)
@@ -165,7 +217,7 @@ class NornFlowLogger:
 
         # Create file formatter with microsecond timestamps
         self._file_handler.setFormatter(
-            MicrosecondFormatter("%(asctime)s [%(levelname)s] [%(name)s] - %(message)s")
+            self._create_formatter("%(asctime)s [%(levelname)s] [%(name)s] - %(message)s")
         )
 
         # Add file handler to logger

@@ -34,8 +34,9 @@ class NornFlowFailureStrategyProcessor(Processor):
         failure_strategy: The failure handling strategy to apply.
     """
 
-    def __init__(self, failure_strategy: FailureStrategy) -> None:
+    def __init__(self, failure_strategy: FailureStrategy, redaction_enabled: bool = True) -> None:
         self.failure_strategy = failure_strategy
+        self.redaction_enabled = redaction_enabled
         self.collected_errors = []
         self.fail_fast_triggered = False
         self.nornir = None
@@ -82,7 +83,10 @@ class NornFlowFailureStrategyProcessor(Processor):
                         )
                         print(f"{Fore.RED}Task '{task.name}' failed on host '{host.name}'")
                         if result.exception:
-                            print(f"{Fore.RED}Error: {mask_text(str(result.exception))}")
+                            print(
+                                f"{Fore.RED}Error: "
+                                f"{mask_text(str(result.exception), reveal=not self.redaction_enabled)}"
+                            )
                         print(f"{Fore.RED}Signaling all threads to stop...")
                         print(
                             f"{Fore.RED}NOTE: Tasks already started will continue "
@@ -113,7 +117,10 @@ class NornFlowFailureStrategyProcessor(Processor):
                 error_table = []
                 for task_name, host_name, host_result in self.collected_errors:
                     error_msg = (
-                        mask_text(str(host_result.exception))
+                        mask_text(
+                            str(host_result.exception),
+                            reveal=not self.redaction_enabled,
+                        )
                         if host_result.exception
                         else "Unknown error"
                     )
