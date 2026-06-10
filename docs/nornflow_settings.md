@@ -17,6 +17,7 @@
   - [`failure_strategy`](#failure_strategy)
   - [`processors`](#processors)
   - [`logger`](#logger)
+  - [`redaction`](#redaction)
   - [`packages`](#packages)
 - [NornFlow Settings vs Nornir Configs](#nornflow-settings-vs-nornir-configs)
 
@@ -287,7 +288,101 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   | `ERROR` | Errors that may affect results (also printed to console) |
   | `CRITICAL` | Severe errors that may halt execution |
 - **Note**: Log files are automatically created with timestamped filenames (e.g., `my_workflow_20260115_143022.log`). Each workflow execution creates a new log file. Errors (`ERROR` level and above) are printed to stderr regardless of the log level setting.
-- **Sensitive Data Protection**: NornFlow will attempt to redact sensitive data in log messages. Values explicitly associated with keys like `password`, `secret`, `token`, `api_key`, and similar are replaced with `***REDACTED***`. However, this is merely a best effort. It is the user's responsibility to avoid logging sensitive data.
+- **Sensitive Data Protection**: Log redaction is controlled by [`redaction.logs_enabled`](#redaction) (see section below). When enabled, values associated with keys like `password`, `secret`, `token`, or `api_key` are replaced with `***REDACTED***` in log files and stderr log output. **This is best-effort ONLY; avoid logging sensitive data, unless you know what and why you are doing it.**
+
+### `redaction`
+
+Controls where NornFlow redacts sensitive values before they reach an operator. Redaction is **best-effort**: it matches key names and `key=value` / `key: value` patterns in unstructured text. It is not a secrets manager.
+
+- **Type**: `dict` — only `enabled` and `logs_enabled` are accepted; unknown keys raise a settings error.
+- **Default**: `{"enabled": true, "logs_enabled": true}` when the section is omitted (***NOTE***:*`logs_enabled` inherits `enabled`* if omitted).
+
+#### Sub-keys
+
+| Key | Default | Applies to |
+|-----|---------|------------|
+| `enabled` | `true` | Terminal surfaces: `nornflow show` tables, `nornflow run` task stdout, workflow overview vars, failure/error panels |
+| `logs_enabled` | inherits `enabled` | Log files under `logger.directory` and ERROR+ messages on stderr via the logging system |
+
+**Inheritance rule:** If `logs_enabled` is omitted, it takes the same value as `enabled`. Set `logs_enabled` explicitly only when you want logs to behave differently from terminal output.
+
+#### Examples
+
+Default (redact everywhere):
+
+```yaml
+redaction:
+  enabled: true
+```
+
+Disable redaction for local debugging (terminal **and** logs, because `logs_enabled` inherits):
+
+```yaml
+redaction:
+  enabled: false
+```
+
+Redact terminal output but allow plaintext in log files (uncommon; use when you need full detail in persisted logs only):
+
+```yaml
+redaction:
+  enabled: true
+  logs_enabled: false
+```
+
+#### Environment variables
+
+```bash
+export NORNFLOW_SETTINGS_REDACTION__enabled=false
+export NORNFLOW_SETTINGS_REDACTION__logs_enabled=false
+```
+
+#### CLI override
+
+`--no-redact` on `nornflow show` or `nornflow run` disables **terminal** redaction for that invocation only. Log redaction is **not** affected by the CLI flag — it always follows `logs_enabled` in settings (regardless if set explicitly to `true` or `false`). To disable log redaction, set `logs_enabled: false` or just `enabled: false` (which inherits to logs when `logs_enabled` is omitted).
+
+One-off terminal debugging with logs still protected (default settings):
+
+```bash
+nornflow show --no-redact --settings
+nornflow run --no-redact workflows/my_workflow.yaml
+```
+
+#### CLI warnings
+
+When redaction is partially or fully disabled, `nornflow show` and `nornflow run` print a yellow warning before output. Only one warning is shown per invocation:
+
+| State | Typical cause | Message intent |
+|-------|---------------|----------------|
+| Terminal off, logs off | `enabled: false` (logs inherit), or both keys explicitly `false` | Secrets may appear in **terminal and log files** |
+| Terminal off, logs on | `--no-redact`, or terminal disabled while `logs_enabled: true` | Secrets may appear on **screen only**; logs stay redacted |
+| Terminal on, logs off | `enabled: true` with `logs_enabled: false` | Secrets may appear in **log files and stderr log output** only |
+
+#### Placeholder
+
+Redacted values are always shown as `***REDACTED***`.
+
+#### What redaction does not cover
+
+- Values stored under key names that do not match [protected keywords](../nornflow/constants.py) (`PROTECTED_KEYWORDS`)
+- Secrets embedded in unstructured device output with no matching keyword pattern
+- In-memory APIs (`settings.as_dict`, `nornir_configs`) — these return unmasked data; redact before printing with `nornflow.masking.mask_for_display()`:
+
+  ```python
+  from nornflow.masking import mask_for_display
+
+  print(mask_for_display(nornflow.settings.as_dict))
+  ```
+
+#### Operator responsibility for false positives
+
+Broad keywords like `encryption_key` or `secret_message` may be redacted even when the value is not secret. There is no per-key allowlist in V1. Workarounds:
+
+1. **Rename the variable** — use a non-sensitive key name (e.g. `encryption_algorithm` instead of `encryption_key`).
+2. **Disable terminal redaction for one command** — `nornflow show --no-redact` or `nornflow run --no-redact` (logs unaffected).
+3. **Split surfaces** — keep `enabled: true` and set `logs_enabled: false` if you only need plaintext in log files.
+
+Do not disable redaction in production.
 
 ### `packages`
 
