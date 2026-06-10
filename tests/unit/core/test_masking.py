@@ -135,6 +135,21 @@ class TestMicrosecondFormatter:
         assert "secret123" not in result
         assert REDACTED in result
 
+    def test_format_skips_redaction_when_disabled(self):
+        formatter = MicrosecondFormatter("%(message)s", redaction_enabled=False)
+        record = logging.LogRecord(
+            name="nornflow",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="password=secret123",
+            args=(),
+            exc_info=None,
+        )
+        result = formatter.format(record)
+        assert "secret123" in result
+        assert REDACTED not in result
+
 
 class TestMaskStructure:
     """Tests for mask_structure."""

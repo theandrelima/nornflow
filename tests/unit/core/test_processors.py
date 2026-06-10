@@ -270,3 +270,13 @@ class TestDefaultNornFlowProcessorOutputMasking:
         assert "supersecret123" not in output
         assert "[Shushed!]" in output
         assert REDACTED not in output
+
+    def test_format_task_output_no_redact_shows_secret(self):
+        processor = DefaultNornFlowProcessor(redaction_enabled=False)
+        mock_result = MagicMock()
+        mock_result.result = "api_token=supersecret123"
+
+        output = processor._format_task_output(mock_result, suppress_output=False)
+
+        assert "supersecret123" in output
+        assert REDACTED not in output
