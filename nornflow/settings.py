@@ -18,9 +18,11 @@ from nornflow.constants import (
     NORNFLOW_DEFAULT_HOOKS_DIR,
     NORNFLOW_DEFAULT_J2_FILTERS_DIR,
     NORNFLOW_DEFAULT_LOGGER,
+    NORNFLOW_DEFAULT_REDACTION,
     NORNFLOW_DEFAULT_TASKS_DIR,
     NORNFLOW_DEFAULT_VARS_DIR,
     NORNFLOW_DEFAULT_WORKFLOWS_DIR,
+    REDACTION_ALLOWED_KEYS,
 )
 from nornflow.exceptions import SettingsError
 from nornflow.logger import logger
@@ -136,6 +138,10 @@ class NornFlowSettings(BaseSettings):
     logger: dict[str, Any] = Field(
         default_factory=lambda: {**NORNFLOW_DEFAULT_LOGGER}, description="Logger configuration dictionary"
     )
+    redaction: dict[str, Any] = Field(
+        default_factory=lambda: {**NORNFLOW_DEFAULT_REDACTION},
+        description="Output redaction configuration dictionary",
+    )
 
     _base_dir: Path | None = PrivateAttr(default=None)
     _settings_file: str | None = PrivateAttr(default=None)
@@ -225,6 +231,47 @@ class NornFlowSettings(BaseSettings):
             raise SettingsError("logger.directory must be a string")
         if not isinstance(merged["level"], str):
             raise SettingsError("logger.level must be a string")
+
+        return merged
+
+    @field_validator("redaction", mode="before")
+    @classmethod
+    def validate_redaction(cls, v: Any) -> dict[str, Any]:
+        """Validate redaction configuration, merging with defaults for missing keys.
+
+        Only ``enabled`` and ``logs_enabled`` are accepted. When ``logs_enabled`` is
+        omitted it inherits the value of ``enabled``.
+
+        Args:
+            v: Raw value from settings source.
+
+        Returns:
+            Merged redaction config dict.
+
+        Raises:
+            SettingsError: If the value is not a dict, contains unknown keys, or
+                has invalid types.
+        """
+        if not isinstance(v, dict):
+            raise SettingsError("redaction must be a dictionary")
+
+        unknown_keys = set(v.keys()) - REDACTION_ALLOWED_KEYS
+        if unknown_keys:
+            raise SettingsError(
+                f"redaction contains unknown key(s): {sorted(unknown_keys)}. "
+                f"Allowed keys: {sorted(REDACTION_ALLOWED_KEYS)}"
+            )
+
+        merged = {**NORNFLOW_DEFAULT_REDACTION, **v}
+
+        if not isinstance(merged["enabled"], bool):
+            raise SettingsError("redaction.enabled must be a boolean")
+
+        if "logs_enabled" in v:
+            if not isinstance(merged["logs_enabled"], bool):
+                raise SettingsError("redaction.logs_enabled must be a boolean")
+        else:
+            merged["logs_enabled"] = merged["enabled"]
 
         return merged
 
@@ -396,6 +443,16 @@ class NornFlowSettings(BaseSettings):
     def loaded_settings(self) -> dict[str, Any]:
         """Backward compatibility property for accessing settings as dict."""
         return self.as_dict
+
+    @property
+    def redaction_enabled(self) -> bool:
+        """Whether output redaction is enabled for terminal display surfaces."""
+        return bool(self.redaction.get("enabled", True))
+
+    @property
+    def redaction_logs_enabled(self) -> bool:
+        """Whether output redaction is enabled for log files and stderr log output."""
+        return bool(self.redaction.get("logs_enabled", self.redaction_enabled))
 
     def __getattr__(self, name: str) -> Any:
         """

@@ -100,7 +100,26 @@ NORNFLOW_SUPPORTED_YAML_EXTENSIONS = (".yaml", ".yml")
 # Default inventory filter keys
 JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")
 
-# Output masking
+# Output redaction — settings defaults, validation, CLI warnings, and masking engine
+NORNFLOW_DEFAULT_REDACTION = {"enabled": True}
+REDACTION_ALLOWED_KEYS = frozenset({"enabled", "logs_enabled"})
+
+# Both terminal and log redaction off (e.g. redaction.enabled: false).
+REDACTION_FULL_DISABLED_WARNING = (
+    "Warning: All output redaction is disabled. Sensitive values may appear in terminal output "
+    "and log files."
+)
+# Terminal off, logs on (e.g. --no-redact with default settings).
+REDACTION_TERMINAL_DISABLED_WARNING = (
+    "Warning: Terminal output redaction is disabled. Sensitive values may appear in "
+    "terminal output. Log files remain redacted per settings."
+)
+# Terminal on, logs off (e.g. logs_enabled: false with enabled: true).
+REDACTION_LOGS_DISABLED_WARNING = (
+    "Warning: Log redaction is disabled. Sensitive values may appear in log files "
+    "and stderr log output."
+)
+
 REDACTED = "***REDACTED***"
 # Strings below this size always run the regex pass; larger strings use a keyword
 # substring pre-check first to avoid scanning huge blobs with no secrets.
