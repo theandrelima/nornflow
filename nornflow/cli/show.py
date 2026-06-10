@@ -14,6 +14,11 @@ from nornflow import NornFlowBuilder
 from nornflow.catalogs import Catalog
 from nornflow.cli.constants import CWD
 from nornflow.cli.exceptions import CLIShowError
+from nornflow.constants import (
+    REDACTION_FULL_DISABLED_WARNING,
+    REDACTION_LOGS_DISABLED_WARNING,
+    REDACTION_TERMINAL_DISABLED_WARNING,
+)
 from nornflow.exceptions import NornFlowError
 from nornflow.logger import logger
 from nornflow.masking import mask_structure
@@ -45,6 +50,11 @@ def show(  # noqa: PLR0912
         False, "--nornir-configs", "-n", help="Display current Nornir Configs"
     ),
     all: bool = typer.Option(False, "--all", "-a", help="Display all information"),
+    no_redact: bool = typer.Option(
+        False,
+        "--no-redact",
+        help="Disable terminal output redaction. Log redaction follows settings. Use with caution.",
+    ),
 ) -> None:
     """
     Displays summary info about NornFlow.
@@ -77,7 +87,19 @@ def show(  # noqa: PLR0912
             settings_path = ctx.obj.get("settings")
             builder.with_settings_path(settings_path)
 
+        if no_redact:
+            builder.with_kwargs(no_redact=True)
+
         nornflow = builder.build()
+
+        if not nornflow.redaction_enabled and not nornflow.logs_redaction_enabled:
+            typer.secho(REDACTION_FULL_DISABLED_WARNING, fg=typer.colors.YELLOW)
+        elif not nornflow.redaction_enabled:
+            typer.secho(REDACTION_TERMINAL_DISABLED_WARNING, fg=typer.colors.YELLOW)
+        elif not nornflow.logs_redaction_enabled:
+            typer.secho(REDACTION_LOGS_DISABLED_WARNING, fg=typer.colors.YELLOW)
+
+        redaction_enabled = nornflow.redaction_enabled
 
         if all:
             show_tasks_catalog(nornflow)
@@ -86,8 +108,8 @@ def show(  # noqa: PLR0912
             show_blueprints_catalog(nornflow)
             show_j2_filters_catalog(nornflow)
             show_hooks_catalog(nornflow)
-            show_nornflow_settings(nornflow)
-            show_nornir_configs(nornflow)
+            show_nornflow_settings(nornflow, redaction_enabled=redaction_enabled)
+            show_nornir_configs(nornflow, redaction_enabled=redaction_enabled)
         else:
             if show_all_catalogs:
                 show_tasks_catalog(nornflow)
@@ -111,9 +133,9 @@ def show(  # noqa: PLR0912
                     show_hooks_catalog(nornflow)
 
             if settings:
-                show_nornflow_settings(nornflow)
+                show_nornflow_settings(nornflow, redaction_enabled=redaction_enabled)
             if nornir_configs:
-                show_nornir_configs(nornflow)
+                show_nornir_configs(nornflow, redaction_enabled=redaction_enabled)
 
     except PluginNotRegistered as e:
         CLIShowError(
@@ -249,14 +271,34 @@ def show_hooks_catalog(nornflow: "NornFlow") -> None:
     )
 
 
-def show_nornflow_settings(nornflow: "NornFlow") -> None:
-    """Display the NornFlow settings."""
-    show_formatted_table("NORNFLOW SETTINGS", render_settings_table_data, ["Setting", "Value"], nornflow)
+def show_nornflow_settings(nornflow: "NornFlow", *, redaction_enabled: bool = True) -> None:
+    """Display the NornFlow settings.
+
+    Args:
+        nornflow: The NornFlow object.
+        redaction_enabled: When False, sensitive values are shown in plain text.
+    """
+    show_formatted_table(
+        "NORNFLOW SETTINGS",
+        lambda nf: render_settings_table_data(nf, redaction_enabled=redaction_enabled),
+        ["Setting", "Value"],
+        nornflow,
+    )
 
 
-def show_nornir_configs(nornflow: "NornFlow") -> None:
-    """Display the Nornir configs."""
-    show_formatted_table("NORNIR CONFIGS", render_nornir_cfgs_table_data, ["Config", "Value"], nornflow)
+def show_nornir_configs(nornflow: "NornFlow", *, redaction_enabled: bool = True) -> None:
+    """Display the Nornir configs.
+
+    Args:
+        nornflow: The NornFlow object.
+        redaction_enabled: When False, sensitive values are shown in plain text.
+    """
+    show_formatted_table(
+        "NORNIR CONFIGS",
+        lambda nf: render_nornir_cfgs_table_data(nf, redaction_enabled=redaction_enabled),
+        ["Config", "Value"],
+        nornflow,
+    )
 
 
 def show_catalog_formatted_table(
@@ -428,46 +470,53 @@ def render_hooks_catalog_table_data(nornflow: "NornFlow") -> tuple[list[list[str
     )
 
 
-def render_settings_table_data(nornflow: "NornFlow") -> list[list[str]]:
+def render_settings_table_data(nornflow: "NornFlow", *, redaction_enabled: bool = True) -> list[list[str]]:
     """Render the NornFlow settings as a list of lists.
 
     Args:
         nornflow: The NornFlow object.
+        redaction_enabled: When False, sensitive values are shown in plain text.
 
     Returns:
         The table data.
     """
     settings_dict = nornflow.settings.as_dict
-    return render_table_data(settings_dict)
+    return render_table_data(settings_dict, redaction_enabled=redaction_enabled)
 
 
-def render_nornir_cfgs_table_data(nornflow: "NornFlow") -> list[list[str]]:
+def render_nornir_cfgs_table_data(nornflow: "NornFlow", *, redaction_enabled: bool = True) -> list[list[str]]:
     """Render the Nornir configs as a list of lists.
 
     Args:
         nornflow: The NornFlow object.
+        redaction_enabled: When False, sensitive values are shown in plain text.
 
     Returns:
         The table data.
     """
     nornir_configs = nornflow.nornir_configs
-    return render_table_data(nornir_configs)
+    return render_table_data(nornir_configs, redaction_enabled=redaction_enabled)
 
 
 def render_table_data(
-    data: dict[str, Any], key_color: str = "cyan", value_color: str = "yellow"
+    data: dict[str, Any],
+    key_color: str = "cyan",
+    value_color: str = "yellow",
+    *,
+    redaction_enabled: bool = True,
 ) -> list[list[str]]:
-    """Render a dictionary as a list of lists, masking sensitive values before display.
+    """Render a dictionary as a list of lists, redacting sensitive values before display.
 
     Args:
         data: The dictionary to render.
         key_color: The color for the keys.
         value_color: The color for the values.
+        redaction_enabled: When False, skip redaction and show values as-is.
 
     Returns:
-        The table data with sensitive values replaced by REDACTED.
+        The table data with sensitive values replaced by REDACTED unless redaction is disabled.
     """
-    masked = mask_structure(data)
+    masked = mask_structure(data, reveal=not redaction_enabled)
     table_data = []
     for key, value in masked.items():
         colored_key = colored(key, key_color, attrs=["bold"])
