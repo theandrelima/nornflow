@@ -201,6 +201,61 @@ class TestNornFlowPrecedence:
             assert nf.dry_run is True
 
 
+class TestRedactionEnabled:
+    """Test effective redaction_enabled on NornFlow instances."""
+
+    def test_redaction_enabled_defaults_true(self):
+        """Redaction is enabled by default when settings omit redaction."""
+        settings = NornFlowSettings(nornir_config_file="dummy.yaml")
+
+        with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
+            nf = NornFlow(nornflow_settings=settings)
+
+        assert nf.redaction_enabled is True
+
+    def test_no_redact_constructor_disables_redaction(self):
+        """Constructor no_redact=True disables redaction for the session."""
+        settings = NornFlowSettings(nornir_config_file="dummy.yaml")
+
+        with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
+            nf = NornFlow(nornflow_settings=settings, no_redact=True)
+
+        assert nf.redaction_enabled is False
+
+    def test_settings_redaction_disabled(self):
+        """settings.redaction.enabled=false disables redaction."""
+        settings = NornFlowSettings(nornir_config_file="dummy.yaml", redaction={"enabled": False})
+
+        with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
+            nf = NornFlow(nornflow_settings=settings)
+
+        assert nf.redaction_enabled is False
+        assert nf.logs_redaction_enabled is False
+
+    def test_logs_redaction_disabled_independently(self):
+        """settings.redaction.logs_enabled=false disables log redaction only."""
+        settings = NornFlowSettings(
+            nornir_config_file="dummy.yaml",
+            redaction={"enabled": True, "logs_enabled": False},
+        )
+
+        with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
+            nf = NornFlow(nornflow_settings=settings)
+
+        assert nf.redaction_enabled is True
+        assert nf.logs_redaction_enabled is False
+
+    def test_no_redact_does_not_disable_logs_redaction(self):
+        """Constructor no_redact=True disables terminal redaction only; logs follow settings."""
+        settings = NornFlowSettings(nornir_config_file="dummy.yaml")
+
+        with patch("nornflow.nornflow.NornFlow._initialize_nornir"):
+            nf = NornFlow(nornflow_settings=settings, no_redact=True)
+
+        assert nf.redaction_enabled is False
+        assert nf.logs_redaction_enabled is True
+
+
 class TestWorkflowModelCreation:
     """Test workflow model creation."""
 

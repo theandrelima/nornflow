@@ -735,6 +735,12 @@ class TestFormatVariableValue:
 
         assert result == "***REDACTED***"
 
+    def test_format_protected_password_no_redact(self):
+        """Test password is shown when redaction is disabled."""
+        result = format_variable_value("password", "secret123", redaction_enabled=False)
+
+        assert result == "secret123"
+
     def test_format_protected_token(self):
         """Test token is masked."""
         result = format_variable_value("api_token", "abc123")

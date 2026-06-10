@@ -273,3 +273,93 @@ def test_local_blueprints_multiple_directories(tmp_path):
     assert len(settings.local_blueprints) == 2
     assert str(tmp_path / "blueprints1") in settings.local_blueprints
     assert str(tmp_path / "blueprints2") in settings.local_blueprints
+
+
+class TestRedactionSettings:
+    """Tests for the redaction configuration field and redaction_enabled property."""
+
+    def test_redaction_default(self):
+        """redaction defaults to enabled=True."""
+        settings_dict = make_valid_settings_dict()
+        settings = NornFlowSettings(**settings_dict)
+
+        assert settings.redaction == {"enabled": True, "logs_enabled": True}
+        assert settings.redaction_enabled is True
+        assert settings.redaction_logs_enabled is True
+
+    def test_redaction_disabled_via_dict(self):
+        """redaction.enabled can be set to False."""
+        settings_dict = make_valid_settings_dict()
+        settings_dict["redaction"] = {"enabled": False}
+        settings = NornFlowSettings(**settings_dict)
+
+        assert settings.redaction["enabled"] is False
+        assert settings.redaction_enabled is False
+
+    def test_redaction_partial_override_merges_defaults(self):
+        """An empty redaction dict is valid and merges with defaults."""
+        settings_dict = make_valid_settings_dict()
+        settings_dict["redaction"] = {}
+        settings = NornFlowSettings(**settings_dict)
+
+        assert settings.redaction == {"enabled": True, "logs_enabled": True}
+
+    def test_redaction_not_a_dict_raises(self):
+        """Non-dict redaction value must raise SettingsError."""
+        settings_dict = make_valid_settings_dict()
+        settings_dict["redaction"] = "true"
+
+        with pytest.raises(Exception):
+            NornFlowSettings(**settings_dict)
+
+    def test_redaction_enabled_non_bool_raises(self):
+        """A non-bool enabled must raise SettingsError."""
+        settings_dict = make_valid_settings_dict()
+        settings_dict["redaction"] = {"enabled": "yes"}
+
+        with pytest.raises(Exception):
+            NornFlowSettings(**settings_dict)
+
+    def test_redaction_loaded_from_yaml(self, tmp_path):
+        """redaction.enabled can be set via YAML file."""
+        settings_file = tmp_path / "settings.yaml"
+        settings_file.write_text(yaml.dump({"nornir_config_file": "c.yaml", "redaction": {"enabled": False}}))
+
+        settings = NornFlowSettings.load(str(settings_file))
+
+        assert settings.redaction_enabled is False
+        assert settings.redaction_logs_enabled is False
+
+    def test_logs_enabled_inherits_enabled_when_omitted(self):
+        """logs_enabled follows enabled when not set explicitly."""
+        settings_dict = make_valid_settings_dict()
+        settings_dict["redaction"] = {"enabled": False}
+        settings = NornFlowSettings(**settings_dict)
+
+        assert settings.redaction["logs_enabled"] is False
+        assert settings.redaction_logs_enabled is False
+
+    def test_logs_enabled_explicit_override(self):
+        """logs_enabled can differ from enabled when set explicitly."""
+        settings_dict = make_valid_settings_dict()
+        settings_dict["redaction"] = {"enabled": True, "logs_enabled": False}
+        settings = NornFlowSettings(**settings_dict)
+
+        assert settings.redaction_enabled is True
+        assert settings.redaction_logs_enabled is False
+
+    def test_redaction_unknown_key_raises(self):
+        """Unknown keys under redaction must raise SettingsError."""
+        settings_dict = make_valid_settings_dict()
+        settings_dict["redaction"] = {"enabled": True, "extra": True}
+
+        with pytest.raises(Exception):
+            NornFlowSettings(**settings_dict)
+
+    def test_redaction_logs_enabled_non_bool_raises(self):
+        """A non-bool logs_enabled must raise SettingsError."""
+        settings_dict = make_valid_settings_dict()
+        settings_dict["redaction"] = {"logs_enabled": "no"}
+
+        with pytest.raises(Exception):
+            NornFlowSettings(**settings_dict)
