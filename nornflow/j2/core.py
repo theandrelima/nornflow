@@ -89,7 +89,7 @@ class Jinja2Service:
     def reset(cls) -> None:
         """Clear the singleton so the next use rebuilds environment and catalogs.
 
-        Intended for tests and embedded use when multiple ``NornFlow`` instances are
+        Intended for tests and embedded use when multiple 'NornFlow' instances are
         created sequentially in one process.
         """
         with cls._lock:
@@ -106,7 +106,7 @@ class Jinja2Service:
 
         Registers j2_filters from local directories first, then from packages.
         Rebuilds the singleton on each call so filter catalogs do not leak between
-        successive ``NornFlow`` initializations in the same process.
+        successive 'NornFlow' initializations in the same process.
         """
         cls.reset()
         locations = [(LOCAL_NAMESPACE, str(path), TIER_LOCAL) for path in settings.local_j2_filters]

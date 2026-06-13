@@ -97,9 +97,9 @@ class Catalog(ABC, dict[str, Any]):
         Args:
             bare_name: Unqualified asset name.
             item: Asset value to store.
-            namespace: Catalog namespace (``nornflow``, ``local``, or package name).
-            tier: Registration tier (``builtin``, ``local``, or ``package``).
-            **kwargs: Extra fields merged into ``sources`` (module_name, description, ...).
+            namespace: Catalog namespace ('nornflow', 'local', or package name).
+            tier: Registration tier ('builtin', 'local', or 'package').
+            **kwargs: Extra fields merged into 'sources' (module_name, description, ...).
 
         Returns:
             The registered item.
@@ -133,7 +133,7 @@ class Catalog(ABC, dict[str, Any]):
         Args:
             name: Bare or legacy key for the item.
             item: Value to store.
-            **kwargs: Metadata; may include ``namespace`` and ``tier``.
+            **kwargs: Metadata; may include 'namespace' and 'tier'.
 
         Returns:
             The registered value.
@@ -230,7 +230,7 @@ class Catalog(ABC, dict[str, Any]):
         """Resolve a bare or qualified reference to its catalog value.
 
         Args:
-            reference: Bare name or ``namespace.name`` qualified reference.
+            reference: Bare name or 'namespace.name' qualified reference.
 
         Returns:
             The registered asset value.

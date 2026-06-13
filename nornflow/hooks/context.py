@@ -7,8 +7,8 @@ def set_hook_registration(namespace: str, tier: str) -> Token:
     """Set namespace and tier for hook class registration during module import.
 
     Args:
-        namespace: Catalog namespace (e.g. ``local`` or a package name).
-        tier: Registration tier (``builtin``, ``local``, or ``package``).
+        namespace: Catalog namespace (e.g. 'local' or a package name).
+        tier: Registration tier ('builtin', 'local', or 'package').
 
     Returns:
         ContextVar token for resetting the context.
@@ -20,7 +20,7 @@ def reset_hook_registration(token: Token) -> None:
     """Reset hook registration context to its previous value.
 
     Args:
-        token: Token returned by ``set_hook_registration``.
+        token: Token returned by 'set_hook_registration'.
     """
     _hook_registration.reset(token)
 

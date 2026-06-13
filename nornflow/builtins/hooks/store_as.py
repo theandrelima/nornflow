@@ -26,7 +26,7 @@ def _raise_validation(
     Args:
         error_code: Short identifier for the validation failure.
         message: Human-readable error detail.
-        cause: Optional exception to chain as ``__cause__``.
+        cause: Optional exception to chain as '__cause__'.
 
     Raises:
         HookValidationError: Always raised; this function never returns.
