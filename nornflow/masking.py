@@ -1,9 +1,13 @@
 """
 Centralized output masking for NornFlow.
 
-All user-facing output paths (CLI tables, workflow overview, log formatters( must
+All user-facing output paths (CLI tables, workflow overview, log formatters) must
 pass data through this module before rendering. In-memory runtime objects are never
 masked here; masking applies only at display and log boundaries.
+
+Key-name policy merges built-in 'PROTECTED_KEYWORDS' with user
+'redaction.sensitive_names' and applies one segment-aware rule to both:
+normalize the key, then match the full name or any '_'-delimited segment.
 
 Three public entry points cover all output sinks:
 - mask_for_display: top-level entry point; dispatches by type.
@@ -19,41 +23,62 @@ from nornflow.constants import LARGE_TEXT_THRESHOLD, PROTECTED_KEYWORDS, REDACTE
 # Frozenset for O(1) lookup; normalized to lowercase once at import time.
 _KEYWORDS_SET: frozenset[str] = frozenset(kw.lower() for kw in PROTECTED_KEYWORDS)
 
+_MASK_TEXT_PATTERNS: dict[frozenset[str], re.Pattern[str]] = {}
 
-def _get_mask_text_pattern() -> re.Pattern:
-    """Get or lazily build the compiled regex for text-based sensitive data detection."""
-    if not hasattr(_get_mask_text_pattern, "_pattern"):
-        keywords = "|".join(re.escape(kw) for kw in PROTECTED_KEYWORDS)
-        _get_mask_text_pattern._pattern = re.compile(  # noqa: SLF001
-            rf"({keywords})(\s*[:=]\s*)(['\"]?)(\S+?)(\3)(?=\s|,|}}|\]|$)", re.IGNORECASE
+
+def _normalize_identifier(name: str) -> str:
+    """Normalize a key or identifier for sensitivity comparison."""
+    return name.lower().replace("-", "_").replace(".", "_")
+
+
+def _effective_keywords(sensitive_names: frozenset[str] | None = None) -> frozenset[str]:
+    """Built-in and user keywords merged for a single matching policy."""
+    if sensitive_names:
+        return _KEYWORDS_SET | sensitive_names
+    return _KEYWORDS_SET
+
+
+def _get_mask_text_pattern(sensitive_names: frozenset[str] | None = None) -> re.Pattern[str]:
+    """Get or lazily build the compiled regex for text-based sensitive data detection.
+
+    Args:
+        sensitive_names: Optional user-declared identifiers to include in the regex.
+
+    Returns:
+        Compiled pattern matching 'key=value' and 'key: value' forms.
+    """
+    cache_key = sensitive_names or frozenset()
+    if cache_key not in _MASK_TEXT_PATTERNS:
+        keywords = list(PROTECTED_KEYWORDS)
+        if sensitive_names:
+            keywords.extend(sorted(sensitive_names))
+        alternation = "|".join(re.escape(kw) for kw in keywords)
+        _MASK_TEXT_PATTERNS[cache_key] = re.compile(
+            rf"({alternation})(\s*[:=]\s*)(['\"]?)(\S+?)(\3)(?=\s|,|}}|\]|$)", re.IGNORECASE
         )
+    return _MASK_TEXT_PATTERNS[cache_key]
 
-    return _get_mask_text_pattern._pattern  # noqa: SLF001
 
-
-def is_sensitive_key(key: str, extra_keywords: frozenset[str] | None = None) -> bool:
+def is_sensitive_key(key: str, sensitive_names: frozenset[str] | None = None) -> bool:
     """Return True if a key name is considered sensitive under the masking policy.
 
-    Uses segment-aware matching to avoid false positives from naive substring
-    checks (e.g. 'key' must not match inside 'monkey'):
+    Uses segment-aware matching for built-in 'PROTECTED_KEYWORDS' and user
+    'sensitive_names' alike:
 
     1. Normalize the key (lowercase, hyphens and dots → underscores).
-    2. Exact match: the normalized full key equals a keyword in the set
-       (catches compound keywords like 'db_connection_string').
-    3. Segment match: any individual segment produced by splitting on '_'
-       equals a keyword in the set (catches 'nautobot_token' via 'token').
+    2. Exact match: the normalized full key equals a keyword.
+    3. Segment match: any '_'-delimited segment equals a keyword
+       (e.g. 'token' matches 'nautobot_token'; user 'pin' matches 'vault_pin').
 
     Args:
         key: The key name to evaluate.
-        extra_keywords: Optional additional keywords to include (user-configured).
+        sensitive_names: Optional user-configured identifiers from settings.
 
     Returns:
         True if the key is considered sensitive.
     """
-    normalized = key.lower().replace("-", "_").replace(".", "_")
-    keywords = _KEYWORDS_SET
-    if extra_keywords:
-        keywords = keywords | frozenset(kw.lower() for kw in extra_keywords)
+    normalized = _normalize_identifier(key)
+    keywords = _effective_keywords(sensitive_names)
 
     if normalized in keywords:
         return True
@@ -61,16 +86,21 @@ def is_sensitive_key(key: str, extra_keywords: frozenset[str] | None = None) -> 
     return any(segment in keywords for segment in normalized.split("_") if segment)
 
 
-def mask_text(text: str, *, reveal: bool = False) -> str:
+def mask_text(
+    text: str,
+    *,
+    reveal: bool = False,
+    sensitive_names: frozenset[str] | None = None,
+) -> str:
     """Redact sensitive key=value / key: value patterns from an unstructured string.
 
     Regex-based best-effort pass suitable for log lines, task output, and error
-    messages. Does not guarantee full coverage of all possible secret representations
-    (e.g. bare values without a key prefix are not caught).
+    messages. Matches built-in 'PROTECTED_KEYWORDS' and user 'sensitive_names'.
 
     Args:
         text: The string to sanitize.
         reveal: If True, return the string unchanged (zero processing).
+        sensitive_names: Optional user-declared identifiers to include in the regex.
 
     Returns:
         String with sensitive values replaced by REDACTED, or the original string
@@ -79,23 +109,23 @@ def mask_text(text: str, *, reveal: bool = False) -> str:
     if reveal or not isinstance(text, str) or not text:
         return text
 
-    if len(text) >= LARGE_TEXT_THRESHOLD and not _text_may_contain_secrets(text):
+    if len(text) >= LARGE_TEXT_THRESHOLD and not _text_may_contain_secrets(text, sensitive_names):
         return text
 
-    return _get_mask_text_pattern().sub(rf"\1\2\3{REDACTED}\5", text)
+    return _get_mask_text_pattern(sensitive_names).sub(rf"\1\2\3{REDACTED}\5", text)
 
 
-def _text_may_contain_secrets(text: str) -> bool:
-    """Cheap pre-check: True if any protected keyword appears as a substring."""
+def _text_may_contain_secrets(text: str, sensitive_names: frozenset[str] | None = None) -> bool:
+    """Cheap pre-check: True if any keyword appears as a substring."""
     text_lower = text.lower()
-    return any(keyword in text_lower for keyword in _KEYWORDS_SET)
+    return any(keyword in text_lower for keyword in _effective_keywords(sensitive_names))
 
 
 def mask_structure(
     data: Any,
     *,
     reveal: bool = False,
-    extra_keywords: frozenset[str] | None = None,
+    sensitive_names: frozenset[str] | None = None,
 ) -> Any:
     """Recursively walk a dict / list / tuple and redact values whose keys are sensitive.
 
@@ -109,7 +139,7 @@ def mask_structure(
     Args:
         data: The data structure to mask.
         reveal: If True, return data unchanged.
-        extra_keywords: Optional additional keywords beyond PROTECTED_KEYWORDS.
+        sensitive_names: Optional user-configured identifiers from settings.
 
     Returns:
         A new structure with sensitive leaf values replaced by REDACTED.
@@ -120,18 +150,18 @@ def mask_structure(
     if isinstance(data, dict):
         result = {}
         for key, value in data.items():
-            if is_sensitive_key(str(key), extra_keywords):
+            if is_sensitive_key(str(key), sensitive_names):
                 result[key] = REDACTED
             else:
-                result[key] = mask_structure(value, reveal=reveal, extra_keywords=extra_keywords)
+                result[key] = mask_structure(value, reveal=reveal, sensitive_names=sensitive_names)
         return result
 
     if isinstance(data, list):
-        return [mask_structure(item, reveal=reveal, extra_keywords=extra_keywords) for item in data]
+        return [mask_structure(item, reveal=reveal, sensitive_names=sensitive_names) for item in data]
 
     if isinstance(data, tuple):
         return tuple(
-            mask_structure(item, reveal=reveal, extra_keywords=extra_keywords) for item in data
+            mask_structure(item, reveal=reveal, sensitive_names=sensitive_names) for item in data
         )
 
     return data
@@ -141,7 +171,7 @@ def mask_for_display(
     data: Any,
     *,
     reveal: bool = False,
-    extra_keywords: frozenset[str] | None = None,
+    sensitive_names: frozenset[str] | None = None,
 ) -> Any:
     """Mask data before any user-facing rendering.
 
@@ -157,7 +187,7 @@ def mask_for_display(
     Args:
         data: The data to mask.
         reveal: If True, return data completely unchanged (zero processing fast path).
-        extra_keywords: Optional additional keywords beyond PROTECTED_KEYWORDS.
+        sensitive_names: Optional user-configured identifiers from settings.
 
     Returns:
         Masked version of data, safe for display.
@@ -166,9 +196,9 @@ def mask_for_display(
         return data
 
     if isinstance(data, dict | list | tuple):
-        return mask_structure(data, extra_keywords=extra_keywords)
+        return mask_structure(data, sensitive_names=sensitive_names)
 
     if isinstance(data, str):
-        return mask_text(data)
+        return mask_text(data, sensitive_names=sensitive_names)
 
     return data
