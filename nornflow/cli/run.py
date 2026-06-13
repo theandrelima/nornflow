@@ -441,7 +441,7 @@ NO_REDACT_OPTION = typer.Option(
 
 # TODO: Eventually, decommission the legacy options.
 @app.command()
-def run(
+def run(  # noqa: PLR0912
     ctx: typer.Context,
     target: str = typer.Argument(..., help="The name of the task or workflow to run"),
     args: str | None = ARGS_OPTION,

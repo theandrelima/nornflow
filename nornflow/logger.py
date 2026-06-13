@@ -31,7 +31,6 @@ from nornflow.constants import NORNFLOW_DEFAULT_LOGGER
 from nornflow.masking import mask_text
 
 
-
 def sanitize_filename(name: str) -> str:
     """Sanitize a string for safe use as a filename.
 
