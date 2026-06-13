@@ -677,10 +677,12 @@ processors:
 ```
 
 Features:
-- Formatted task output
+- Formatted task output (with terminal redaction when `redaction.enabled` is true)
 - Progress indicators
 - Result summaries
 - Support for the `shush` hook
+
+NornFlow passes `redaction_enabled` and `sensitive_names` into this processor at runtime. If you omit it from the [`processors`](./nornflow_settings.md#processors) list without substituting a processor that applies the same masking, `nornflow run` may print sensitive task output in plain text. See [Processors and `nornflow run` task output](./nornflow_settings.md#processors-and-nornflow-run-task-output).
 
 ### NornFlowFailureStrategyProcessor
 
@@ -760,7 +762,20 @@ mask_for_display({"api_key": "s3cr3t"})
 # {"api_key": "***REDACTED***"}
 ```
 
-The placeholder is always `***REDACTED***`. Matching is driven by `PROTECTED_KEYWORDS` in [constants.py](../nornflow/constants.py) and uses segment-aware key matching so that `nautobot_token` triggers on the `token` segment while `tokenizer` does not.
+The placeholder is always `***REDACTED***`. Built-in [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) and user `redaction.sensitive_names` share one segment-aware key-matching rule (see [`redaction`](#redaction) in the settings guide).
+
+Pass `sensitive_names=` to helpers when masking outside NornFlow runtime; at runtime use `NornFlow.redaction_sensitive_names` (wired into show, overview, processors, and logs).
+
+**Runtime surfaces during `nornflow run`:**
+
+| Surface | Depends on user `processors`? |
+|---------|-------------------------------|
+| Task stdout / formatted result output | **Yes** — default: `DefaultNornFlowProcessor` |
+| Workflow overview vars | No |
+| Failure-strategy error panels | No — system `NornFlowFailureStrategyProcessor` |
+| Log files | No — logger + `redaction.logs_enabled` |
+
+See [Processors and `nornflow run` task output](./nornflow_settings.md#processors-and-nornflow-run-task-output) for configuration implications.
 
 All redaction helpers accept a `reveal=True` keyword argument to bypass redaction programmatically:
 
