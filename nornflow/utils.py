@@ -24,9 +24,8 @@ from nornflow.constants import (
     FailureStrategy,
     JINJA_PATTERN,
     NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
+    REDACTED,
 )
-from nornflow.constants import REDACTED
-from nornflow.masking import is_sensitive_key
 from nornflow.exceptions import (
     CoreError,
     ProcessorError,
@@ -34,6 +33,7 @@ from nornflow.exceptions import (
     WorkflowError,
 )
 from nornflow.logger import logger
+from nornflow.masking import is_sensitive_key
 
 if TYPE_CHECKING:
     from nornflow.vars.manager import NornFlowVariablesManager

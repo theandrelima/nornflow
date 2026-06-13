@@ -89,10 +89,12 @@ class NornFlowFailureStrategyProcessor(Processor):
                         )
                         print(f"{Fore.RED}Task '{task.name}' failed on host '{host.name}'")
                         if result.exception:
-                            print(
-                                f"{Fore.RED}Error: "
-                                f"{mask_text(str(result.exception), reveal=not self.redaction_enabled, sensitive_names=self.sensitive_names)}"
+                            error_text = mask_text(
+                                str(result.exception),
+                                reveal=not self.redaction_enabled,
+                                sensitive_names=self.sensitive_names,
                             )
+                            print(f"{Fore.RED}Error: {error_text}")
                         print(f"{Fore.RED}Signaling all threads to stop...")
                         print(
                             f"{Fore.RED}NOTE: Tasks already started will continue "
