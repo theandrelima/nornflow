@@ -48,6 +48,9 @@ packages: []
 
 redaction:
   enabled: true
+  # sensitive_names: # optional, add your own sensitive names here
+  #   - credential_x
+  #   - vendor_pin
 
 logger:
   directory: ".nornflow/logs"

@@ -391,19 +391,26 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
             check_for_jinja2_recursive(item, f"{path}[{idx}]")
 
 
-def format_variable_value(key: str, value: Any, *, redaction_enabled: bool = True) -> str:
+def format_variable_value(
+    key: str,
+    value: Any,
+    *,
+    redaction_enabled: bool = True,
+    sensitive_names: frozenset[str] | None = None,
+) -> str:
     """
-    Format a variable value for display, redacting protected keywords.
+    Format a variable value for display, redacting protected and user-declared keys.
 
     Args:
         key: The variable name.
         value: The variable value.
         redaction_enabled: When False, return the value without redaction.
+        sensitive_names: User-declared identifiers (exact match only).
 
     Returns:
         The formatted display string, with REDACTED substituted for sensitive values.
     """
-    if redaction_enabled and is_sensitive_key(key):
+    if redaction_enabled and is_sensitive_key(key, sensitive_names):
         return REDACTED
     display_value = str(value)
     if isinstance(value, tuple):
@@ -421,6 +428,7 @@ def _build_vars_section(
     vars_manager: "NornFlowVariablesManager | None",
     *,
     redaction_enabled: bool = True,
+    sensitive_names: frozenset[str] | None = None,
 ) -> list[Any]:
     """
     Build the variables section for the workflow overview panel.
@@ -457,7 +465,12 @@ def _build_vars_section(
         vars_table.add_row(
             source,
             key,
-            format_variable_value(key, value, redaction_enabled=redaction_enabled),
+            format_variable_value(
+                key,
+                value,
+                redaction_enabled=redaction_enabled,
+                sensitive_names=sensitive_names,
+            ),
             _get_type_display(value),
         )
 
@@ -483,6 +496,7 @@ def print_workflow_overview(
     vars_manager: "NornFlowVariablesManager | None" = None,
     *,
     redaction_enabled: bool = True,
+    sensitive_names: frozenset[str] | None = None,
 ) -> None:
     """
     Print a comprehensive workflow overview before execution using Rich.
@@ -495,6 +509,7 @@ def print_workflow_overview(
         failure_strategy: The active failure handling strategy.
         vars_manager: Variables manager for assembly-time vars.
         redaction_enabled: When False, sensitive variable values are shown in plain text.
+        sensitive_names: User-declared identifiers from 'redaction.sensitive_names'.
     """
     console = Console()
 
@@ -518,7 +533,13 @@ def print_workflow_overview(
     )
 
     elements: list[Any] = [table]
-    elements.extend(_build_vars_section(vars_manager, redaction_enabled=redaction_enabled))
+    elements.extend(
+        _build_vars_section(
+            vars_manager,
+            redaction_enabled=redaction_enabled,
+            sensitive_names=sensitive_names,
+        )
+    )
 
     panel = Panel(
         Group(*elements),

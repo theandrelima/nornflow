@@ -68,6 +68,7 @@ class MicrosecondFormatter(logging.Formatter):
         datefmt: str | None = None,
         *,
         redaction_enabled: bool = True,
+        sensitive_names: frozenset[str] | None = None,
     ) -> None:
         """Initialize the formatter.
 
@@ -75,9 +76,11 @@ class MicrosecondFormatter(logging.Formatter):
             fmt: Log format string.
             datefmt: Optional strftime format for timestamps.
             redaction_enabled: When True, apply mask_text to log message content.
+            sensitive_names: User-declared identifiers for text redaction.
         """
         super().__init__(fmt, datefmt)
         self.redaction_enabled = redaction_enabled
+        self.sensitive_names = sensitive_names
 
     def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:  # noqa: N802
         """Format the time with microseconds support."""
@@ -88,10 +91,13 @@ class MicrosecondFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format the log record, redacting sensitive content when enabled."""
         reveal = not self.redaction_enabled
-        record.msg = mask_text(str(record.msg), reveal=reveal)
+        record.msg = mask_text(str(record.msg), reveal=reveal, sensitive_names=self.sensitive_names)
         if record.args:
             record.args = tuple(
-                mask_text(arg, reveal=reveal) if isinstance(arg, str) else arg for arg in record.args
+                mask_text(arg, reveal=reveal, sensitive_names=self.sensitive_names)
+                if isinstance(arg, str)
+                else arg
+                for arg in record.args
             )
         return super().format(record)
 
@@ -120,6 +126,7 @@ class NornFlowLogger:
         self._logger = logging.getLogger("nornflow")
         self._logger.setLevel(logging.DEBUG)
         self._logs_redaction_enabled = True
+        self._sensitive_names: frozenset[str] = frozenset()
 
         # Console handler for ERROR level and above (always active for visibility)
         console_handler = logging.StreamHandler(sys.stderr)
@@ -150,6 +157,7 @@ class NornFlowLogger:
             fmt,
             datefmt=datefmt,
             redaction_enabled=self._logs_redaction_enabled,
+            sensitive_names=self._sensitive_names,
         )
 
     def set_logs_redaction(self, logs_redaction_enabled: bool) -> None:
@@ -164,6 +172,18 @@ class NornFlowLogger:
             if isinstance(formatter, MicrosecondFormatter):
                 formatter.redaction_enabled = logs_redaction_enabled
 
+    def set_sensitive_names(self, sensitive_names: frozenset[str]) -> None:
+        """Update user-declared sensitive identifiers on all active log formatters.
+
+        Args:
+            sensitive_names: Normalized identifiers from 'redaction.sensitive_names'.
+        """
+        self._sensitive_names = sensitive_names
+        for handler in self._logger.handlers:
+            formatter = handler.formatter
+            if isinstance(formatter, MicrosecondFormatter):
+                formatter.sensitive_names = sensitive_names
+
     def set_execution_context(
         self,
         execution_name: str,
@@ -172,6 +192,7 @@ class NornFlowLogger:
         log_level: str = "INFO",
         *,
         logs_redaction_enabled: bool = True,
+        sensitive_names: frozenset[str] | None = None,
     ) -> None:
         """
         Set the execution context for logging.
@@ -184,8 +205,11 @@ class NornFlowLogger:
             log_dir: Directory to store log files. If None, uses default.
             log_level: Logging level (e.g., "DEBUG", "INFO").
             logs_redaction_enabled: When False, log file and stderr log output skip redaction.
+            sensitive_names: User-declared identifiers from 'redaction.sensitive_names'.
         """
         self.set_logs_redaction(logs_redaction_enabled)
+        if sensitive_names is not None:
+            self.set_sensitive_names(sensitive_names)
 
         # Remove existing file handler if present
         if self._file_handler:

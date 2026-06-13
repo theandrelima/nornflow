@@ -481,7 +481,11 @@ def render_settings_table_data(nornflow: "NornFlow", *, redaction_enabled: bool 
         The table data.
     """
     settings_dict = nornflow.settings.as_dict
-    return render_table_data(settings_dict, redaction_enabled=redaction_enabled)
+    return render_table_data(
+        settings_dict,
+        redaction_enabled=redaction_enabled,
+        sensitive_names=nornflow.redaction_sensitive_names,
+    )
 
 
 def render_nornir_cfgs_table_data(nornflow: "NornFlow", *, redaction_enabled: bool = True) -> list[list[str]]:
@@ -495,7 +499,11 @@ def render_nornir_cfgs_table_data(nornflow: "NornFlow", *, redaction_enabled: bo
         The table data.
     """
     nornir_configs = nornflow.nornir_configs
-    return render_table_data(nornir_configs, redaction_enabled=redaction_enabled)
+    return render_table_data(
+        nornir_configs,
+        redaction_enabled=redaction_enabled,
+        sensitive_names=nornflow.redaction_sensitive_names,
+    )
 
 
 def render_table_data(
@@ -504,19 +512,24 @@ def render_table_data(
     value_color: str = "yellow",
     *,
     redaction_enabled: bool = True,
+    sensitive_names: frozenset[str] | None = None,
 ) -> list[list[str]]:
     """Render a dictionary as a list of lists, redacting sensitive values before display.
+
+    Applies built-in 'PROTECTED_KEYWORDS' (segment-aware) and user
+    'sensitive_names' (exact match) before formatting table rows.
 
     Args:
         data: The dictionary to render.
         key_color: The color for the keys.
         value_color: The color for the values.
         redaction_enabled: When False, skip redaction and show values as-is.
+        sensitive_names: User-declared identifiers from 'redaction.sensitive_names'.
 
     Returns:
         The table data with sensitive values replaced by REDACTED unless redaction is disabled.
     """
-    masked = mask_structure(data, reveal=not redaction_enabled)
+    masked = mask_structure(data, reveal=not redaction_enabled, sensitive_names=sensitive_names)
     table_data = []
     for key, value in masked.items():
         colored_key = colored(key, key_color, attrs=["bold"])
