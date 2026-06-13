@@ -34,20 +34,29 @@ NornFlow will try to find a settings YAML file in the following order:
 
 ## Environment Variable Support
 
-Most settings can be overridden using environment variables with the `NORNFLOW_SETTINGS_` prefix. The **`packages`** setting is an exception: it cannot be overridden via environment variables and must be set in the settings YAML file (see [`packages`](#packages)).
+Most settings can be overridden using environment variables with the `NORNFLOW_SETTINGS_` prefix followed by the **exact YAML field name** (lowercase; settings are case-sensitive). The **`packages`** setting is an exception: it cannot be overridden via environment variables and must be set in the settings YAML file (see [`packages`](#packages)).
+
+Dict-typed **`logger`** must be supplied as a **JSON object** on the top-level env var (nested `__` keys are not supported for `logger`). **`redaction`** supports nested env keys (see [`redaction`](#redaction)) or a whole-dict JSON override.
 
 ```bash
 # Override nornir_config_file
-export NORNFLOW_SETTINGS_NORNIR_CONFIG_FILE="configs/nornir-prod.yaml"
+export NORNFLOW_SETTINGS_nornir_config_file="configs/nornir-prod.yaml"
 
 # Override failure strategy
-export NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"
+export NORNFLOW_SETTINGS_failure_strategy="fail-fast"
 
 # Override list values (JSON format)
-export NORNFLOW_SETTINGS_LOCAL_TASKS='["tasks", "custom_tasks"]'
+export NORNFLOW_SETTINGS_local_tasks='["tasks", "custom_tasks"]'
 
 # Override dry run
-export NORNFLOW_SETTINGS_DRY_RUN=true
+export NORNFLOW_SETTINGS_dry_run=true
+
+# logger: JSON object only
+export NORNFLOW_SETTINGS_logger='{"directory": "/var/log/nornflow", "level": "DEBUG"}'
+
+# redaction: nested keys (preferred) or whole-dict JSON
+export NORNFLOW_SETTINGS_redaction__enabled=false
+export NORNFLOW_SETTINGS_redaction__sensitive_names='["credential_x", "vendor_pin"]'
 ```
 
 **Settings Loading Priority (highest to lowest):**
@@ -65,7 +74,7 @@ Additionally, for certain settings like `dry_run` and `failure_strategy`, there'
 2. Workflow-level definitions in YAML (workflow-specific configuration)
 3. Settings value (from the loading priority chain above)
 
-This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, passing `--failure-strategy skip-failed` via CLI will override it, as the CLI represents the most explicit user intent at runtime.
+This means even if you set `NORNFLOW_SETTINGS_failure_strategy="fail-fast"`, passing `--failure-strategy skip-failed` via CLI will override it, as the CLI represents the most explicit user intent at runtime.
 
 ## Mandatory Settings
 
@@ -79,7 +88,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   ```yaml
   nornir_config_file: "nornir_configs/config.yaml"
   ```
-- **Note**: Can be set via environment variable `NORNFLOW_SETTINGS_NORNIR_CONFIG_FILE`.
+- **Note**: Can be set via environment variable `NORNFLOW_SETTINGS_nornir_config_file`.
 
 ## Optional Settings
 
@@ -99,7 +108,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "/abs/path/to/tasks"       # Absolute path
     - "../shared_tasks"          # Relative to settings file
   ```
-- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_TASKS`
+- **Environment Variable**: `NORNFLOW_SETTINGS_local_tasks`
 - **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_tasks` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `local_workflows`
@@ -117,7 +126,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "workflows"
     - "/shared/workflows"
   ```
-- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_WORKFLOWS`
+- **Environment Variable**: `NORNFLOW_SETTINGS_local_workflows`
 - **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_workflows` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `local_filters`
@@ -135,7 +144,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "filters"
     - "../custom_filters"
   ```
-- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_FILTERS`
+- **Environment Variable**: `NORNFLOW_SETTINGS_local_filters`
 - **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_filters` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 
 ### `local_hooks`
@@ -153,7 +162,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "hooks"
     - "/shared/custom_hooks"
   ```
-- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_HOOKS`
+- **Environment Variable**: `NORNFLOW_SETTINGS_local_hooks`
 - **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_hooks` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 - **Deep Dive**: [Hooks Guide](./hooks_guide.md)
 
@@ -173,7 +182,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "../shared_blueprints"
     - "/opt/company/blueprints"
   ```
-- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_BLUEPRINTS`
+- **Environment Variable**: `NORNFLOW_SETTINGS_local_blueprints`
 - **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_blueprints` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 - **Deep Dive**: [Blueprints Guide](./blueprints_guide.md)
 
@@ -192,7 +201,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
     - "j2_filters"
     - "/opt/company/shared_filters"
   ```
-- **Environment Variable**: `NORNFLOW_SETTINGS_LOCAL_J2_FILTERS`
+- **Environment Variable**: `NORNFLOW_SETTINGS_local_j2_filters`
 - **Important**: If you plan to delete any of the automatically created directories (from `nornflow init`) without creating or pointing to your own alternative source directories for this setting, you must set `local_j2_filters` to an empty list (`[]`) in `nornflow.yaml`. Otherwise, NornFlow will raise ResourceError exceptions during initialization and break.
 - **Deep Dive**: [Jinja2 Filters Reference](./jinja2_filters.md)
 
@@ -226,7 +235,7 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   ```yaml
   dry_run: True
   ```
-- **Note**: The runtime precedence means that even if you set `NORNFLOW_SETTINGS_DRY_RUN=true`, passing `--dry-run false` via CLI will override it.
+- **Note**: The runtime precedence means that even if you set `NORNFLOW_SETTINGS_dry_run=true`, passing `--dry-run false` via CLI will override it.
 
 ### `failure_strategy`
 
@@ -265,6 +274,8 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   3. Processors defined in this settings file
   4. `DefaultNornFlowProcessor` (if no other processors specified)
 
+- **Redaction dependency:** Terminal masking of **task stdout** during `nornflow run` is implemented by processors (default: `DefaultNornFlowProcessor`). Removing or replacing that processor without a redaction-aware alternative disables task-output masking even when [`redaction.enabled`](#redaction) is `true`. See [Processors and `nornflow run` task output](#processors-and-nornflow-run-task-output).
+
 ### `logger`
 
 - **Description**: Configuration for NornFlow's logging system. Controls where log files are written and the logging verbosity level.
@@ -288,14 +299,15 @@ This means even if you set `NORNFLOW_SETTINGS_FAILURE_STRATEGY="fail-fast"`, pas
   | `ERROR` | Errors that may affect results (also printed to console) |
   | `CRITICAL` | Severe errors that may halt execution |
 - **Note**: Log files are automatically created with timestamped filenames (e.g., `my_workflow_20260115_143022.log`). Each workflow execution creates a new log file. Errors (`ERROR` level and above) are printed to stderr regardless of the log level setting.
-- **Sensitive Data Protection**: Log redaction is controlled by [`redaction.logs_enabled`](#redaction) (see section below). When enabled, values associated with keys like `password`, `secret`, `token`, or `api_key` are replaced with `***REDACTED***` in log files and stderr log output. **This is best-effort ONLY; avoid logging sensitive data, unless you know what and why you are doing it.**
+- **Environment Variable**: `NORNFLOW_SETTINGS_logger` — JSON object (e.g. `'{"directory": "/var/log/nornflow", "level": "DEBUG"}'`). Nested `NORNFLOW_SETTINGS_logger__directory` / `__level` keys are **not** supported.
+- **Sensitive Data Protection**: Log redaction is controlled by [`redaction.logs_enabled`](#redaction) (see section below). When enabled, values associated with keys like `password`, `secret`, `token`, or `api_key` (from [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129)) are replaced with `***REDACTED***` in log files and stderr log output. **This is best-effort ONLY; avoid logging sensitive data, unless you know what and why you are doing it.**
 
 ### `redaction`
 
-Controls where NornFlow redacts sensitive values before they reach an operator. Redaction is **best-effort**: it matches key names and `key=value` / `key: value` patterns in unstructured text. It is not a secrets manager.
+Controls where NornFlow redacts sensitive values before they reach an operator. Redaction is **best-effort**: it matches key names and `key=value` / `key: value` patterns in unstructured text. It is not a secrets manager. Users should always strive to make their workflows (and underlying task logic) hide/not print clear-text sensitive values. **This seetings aids in that purpose only.** 
 
-- **Type**: `dict` — only `enabled` and `logs_enabled` are accepted; unknown keys raise a settings error.
-- **Default**: `{"enabled": true, "logs_enabled": true}` when the section is omitted (***NOTE***:*`logs_enabled` inherits `enabled`* if omitted).
+- **Type**: `dict` — `enabled`, `logs_enabled`, and `sensitive_names` are accepted; unknown keys raise a settings error.
+- **Default**: `{"enabled": true, "logs_enabled": true, "sensitive_names": []}` when the section is omitted (***NOTE***:*`logs_enabled` inherits `enabled`* if omitted).
 
 #### Sub-keys
 
@@ -303,8 +315,28 @@ Controls where NornFlow redacts sensitive values before they reach an operator. 
 |-----|---------|------------|
 | `enabled` | `true` | Terminal surfaces: `nornflow show` tables, `nornflow run` task stdout, workflow overview vars, failure/error panels |
 | `logs_enabled` | inherits `enabled` | Log files under `logger.directory` and ERROR+ messages on stderr via the logging system |
+| `sensitive_names` | `[]` | User-declared identifiers merged with built-in [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) — same segment-aware key matching on all surfaces |
 
 **Inheritance rule:** If `logs_enabled` is omitted, it takes the same value as `enabled`. Set `logs_enabled` explicitly only when you want logs to behave differently from terminal output.
+
+#### Processors and `nornflow run` task output
+
+> **Important:** During `nornflow run`, **task result text on the terminal** is redacted only by processors that support it — not by `redaction.enabled` alone.
+
+By default, [`DefaultNornFlowProcessor`](./api_reference.md#defaultnornflowprocessor) handles this. It is applied automatically when the [`processors`](#processors) setting is omitted. Before execution, NornFlow syncs `redaction.enabled` and `redaction.sensitive_names` onto any processor that exposes `redaction_enabled` and `sensitive_names`; the default processor uses those when formatting task stdout.
+
+If you **replace or remove** `DefaultNornFlowProcessor` via [`processors`](#processors) (in `nornflow.yaml` or workflow YAML), task output may show secrets even with `redaction.enabled: true`. Either keep the default processor in your list, or implement the same attributes and call `nornflow.masking.mask_text` in any custom processor that prints results.
+
+This is the same class of constraint as the [`shush` hook](./hooks_guide.md#processor-compatibility): several settings-backed features depend on the default processor unless you provide an equivalent.
+
+**What does not require user-configurable processors:**
+
+| Terminal surface during `run` | Redaction mechanism |
+|-------------------------------|---------------------|
+| Workflow overview vars (preflight) | Built into `nornflow run` |
+| Failure-strategy error lines | Always-on `NornFlowFailureStrategyProcessor` (system) |
+| `nornflow show` tables | CLI rendering (not the processor chain) |
+| Log files and stderr log output | [`logger`](#logger) + `redaction.logs_enabled` |
 
 #### Examples
 
@@ -330,12 +362,38 @@ redaction:
   logs_enabled: false
 ```
 
+Declare custom secret identifiers (e.g. env/CLI vars not covered by built-in keywords):
+
+```yaml
+redaction:
+  enabled: true
+  sensitive_names:
+    - credential_x
+    - vendor_pin
+```
+
+`sensitive_names` entries are merged with [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) and use the **same segment-aware rule**: a listed name matches that full key and any key containing it as an `_`-delimited segment (e.g. `pin` matches `vault_pin`; `token` matches `nautobot_token`). Listing a very short name may redact more keys than you intend — prefer full identifiers such as `vendor_pin` over `pin`.
+
 #### Environment variables
 
+Use nested keys (same `__` delimiter as other settings) or a whole-dict JSON override:
+
 ```bash
-export NORNFLOW_SETTINGS_REDACTION__enabled=false
-export NORNFLOW_SETTINGS_REDACTION__logs_enabled=false
+# Disable terminal and log redaction (logs_enabled inherits enabled)
+export NORNFLOW_SETTINGS_redaction__enabled=false
+
+# Terminal on, logs off
+export NORNFLOW_SETTINGS_redaction__enabled=true
+export NORNFLOW_SETTINGS_redaction__logs_enabled=false
+
+# User-sensitive identifiers (JSON list)
+export NORNFLOW_SETTINGS_redaction__sensitive_names='["credential_x", "vendor_pin"]'
+
+# Alternative: whole dict as JSON
+export NORNFLOW_SETTINGS_redaction='{"enabled": true, "sensitive_names": ["credential_x"]}'
 ```
+
+When a settings YAML file is loaded via `NornFlowSettings.load()`, any `redaction` block in that file overrides env vars for those keys.
 
 #### CLI override
 
@@ -364,7 +422,7 @@ Redacted values are always shown as `***REDACTED***`.
 
 #### What redaction does not cover
 
-- Values stored under key names that do not match [protected keywords](../nornflow/constants.py) (`PROTECTED_KEYWORDS`)
+- Values stored under key names that do not match built-in [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) or your `sensitive_names` list
 - Secrets embedded in unstructured device output with no matching keyword pattern
 - In-memory APIs (`settings.as_dict`, `nornir_configs`) — these return unmasked data; redact before printing with `nornflow.masking.mask_for_display()`:
 
