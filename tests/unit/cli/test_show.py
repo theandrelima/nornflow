@@ -495,6 +495,7 @@ class TestMaskingInShow:
     def test_nested_token_is_masked(self):
         """nautobot_token nested inside inventory options must never appear in output."""
         mock_nornflow = MagicMock()
+        mock_nornflow.redaction_sensitive_names = frozenset()
         mock_nornflow.nornir_configs = {
             "inventory": {
                 "plugin": "NautobotInventory",
@@ -514,6 +515,7 @@ class TestMaskingInShow:
     def test_url_is_not_masked(self):
         """Non-sensitive values such as nautobot_url must pass through unchanged."""
         mock_nornflow = MagicMock()
+        mock_nornflow.redaction_sensitive_names = frozenset()
         mock_nornflow.nornir_configs = {
             "inventory": {
                 "options": {
@@ -527,9 +529,34 @@ class TestMaskingInShow:
 
         assert "http://localhost:8080" in str(result)
 
+    def test_user_sensitive_name_in_nornir_configs_is_masked(self):
+        """Names listed only in sensitive_names must be redacted in show output."""
+        mock_nornflow = MagicMock()
+        mock_nornflow.redaction_sensitive_names = frozenset({"credential_x"})
+        mock_nornflow.nornir_configs = {
+            "inventory": {
+                "hosts": {
+                    "leaf1": {
+                        "hostname": "10.0.0.1",
+                        "credential_x": "CLAB_ONLY_SECRET",
+                        "site_label": "lab-east",
+                    }
+                }
+            }
+        }
+
+        result = render_nornir_cfgs_table_data(mock_nornflow)
+
+        rendered = str(result)
+        assert "CLAB_ONLY_SECRET" not in rendered
+        assert "***REDACTED***" in rendered
+        assert "lab-east" in rendered
+        assert "10.0.0.1" in rendered
+
     def test_top_level_sensitive_key_in_settings_is_masked(self):
         """A top-level sensitive key in settings.as_dict must be masked."""
         mock_nornflow = MagicMock()
+        mock_nornflow.redaction_sensitive_names = frozenset()
         mock_nornflow.settings.as_dict = {
             "nornir_config_file": "nornir_configs/config.yaml",
             "db_password": "hunter2",
@@ -569,6 +596,7 @@ class TestNoRedact:
     def test_render_settings_table_data_no_redact(self):
         """render_settings_table_data with redaction_enabled=False shows plain values."""
         mock_nornflow = MagicMock()
+        mock_nornflow.redaction_sensitive_names = frozenset()
         mock_nornflow.settings.as_dict = {"db_password": "hunter2", "host": "router1"}
 
         result = render_settings_table_data(mock_nornflow, redaction_enabled=False)
@@ -580,6 +608,7 @@ class TestNoRedact:
     def test_render_nornir_cfgs_table_data_no_redact(self):
         """render_nornir_cfgs_table_data with redaction_enabled=False shows nested token."""
         mock_nornflow = MagicMock()
+        mock_nornflow.redaction_sensitive_names = frozenset()
         mock_nornflow.nornir_configs = {
             "inventory": {"options": {"nautobot_token": "s3cr3t"}}
         }
