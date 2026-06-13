@@ -30,14 +30,20 @@ class DefaultNornFlowProcessor(Processor):
 
     supports_shush_hook = True
 
-    def __init__(self, redaction_enabled: bool = True):
+    def __init__(
+        self,
+        redaction_enabled: bool = True,
+        sensitive_names: frozenset[str] | None = None,
+    ):
         """Initialize processor with tracking variables for timing and statistics.
 
         Args:
             redaction_enabled: When True, sensitive values in task output are redacted.
+            sensitive_names: User-declared identifiers from 'redaction.sensitive_names'.
         """
         super().__init__()
         self.redaction_enabled = redaction_enabled
+        self.sensitive_names = sensitive_names
 
         # Dictionary to track start times for each (task_name, host) pair for timing calculations
         self.start_times = {}
@@ -107,7 +113,11 @@ class DefaultNornFlowProcessor(Processor):
             Formatted output string with appropriate styling
         """
         if not suppress_output and result.result:
-            output = mask_text(str(result.result), reveal=not self.redaction_enabled)
+            output = mask_text(
+                str(result.result),
+                reveal=not self.redaction_enabled,
+                sensitive_names=self.sensitive_names,
+            )
             return f"\n{Fore.WHITE}Output:\n{output}"
         if suppress_output:
             return f"\n{Fore.WHITE}Output: {Style.DIM}[Shushed!]{Style.RESET_ALL}"

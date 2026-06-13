@@ -146,6 +146,7 @@ class NornFlow:
                 log_dir=self.settings.logger.get("directory"),
                 log_level=self.settings.logger.get("level", "INFO"),
                 logs_redaction_enabled=self.logs_redaction_enabled,
+                sensitive_names=self.redaction_sensitive_names,
             )
             self._initialize_package_loader()
             self._initialize_hooks()  # Must run before _initialize_catalogs to populate HOOKS_CATALOG
@@ -271,7 +272,7 @@ class NornFlow:
 
     def _initialize_processors(self) -> None:
         """
-        Load USER-CONFIGURABLE processors with proper precedence and store them in `self._processors`.
+        Load USER-CONFIGURABLE processors with proper precedence and store them in 'self._processors'.
 
         This method ONLY handles processors that users can configure via:
         - CLI arguments (--processors)
@@ -299,7 +300,12 @@ class NornFlow:
 
         processors_list = self.processors or self.settings.processors
         if not processors_list:
-            self._processors = [DefaultNornFlowProcessor(redaction_enabled=self.redaction_enabled)]
+            self._processors = [
+                DefaultNornFlowProcessor(
+                    redaction_enabled=self.redaction_enabled,
+                    sensitive_names=self.redaction_sensitive_names,
+                )
+            ]
             return
 
         self._processors = []
@@ -519,8 +525,8 @@ class NornFlow:
         """Whether terminal output should be redacted for this session.
 
         Returns:
-            False when ``no_redact`` was passed to the constructor or settings
-            have ``redaction.enabled: false``; True otherwise.
+            False when 'no_redact' was passed to the constructor or settings
+            have 'redaction.enabled: false'; True otherwise.
         """
         if self._no_redact:
             return False
@@ -530,22 +536,29 @@ class NornFlow:
     def logs_redaction_enabled(self) -> bool:
         """Whether log file and stderr log output should be redacted for this session.
 
-        Log redaction follows ``redaction.logs_enabled`` in settings only.
-        ``--no-redact`` does not affect logs.
+        Log redaction follows 'redaction.logs_enabled' in settings only.
+        '--no-redact' does not affect logs.
 
         Returns:
             False when settings have log redaction disabled; True otherwise.
         """
         return self.settings.redaction_logs_enabled
 
+    @property
+    def redaction_sensitive_names(self) -> frozenset[str]:
+        """User-declared sensitive identifiers from 'redaction.sensitive_names'."""
+        return self.settings.redaction_sensitive_names
+
     def _sync_processor_redaction(self, processor: Any) -> None:
-        """Apply the current redaction setting to a processor that supports it.
+        """Apply the current redaction settings to a processor that supports them.
 
         Args:
-            processor: A Nornir processor instance, if it exposes ``redaction_enabled``.
+            processor: A Nornir processor instance, if it exposes redaction attributes.
         """
         if hasattr(processor, "redaction_enabled"):
             processor.redaction_enabled = self.redaction_enabled
+        if hasattr(processor, "sensitive_names"):
+            processor.sensitive_names = self.redaction_sensitive_names
 
     @property
     def var_processor(self) -> NornFlowVariableProcessor | None:
@@ -575,6 +588,7 @@ class NornFlow:
             self._failure_strategy_processor = NornFlowFailureStrategyProcessor(
                 self.failure_strategy,
                 redaction_enabled=self.redaction_enabled,
+                sensitive_names=self.redaction_sensitive_names,
             )
         return self._failure_strategy_processor
 
@@ -1258,6 +1272,7 @@ class NornFlow:
             vars_manager=self.var_processor.vars_manager,
             failure_strategy=self.failure_strategy,
             redaction_enabled=self.redaction_enabled,
+            sensitive_names=self.redaction_sensitive_names,
         )
 
     def _print_workflow_summary(self) -> None:
