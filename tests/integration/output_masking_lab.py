@@ -11,6 +11,7 @@ from tests.integration.project_bootstrap import (
     FIXTURES_COMMON,
     bootstrap_nornflow_project,
     dev_nornflow_cli,
+    patch_nornflow_settings,
 )
 
 MASKING_HOST_NAME = "localhost"
@@ -62,6 +63,11 @@ def build_output_masking_integration_lab(lab_root: Path) -> OutputMaskingIntegra
         nornflow_executable=nornflow_cli,
         overlay_dirs=[FIXTURES_COMMON],
         write_hosts=lambda path: _write_single_host_inventory(path, MASKING_HOST_NAME),
+    )
+
+    patch_nornflow_settings(
+        settings_file,
+        {"redaction": {"enabled": True, "sensitive_names": ["credential_x"]}},
     )
 
     settings = NornFlowSettings.load(str(settings_file), base_dir=lab_root)
