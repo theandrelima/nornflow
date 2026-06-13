@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
-from pydantic import Field, field_validator, model_validator, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, PrivateAttr
 from pydantic_serdes.utils import load_file_to_dict
 from pydantic_settings import (
     BaseSettings,
@@ -22,7 +22,6 @@ from nornflow.constants import (
     NORNFLOW_DEFAULT_TASKS_DIR,
     NORNFLOW_DEFAULT_VARS_DIR,
     NORNFLOW_DEFAULT_WORKFLOWS_DIR,
-    REDACTION_ALLOWED_KEYS,
 )
 from nornflow.exceptions import SettingsError
 from nornflow.logger import logger
@@ -34,9 +33,9 @@ _ENV_EXCLUDED_FIELDS: frozenset[str] = frozenset({"packages"})
 class _NornFlowEnvSettingsSource(EnvSettingsSource):
     """Env settings source that excludes structural fields from env var override.
 
-    The ``packages`` setting is a design-time decision that belongs in the
+    The 'packages' setting is a design-time decision that belongs in the
     settings YAML file (or programmatic overrides).  This source strips it
-    from the env-provided values so that ``NORNFLOW_SETTINGS_PACKAGES`` is
+    from the env-provided values so that 'NORNFLOW_SETTINGS_PACKAGES' is
     never honoured, matching the documented behaviour.
     """
 
@@ -45,6 +44,53 @@ class _NornFlowEnvSettingsSource(EnvSettingsSource):
         for field_name in _ENV_EXCLUDED_FIELDS:
             data.pop(field_name, None)
         return data
+
+
+class RedactionSettings(BaseModel):
+    """Output redaction configuration (terminal, logs, and user-sensitive identifiers)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    logs_enabled: bool | None = None
+    sensitive_names: list[str] = Field(default_factory=list)
+
+    @field_validator("enabled", "logs_enabled", mode="before")
+    @classmethod
+    def coerce_bool_fields(cls, v: Any) -> Any:
+        """Accept bools and env-style true/false strings; reject other values."""
+        if v is None:
+            return v
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str) and v.lower() in ("true", "false"):
+            return v.lower() == "true"
+        raise SettingsError("redaction boolean fields must be true or false")
+
+    @field_validator("sensitive_names", mode="before")
+    @classmethod
+    def coerce_sensitive_names(cls, v: Any) -> list[Any]:
+        """Accept a list or default to empty when omitted."""
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            raise SettingsError("redaction.sensitive_names must be a list")
+        return v
+
+    @field_validator("sensitive_names")
+    @classmethod
+    def normalize_sensitive_names(cls, v: list[str]) -> list[str]:
+        """Normalize identifiers to lowercase with hyphens and dots as underscores."""
+        if not all(isinstance(name, str) and name.strip() for name in v):
+            raise SettingsError("redaction.sensitive_names must be a list of non-empty strings")
+        return [name.lower().replace("-", "_").replace(".", "_") for name in v]
+
+    @model_validator(mode="after")
+    def inherit_logs_enabled(self) -> Self:
+        """When logs_enabled is omitted, inherit enabled."""
+        if self.logs_enabled is None:
+            self.logs_enabled = self.enabled
+        return self
 
 
 class NornFlowSettings(BaseSettings):
@@ -57,7 +103,7 @@ class NornFlowSettings(BaseSettings):
     3. Environment variables (prefixed with NORNFLOW_SETTINGS_)
     4. Default values defined in this class
 
-    The ``packages`` setting is excluded from environment variable override.
+    The 'packages' setting is excluded from environment variable override.
     It must be set in the settings YAML file or via programmatic overrides.
 
     Note the careful terminology:
@@ -138,9 +184,9 @@ class NornFlowSettings(BaseSettings):
     logger: dict[str, Any] = Field(
         default_factory=lambda: {**NORNFLOW_DEFAULT_LOGGER}, description="Logger configuration dictionary"
     )
-    redaction: dict[str, Any] = Field(
-        default_factory=lambda: {**NORNFLOW_DEFAULT_REDACTION},
-        description="Output redaction configuration dictionary",
+    redaction: RedactionSettings = Field(
+        default_factory=RedactionSettings,
+        description="Output redaction configuration",
     )
 
     _base_dir: Path | None = PrivateAttr(default=None)
@@ -154,7 +200,7 @@ class NornFlowSettings(BaseSettings):
             return []
 
         if not isinstance(v, list):
-            raise TypeError("packages must be a list")
+            raise SettingsError("packages must be a list")
 
         normalized = []
         for item in v:
@@ -163,7 +209,7 @@ class NornFlowSettings(BaseSettings):
             elif isinstance(item, (dict, PackageDescriptor)):
                 normalized.append(item)
             else:
-                raise TypeError(f"Invalid package entry type: {type(item).__name__}")
+                raise SettingsError(f"Invalid package entry type: {type(item).__name__}")
 
         return normalized
 
@@ -174,7 +220,7 @@ class NornFlowSettings(BaseSettings):
         seen = set()
         duplicates = [n for n in names if n in seen or seen.add(n)]
         if duplicates:
-            raise ValueError(f"Duplicate package name(s) in 'packages': {sorted(set(duplicates))}")
+            raise SettingsError(f"Duplicate package name(s) in 'packages': {sorted(set(duplicates))}")
         return self
 
     @field_validator("processors", mode="before")
@@ -193,10 +239,10 @@ class NornFlowSettings(BaseSettings):
                 validated.append({"class": item, "args": {}})
             elif isinstance(item, dict):
                 if "class" not in item:
-                    raise ValueError("Each processor dict must have a 'class' key")
+                    raise SettingsError("Each processor dict must have a 'class' key")
                 validated.append({"class": item["class"], "args": item.get("args", {})})
             else:
-                raise TypeError(f"Invalid processor type: {type(item).__name__}")
+                raise SettingsError(f"Invalid processor type: {type(item).__name__}")
 
         return validated
 
@@ -212,7 +258,7 @@ class NornFlowSettings(BaseSettings):
                 try:
                     return FailureStrategy(normalized)
                 except ValueError as e:
-                    raise ValueError(
+                    raise SettingsError(
                         f"Invalid failure strategy: {v}. "
                         f"Must be one of: {', '.join(s.value for s in FailureStrategy)}"
                     ) from e
@@ -236,43 +282,31 @@ class NornFlowSettings(BaseSettings):
 
     @field_validator("redaction", mode="before")
     @classmethod
-    def validate_redaction(cls, v: Any) -> dict[str, Any]:
+    def validate_redaction(cls, v: Any) -> Any:
         """Validate redaction configuration, merging with defaults for missing keys.
 
-        Only ``enabled`` and ``logs_enabled`` are accepted. When ``logs_enabled`` is
-        omitted it inherits the value of ``enabled``.
+        Accepts 'enabled', 'logs_enabled', and 'sensitive_names'. When
+        'logs_enabled' is omitted it inherits the value of 'enabled'.
+        'sensitive_names' entries use the same segment-aware key matching as
+        built-in 'PROTECTED_KEYWORDS' once loaded (see 'nornflow.masking').
 
         Args:
             v: Raw value from settings source.
 
         Returns:
-            Merged redaction config dict.
+            Dict or RedactionSettings ready for model validation.
 
         Raises:
-            SettingsError: If the value is not a dict, contains unknown keys, or
-                has invalid types.
+            SettingsError: If the value is not a dict or has invalid types.
         """
+        if isinstance(v, RedactionSettings):
+            return v
+        if v is None:
+            v = {}
         if not isinstance(v, dict):
             raise SettingsError("redaction must be a dictionary")
 
-        unknown_keys = set(v.keys()) - REDACTION_ALLOWED_KEYS
-        if unknown_keys:
-            raise SettingsError(
-                f"redaction contains unknown key(s): {sorted(unknown_keys)}. "
-                f"Allowed keys: {sorted(REDACTION_ALLOWED_KEYS)}"
-            )
-
         merged = {**NORNFLOW_DEFAULT_REDACTION, **v}
-
-        if not isinstance(merged["enabled"], bool):
-            raise SettingsError("redaction.enabled must be a boolean")
-
-        if "logs_enabled" in v:
-            if not isinstance(merged["logs_enabled"], bool):
-                raise SettingsError("redaction.logs_enabled must be a boolean")
-        else:
-            merged["logs_enabled"] = merged["enabled"]
-
         return merged
 
     def _resolve_path_field(self, field_name: str, key: str | None, base_dir: Path) -> None:
@@ -447,12 +481,17 @@ class NornFlowSettings(BaseSettings):
     @property
     def redaction_enabled(self) -> bool:
         """Whether output redaction is enabled for terminal display surfaces."""
-        return bool(self.redaction.get("enabled", True))
+        return self.redaction.enabled
 
     @property
     def redaction_logs_enabled(self) -> bool:
         """Whether output redaction is enabled for log files and stderr log output."""
-        return bool(self.redaction.get("logs_enabled", self.redaction_enabled))
+        return bool(self.redaction.logs_enabled)
+
+    @property
+    def redaction_sensitive_names(self) -> frozenset[str]:
+        """User-declared sensitive identifiers (normalized lowercase)."""
+        return frozenset(self.redaction.sensitive_names)
 
     def __getattr__(self, name: str) -> Any:
         """

@@ -66,6 +66,7 @@ NORNFLOW_DEFAULT_BLUEPRINTS_DIR = "blueprints"
 NORNFLOW_DEFAULT_VARS_DIR = "vars"
 NORNFLOW_DEFAULT_J2_FILTERS_DIR = "j2_filters"
 NORNFLOW_DEFAULT_LOGGER = {"directory": ".nornflow/logs", "level": "INFO"}
+NORNFLOW_DEFAULT_REDACTION = {"enabled": True, "sensitive_names": []}
 
 NORNFLOW_SETTINGS_OPTIONAL = {
     "local_tasks": [NORNFLOW_DEFAULT_TASKS_DIR],
@@ -79,6 +80,7 @@ NORNFLOW_SETTINGS_OPTIONAL = {
     "failure_strategy": FailureStrategy.SKIP_FAILED,
     "dry_run": False,
     "logger": NORNFLOW_DEFAULT_LOGGER,
+    "redaction": NORNFLOW_DEFAULT_REDACTION,
 }
 
 # Kwargs that cannot be passed to NornFlow.__init__; they must be set via the settings YAML file.
@@ -92,6 +94,8 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "local_j2_filters",
     "packages",
     "logger",
+    # 'redaction' is settings-only; use '--no-redact' / 'no_redact=True' to disable terminal masking per run
+    "redaction",
 )
 
 # Supported extensions
@@ -100,11 +104,7 @@ NORNFLOW_SUPPORTED_YAML_EXTENSIONS = (".yaml", ".yml")
 # Default inventory filter keys
 JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")
 
-# Output redaction — settings defaults, validation, CLI warnings, and masking engine
-NORNFLOW_DEFAULT_REDACTION = {"enabled": True}
-REDACTION_ALLOWED_KEYS = frozenset({"enabled", "logs_enabled"})
-
-# Both terminal and log redaction off (e.g. redaction.enabled: false).
+# Output redaction — CLI warnings and masking engine
 REDACTION_FULL_DISABLED_WARNING = (
     "Warning: All output redaction is disabled. Sensitive values may appear in terminal output "
     "and log files."
