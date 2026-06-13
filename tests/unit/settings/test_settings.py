@@ -1,9 +1,11 @@
+import os
+
 import pytest
 import yaml
 
 from nornflow.constants import NORNFLOW_SETTINGS_MANDATORY, NORNFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import SettingsError
-from nornflow.settings import NornFlowSettings
+from nornflow.settings import NornFlowSettings, RedactionSettings
 
 
 def make_valid_settings_dict() -> dict[str, object]:
@@ -283,9 +285,10 @@ class TestRedactionSettings:
         settings_dict = make_valid_settings_dict()
         settings = NornFlowSettings(**settings_dict)
 
-        assert settings.redaction == {"enabled": True, "logs_enabled": True}
+        assert settings.redaction == RedactionSettings(enabled=True, logs_enabled=True, sensitive_names=[])
         assert settings.redaction_enabled is True
         assert settings.redaction_logs_enabled is True
+        assert settings.redaction_sensitive_names == frozenset()
 
     def test_redaction_disabled_via_dict(self):
         """redaction.enabled can be set to False."""
@@ -293,7 +296,7 @@ class TestRedactionSettings:
         settings_dict["redaction"] = {"enabled": False}
         settings = NornFlowSettings(**settings_dict)
 
-        assert settings.redaction["enabled"] is False
+        assert settings.redaction.enabled is False
         assert settings.redaction_enabled is False
 
     def test_redaction_partial_override_merges_defaults(self):
@@ -302,7 +305,7 @@ class TestRedactionSettings:
         settings_dict["redaction"] = {}
         settings = NornFlowSettings(**settings_dict)
 
-        assert settings.redaction == {"enabled": True, "logs_enabled": True}
+        assert settings.redaction == RedactionSettings(enabled=True, logs_enabled=True, sensitive_names=[])
 
     def test_redaction_not_a_dict_raises(self):
         """Non-dict redaction value must raise SettingsError."""
@@ -336,7 +339,7 @@ class TestRedactionSettings:
         settings_dict["redaction"] = {"enabled": False}
         settings = NornFlowSettings(**settings_dict)
 
-        assert settings.redaction["logs_enabled"] is False
+        assert settings.redaction.logs_enabled is False
         assert settings.redaction_logs_enabled is False
 
     def test_logs_enabled_explicit_override(self):
@@ -363,3 +366,192 @@ class TestRedactionSettings:
 
         with pytest.raises(Exception):
             NornFlowSettings(**settings_dict)
+
+    def test_sensitive_names_normalized_and_exposed(self):
+        """sensitive_names are normalized and exposed as a frozenset property."""
+        settings_dict = make_valid_settings_dict()
+        settings_dict["redaction"] = {
+            "enabled": True,
+            "sensitive_names": ["Credential-X", "vendor.pin"],
+        }
+        settings = NornFlowSettings(**settings_dict)
+
+        assert settings.redaction.sensitive_names == ["credential_x", "vendor_pin"]
+        assert settings.redaction_sensitive_names == frozenset({"credential_x", "vendor_pin"})
+
+    def test_sensitive_names_must_be_string_list(self):
+        """Non-string entries in sensitive_names must raise."""
+        settings_dict = make_valid_settings_dict()
+        settings_dict["redaction"] = {"sensitive_names": ["ok", 1]}
+
+        with pytest.raises(Exception):
+            NornFlowSettings(**settings_dict)
+
+    def test_sensitive_names_empty_string_rejected(self):
+        """Blank strings in sensitive_names must raise."""
+        settings_dict = make_valid_settings_dict()
+        settings_dict["redaction"] = {"sensitive_names": ["credential_x", "  "]}
+
+        with pytest.raises(Exception):
+            NornFlowSettings(**settings_dict)
+
+
+class TestSettingsEnvVars:
+    """Environment variable loading for NornFlowSettings (case-sensitive field names)."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_nornflow_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Remove NORNFLOW_SETTINGS_* vars so each test starts clean."""
+        for key in list(os.environ):
+            if key.startswith("NORNFLOW_SETTINGS_"):
+                monkeypatch.delenv(key, raising=False)
+        monkeypatch.setenv("NORNFLOW_SETTINGS_nornir_config_file", "c.yaml")
+
+    def test_nornir_config_file_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Lowercase env name matching the YAML field is honoured."""
+        monkeypatch.setenv("NORNFLOW_SETTINGS_nornir_config_file", "configs/nornir.yaml")
+
+        settings = NornFlowSettings()
+
+        assert settings.nornir_config_file == "configs/nornir.yaml"
+
+    def test_uppercase_env_name_not_honoured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Uppercase env names are ignored because settings are case-sensitive."""
+        monkeypatch.delenv("NORNFLOW_SETTINGS_nornir_config_file", raising=False)
+        monkeypatch.setenv("NORNFLOW_SETTINGS_NORNIR_CONFIG_FILE", "configs/nornir.yaml")
+
+        with pytest.raises(Exception):
+            NornFlowSettings()
+
+    def test_failure_strategy_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """failure_strategy can be set via NORNFLOW_SETTINGS_failure_strategy."""
+        from nornflow.constants import FailureStrategy
+
+        monkeypatch.setenv("NORNFLOW_SETTINGS_failure_strategy", "fail-fast")
+
+        settings = NornFlowSettings()
+
+        assert settings.failure_strategy == FailureStrategy.FAIL_FAST
+
+    def test_dry_run_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """dry_run can be set via NORNFLOW_SETTINGS_dry_run."""
+        monkeypatch.setenv("NORNFLOW_SETTINGS_dry_run", "true")
+
+        settings = NornFlowSettings()
+
+        assert settings.dry_run is True
+
+    def test_redaction_from_json_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Whole redaction dict via NORNFLOW_SETTINGS_redaction JSON is supported."""
+        monkeypatch.setenv(
+            "NORNFLOW_SETTINGS_redaction",
+            '{"enabled": true, "logs_enabled": false, "sensitive_names": ["credential_x", "vendor_pin"]}',
+        )
+
+        settings = NornFlowSettings()
+
+        assert settings.redaction_enabled is True
+        assert settings.redaction_logs_enabled is False
+        assert settings.redaction_sensitive_names == frozenset({"credential_x", "vendor_pin"})
+
+    def test_redaction_nested_enabled_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Nested redaction__enabled env key is supported via RedactionSettings model."""
+        monkeypatch.setenv("NORNFLOW_SETTINGS_redaction__enabled", "false")
+
+        settings = NornFlowSettings()
+
+        assert settings.redaction_enabled is False
+        assert settings.redaction_logs_enabled is False
+
+    def test_redaction_nested_logs_enabled_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Nested redaction__logs_enabled can differ from enabled."""
+        monkeypatch.setenv("NORNFLOW_SETTINGS_redaction__enabled", "true")
+        monkeypatch.setenv("NORNFLOW_SETTINGS_redaction__logs_enabled", "false")
+
+        settings = NornFlowSettings()
+
+        assert settings.redaction_enabled is True
+        assert settings.redaction_logs_enabled is False
+
+    def test_redaction_sensitive_names_nested_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """sensitive_names can be set via NORNFLOW_SETTINGS_redaction__sensitive_names JSON list."""
+        monkeypatch.setenv(
+            "NORNFLOW_SETTINGS_redaction__sensitive_names",
+            '["credential_x", "vendor_pin"]',
+        )
+
+        settings = NornFlowSettings()
+
+        assert settings.redaction_sensitive_names == frozenset({"credential_x", "vendor_pin"})
+
+    def test_redaction_nested_and_json_env_both_work(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Whole-dict JSON env override remains valid alongside nested keys."""
+        monkeypatch.setenv(
+            "NORNFLOW_SETTINGS_redaction",
+            '{"enabled": true, "sensitive_names": ["credential_x"]}',
+        )
+
+        settings = NornFlowSettings()
+
+        assert settings.redaction_enabled is True
+        assert settings.redaction_sensitive_names == frozenset({"credential_x"})
+
+    def test_logger_from_json_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Whole logger dict via NORNFLOW_SETTINGS_logger JSON is supported."""
+        monkeypatch.setenv(
+            "NORNFLOW_SETTINGS_logger",
+            '{"directory": "/tmp/nornflow-logs", "level": "DEBUG"}',
+        )
+
+        settings = NornFlowSettings()
+
+        assert settings.logger == {"directory": "/tmp/nornflow-logs", "level": "DEBUG"}
+
+    def test_logger_nested_env_keys_not_supported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Nested logger__* env keys are not supported."""
+        monkeypatch.setenv("NORNFLOW_SETTINGS_logger__level", "DEBUG")
+
+        with pytest.raises(AttributeError):
+            NornFlowSettings()
+
+    def test_packages_env_override_ignored(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """NORNFLOW_SETTINGS_packages is stripped and never applied."""
+        monkeypatch.setenv("NORNFLOW_SETTINGS_packages", '[{"name": "evil_pkg"}]')
+
+        settings = NornFlowSettings()
+
+        assert settings.packages == []
+
+    def test_yaml_redaction_overrides_env(self, monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+        """YAML redaction block wins over NORNFLOW_SETTINGS_redaction when loading from disk."""
+        settings_file = tmp_path / "nornflow.yaml"
+        settings_file.write_text(
+            yaml.dump(
+                {
+                    "nornir_config_file": "c.yaml",
+                    "redaction": {"enabled": True, "logs_enabled": True},
+                }
+            )
+        )
+        monkeypatch.setenv("NORNFLOW_SETTINGS_redaction", '{"enabled": false}')
+
+        settings = NornFlowSettings.load(str(settings_file))
+
+        assert settings.redaction_enabled is True
+        assert settings.redaction_logs_enabled is True
+
+    def test_redaction_from_env_when_omitted_in_yaml(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path
+    ) -> None:
+        """NORNFLOW_SETTINGS_redaction applies when the YAML file omits redaction."""
+        settings_file = tmp_path / "nornflow.yaml"
+        settings_file.write_text(yaml.dump({"nornir_config_file": "c.yaml"}))
+        monkeypatch.setenv(
+            "NORNFLOW_SETTINGS_redaction",
+            '{"enabled": false, "sensitive_names": ["credential_x"]}',
+        )
+
+        settings = NornFlowSettings.load(str(settings_file))
+
+        assert settings.redaction_enabled is False
+        assert settings.redaction_sensitive_names == frozenset({"credential_x"})

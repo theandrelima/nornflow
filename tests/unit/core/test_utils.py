@@ -795,6 +795,20 @@ class TestFormatVariableValue:
 
         assert result == "***REDACTED***"
 
+    def test_format_user_sensitive_name_exact_match(self):
+        """User sensitive_names use exact match only."""
+        names = frozenset(["credential_x"])
+        result = format_variable_value("credential_x", "lab-secret", sensitive_names=names)
+
+        assert result == "***REDACTED***"
+
+    def test_format_user_sensitive_name_segment_match(self):
+        """Listing 'pin' masks 'vault_pin' via segment-aware matching."""
+        names = frozenset(["pin"])
+        result = format_variable_value("vault_pin", "1234", sensitive_names=names)
+
+        assert result == "***REDACTED***"
+
 
 class TestPrintWorkflowOverview:
     """Tests for print_workflow_overview function."""

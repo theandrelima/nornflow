@@ -55,14 +55,17 @@ class TestIsSensitiveKey:
     def test_dot_normalized(self):
         assert is_sensitive_key("auth.token") is True
 
-    def test_extra_keywords(self):
-        extra = frozenset(["vault_pin"])
-        assert is_sensitive_key("vault_pin", extra) is True
+    def test_sensitive_names_exact_match(self):
+        names = frozenset(["vault_pin"])
+        assert is_sensitive_key("vault_pin", names) is True
         assert is_sensitive_key("vault_pin") is False
 
-    def test_extra_keywords_segment_match(self):
-        extra = frozenset(["pin"])
-        assert is_sensitive_key("vault_pin", extra) is True
+    def test_sensitive_names_segment_match(self):
+        """User sensitive_names use the same segment-aware rule as built-in keywords."""
+        names = frozenset(["pin"])
+        assert is_sensitive_key("vault_pin", names) is True
+        assert is_sensitive_key("pin", names) is True
+        assert is_sensitive_key("spin", names) is False
 
 
 class TestMaskText:
@@ -116,6 +119,19 @@ class TestMaskText:
         assert "leaked_secret" not in result
         assert REDACTED in result
 
+    def test_masks_user_sensitive_name_in_text(self):
+        names = frozenset(["credential_x"])
+        result = mask_text("credential_x=not-in-protected-keywords", sensitive_names=names)
+        assert "not-in-protected-keywords" not in result
+        assert REDACTED in result
+
+    def test_large_string_with_sensitive_name_still_masks(self):
+        names = frozenset(["credential_x"])
+        text = "x" * LARGE_TEXT_THRESHOLD + " credential_x=leaked_secret"
+        result = mask_text(text, sensitive_names=names)
+        assert "leaked_secret" not in result
+        assert REDACTED in result
+
 
 class TestMicrosecondFormatter:
     """Tests for log formatter masking."""
@@ -149,6 +165,22 @@ class TestMicrosecondFormatter:
         result = formatter.format(record)
         assert "secret123" in result
         assert REDACTED not in result
+
+    def test_format_masks_user_sensitive_name(self):
+        names = frozenset(["credential_x"])
+        formatter = MicrosecondFormatter("%(message)s", sensitive_names=names)
+        record = logging.LogRecord(
+            name="nornflow",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="credential_x=lab-secret",
+            args=(),
+            exc_info=None,
+        )
+        result = formatter.format(record)
+        assert "lab-secret" not in result
+        assert REDACTED in result
 
 
 class TestMaskStructure:
@@ -204,10 +236,10 @@ class TestMaskStructure:
         data = {"password": "secret"}
         assert mask_structure(data, reveal=True) is data
 
-    def test_extra_keywords(self):
-        extra = frozenset(["vault_pin"])
+    def test_sensitive_names(self):
+        names = frozenset(["vault_pin"])
         data = {"vault_pin": "1234", "name": "test"}
-        result = mask_structure(data, extra_keywords=extra)
+        result = mask_structure(data, sensitive_names=names)
         assert result["vault_pin"] == REDACTED
         assert result["name"] == "test"
 
@@ -257,6 +289,11 @@ class TestMaskForDisplay:
     def test_reveal_fast_path(self):
         data = {"password": "secret"}
         assert mask_for_display(data, reveal=True) is data
+
+    def test_sensitive_names_on_all_surfaces(self):
+        names = frozenset(["credential_x"])
+        assert mask_for_display({"credential_x": "secret"}, sensitive_names=names)["credential_x"] == REDACTED
+        assert "secret" not in mask_for_display("credential_x=secret", sensitive_names=names)
 
     def test_nornir_config_acceptance_criterion(self):
         """
