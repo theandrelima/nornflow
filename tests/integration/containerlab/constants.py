@@ -3,7 +3,7 @@
 Edit values here to match your lab topology, pinned package version, or generated
 asset names. Other modules under this directory import from this file only.
 
-Keep ``inventory/hosts.yaml.example`` aligned when you change ``LAB_HOSTS`` —
+Keep 'inventory/hosts.yaml.example' aligned when you change 'LAB_HOSTS' —
 that file is reference documentation for manual preflight, not read at runtime.
 """
 
@@ -28,6 +28,12 @@ LAB_STORE_AS_FAILURE_MARKER = "NORNFLOW_LAB_STORE_AS_FAILURE_OK"
 LAB_READONLY_BLUEPRINT = "lab_readonly_snapshot.yaml"
 # File lives under workflows/lab/ for domain vars; catalog key is the filename only.
 LAB_VARS_ALL_LEVELS_WORKFLOW = "vars_all_levels.yaml"
+LAB_OUTPUT_MASKING_WORKFLOW = "lab_output_masking.yaml"
+
+# User-declared sensitive name exercised by lab_output_masking.yaml and host data.
+LAB_MASKING_SENSITIVE_NAME = "credential_x"
+LAB_MASKING_CREDENTIAL_SECRET = "CLAB_CREDENTIAL_X_SECRET_VALUE"
+LAB_MASKING_VISIBLE_LABEL = "visible-lab-marker"
 
 LAB_VALIDATE_OK_WORKFLOW = "lab_validate_ok.yaml"
 LAB_VALIDATE_BAD_TASK_WORKFLOW = "lab_validate_bad_task.yaml"

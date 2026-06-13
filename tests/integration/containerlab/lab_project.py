@@ -11,6 +11,8 @@ from tests.integration.containerlab.constants import (
     LAB_EAPI_PORT,
     LAB_EAPI_TRANSPORT,
     LAB_HOSTS,
+    LAB_MASKING_CREDENTIAL_SECRET,
+    LAB_MASKING_SENSITIVE_NAME,
     NORNFLOW_ARISTA_PACKAGE,
     NORNFLOW_ARISTA_VERSION,
 )
@@ -68,6 +70,8 @@ def write_lab_hosts_yaml(path: Path, username: str, password: str) -> None:
             "data": {
                 "eapi_transport": LAB_EAPI_TRANSPORT,
                 "eapi_port": LAB_EAPI_PORT,
+                LAB_MASKING_SENSITIVE_NAME: LAB_MASKING_CREDENTIAL_SECRET,
+                "site_label": "lab-east",
             },
         }
     path.write_text(yaml.safe_dump(hosts, sort_keys=True))
@@ -94,7 +98,13 @@ def build_lab_project(
         project_root,
         nornflow_executable=nornflow_cli,
         overlay_dirs=[FIXTURES_COMMON, CONTAINERLAB_OVERLAY],
-        settings_patch={"packages": [NORNFLOW_ARISTA_PACKAGE]},
+        settings_patch={
+            "packages": [NORNFLOW_ARISTA_PACKAGE],
+            "redaction": {
+                "enabled": True,
+                "sensitive_names": [LAB_MASKING_SENSITIVE_NAME],
+            },
+        },
         write_hosts=lambda hosts_path: write_lab_hosts_yaml(hosts_path, username, password),
     )
 
