@@ -15,7 +15,7 @@ def dev_nornflow_cli() -> Path:
     """Return the nornflow CLI from PATH or the active virtualenv.
 
     Returns:
-        Path to an existing ``nornflow`` executable.
+        Path to an existing 'nornflow' executable.
 
     Raises:
         FileNotFoundError: When no nornflow executable is found.
@@ -69,7 +69,7 @@ def patch_nornflow_settings(settings_file: Path, updates: dict[str, object]) -> 
 
 
 def run_nornflow_init(nornflow_executable: Path, project_root: Path) -> None:
-    """Run ``nornflow init`` non-interactively in project_root.
+    """Run 'nornflow init' non-interactively in project_root.
 
     Args:
         nornflow_executable: Path to nornflow CLI (venv or dev install).

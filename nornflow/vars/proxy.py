@@ -10,15 +10,15 @@ from nornflow.vars.exceptions import VariableError
 class NornirHostProxy:
     """
     Read-only proxy object for accessing Nornir inventory variables for the current host
-    via the `host.` namespace in NornFlow templates.
+    via the 'host.' namespace in NornFlow templates.
 
     This class implements a proxy pattern to provide direct access to host attributes
-    (like `name`, `platform`) and keys within the `host.data` dictionary. Nornir's
-    `host.data` dictionary is the result of merging variables from host-specific
+    (like 'name', 'platform') and keys within the 'host.data' dictionary. Nornir's
+    'host.data' dictionary is the result of merging variables from host-specific
     definitions, group inheritance, and inventory defaults.
 
-    The `NornFlowVariableProcessor` is responsible for setting the `current_host_name`
-    and `nornir` instance on this proxy before it's used for variable resolution
+    The 'NornFlowVariableProcessor' is responsible for setting the 'current_host_name'
+    and 'nornir' instance on this proxy before it's used for variable resolution
     within a task context. This proxy itself does not modify Nornir inventory.
     """
 

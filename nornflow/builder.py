@@ -24,13 +24,13 @@ class NornFlowBuilder:
     - Additional keyword arguments
 
     Vars in Builder Context:
-    The builder's `with_vars()` method sets variables that will have the highest
+    The builder's 'with_vars()' method sets variables that will have the highest
     precedence in the variable resolution system. While termed "vars" due to
     their primary use case (command-line arguments), these serve as a universal
     override mechanism in the builder pattern.
 
     Inventory Filters in Builder Context:
-    The builder's `with_filters()` method sets inventory filters that will completely
+    The builder's 'with_filters()' method sets inventory filters that will completely
     override any inventory filters defined in the workflow YAML.
 
     Usage Examples:
@@ -152,7 +152,7 @@ class NornFlowBuilder:
 
         The workflow will be resolved from the workflows catalog during NornFlow execution.
         This allows using workflow names instead of paths, which is particularly useful
-        for CLI commands like `nornflow run some_workflow_name`.
+        for CLI commands like 'nornflow run some_workflow_name'.
 
         Args:
             workflow_name: The name of the workflow to set.

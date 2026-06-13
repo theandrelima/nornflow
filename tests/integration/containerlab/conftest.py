@@ -70,7 +70,7 @@ def run_nornflow_cli(
 
     Args:
         lab: Session lab environment.
-        cli_args: Arguments after global options (e.g. ``['show', '--tasks']``).
+        cli_args: Arguments after global options (e.g. "['show', '--tasks']").
         stream: When True, inherit stdout/stderr for live CLI output.
 
     Returns:
@@ -91,7 +91,7 @@ def run_lab_phase(lab: LabEnvironment, phase: str) -> subprocess.CompletedProces
 
     Args:
         lab: Session lab environment.
-        phase: ``phase-b`` (in-process catalog validation).
+        phase: 'phase-b' (in-process catalog validation).
 
     Returns:
         Completed subprocess result.
@@ -107,7 +107,7 @@ def run_lab_phase(lab: LabEnvironment, phase: str) -> subprocess.CompletedProces
 
 
 def run_lab_workflow(lab: LabEnvironment, workflow: str = LAB_INTEGRATION_WORKFLOW) -> subprocess.CompletedProcess[str | None]:
-    """Run a workflow via the real ``nornflow run`` CLI with live output.
+    """Run a workflow via the real 'nornflow run' CLI with live output.
 
     Args:
         lab: Session lab environment.

@@ -9,6 +9,6 @@ def lab_prefix(value: str, prefix: str = "LAB") -> str:
         prefix: Prefix to prepend.
 
     Returns:
-        ``{prefix}:{value}`` string.
+        '{prefix}:{value}' string.
     """
     return f"{prefix}:{value}"
