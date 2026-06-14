@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
-from typing import Any, Self
+from typing import Any
+
+from typing_extensions import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, PrivateAttr
 from pydantic_serdes.utils import load_file_to_dict
