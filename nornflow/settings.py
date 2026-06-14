@@ -287,6 +287,8 @@ class NornFlowSettings(BaseSettings):
 
         Accepts 'enabled', 'logs_enabled', and 'sensitive_names'. When
         'logs_enabled' is omitted it inherits the value of 'enabled'.
+        Unknown keys are rejected by RedactionSettings (extra='forbid'); via
+        NornFlowSettings.load() validation failures surface as SettingsError.
         'sensitive_names' entries use the same segment-aware key matching as
         built-in 'PROTECTED_KEYWORDS' once loaded (see 'nornflow.masking').
 
@@ -297,7 +299,7 @@ class NornFlowSettings(BaseSettings):
             Dict or RedactionSettings ready for model validation.
 
         Raises:
-            SettingsError: If the value is not a dict or has invalid types.
+            SettingsError: If the value is not a dict.
         """
         if isinstance(v, RedactionSettings):
             return v

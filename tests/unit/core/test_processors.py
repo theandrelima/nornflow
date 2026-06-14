@@ -280,3 +280,14 @@ class TestDefaultNornFlowProcessorOutputMasking:
 
         assert "supersecret123" in output
         assert REDACTED not in output
+
+    def test_format_task_output_masks_structured_dict(self):
+        processor = DefaultNornFlowProcessor()
+        mock_result = MagicMock()
+        mock_result.result = {"password": "hunter2", "host": "router1"}
+
+        output = processor._format_task_output(mock_result, suppress_output=False)
+
+        assert "hunter2" not in output
+        assert REDACTED in output
+        assert "router1" in output
