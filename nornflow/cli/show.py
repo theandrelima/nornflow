@@ -516,8 +516,8 @@ def render_table_data(
 ) -> list[list[str]]:
     """Render a dictionary as a list of lists, redacting sensitive values before display.
 
-    Applies built-in 'PROTECTED_KEYWORDS' (segment-aware) and user
-    'sensitive_names' (exact match) before formatting table rows.
+    Applies built-in 'PROTECTED_KEYWORDS' and user 'sensitive_names' with the same
+    segment-aware key-matching rule before formatting table rows.
 
     Args:
         data: The dictionary to render.

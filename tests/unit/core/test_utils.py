@@ -796,7 +796,7 @@ class TestFormatVariableValue:
         assert result == "***REDACTED***"
 
     def test_format_user_sensitive_name_exact_match(self):
-        """User sensitive_names use exact match only."""
+        """User sensitive_names match declared identifiers exactly."""
         names = frozenset(["credential_x"])
         result = format_variable_value("credential_x", "lab-secret", sensitive_names=names)
 

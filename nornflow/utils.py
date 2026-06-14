@@ -405,7 +405,7 @@ def format_variable_value(
         key: The variable name.
         value: The variable value.
         redaction_enabled: When False, return the value without redaction.
-        sensitive_names: User-declared identifiers (exact match only).
+        sensitive_names: User-declared identifiers (same segment-aware rule as built-in keywords).
 
     Returns:
         The formatted display string, with REDACTED substituted for sensitive values.
