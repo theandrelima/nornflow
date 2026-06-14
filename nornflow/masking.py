@@ -12,9 +12,11 @@ structured data: normalize the key, then match the full name or any
 
 On unstructured text (mask_text), each keyword is also matched in hyphen and
 dot surface forms (e.g. db_connection_string, db-connection-string,
-db.connection.string) for key=value / key: value patterns only. Strings at or
-above LARGE_TEXT_THRESHOLD use a substring pre-check with the same surface
-forms before running regex.
+db.connection.string) for key=value / key: value patterns only. A keyword must
+start at a key boundary (after start, '_', '-', '.', or a non-alphanumeric)
+so protected keywords do not match inside longer names (e.g. token in monkey=).
+Strings at or above LARGE_TEXT_THRESHOLD use a substring pre-check with the
+same surface forms before running regex.
 
 Three public entry points cover all output sinks:
 - mask_for_display: top-level entry point; dispatches by type.
@@ -90,7 +92,8 @@ def _get_mask_text_pattern(sensitive_names: frozenset[str] | None = None) -> re.
     if cache_key not in _MASK_TEXT_PATTERNS:
         alternation = "|".join(re.escape(kw) for kw in _cached_text_alternatives(sensitive_names))
         _MASK_TEXT_PATTERNS[cache_key] = re.compile(
-            rf"({alternation})(\s*[:=]\s*)(['\"]?)(\S+?)(\3)(?=\s|,|}}|\]|$)", re.IGNORECASE
+            rf"(?<![a-zA-Z0-9])({alternation})(\s*[:=]\s*)(['\"]?)(\S+?)(\3)(?=\s|,|}}|\]|$)",
+            re.IGNORECASE,
         )
     return _MASK_TEXT_PATTERNS[cache_key]
 
@@ -132,6 +135,7 @@ def mask_text(
 
     Regex-based best-effort pass suitable for log lines, task output, and error
     messages. Matches built-in 'PROTECTED_KEYWORDS' and user 'sensitive_names'.
+    Keywords must start at a key boundary (not inside a longer alphanumeric run).
 
     Strings at or above LARGE_TEXT_THRESHOLD skip regex unless a keyword surface
     form (underscore, hyphen, or dot) appears as a substring; the pre-check uses
@@ -236,7 +240,7 @@ def mask_for_display(
     if reveal:
         return data
 
-    if isinstance(data, dict | list | tuple):
+    if isinstance(data, (dict, list, tuple)):
         return mask_structure(data, sensitive_names=sensitive_names)
 
     if isinstance(data, str):

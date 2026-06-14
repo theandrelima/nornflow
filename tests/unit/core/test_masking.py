@@ -99,6 +99,10 @@ class TestMaskText:
         original = "hostname = router1"
         assert mask_text(original) == original
 
+    def test_does_not_redact_substring_key_false_positive(self):
+        """Segment keyword 'key' must not match inside 'monkey='."""
+        assert mask_text("monkey=abc") == "monkey=abc"
+
     def test_reveal_returns_unchanged(self):
         text = "password=topsecret"
         assert mask_text(text, reveal=True) == text
