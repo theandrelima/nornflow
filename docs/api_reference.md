@@ -752,6 +752,7 @@ from nornflow.masking import mask_text, mask_structure, mask_for_display
 # Redact key=value / key: value patterns in free-form strings
 mask_text("token=abc123")          # "token=***REDACTED***"
 mask_text("password: hunter2")    # "password: ***REDACTED***"
+mask_text("db-connection-string=x")  # hyphen/dot surface forms match underscore keywords
 
 # Redact sensitive keys in nested dicts / lists
 mask_structure({"nautobot_token": "abc", "host": "router1"})
@@ -762,7 +763,7 @@ mask_for_display({"api_key": "s3cr3t"})
 # {"api_key": "***REDACTED***"}
 ```
 
-The placeholder is always `***REDACTED***`. Built-in [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) and user `redaction.sensitive_names` share one segment-aware key-matching rule (see [`redaction`](#redaction) in the settings guide).
+The placeholder is always `***REDACTED***`. Built-in [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) and user `redaction.sensitive_names` share one segment-aware key rule on structured data (`mask_structure`). On unstructured strings (`mask_text`), redaction applies only to `key=value` / `key: value` patterns; each keyword is matched in underscore, hyphen, and dot surface forms (e.g. `api_key`, `api-key`, `api.key`). Large strings use the same surface forms in a substring pre-check before regex. See [Matching rules](./nornflow_settings.md#matching-rules) in the settings guide.
 
 Pass `sensitive_names=` to helpers when masking outside NornFlow runtime; at runtime use `NornFlow.redaction_sensitive_names` (wired into show, overview, processors, and logs).
 
