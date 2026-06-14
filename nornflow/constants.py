@@ -125,16 +125,16 @@ REDACTED = "***REDACTED***"
 # substring pre-check first to avoid scanning huge blobs with no secrets.
 LARGE_TEXT_THRESHOLD = 8192
 
-# Segment atoms and exact-only keys for output redaction (see nornflow.masking).
+# Protected keywords for output redaction (see nornflow.masking).
 #
 # Segment-aware matching: normalize the key (lowercase; '-' and '.' → '_'), then
 # redact when the full name or any '_'-delimited segment equals an entry below
 # (e.g. token → nautobot_token; key → api_key; secret → client_secret).
 #
-# Prefer short segment atoms over compound synonyms. List a compound only when it
+# Prefer short keywords over compound synonyms. List a compound only when it
 # cannot be inferred from segments (e.g. apikey, db_connection_string).
 PROTECTED_KEYWORDS = [
-    # Core secret-bearing segments
+    # Core secret-bearing keywords (match as full key or as a segment)
     "password",
     "passwd",
     "pwd",

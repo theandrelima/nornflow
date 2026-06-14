@@ -860,7 +860,7 @@ processors:
 ```
 
 **Built-in Processors:**
-- `DefaultNornFlowProcessor`: Formats task output, applies terminal redaction to task stdout (when [`redaction.enabled`](./nornflow_settings.md#redaction) is true), and tracks execution statistics — see [Processors and `nornflow run` task output](./nornflow_settings.md#processors-and-nornflow-run-task-output)
+- `DefaultNornFlowProcessor`: Formats task output, applies terminal redaction to task stdout (when [`redaction.enabled`](./nornflow_settings.md#redaction) is true), and tracks execution statistics. See [Processors and `nornflow run` task output](./nornflow_settings.md#processors-and-nornflow-run-task-output).
 - `NornFlowVariableProcessor`: Handles variable resolution (always applied first)
 - `NornFlowFailureStrategyProcessor`: Implements failure handling (always applied last)
 - `NornFlowHookProcessor`: Orchestrates hook execution (automatically added when hooks are present)

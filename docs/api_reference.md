@@ -751,8 +751,10 @@ from nornflow.masking import mask_text, mask_structure, mask_for_display
 
 # Redact key=value / key: value patterns in free-form strings
 mask_text("token=abc123")          # "token=***REDACTED***"
+mask_text("nautobot_token=abc")    # segment boundary before token
 mask_text("password: hunter2")    # "password: ***REDACTED***"
 mask_text("db-connection-string=x")  # hyphen/dot surface forms match underscore keywords
+mask_text("monkey=abc")            # unchanged; key not at a segment boundary
 
 # Redact sensitive keys in nested dicts / lists
 mask_structure({"nautobot_token": "abc", "host": "router1"})
@@ -763,7 +765,7 @@ mask_for_display({"api_key": "s3cr3t"})
 # {"api_key": "***REDACTED***"}
 ```
 
-The placeholder is always `***REDACTED***`. Built-in [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) and user `redaction.sensitive_names` share one segment-aware key rule on structured data (`mask_structure`). On unstructured strings (`mask_text`), redaction applies only to `key=value` / `key: value` patterns; each keyword is matched in underscore, hyphen, and dot surface forms (e.g. `api_key`, `api-key`, `api.key`). Large strings use the same surface forms in a substring pre-check before regex. See [Matching rules](./nornflow_settings.md#matching-rules) in the settings guide.
+The placeholder is always `***REDACTED***`. Built-in [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) and user `redaction.sensitive_names` share one segment-aware key rule on structured data (`mask_structure`). On unstructured strings (`mask_text`), redaction applies only to `key=value` / `key: value` patterns; each keyword is matched in underscore, hyphen, and dot surface forms (e.g. `api_key`, `api-key`, `api.key`), and only at key boundaries (start of the key or after `_`, `-`, `.`, or a non-alphanumeric character, so `token` matches `nautobot_token=` but not `monkey=`). Large strings use the same surface forms in a substring pre-check before regex. See [Matching rules](./nornflow_settings.md#matching-rules) in the settings guide.
 
 Pass `sensitive_names=` to helpers when masking outside NornFlow runtime; at runtime use `NornFlow.redaction_sensitive_names` (wired into show, overview, processors, and logs).
 
@@ -771,10 +773,10 @@ Pass `sensitive_names=` to helpers when masking outside NornFlow runtime; at run
 
 | Surface | Depends on user `processors`? |
 |---------|-------------------------------|
-| Task stdout / formatted result output | **Yes** — default: `DefaultNornFlowProcessor` |
+| Task stdout / formatted result output | **Yes** (default: `DefaultNornFlowProcessor`) |
 | Workflow overview vars | No |
-| Failure-strategy error panels | No — system `NornFlowFailureStrategyProcessor` |
-| Log files | No — logger + `redaction.logs_enabled` |
+| Failure-strategy error panels | No (system `NornFlowFailureStrategyProcessor`) |
+| Log files | No (logger + `redaction.logs_enabled`) |
 
 See [Processors and `nornflow run` task output](./nornflow_settings.md#processors-and-nornflow-run-task-output) for configuration implications.
 
@@ -792,9 +794,9 @@ At runtime, `NornFlow.redaction_enabled` governs terminal surfaces; `NornFlow.lo
 | `redaction.enabled` | Terminal surfaces |
 | `redaction.logs_enabled` | Log files and stderr log handler (`logs_enabled` inherits `enabled` when omitted) |
 
-`nornflow show` and `nornflow run` emit a yellow warning when redaction is partially or fully disabled (full, terminal-only, or logs-only — see [CLI warnings](./nornflow_settings.md#cli-warnings) in the settings guide).
+`nornflow show` and `nornflow run` emit a yellow warning when redaction is partially or fully disabled (full, terminal-only, or logs-only; see [CLI warnings](./nornflow_settings.md#cli-warnings) in the settings guide).
 
-To disable all redaction via settings, set `redaction.enabled: false`. To disable logs only, set `redaction.logs_enabled: false`. See [NornFlow Settings — redaction](./nornflow_settings.md#redaction).
+To disable all redaction via settings, set `redaction.enabled: false`. To disable logs only, set `redaction.logs_enabled: false`. See [NornFlow Settings: redaction](./nornflow_settings.md#redaction).
 
 <div align="center">
   
