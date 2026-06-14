@@ -119,6 +119,22 @@ class TestMaskText:
         assert "leaked_secret" not in result
         assert REDACTED in result
 
+    def test_masks_hyphenated_key_in_text(self):
+        result = mask_text("db-connection-string=supersecret")
+        assert "supersecret" not in result
+        assert REDACTED in result
+
+    def test_masks_dotted_key_in_text(self):
+        result = mask_text("api.key=supersecret")
+        assert "supersecret" not in result
+        assert REDACTED in result
+
+    def test_large_string_with_hyphenated_keyword_still_masks(self):
+        text = "x" * LARGE_TEXT_THRESHOLD + " db-connection-string=leaked_secret"
+        result = mask_text(text)
+        assert "leaked_secret" not in result
+        assert REDACTED in result
+
     def test_masks_user_sensitive_name_in_text(self):
         names = frozenset(["credential_x"])
         result = mask_text("credential_x=not-in-protected-keywords", sensitive_names=names)

@@ -6,8 +6,15 @@ pass data through this module before rendering. In-memory runtime objects are ne
 masked here; masking applies only at display and log boundaries.
 
 Key-name policy merges built-in 'PROTECTED_KEYWORDS' with user
-'redaction.sensitive_names' and applies one segment-aware rule to both:
-normalize the key, then match the full name or any '_'-delimited segment.
+'redaction.sensitive_names' and applies one segment-aware rule to both on
+structured data: normalize the key, then match the full name or any
+'_'-delimited segment.
+
+On unstructured text (mask_text), each keyword is also matched in hyphen and
+dot surface forms (e.g. db_connection_string, db-connection-string,
+db.connection.string) for key=value / key: value patterns only. Strings at or
+above LARGE_TEXT_THRESHOLD use a substring pre-check with the same surface
+forms before running regex.
 
 Three public entry points cover all output sinks:
 - mask_for_display: top-level entry point; dispatches by type.
@@ -24,6 +31,7 @@ from nornflow.constants import LARGE_TEXT_THRESHOLD, PROTECTED_KEYWORDS, REDACTE
 _KEYWORDS_SET: frozenset[str] = frozenset(kw.lower() for kw in PROTECTED_KEYWORDS)
 
 _MASK_TEXT_PATTERNS: dict[frozenset[str], re.Pattern[str]] = {}
+_TEXT_ALTERNATIVES: dict[frozenset[str], tuple[str, ...]] = {}
 
 
 def _normalize_identifier(name: str) -> str:
@@ -38,6 +46,37 @@ def _effective_keywords(sensitive_names: frozenset[str] | None = None) -> frozen
     return _KEYWORDS_SET
 
 
+def _keyword_text_variants(keyword: str) -> frozenset[str]:
+    """Surface forms for unstructured text (underscore, hyphen, dot separators)."""
+    normalized = _normalize_identifier(keyword)
+    return frozenset(
+        {
+            normalized,
+            normalized.replace("_", "-"),
+            normalized.replace("_", "."),
+        }
+    )
+
+
+def _text_pattern_alternatives(sensitive_names: frozenset[str] | None = None) -> list[str]:
+    """Keyword alternation for mask_text, longest first to prefer compound matches."""
+    keywords = list(PROTECTED_KEYWORDS)
+    if sensitive_names:
+        keywords.extend(sorted(sensitive_names))
+    variants: set[str] = set()
+    for keyword in keywords:
+        variants.update(_keyword_text_variants(keyword))
+    return sorted(variants, key=len, reverse=True)
+
+
+def _cached_text_alternatives(sensitive_names: frozenset[str] | None = None) -> tuple[str, ...]:
+    """Cached keyword surface forms for regex building and large-string pre-check."""
+    cache_key = sensitive_names or frozenset()
+    if cache_key not in _TEXT_ALTERNATIVES:
+        _TEXT_ALTERNATIVES[cache_key] = tuple(_text_pattern_alternatives(sensitive_names))
+    return _TEXT_ALTERNATIVES[cache_key]
+
+
 def _get_mask_text_pattern(sensitive_names: frozenset[str] | None = None) -> re.Pattern[str]:
     """Get or lazily build the compiled regex for text-based sensitive data detection.
 
@@ -49,10 +88,7 @@ def _get_mask_text_pattern(sensitive_names: frozenset[str] | None = None) -> re.
     """
     cache_key = sensitive_names or frozenset()
     if cache_key not in _MASK_TEXT_PATTERNS:
-        keywords = list(PROTECTED_KEYWORDS)
-        if sensitive_names:
-            keywords.extend(sorted(sensitive_names))
-        alternation = "|".join(re.escape(kw) for kw in keywords)
+        alternation = "|".join(re.escape(kw) for kw in _cached_text_alternatives(sensitive_names))
         _MASK_TEXT_PATTERNS[cache_key] = re.compile(
             rf"({alternation})(\s*[:=]\s*)(['\"]?)(\S+?)(\3)(?=\s|,|}}|\]|$)", re.IGNORECASE
         )
@@ -97,6 +133,10 @@ def mask_text(
     Regex-based best-effort pass suitable for log lines, task output, and error
     messages. Matches built-in 'PROTECTED_KEYWORDS' and user 'sensitive_names'.
 
+    Strings at or above LARGE_TEXT_THRESHOLD skip regex unless a keyword surface
+    form (underscore, hyphen, or dot) appears as a substring; the pre-check uses
+    the same variants as the compiled pattern.
+
     Args:
         text: The string to sanitize.
         reveal: If True, return the string unchanged (zero processing).
@@ -104,7 +144,8 @@ def mask_text(
 
     Returns:
         String with sensitive values replaced by REDACTED, or the original string
-        if reveal is True or input is not a str.
+        if reveal is True, input is not a str, or a large string contains no keyword
+        variants.
     """
     if reveal or not isinstance(text, str) or not text:
         return text
@@ -116,9 +157,9 @@ def mask_text(
 
 
 def _text_may_contain_secrets(text: str, sensitive_names: frozenset[str] | None = None) -> bool:
-    """Cheap pre-check: True if any keyword appears as a substring."""
+    """Cheap pre-check: True if any keyword surface form appears as a substring."""
     text_lower = text.lower()
-    return any(keyword in text_lower for keyword in _effective_keywords(sensitive_names))
+    return any(variant in text_lower for variant in _cached_text_alternatives(sensitive_names))
 
 
 def mask_structure(
@@ -202,3 +243,8 @@ def mask_for_display(
         return mask_text(data, sensitive_names=sensitive_names)
 
     return data
+
+
+# Warm default caches at import so the first mask_text call avoids compile/build cost.
+_cached_text_alternatives()
+_get_mask_text_pattern()
