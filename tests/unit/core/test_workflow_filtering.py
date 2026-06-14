@@ -23,7 +23,7 @@ def filter_parameterless(host):
 
 
 class TestNornFlowFiltering:
-    """Unit-tests for `_get_filtering_kwargs` helper."""
+    """Unit-tests for '_get_filtering_kwargs' helper."""
 
     @pytest.fixture()
     def filters_catalog(self) -> dict[str, tuple[Any, list[str]]]:
@@ -40,7 +40,7 @@ class TestNornFlowFiltering:
         filters_catalog: dict[str, Any],
     ) -> list[dict[str, Any]]:
         """
-        Call the real `_get_filtering_kwargs` on a lightweight NornFlow stub,
+        Call the real '_get_filtering_kwargs' on a lightweight NornFlow stub,
         injecting a shim that restores legacy behaviour expected by these tests.
         """
         nf_stub: NornFlow = object.__new__(NornFlow)  # bypass heavy __init__

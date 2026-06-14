@@ -31,9 +31,9 @@ class _SimpleHostProxy:
     """
     Lightweight proxy that mimics the real Nornir host proxy.
 
-    - Delegates attributes present on the wrapped ``MockHost``.  
-    - Returns a fresh ``MagicMock`` for unknown attributes so templates can
-      still use Jinja2 ``default`` safely.
+    - Delegates attributes present on the wrapped 'MockHost'.  
+    - Returns a fresh 'MagicMock' for unknown attributes so templates can
+      still use Jinja2 'default' safely.
     """
 
     def __init__(self, host: MockHost) -> None:

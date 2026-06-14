@@ -12,6 +12,9 @@ from nornflow.constants import (
     FailureStrategy,
     NORNFLOW_SPECIAL_FILTER_KEYS,
     NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
+    REDACTION_FULL_DISABLED_WARNING,
+    REDACTION_LOGS_DISABLED_WARNING,
+    REDACTION_TERMINAL_DISABLED_WARNING,
 )
 from nornflow.exceptions import NornFlowError
 from nornflow.logger import logger
@@ -297,6 +300,7 @@ def get_nornflow_builder(
     vars: dict[str, Any] | None = None,
     failure_strategy: FailureStrategy | None = None,
     dry_run: bool = False,
+    no_redact: bool = False,
 ) -> NornFlowBuilder:
     """
     Build the workflow using the provided target, arguments, inventory filters, and dry-run option.
@@ -310,6 +314,7 @@ def get_nornflow_builder(
         vars (dict): Vars with highest precedence.
         failure_strategy (FailureStrategy): Failure strategy with highest precedence.
         dry_run (bool): Whether to perform a dry run.
+        no_redact (bool): Whether to disable output redaction for terminal display only.
 
     Returns:
         NornFlowBuilder: The builder instance with the configured workflow.
@@ -340,6 +345,9 @@ def get_nornflow_builder(
     # Add dry_run if specified
     if dry_run:
         builder.with_kwargs(dry_run=dry_run)
+
+    if no_redact:
+        builder.with_kwargs(no_redact=True)
 
     if any(target.endswith(ext) for ext in NORNFLOW_SUPPORTED_YAML_EXTENSIONS):
         builder.with_workflow_reference(target)
@@ -424,10 +432,16 @@ FAILURE_STRATEGY_OPTION = typer.Option(
     "Both hyphen and underscore variations are accepted (e.g., 'fail-fast' or 'fail_fast').",
 )
 
+NO_REDACT_OPTION = typer.Option(
+    False,
+    "--no-redact",
+    help="Disable terminal output redaction. Log redaction follows settings. Use with caution.",
+)
+
 
 # TODO: Eventually, decommission the legacy options.
 @app.command()
-def run(
+def run(  # noqa: PLR0912
     ctx: typer.Context,
     target: str = typer.Argument(..., help="The name of the task or workflow to run"),
     args: str | None = ARGS_OPTION,
@@ -438,6 +452,7 @@ def run(
     vars: str | None = VARS_OPTION,
     failure_strategy: str | None = FAILURE_STRATEGY_OPTION,
     dry_run: bool = DRY_RUN_OPTION,
+    no_redact: bool = NO_REDACT_OPTION,
 ) -> None:
     """
     Runs either a cataloged task or workflow - for workflows, the '.yaml'/'.yml' extension must be included.
@@ -499,9 +514,18 @@ def run(
             parsed_vars,
             parsed_failure_strategy,
             dry_run,
+            no_redact,
         )
 
         nornflow = builder.build()
+
+        if not nornflow.redaction_enabled and not nornflow.logs_redaction_enabled:
+            typer.secho(REDACTION_FULL_DISABLED_WARNING, fg=typer.colors.YELLOW)
+        elif not nornflow.redaction_enabled:
+            typer.secho(REDACTION_TERMINAL_DISABLED_WARNING, fg=typer.colors.YELLOW)
+        elif not nornflow.logs_redaction_enabled:
+            typer.secho(REDACTION_LOGS_DISABLED_WARNING, fg=typer.colors.YELLOW)
+
         exit_code = nornflow.run()
 
         if exit_code != 0:

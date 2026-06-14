@@ -1,0 +1,17 @@
+workflow:
+  name: Containerlab output masking
+  description: >
+    Exercises user-declared sensitive_names and built-in keyword masking on CLI
+    stdout, logs, and inventory-shaped task output.
+  vars:
+    credential_x: CLAB_CREDENTIAL_X_SECRET_VALUE
+    lab_label: visible-lab-marker
+  tasks:
+    - name: nornflow.echo
+      args:
+        msg: >-
+          credential_x={{ credential_x }} lab_label={{ lab_label }}
+
+    - name: nornflow.echo
+      args:
+        msg: "password={{ host.password }} hostname={{ host.name }}"

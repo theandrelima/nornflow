@@ -4,7 +4,7 @@ from nornflow.packages.constants import VALID_RESOURCE_TYPES
 
 
 class PackageDescriptor(BaseModel):
-    """Validates and represents a single entry in the `packages` setting.
+    """Validates and represents a single entry in the 'packages' setting.
 
     Attributes:
         name: Python import path for the NornFlow-compatible package.

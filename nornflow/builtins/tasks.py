@@ -32,7 +32,7 @@ def set(task: Task, print_output: bool = True, **kwargs) -> Result:
 
     Returns:
         Result: A Nornir Result object indicating the task was processed.
-                The `result` attribute contains a detailed report of what
+                The 'result' attribute contains a detailed report of what
                 variables were set and their resolved values.
 
     Raises:
@@ -93,13 +93,13 @@ def pause(task: Task, msg: str = "", timer: int = 0) -> Result:
     after printing the task result block. This ensures the full sequence
     (pause prompt → user input → result output) is atomic per host.
 
-    When ``timer`` is provided, displays a per-host countdown and
+    When 'timer' is provided, displays a per-host countdown and
     auto-continues when it expires.
 
-    When no ``timer`` is given, prompts for Enter once per host.
+    When no 'timer' is given, prompts for Enter once per host.
 
-    Use the ``single`` hook to pause only once for the entire inventory.
-    Use the ``if`` hook to pause only for a subset of hosts.
+    Use the 'single' hook to pause only once for the entire inventory.
+    Use the 'if' hook to pause only for a subset of hosts.
 
     Args:
         task: The Nornir Task object.

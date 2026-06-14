@@ -677,10 +677,12 @@ processors:
 ```
 
 Features:
-- Formatted task output
+- Formatted task output (with terminal redaction when `redaction.enabled` is true)
 - Progress indicators
 - Result summaries
 - Support for the `shush` hook
+
+NornFlow passes `redaction_enabled` and `sensitive_names` into this processor at runtime. If you omit it from the [`processors`](./nornflow_settings.md#processors) list without substituting a processor that applies the same masking, `nornflow run` may print sensitive task output in plain text. See [Processors and `nornflow run` task output](./nornflow_settings.md#processors-and-nornflow-run-task-output).
 
 ### NornFlowFailureStrategyProcessor
 
@@ -733,20 +735,68 @@ logger.set_execution_context(
     execution_name="my_workflow",
     execution_type="workflow",
     log_dir=".nornflow/logs",
-    log_level="INFO"
+    log_level="INFO",
+    logs_redaction_enabled=True,
 )
 ```
 
-### Sensitive Data Sanitization
+Log redaction follows `redaction.logs_enabled` in settings only; `--no-redact` does not affect logs. NornFlow passes `logs_redaction_enabled` when initializing the logger.
 
-NornFlow Logger attempts to sanitize log messages to hide sensitive data. This is a best effort endeavour, and will only work for data explicitly related to what is considered a protected keyword.  
-> Note: `PROTECTED_KEYWORDS` can be found in [constants.py](../nornflow/constants.py)
+### Output Redaction
+
+NornFlow redacts sensitive values before they reach the terminal or log files. Settings are controlled by [`redaction`](./nornflow_settings.md#redaction) in `nornflow.yaml`; the implementation lives in `nornflow.masking`:
+
 ```python
-from nornflow.logger import sanitize_log_message
+from nornflow.masking import mask_text, mask_structure, mask_for_display
 
-# Values after keywords like 'password', 'secret', 'token' are redacted
-sanitize_log_message("password=secret123")  # "password=***REDACTED***"
+# Redact key=value / key: value patterns in free-form strings
+mask_text("token=abc123")          # "token=***REDACTED***"
+mask_text("nautobot_token=abc")    # segment boundary before token
+mask_text("password: hunter2")    # "password: ***REDACTED***"
+mask_text("db-connection-string=x")  # hyphen/dot surface forms match underscore keywords
+mask_text("monkey=abc")            # unchanged; key not at a segment boundary
+
+# Redact sensitive keys in nested dicts / lists
+mask_structure({"nautobot_token": "abc", "host": "router1"})
+# {"nautobot_token": "***REDACTED***", "host": "router1"}
+
+# Dispatch automatically: str → mask_text, dict/list → mask_structure
+mask_for_display({"api_key": "s3cr3t"})
+# {"api_key": "***REDACTED***"}
 ```
+
+The placeholder is always `***REDACTED***`. Built-in [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) and user `redaction.sensitive_names` share one segment-aware key rule on structured data (`mask_structure`). On unstructured strings (`mask_text`), redaction applies only to `key=value` / `key: value` patterns; each keyword is matched in underscore, hyphen, and dot surface forms (e.g. `api_key`, `api-key`, `api.key`), and only at key boundaries (start of the key or after `_`, `-`, `.`, or a non-alphanumeric character, so `token` matches `nautobot_token=` but not `monkey=`). Large strings use the same surface forms in a substring pre-check before regex. See [Matching rules](./nornflow_settings.md#matching-rules) in the settings guide.
+
+Pass `sensitive_names=` to helpers when masking outside NornFlow runtime; at runtime use `NornFlow.redaction_sensitive_names` (wired into show, overview, processors, and logs).
+
+**Runtime surfaces during `nornflow run`:**
+
+| Surface | Depends on user `processors`? |
+|---------|-------------------------------|
+| Task stdout / formatted result output | **Yes** (default: `DefaultNornFlowProcessor`) |
+| Workflow overview vars | No |
+| Failure-strategy error panels | No (system `NornFlowFailureStrategyProcessor`) |
+| Log files | No (logger + `redaction.logs_enabled`) |
+
+See [Processors and `nornflow run` task output](./nornflow_settings.md#processors-and-nornflow-run-task-output) for configuration implications.
+
+All redaction helpers accept a `reveal=True` keyword argument to bypass redaction programmatically:
+
+```python
+mask_text("password=hunter2", reveal=True)  # "password=hunter2"
+```
+
+At runtime, `NornFlow.redaction_enabled` governs terminal surfaces; `NornFlow.logs_redaction_enabled` governs log files and stderr log output. The former respects `--no-redact`; the latter follows `redaction.logs_enabled` in settings only.
+
+| Control | Scope |
+|---------|-------|
+| `--no-redact` | Terminal only, for that CLI invocation |
+| `redaction.enabled` | Terminal surfaces |
+| `redaction.logs_enabled` | Log files and stderr log handler (`logs_enabled` inherits `enabled` when omitted) |
+
+`nornflow show` and `nornflow run` emit a yellow warning when redaction is partially or fully disabled (full, terminal-only, or logs-only; see [CLI warnings](./nornflow_settings.md#cli-warnings) in the settings guide).
+
+To disable all redaction via settings, set `redaction.enabled: false`. To disable logs only, set `redaction.logs_enabled: false`. See [NornFlow Settings: redaction](./nornflow_settings.md#redaction).
 
 <div align="center">
   

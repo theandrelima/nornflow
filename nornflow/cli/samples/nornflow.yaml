@@ -36,17 +36,21 @@ local_blueprints:
 local_j2_filters:
   - "j2_filters"
 
-packages: []
-
-processors:
-  - class: "nornflow.builtins.DefaultNornFlowProcessor"
-    args: {}
-
 vars_dir: "vars"
+
+dry_run: false
 
 failure_strategy: "skip-failed"
 
-dry_run: false
+processors: []
+
+packages: []
+
+redaction:
+  enabled: true
+  # sensitive_names: # optional, add your own sensitive names here
+  #   - credential_x
+  #   - vendor_pin
 
 logger:
   directory: ".nornflow/logs"

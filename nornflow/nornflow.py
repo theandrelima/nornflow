@@ -103,6 +103,7 @@ class NornFlow:
         filters: dict[str, Any] | None = None,
         failure_strategy: FailureStrategy | None = None,
         dry_run: bool | None = None,
+        no_redact: bool = False,
         **kwargs: Any,
     ):
         """
@@ -125,6 +126,9 @@ class NornFlow:
                 strategy defined in the workflow YAML.
             dry_run: Dry run mode with highest precedence. This overrides any dry_run
                 setting defined in the workflow YAML or settings.
+            no_redact: When True, disable terminal output redaction for this session.
+                Log redaction is unaffected and follows 'redaction.logs_enabled' in
+                settings.
             **kwargs: Additional keyword arguments passed to NornFlowSettings
 
         Raises:
@@ -134,15 +138,16 @@ class NornFlow:
             logger.info("Initializing NornFlow instance")
             self._validate_init_kwargs(kwargs)
             self._initialize_settings(nornflow_settings, kwargs)
+            self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, no_redact, processors)
 
             logger.set_execution_context(
                 execution_name="loading",
                 execution_type="workflow",
                 log_dir=self.settings.logger.get("directory"),
                 log_level=self.settings.logger.get("level", "INFO"),
+                logs_redaction_enabled=self.logs_redaction_enabled,
+                sensitive_names=self.redaction_sensitive_names,
             )
-
-            self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, processors)
             self._initialize_package_loader()
             self._initialize_hooks()  # Must run before _initialize_catalogs to populate HOOKS_CATALOG
             self._initialize_catalogs()
@@ -176,6 +181,7 @@ class NornFlow:
         filters: dict[str, Any] | None,
         failure_strategy: FailureStrategy | None,
         dry_run: bool | None,
+        no_redact: bool,
         processors: list[dict[str, Any]] | None,
     ) -> None:
         """
@@ -193,6 +199,7 @@ class NornFlow:
         self._filters = filters or {}
         self._failure_strategy = failure_strategy
         self._dry_run = dry_run
+        self._no_redact = no_redact
         self._processors = processors
         self._workflow = None
         self._workflow_path = None
@@ -265,7 +272,7 @@ class NornFlow:
 
     def _initialize_processors(self) -> None:
         """
-        Load USER-CONFIGURABLE processors with proper precedence and store them in `self._processors`.
+        Load USER-CONFIGURABLE processors with proper precedence and store them in 'self._processors'.
 
         This method ONLY handles processors that users can configure via:
         - CLI arguments (--processors)
@@ -293,13 +300,19 @@ class NornFlow:
 
         processors_list = self.processors or self.settings.processors
         if not processors_list:
-            self._processors = [DefaultNornFlowProcessor()]
+            self._processors = [
+                DefaultNornFlowProcessor(
+                    redaction_enabled=self.redaction_enabled,
+                    sensitive_names=self.redaction_sensitive_names,
+                )
+            ]
             return
 
         self._processors = []
         try:
             for processor_config in processors_list:
                 processor = load_processor(processor_config)
+                self._sync_processor_redaction(processor)
                 self._processors.append(processor)
         except ProcessorError as err:
             raise InitializationError(f"Failed to load processor: {err}") from err
@@ -508,6 +521,46 @@ class NornFlow:
         return self.settings.dry_run
 
     @property
+    def redaction_enabled(self) -> bool:
+        """Whether terminal output should be redacted for this session.
+
+        Returns:
+            False when 'no_redact' was passed to the constructor or settings
+            have 'redaction.enabled: false'; True otherwise.
+        """
+        if self._no_redact:
+            return False
+        return self.settings.redaction_enabled
+
+    @property
+    def logs_redaction_enabled(self) -> bool:
+        """Whether log file and stderr log output should be redacted for this session.
+
+        Log redaction follows 'redaction.logs_enabled' in settings only.
+        '--no-redact' does not affect logs.
+
+        Returns:
+            False when settings have log redaction disabled; True otherwise.
+        """
+        return self.settings.redaction_logs_enabled
+
+    @property
+    def redaction_sensitive_names(self) -> frozenset[str]:
+        """User-declared sensitive identifiers from 'redaction.sensitive_names'."""
+        return self.settings.redaction_sensitive_names
+
+    def _sync_processor_redaction(self, processor: Any) -> None:
+        """Apply the current redaction settings to a processor that supports them.
+
+        Args:
+            processor: A Nornir processor instance, if it exposes redaction attributes.
+        """
+        if hasattr(processor, "redaction_enabled"):
+            processor.redaction_enabled = self.redaction_enabled
+        if hasattr(processor, "sensitive_names"):
+            processor.sensitive_names = self.redaction_sensitive_names
+
+    @property
     def var_processor(self) -> NornFlowVariableProcessor | None:
         """
         Get the variable processor, creating it lazily if needed.
@@ -532,7 +585,11 @@ class NornFlow:
             NornFlowFailureStrategyProcessor: The failure strategy processor instance.
         """
         if not self._failure_strategy_processor:
-            self._failure_strategy_processor = NornFlowFailureStrategyProcessor(self.failure_strategy)
+            self._failure_strategy_processor = NornFlowFailureStrategyProcessor(
+                self.failure_strategy,
+                redaction_enabled=self.redaction_enabled,
+                sensitive_names=self.redaction_sensitive_names,
+            )
         return self._failure_strategy_processor
 
     @property
@@ -1178,6 +1235,7 @@ class NornFlow:
                 workflow_processors = []
                 for processor_config in self.workflow.processors:
                     processor = load_processor(dict(processor_config))
+                    self._sync_processor_redaction(processor)
                     workflow_processors.append(processor)
 
                 if workflow_processors:
@@ -1213,6 +1271,8 @@ class NornFlow:
             inventory_filters=self.filters or self.workflow.inventory_filters or {},
             vars_manager=self.var_processor.vars_manager,
             failure_strategy=self.failure_strategy,
+            redaction_enabled=self.redaction_enabled,
+            sensitive_names=self.redaction_sensitive_names,
         )
 
     def _print_workflow_summary(self) -> None:
