@@ -1,7 +1,7 @@
 # NornFlow
 
 <p align="center">
-  <img src="img/nox.png" alt="Nox, the NornFlow mascot." width="220">
+  <img src="https://raw.githubusercontent.com/theandrelima/nornflow/main/img/nox.png" alt="Nox, the NornFlow mascot." width="220">
 </p>
 
 [![CI](https://github.com/theandrelima/nornflow/actions/workflows/ci.yml/badge.svg)](https://github.com/theandrelima/nornflow/actions/workflows/ci.yml)
