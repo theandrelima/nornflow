@@ -14,6 +14,7 @@ from nornflow import NornFlowBuilder
 from nornflow.catalogs import Catalog
 from nornflow.cli.constants import CWD
 from nornflow.cli.exceptions import CLIShowError
+from nornflow.cli.nox import print_nox
 from nornflow.constants import (
     REDACTION_FULL_DISABLED_WARNING,
     REDACTION_LOGS_DISABLED_WARNING,
@@ -55,10 +56,15 @@ def show(  # noqa: PLR0912
         "--no-redact",
         help="Disable terminal output redaction. Log redaction follows settings. Use with caution.",
     ),
+    nox: bool = typer.Option(False, "--nox", hidden=True),
 ) -> None:
     """
     Displays summary info about NornFlow.
     """
+    if nox is True:
+        print_nox()
+        return
+
     show_all_catalogs = catalog or catalogs
 
     if not any(
