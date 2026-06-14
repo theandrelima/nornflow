@@ -1,6 +1,7 @@
 from typing import Any, TYPE_CHECKING
 
-from nornflow.hooks.base import HOOK_REGISTRY
+from nornflow.exceptions import AssetAmbiguityError, AssetNotFoundError
+from nornflow.hooks.base import HOOKS_CATALOG
 from nornflow.logger import logger
 
 if TYPE_CHECKING:
@@ -23,7 +24,7 @@ def load_hooks(hooks_dict: dict[str, Any]) -> list["Hook"]:
         return hooks
 
     for hook_name, hook_config in hooks_dict.items():
-        hook_class = HOOK_REGISTRY.get(hook_name)
+        hook_class = _resolve_hook_class(hook_name)
         if hook_class:
             try:
                 hook_instance = hook_class(hook_config)
@@ -34,3 +35,20 @@ def load_hooks(hooks_dict: dict[str, Any]) -> list["Hook"]:
 
     logger.debug(f"Loaded {len(hooks)} hooks from configuration.")
     return hooks
+
+
+def _resolve_hook_class(hook_name: str) -> type["Hook"] | None:
+    """Resolve a hook class from the hooks catalog by bare or qualified name."""
+    if hasattr(HOOKS_CATALOG, "resolve"):
+        try:
+            return HOOKS_CATALOG.resolve(hook_name)
+        except AssetNotFoundError:
+            return None
+        except AssetAmbiguityError as exc:
+            logger.error(
+                f"Hook '{hook_name}' is ambiguous. Use a qualified name. "
+                f"Candidates: {', '.join(sorted(exc.candidates))}"
+            )
+            raise
+
+    return HOOKS_CATALOG.get(hook_name)

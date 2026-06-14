@@ -2,6 +2,8 @@ import pytest
 from unittest.mock import MagicMock
 from nornir.core.inventory import Host, Inventory
 
+from nornflow.catalogs import CallableCatalog
+
 
 class MockNornir:
     """Simple mock object for Nornir that behaves like a real object for attribute checks."""
@@ -92,9 +94,23 @@ def mock_processor_incompatible():
 
 @pytest.fixture
 def mock_filters_catalog():
-    """Fixture providing a mock filters catalog."""
-    catalog = {}
-    return catalog
+    """Fixture providing a CallableCatalog for filter tests."""
+    return CallableCatalog(name="filters")
+
+
+@pytest.fixture
+def register_filter():
+    """Register a mock inventory filter in a test catalog."""
+
+    def _register(catalog: CallableCatalog, name: str, filter_func, param_names: list[str]) -> None:
+        catalog.register(
+            name,
+            (filter_func, param_names),
+            namespace="nornflow",
+            tier="builtin",
+        )
+
+    return _register
 
 
 @pytest.fixture

@@ -164,7 +164,7 @@ CLI variables override `workflow`, `domain`, `global`, and `environment` variabl
 Runtime variables are the highest priority variables in NornFlow's variable system. They can be created or updated in two ways:
 
 1. **Using NornFlow's built-in `set` task**
-2. **Using NornFlow's built-in `set_to` hook to capture task results**
+2. **Using NornFlow's built-in `store_as` hook to store task results**
 
 #### Using the `set` Task
 
@@ -187,117 +187,93 @@ When this task runs:
 - If variables with these names already exist, they are updated with the new values
 - Variables are isolated per device - each host has its own `timestamp`, `device_type`, etc.
 
-#### Using the `set_to` Hook
+#### Using the `store_as` Hook
 
-The `set_to` hook captures task execution results and stores them as runtime variables. It supports two modes:
+The `store_as` hook stores task execution results as runtime variables. See the [Hooks Guide](./hooks_guide.md#the-store_as-hook) for full path syntax, collision rules, and failure-path examples.
 
-##### Simple Storage Mode
+##### Simple mode
 
-Store the complete Nornir `Result` object from a task:
+Store the task's return value (`Result.result`) in one variable:
 
 ```yaml
 tasks:
   - name: get_version
-    set_to: version_output
+    store_as: version_output
 
   - name: echo
     args:
-      msg: "Version: {{ version_output.result }}"
+      msg: "Version: {{ version_output }}"
 ```
 
-In simple mode, `set_to: "variable_name"` stores the entire Nornir `Result` object, which includes:
-- `result`: The actual data returned by the task
-- `failed`: Boolean indicating if the task failed
-- `changed`: Boolean indicating if the task made changes
-- Other Result object attributes
+In simple mode, `store_as: version_output` stores **only** the task's `Result.result` value. It does **not** store the full Nornir `Result` object.
 
-##### Extraction Mode
+##### Extraction mode
 
-Extract specific data from the result and store it in named variables:
+Extract specific fields into named variables:
 
 ```yaml
 tasks:
   - name: get_environment
-    set_to:
+    store_as:
       cpu_usage: "environment.cpu.0.%usage"
       device_serial: "serial_number"
       uptime_seconds: "environment.uptime"
+      task_failed: failed
 ```
 
-**Extraction Path Syntax:**
+**Path shorthand:** if the first segment is **not** a top-level `Result` attribute, lookup starts inside the `Result.result` value. For example, `uptime_seconds: "environment.uptime"` reads `Result.result["environment"]["uptime"]` from the task return value.
 
-The extraction paths directly reference keys in the result data. **No `result.` prefix is needed** - NornFlow automatically looks in the result data:
+**`Result` attributes:** use paths like `failed`, `changed`, `result` (or any other custom attribute name on the Nornir `Result` object) when you need to be specific about where the lookup should start.
+
+**Explicit return-value access:** prefix a path with `result.` when the first segment could match both a `Result` attribute and a key in the return value. For `uptime_seconds` in the example above:
 
 ```yaml
-# Direct key access
-set_to:
-  vendor: "vendor"              # Gets Result.result["vendor"] and sets it to a 'vendor' var
-  hostname: "hostname"          # Gets Result.result["hostname"] and sets it to a 'hostname' var
-
-# Nested dictionary access (dot notation)
-set_to:
-  cpu: "environment.cpu.usage"  # Gets Result.result["environment"]["cpu"]["usage"] and sets it to a 'cpu' var
-  
-# List indexing (bracket notation)
-set_to:
-  first_cpu: "environment.cpu[0].usage"    # Gets Result.result["environment"]["cpu"][0]["usage"] and sets it to a 'first_cpu' var  
-# Complex nested structures
-set_to:
-  value: "dict.nested_list[1].another_dict.list[10]"  # Any combination of nested access
+tasks:
+  - name: get_environment
+    store_as:
+      uptime_seconds: "result.environment.uptime"
 ```
 
-**Special Extraction Prefixes:**
+Both forms store the same value when `Result` has no `environment` attribute. If it does, `"environment.uptime"` resolves against `Result.environment`, not `Result.result` dict.
 
-Three special prefixes extract metadata from the `Result` object itself:
-
-```yaml
-set_to:
-  task_failed: "_failed"        # Gets result.failed (boolean)
-  task_changed: "_changed"      # Gets result.changed (boolean)
-  complete_data: "_result"      # Gets the entire result.result dictionary
-```
-
-**Real-World Example:**
+##### Real-world example
 
 ```yaml
 workflow:
   name: "Device Information Collection"
   tasks:
-    # Collect facts and extract specific data
     - name: napalm_get
       args:
         getters: ["facts", "environment", "interfaces"]
-      set_to:
+      store_as:
         device_model: "facts.model"
         device_serial: "facts.serial_number"
         device_vendor: "facts.vendor"
         cpu_usage: "environment.cpu.0.%usage"
         memory_used: "environment.memory.used_ram"
-        interface_count: "interfaces"  # Will store the entire interfaces dict
-        task_succeeded: "_failed"  # Store if collection failed
-    
-    # Use extracted data in subsequent tasks
+        interface_count: "interfaces"
+        step_failed: failed
+
     - name: set
       args:
         backup_filename: "{{ device_vendor }}_{{ device_model }}_{{ device_serial }}.cfg"
         high_cpu_alert: "{{ cpu_usage | int > 80 }}"
-    
-    # Conditional action based on extracted data
+
     - name: send_alert
       if: "{{ high_cpu_alert }}"
       args:
         message: "High CPU usage detected: {{ cpu_usage }}%"
 ```
 
-#### Key Differences Between `set` Task and `set_to` Hook
+#### Key Differences Between `set` Task and `store_as` Hook
 
-| Aspect | `set` Task | `set_to` Hook |
-|--------|------------|---------------|
-| **Purpose** | Create/update variables with specified values | Create/update variables with task execution results |
-| **What's stored** | Values you explicitly provide in `args` | Task's `Result` object or extracted data |
-| **When to use** | Setting calculated/templated values | Capturing output from tasks |
-| **Data format** | Any data type (strings, numbers, lists, dicts) | `Result` object or extracted values |
-| **Typical use** | Setting timestamps, counters, filenames | Storing device facts, command output, API responses |
+| Aspect | `set` Task | `store_as` Hook |
+|--------|------------|-----------------|
+| **Purpose** | Create/update variables with specified values | Create/update variables from task execution results |
+| **What's stored** | Values you explicitly provide in `args` | Task return value (`Result.result`) or extracted slices |
+| **When to use** | Setting calculated/templated values | Storing command output, device facts, failure flags |
+| **Data format** | Any data type (strings, numbers, lists, dicts) | Return value or extracted fields (strings, numbers, dicts, …) |
+| **Typical use** | Setting timestamps, counters, filenames | Storing device facts, command output, `failed` for branching |
 
 #### Variable Creation and Updates
 
@@ -322,11 +298,11 @@ tasks:
   
   # Capture task result
   - name: get_version
-    set_to: version_data  # Creates 'version_data' variable
+    store_as: version_data  # Creates 'version_data' variable
   
   # Update with new data
   - name: get_config
-    set_to: version_data  # Updates 'version_data' with new result
+    store_as: version_data  # Updates 'version_data' with new return value
 ```
 
 Runtime variables override `CLI`, `workflow`, `domain`, `global`, and `environment` variables with the same name.
@@ -455,7 +431,7 @@ For information on Hook-Driven Template Resolution, which allows deferring varia
 4. **Group related variables**: Use domain variables for domain-specific settings
 5. **Document variables**: Add comments in your variable files (`<vars_dir>/defaults.yaml` and `<vars_dir>/<domain>/default.yaml`)
 6. **Avoid name conflicts**: Don't start variable names with *`host`* to avoid confusion with the `host.` namespace
-7. **Use `set_to` extraction for cleaner code**: Extract only the data you need upfront instead of storing complete results
+7. **Use `store_as` extraction for cleaner templates**: Extract only the fields you need instead of storing large return values and drilling in later
 8. **Leverage Jinja2 filters**: Use filters to transform data, especially when working with complex structures
 
 ## Quick Reference
@@ -468,8 +444,8 @@ For information on Hook-Driven Template Resolution, which allows deferring varia
 | Workflow           | In workflow YAML                | `vars: {vlan: 100}`            | `{{ vlan }}`                 |
 | CLI                | Command line                    | `--vars "x=1"`                 | `{{ x }}`                    |
 | Runtime            | Set with `set` task             | `status: "done"`               | `{{ status }}`               |
-|                    | Set with `set_to` (simple)      | `set_to: version_output`       | `{{ version_output.result }}`|
-|                    | Set with `set_to` (extraction)  | `set_to: {vendor: "vendor"}`   | `{{ vendor }}`               |
+|                    | Set with `store_as` (simple)      | `store_as: version_output`       | `{{ version_output }}`         |
+|                    | Set with `store_as` (extraction)  | `store_as: {vendor: "custom_field.vendor"}`   | `{{ vendor }}`                 |
 | Host data          | Nornir Inventory                | `data: {site_code: NYC01}`     | `{{ host.data.site_code }}`  |
 
 **Checking Variable Existence:**
@@ -478,7 +454,7 @@ For information on Hook-Driven Template Resolution, which allows deferring varia
 |--------------------|---------------------------------|--------------------------------|
 | Default namespace  | `{{ 'var_name' \| is_set }}`    | `true` if variable exists      |
 | Host namespace     | `{{ 'host.var_name' \| is_set }}`| `true` if host attribute exists|
-| Host data          | `{{ 'host.data.key' \| is_set }}`| `true` if host data key exists |
+| Host data          | `{{ 'host.data.some_key' \| is_set }}`| `true` if host data 'some_key' exists |
 
 **Variable Context Availability:**
 

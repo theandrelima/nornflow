@@ -5,11 +5,22 @@ from pydantic_serdes.utils import load_file_to_dict
 
 from nornflow.builtins import DefaultNornFlowProcessor, filters as builtin_filters, tasks as builtin_tasks
 from nornflow.builtins.processors import NornFlowFailureStrategyProcessor, NornFlowHookProcessor
-from nornflow.catalogs import CallableCatalog, FileCatalog
-from nornflow.constants import FailureStrategy, NORNFLOW_INVALID_INIT_KWARGS
+from nornflow.catalogs import CallableCatalog, ClassCatalog, FileCatalog
+from nornflow.constants import (
+    BUILTIN_NAMESPACE,
+    FailureStrategy,
+    LOCAL_NAMESPACE,
+    NORNFLOW_INVALID_INIT_KWARGS,
+    TIER_BUILTIN,
+    TIER_LOCAL,
+    TIER_PACKAGE,
+)
 from nornflow.exceptions import (
+    AssetAmbiguityError,
+    AssetNotFoundError,
     CatalogError,
     CoreError,
+    FilterError,
     ImmutableAttributeError,
     InitializationError,
     ProcessorError,
@@ -18,10 +29,13 @@ from nornflow.exceptions import (
     TaskError,
     WorkflowError,
 )
+from nornflow.hooks.base import HOOKS_CATALOG
+from nornflow.hooks.context import reset_hook_registration, set_hook_registration
 from nornflow.j2 import Jinja2Service
 from nornflow.logger import logger
 from nornflow.models import WorkflowModel
 from nornflow.nornir_manager import NornirManager
+from nornflow.packages import PackageLoader
 from nornflow.settings import NornFlowSettings
 from nornflow.utils import (
     import_modules_recursively,
@@ -32,6 +46,7 @@ from nornflow.utils import (
     print_workflow_overview,
     process_filter,
 )
+from nornflow.validation import validate_workflow_tasks
 from nornflow.vars.manager import NornFlowVariablesManager
 from nornflow.vars.processors import NornFlowVariableProcessor
 
@@ -68,7 +83,7 @@ class NornFlow:
     4. Default processor if none of the above are specified
 
     Variable precedence follows this order (highest to lowest priority):
-    1. Runtime Variables (dynamically set by the 'set' task or 'set_to' hook)
+    1. Runtime Variables (dynamically set by the 'set' task or 'store_as' hook)
     2. CLI Variables (passed via --vars option or set programmatically)
     3. Inline Workflow Variables (defined in workflow YAML under vars: section)
     4. Domain-specific Default Variables (from vars_dir/<domain>/defaults.yaml)
@@ -88,6 +103,7 @@ class NornFlow:
         filters: dict[str, Any] | None = None,
         failure_strategy: FailureStrategy | None = None,
         dry_run: bool | None = None,
+        no_redact: bool = False,
         **kwargs: Any,
     ):
         """
@@ -110,6 +126,9 @@ class NornFlow:
                 strategy defined in the workflow YAML.
             dry_run: Dry run mode with highest precedence. This overrides any dry_run
                 setting defined in the workflow YAML or settings.
+            no_redact: When True, disable terminal output redaction for this session.
+                Log redaction is unaffected and follows 'redaction.logs_enabled' in
+                settings.
             **kwargs: Additional keyword arguments passed to NornFlowSettings
 
         Raises:
@@ -119,16 +138,18 @@ class NornFlow:
             logger.info("Initializing NornFlow instance")
             self._validate_init_kwargs(kwargs)
             self._initialize_settings(nornflow_settings, kwargs)
+            self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, no_redact, processors)
 
             logger.set_execution_context(
                 execution_name="loading",
                 execution_type="workflow",
                 log_dir=self.settings.logger.get("directory"),
                 log_level=self.settings.logger.get("level", "INFO"),
+                logs_redaction_enabled=self.logs_redaction_enabled,
+                sensitive_names=self.redaction_sensitive_names,
             )
-
-            self._initialize_instance_vars(vars, filters, failure_strategy, dry_run, processors)
-            self._initialize_hooks()
+            self._initialize_package_loader()
+            self._initialize_hooks()  # Must run before _initialize_catalogs to populate HOOKS_CATALOG
             self._initialize_catalogs()
             self._initialize_processors()
             self._initialize_j2_service()
@@ -160,24 +181,43 @@ class NornFlow:
         filters: dict[str, Any] | None,
         failure_strategy: FailureStrategy | None,
         dry_run: bool | None,
+        no_redact: bool,
         processors: list[dict[str, Any]] | None,
     ) -> None:
-        """Initialize core instance variables."""
+        """
+        Store constructor arguments and pre-declare sentinel attributes.
+
+        Serves two purposes:
+        1. Persists constructor arguments as private instance state so properties
+           and methods can access them uniformly throughout the object lifecycle.
+        2. Pre-declares attributes that are set conditionally or lazily to None,
+           preventing AttributeError on first access before their respective
+           _initialize_* methods or property getters have run.
+        """
         logger.debug("Initializing instance variables")
         self._vars = vars or {}
         self._filters = filters or {}
         self._failure_strategy = failure_strategy
         self._dry_run = dry_run
+        self._no_redact = no_redact
         self._processors = processors
         self._workflow = None
         self._workflow_path = None
         self._nornir_configs = None
         self._nornir_manager = None
-        # System processors are initialized lazily in their property getters
-        # when needed during workflow execution, not during __init__
+        self._package_loader = None
         self._var_processor = None
         self._failure_strategy_processor = None
         self._hook_processor = None
+
+    def _initialize_package_loader(self) -> None:
+        """Initialize the PackageLoader from configured package descriptors."""
+        if not self.settings.packages:
+            logger.debug("No packages configured, skipping PackageLoader initialization")
+            return
+
+        self._package_loader = PackageLoader(self.settings.packages)
+        logger.debug(f"Initialized PackageLoader with {len(self.settings.packages)} package(s)")
 
     def _initialize_catalogs(self) -> None:
         """Initialize and load catalogs."""
@@ -186,6 +226,7 @@ class NornFlow:
         self._load_filters_catalog()
         self._load_workflows_catalog()
         self._load_blueprints_catalog()
+        self._load_hooks_catalog()
         # Note: j2_filters_catalog is handled by Jinja2Service
         # and doesn't need a separate load method.
 
@@ -195,7 +236,19 @@ class NornFlow:
         for dir_path in self.settings.local_hooks:
             dir_path_obj = Path(dir_path)
             if dir_path_obj.exists():
-                import_modules_recursively(dir_path_obj)
+                token = set_hook_registration(LOCAL_NAMESPACE, TIER_LOCAL)
+                try:
+                    import_modules_recursively(dir_path_obj)
+                finally:
+                    reset_hook_registration(token)
+
+        if self.package_loader:
+            for pkg_name, hook_dir in self.package_loader.get_resource_dirs("hooks"):
+                token = set_hook_registration(pkg_name, TIER_PACKAGE)
+                try:
+                    import_modules_recursively(hook_dir)
+                finally:
+                    reset_hook_registration(token)
 
     def _initialize_nornir(self) -> None:
         """Initialize Nornir configurations and manager."""
@@ -219,7 +272,7 @@ class NornFlow:
 
     def _initialize_processors(self) -> None:
         """
-        Load USER-CONFIGURABLE processors with proper precedence and store them in `self._processors`.
+        Load USER-CONFIGURABLE processors with proper precedence and store them in 'self._processors'.
 
         This method ONLY handles processors that users can configure via:
         - CLI arguments (--processors)
@@ -241,15 +294,25 @@ class NornFlow:
         3. DefaultNornFlowProcessor
         """
         logger.debug("Initializing processors")
+        if self.package_loader:
+            for _pkg_name, processor_dir in self.package_loader.get_resource_dirs("processors"):
+                import_modules_recursively(processor_dir)
+
         processors_list = self.processors or self.settings.processors
         if not processors_list:
-            self._processors = [DefaultNornFlowProcessor()]
+            self._processors = [
+                DefaultNornFlowProcessor(
+                    redaction_enabled=self.redaction_enabled,
+                    sensitive_names=self.redaction_sensitive_names,
+                )
+            ]
             return
 
         self._processors = []
         try:
             for processor_config in processors_list:
                 processor = load_processor(processor_config)
+                self._sync_processor_redaction(processor)
                 self._processors.append(processor)
         except ProcessorError as err:
             raise InitializationError(f"Failed to load processor: {err}") from err
@@ -257,7 +320,7 @@ class NornFlow:
     def _initialize_j2_service(self) -> None:
         """Initialize the Jinja2 service and register custom filters."""
         logger.debug("Initializing Jinja2 service")
-        Jinja2Service.initialize_with_settings(self.settings)
+        Jinja2Service.initialize_with_settings(self.settings, package_loader=self.package_loader)
 
     @property
     def nornir_configs(self) -> dict[str, Any]:
@@ -319,6 +382,26 @@ class NornFlow:
             "Cannot set NornFlow settings directly. They must be either passed as a "
             "NornFlowSettings object or as keyword arguments to the NornFlow initializer."
         )
+
+    @property
+    def package_loader(self) -> PackageLoader | None:
+        """
+        Get the PackageLoader instance.
+
+        Returns:
+            PackageLoader | None: The PackageLoader instance, or None if no packages are configured.
+        """
+        return self._package_loader
+
+    @package_loader.setter
+    def package_loader(self, _: Any) -> None:
+        """
+        Prevent setting the package loader directly.
+
+        Raises:
+            ImmutableAttributeError: Always raised to prevent direct setting.
+        """
+        raise ImmutableAttributeError("Cannot set package loader directly.")
 
     @property
     def vars(self) -> dict[str, Any]:
@@ -438,6 +521,46 @@ class NornFlow:
         return self.settings.dry_run
 
     @property
+    def redaction_enabled(self) -> bool:
+        """Whether terminal output should be redacted for this session.
+
+        Returns:
+            False when 'no_redact' was passed to the constructor or settings
+            have 'redaction.enabled: false'; True otherwise.
+        """
+        if self._no_redact:
+            return False
+        return self.settings.redaction_enabled
+
+    @property
+    def logs_redaction_enabled(self) -> bool:
+        """Whether log file and stderr log output should be redacted for this session.
+
+        Log redaction follows 'redaction.logs_enabled' in settings only.
+        '--no-redact' does not affect logs.
+
+        Returns:
+            False when settings have log redaction disabled; True otherwise.
+        """
+        return self.settings.redaction_logs_enabled
+
+    @property
+    def redaction_sensitive_names(self) -> frozenset[str]:
+        """User-declared sensitive identifiers from 'redaction.sensitive_names'."""
+        return self.settings.redaction_sensitive_names
+
+    def _sync_processor_redaction(self, processor: Any) -> None:
+        """Apply the current redaction settings to a processor that supports them.
+
+        Args:
+            processor: A Nornir processor instance, if it exposes redaction attributes.
+        """
+        if hasattr(processor, "redaction_enabled"):
+            processor.redaction_enabled = self.redaction_enabled
+        if hasattr(processor, "sensitive_names"):
+            processor.sensitive_names = self.redaction_sensitive_names
+
+    @property
     def var_processor(self) -> NornFlowVariableProcessor | None:
         """
         Get the variable processor, creating it lazily if needed.
@@ -462,7 +585,11 @@ class NornFlow:
             NornFlowFailureStrategyProcessor: The failure strategy processor instance.
         """
         if not self._failure_strategy_processor:
-            self._failure_strategy_processor = NornFlowFailureStrategyProcessor(self.failure_strategy)
+            self._failure_strategy_processor = NornFlowFailureStrategyProcessor(
+                self.failure_strategy,
+                redaction_enabled=self.redaction_enabled,
+                sensitive_names=self.redaction_sensitive_names,
+            )
         return self._failure_strategy_processor
 
     @property
@@ -588,6 +715,24 @@ class NornFlow:
         raise ImmutableAttributeError("Cannot set J2 filters catalog directly.")
 
     @property
+    def hooks_catalog(self) -> ClassCatalog:
+        """Get the hooks catalog.
+
+        Returns:
+            ClassCatalog: Catalog of hook names and their corresponding classes.
+        """
+        return self._hooks_catalog
+
+    @hooks_catalog.setter
+    def hooks_catalog(self, _: Any) -> None:
+        """Prevent setting the hooks catalog directly.
+
+        Raises:
+            ImmutableAttributeError: Always raised to prevent direct setting.
+        """
+        raise ImmutableAttributeError("Cannot set hooks catalog directly.")
+
+    @property
     def workflow(self) -> WorkflowModel | None:
         """
         Get the workflow model object.
@@ -687,7 +832,7 @@ class NornFlow:
         builtin_module: Any = None,
         predicate: Any = None,
         transform_item: Any = None,
-        directories: list[str] | None = None,
+        locations: list[tuple[str, str, str]] | None = None,
         recursive: bool = False,
         check_empty: bool = False,
     ) -> Any:
@@ -701,7 +846,7 @@ class NornFlow:
             builtin_module: Optional module to register builtins from (for CallableCatalog).
             predicate: Predicate function for filtering items during discovery.
             transform_item: Optional transform function for items (for CallableCatalog).
-            directories: List of directories to scan for items.
+            locations: List of (namespace, directory_path, tier) tuples to scan.
             recursive: Whether to scan directories recursively (for FileCatalog).
             check_empty: Whether to raise an error if the catalog ends up empty.
 
@@ -712,25 +857,43 @@ class NornFlow:
             ResourceError: If directories don't exist or discovery fails.
             CatalogError: If check_empty is True and catalog is empty.
         """
-        if not catalog:
+        if catalog is None:
             catalog = catalog_type(name)
 
         if builtin_module and predicate:
-            catalog.register_from_module(builtin_module, predicate=predicate, transform_item=transform_item)
+            catalog.register_from_module(
+                builtin_module,
+                predicate=predicate,
+                transform_item=transform_item,
+                namespace=BUILTIN_NAMESPACE,
+                tier=TIER_BUILTIN,
+            )
 
         errors = []
-        for dir_path in directories or []:
+        for namespace, dir_path, tier in locations or []:
             path = Path(dir_path)
             if not path.exists():
                 errors.append(f"{name.capitalize()} directory does not exist: {dir_path}")
                 continue
 
+            is_package = tier == TIER_PACKAGE
             try:
                 if catalog_type == FileCatalog:
-                    catalog.discover_items_in_dir(dir_path, predicate=predicate, recursive=recursive)
+                    catalog.discover_items_in_dir(
+                        dir_path,
+                        predicate=predicate,
+                        recursive=recursive,
+                        is_package=is_package,
+                        namespace=namespace,
+                        tier=tier,
+                    )
                 else:
                     catalog.discover_items_in_dir(
-                        dir_path, predicate=predicate, transform_item=transform_item
+                        dir_path,
+                        predicate=predicate,
+                        transform_item=transform_item,
+                        namespace=namespace,
+                        tier=tier,
                     )
             except Exception as e:
                 logger.exception(f"Error loading {name} from {dir_path}: {e!s}")
@@ -747,6 +910,9 @@ class NornFlow:
                 resource_name="directories",
             )
 
+        catalog.finalize_package_tier()
+        catalog.compute_collision_metadata()
+
         if check_empty and catalog.is_empty:
             raise CatalogError(
                 f"No {name} were found. The {name.capitalize()} Catalog can't be empty.", catalog_name=name
@@ -754,68 +920,84 @@ class NornFlow:
 
         return catalog
 
-    def _load_tasks_catalog(self) -> None:
-        """
-        Load all Nornir tasks from built-ins and from directories specified in settings.
+    def _get_package_dirs(self, resource_type: str) -> list[tuple[str, str]]:
+        """Get namespace and directory paths for a resource type from configured packages.
 
-        Tasks are loaded in two phases:
-        1. Built-in tasks from nornflow.builtins.tasks module
-        2. User-defined tasks from local_tasks
+        Args:
+            resource_type: The resource type to query (e.g. "tasks", "workflows").
+
+        Returns:
+            List of (package_name, directory_path) tuples.
         """
+        if not self.package_loader:
+            return []
+        return [
+            (pkg_name, str(pkg_dir))
+            for pkg_name, pkg_dir in self.package_loader.get_resource_dirs(resource_type)
+        ]
+
+    def _build_catalog_locations(
+        self, resource_type: str, local_dirs: list[str]
+    ) -> list[tuple[str, str, str]]:
+        """Build ordered catalog locations: local first, then packages."""
+        locations = [(LOCAL_NAMESPACE, str(path), TIER_LOCAL) for path in local_dirs]
+        locations.extend(
+            (namespace, path, TIER_PACKAGE) for namespace, path in self._get_package_dirs(resource_type)
+        )
+        return locations
+
+    def _load_tasks_catalog(self) -> None:
+        """Load built-in, local, and package tasks into the tasks catalog."""
         self._tasks_catalog = self._load_catalog(
             CallableCatalog,
             "tasks",
             builtin_module=builtin_tasks,
             predicate=is_nornir_task,
-            directories=self.settings.local_tasks,
+            locations=self._build_catalog_locations("tasks", self.settings.local_tasks),
             check_empty=True,
         )
 
     def _load_filters_catalog(self) -> None:
-        """
-        Load inventory filters from built-ins and from directories specified in settings.
-
-        Filters are loaded in two phases:
-        1. Built-in filters from nflow.builtins.filters module
-        2. User-defined filters from configured local_filters
-        """
+        """Load built-in, local, and package inventory filters into the filters catalog."""
         self._filters_catalog = self._load_catalog(
             CallableCatalog,
             "filters",
             builtin_module=builtin_filters,
             predicate=is_nornir_filter,
             transform_item=process_filter,
-            directories=self.settings.local_filters,
+            locations=self._build_catalog_locations("filters", self.settings.local_filters),
         )
 
     def _load_workflows_catalog(self) -> None:
-        """
-        Discover and load workflow files from directories specified in settings.
-
-        This catalogs the available workflow files for later use when a workflow
-        is requested by name.
-        """
+        """Discover and load workflow files from local and package directories."""
         self._workflows_catalog = self._load_catalog(
             FileCatalog,
             "workflows",
             predicate=is_yaml_file,
-            directories=self.settings.local_workflows,
+            locations=self._build_catalog_locations("workflows", self.settings.local_workflows),
             recursive=True,
         )
 
     def _load_blueprints_catalog(self) -> None:
-        """
-        Discover and load blueprint files from directories specified in settings.
-
-        This catalogs the available blueprint files for later use.
-        """
+        """Discover and load blueprint files from local and package directories."""
         self._blueprints_catalog = self._load_catalog(
             FileCatalog,
             "blueprints",
             predicate=is_yaml_file,
-            directories=self.settings.local_blueprints,
+            locations=self._build_catalog_locations("blueprints", self.settings.local_blueprints),
             recursive=True,
         )
+
+    def _load_hooks_catalog(self) -> None:
+        """Point the hooks catalog at the module-level HOOKS_CATALOG singleton.
+
+        HOOKS_CATALOG is populated incrementally as hook modules are imported
+        by _initialize_hooks(). By the time this method runs, all builtin,
+        local, and package hooks have already been registered into it.
+        """
+        HOOKS_CATALOG.finalize_package_tier()
+        HOOKS_CATALOG.compute_collision_metadata()
+        self._hooks_catalog = HOOKS_CATALOG
 
     def _validate_init_kwargs(self, kwargs: dict[str, Any]) -> None:
         """
@@ -839,12 +1021,23 @@ class NornFlow:
         Check if the tasks in the workflow are present in the tasks catalog.
 
         Raises:
-            TaskError: If any tasks in the workflow are not found in the tasks catalog.
+            TaskError: If any tasks in the workflow are not found or ambiguous.
         """
         logger.debug("Checking tasks in workflow")
         task_names = [task.name for task in self.workflow.tasks]
 
-        missing_tasks = [task_name for task_name in task_names if task_name not in self.tasks_catalog]
+        missing_tasks: list[str] = []
+        for task_name in task_names:
+            try:
+                self.tasks_catalog.resolve(task_name)
+            except AssetAmbiguityError as exc: # noqa: PERF203
+                raise TaskError(
+                    f"Task '{task_name}' is ambiguous in tasks catalog. "
+                    f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
+                    task_name=task_name,
+                ) from exc
+            except AssetNotFoundError:
+                missing_tasks.append(task_name)
 
         if missing_tasks:
             logger.error(f"Missing tasks in catalog: {missing_tasks}")
@@ -896,10 +1089,18 @@ class NornFlow:
         Raises:
             WorkflowError: If the filter is not found or parameter count doesn't match.
         """
-        if key not in self.filters_catalog:
-            raise WorkflowError(f"Filter '{key}' not found in filters catalog")
+        try:
+            filter_entry = self.filters_catalog.resolve(key)
+        except AssetAmbiguityError as exc:
+            raise FilterError(
+                f"Filter '{key}' is ambiguous in filters catalog. "
+                f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
+                filter_name=key,
+            ) from exc
+        except AssetNotFoundError as exc:
+            raise FilterError(f"Filter '{key}' not found in filters catalog", filter_name=key) from exc
 
-        filter_func, param_names = self.filters_catalog[key]
+        filter_func, param_names = filter_entry
 
         if isinstance(filter_values, dict):
             return self._build_filter_kwargs_for_dict(filter_func, filter_values)
@@ -949,19 +1150,25 @@ class NornFlow:
         Raises:
             WorkflowError: If the workflow is not found or loading fails.
         """
-        if name not in self.workflows_catalog:
+        try:
+            workflow_path = self.workflows_catalog.resolve(name)
+        except AssetAmbiguityError as exc:
+            raise WorkflowError(
+                f"Workflow '{name}' is ambiguous in workflows catalog. "
+                f"Use a qualified name. Candidates: {', '.join(sorted(exc.candidates))}",
+            ) from exc
+        except AssetNotFoundError as exc:
             raise WorkflowError(
                 f"Workflow '{name}' not found in workflows catalog. "
                 f"Available workflows: {', '.join(sorted(self.workflows_catalog.keys()))}",
                 component="NornFlow",
-            )
+            ) from exc
 
-        workflow_path = self.workflows_catalog[name]
         try:
             workflow_dict = load_file_to_dict(workflow_path)
             workflow = WorkflowModel.create(
                 workflow_dict,
-                blueprints_catalog=dict(self.blueprints_catalog),
+                blueprints_catalog=self.blueprints_catalog,
                 vars_dir=self.settings.vars_dir,
                 workflow_path=workflow_path,
                 workflow_roots=self.settings.local_workflows,
@@ -1028,6 +1235,7 @@ class NornFlow:
                 workflow_processors = []
                 for processor_config in self.workflow.processors:
                     processor = load_processor(dict(processor_config))
+                    self._sync_processor_redaction(processor)
                     workflow_processors.append(processor)
 
                 if workflow_processors:
@@ -1051,7 +1259,7 @@ class NornFlow:
                 task.run(
                     nornir_manager=self.nornir_manager,
                     vars_manager=self.var_processor.vars_manager,
-                    tasks_catalog=dict(self.tasks_catalog),
+                    tasks_catalog=self.tasks_catalog,
                 )
 
     def _print_workflow_overview(self) -> None:
@@ -1063,6 +1271,8 @@ class NornFlow:
             inventory_filters=self.filters or self.workflow.inventory_filters or {},
             vars_manager=self.var_processor.vars_manager,
             failure_strategy=self.failure_strategy,
+            redaction_enabled=self.redaction_enabled,
+            sensitive_names=self.redaction_sensitive_names,
         )
 
     def _print_workflow_summary(self) -> None:
@@ -1105,6 +1315,32 @@ class NornFlow:
             return 101
 
         return 0
+
+    def validate_workflow(self, workflow: WorkflowModel | None = None) -> None:
+        """Validate a fully assembled workflow without executing tasks or Nornir I/O.
+
+        Precondition: the workflow must already be loaded and fully assembled. Use
+        NornFlowBuilder.with_workflow_path() and build(), or WorkflowModel.create()
+        with blueprint kwargs, before calling this. Do not call on raw dicts,
+        unexpanded blueprints, or an unresolved workflow name string.
+
+        Assembly errors are raised during create() or build(). This method runs a
+        second pass via validate_workflow_tasks().
+
+        Args:
+            workflow: Workflow to validate; defaults to the instance workflow.
+
+        Raises:
+            WorkflowError: When no workflow is loaded or there are no tasks after
+                expansion.
+            WorkflowValidationError: When one or more task-level problems were found.
+        """
+        target = workflow if workflow is not None else self._workflow
+
+        if target is None:
+            raise WorkflowError("No workflow loaded to validate", component="NornFlow")
+
+        validate_workflow_tasks(self, target)
 
     def run(self) -> int:
         """

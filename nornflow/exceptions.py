@@ -5,7 +5,10 @@ This module defines the core exceptions used throughout the NornFlow application
 organized hierarchically with clear inheritance paths.
 """
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from nornflow.validation import ValidationIssue
 
 ###############################################################################
 # ROOT EXCEPTION
@@ -51,6 +54,60 @@ class CatalogError(CoreError):
         self.catalog_name = catalog_name
 
 
+class AssetNotFoundError(CatalogError):
+    """Raised when a catalog reference does not match any registered asset."""
+
+    def __init__(self, reference: str, catalog_name: str = ""):
+        self.reference = reference
+        location = f" in {catalog_name} catalog" if catalog_name else ""
+        super().__init__(
+            f"Asset '{reference}'{location} was not found. "
+            f"Use a qualified name (namespace.name) if the bare name is shared.",
+            catalog_name=catalog_name,
+        )
+
+
+class AssetAmbiguityError(CatalogError):
+    """Raised when a bare catalog reference is ambiguous within the winning tier."""
+
+    def __init__(
+        self,
+        reference: str,
+        catalog_name: str = "",
+        candidates: list[str] | None = None,
+        tier: str = "",
+    ):
+        self.reference = reference
+        self.candidates = candidates or []
+        self.tier = tier
+        candidate_list = ", ".join(sorted(self.candidates))
+        super().__init__(
+            f"Bare reference '{reference}' is ambiguous{(' at tier ' + tier) if tier else ''}. "
+            f"Candidates: {candidate_list}. Use a qualified name instead.",
+            catalog_name=catalog_name,
+        )
+
+
+class BuiltinOverrideError(CoreError):
+    """Raised when any asset attempts to register under a name already claimed by a built-in.
+
+    This applies uniformly across all catalog types and all asset sources (packages,
+    local directories, hooks). Built-in names are permanently reserved.
+
+    Attributes:
+        name: The conflicting name.
+        catalog_name: The catalog where the conflict occurred.
+    """
+
+    def __init__(self, name: str, catalog_name: str = ""):
+        self.name = name
+        self.catalog_name = catalog_name
+        location = f" in {catalog_name} catalog" if catalog_name else ""
+        super().__init__(
+            f"'{name}'{location} is a built-in name and cannot be overridden. Rename the offending asset."
+        )
+
+
 class InitializationError(CoreError):
     """Base for all initialization-related errors."""
 
@@ -94,6 +151,14 @@ class TaskError(WorkflowError):
 
     def __init__(self, message: str = "", task_name: str = "", **kwargs):
         super().__init__(message, task_name=task_name, **kwargs)
+
+
+class WorkflowValidationError(WorkflowError):
+    """Raised when static workflow validation finds one or more task-level problems."""
+
+    def __init__(self, issues: "list[ValidationIssue]"):
+        self.issues = issues
+        super().__init__(f"Workflow validation failed with {len(issues)} error(s)")
 
 
 class FilterError(WorkflowError):

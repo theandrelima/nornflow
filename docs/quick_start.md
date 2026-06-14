@@ -169,7 +169,7 @@ local_blueprints:
   - "blueprints"
 local_j2_filters:
   - "j2_filters"
-imported_packages: []
+packages: []
 dry_run: False
 failure_strategy: "skip-failed"
 processors:
@@ -190,7 +190,7 @@ workflow:
     - name: netmiko_send_command
       args:
         command_string: "show running-config"
-      set_to: "running_config"
+      store_as: running_config
     
     - name: write_file
       args:
@@ -201,6 +201,11 @@ workflow:
 Run it:
 ```bash
 nornflow run backup_configs.yaml
+```
+
+Validate task-level errors from a workflow without executing tasks or contacting devices:
+```bash
+nornflow validate backup_configs.yaml
 ```
 
 ## Using Variables
@@ -260,12 +265,12 @@ tasks:
   - name: netmiko_send_command
     args:
       command_string: "show version"
-    set_to: version_output
+    store_as: version_output
   
   - name: netmiko_send_command
     args:
       command_string: "show interfaces status"
-    set_to: interfaces_output
+    store_as: interfaces_output
 ```
 
 ### Use in Workflow

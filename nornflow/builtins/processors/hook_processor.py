@@ -33,7 +33,7 @@ class NornFlowHookProcessor(Processor):
        - task_model: The current TaskModel being executed
        - hooks: List of Hook instances for this task
 
-    The `context` property always returns the merged dictionary of both contexts.
+    The 'context' property always returns the merged dictionary of both contexts.
     Task-specific context is set at task start and cleared at task completion.
 
     Hook Retrieval:

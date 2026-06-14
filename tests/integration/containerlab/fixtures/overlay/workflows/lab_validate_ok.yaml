@@ -1,0 +1,10 @@
+workflow:
+  name: Containerlab validate OK
+  description: Valid workflow for nornflow validate integration tests.
+  tasks:
+    - name: nornflow.echo
+      args:
+        msg: "validate ok"
+
+    - blueprint: lab_readonly_snapshot.yaml
+      single: true

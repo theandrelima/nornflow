@@ -2,9 +2,14 @@ import os
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, field_validator, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, PrivateAttr
 from pydantic_serdes.utils import load_file_to_dict
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    EnvSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 from nornflow.constants import (
     FailureStrategy,
@@ -13,12 +18,79 @@ from nornflow.constants import (
     NORNFLOW_DEFAULT_HOOKS_DIR,
     NORNFLOW_DEFAULT_J2_FILTERS_DIR,
     NORNFLOW_DEFAULT_LOGGER,
+    NORNFLOW_DEFAULT_REDACTION,
     NORNFLOW_DEFAULT_TASKS_DIR,
     NORNFLOW_DEFAULT_VARS_DIR,
     NORNFLOW_DEFAULT_WORKFLOWS_DIR,
 )
 from nornflow.exceptions import SettingsError
 from nornflow.logger import logger
+from nornflow.packages import PackageDescriptor
+
+_ENV_EXCLUDED_FIELDS: frozenset[str] = frozenset({"packages"})
+
+
+class _NornFlowEnvSettingsSource(EnvSettingsSource):
+    """Env settings source that excludes structural fields from env var override.
+
+    The 'packages' setting is a design-time decision that belongs in the
+    settings YAML file (or programmatic overrides).  This source strips it
+    from the env-provided values so that 'NORNFLOW_SETTINGS_PACKAGES' is
+    never honoured, matching the documented behaviour.
+    """
+
+    def __call__(self) -> dict[str, Any]:
+        data = super().__call__()
+        for field_name in _ENV_EXCLUDED_FIELDS:
+            data.pop(field_name, None)
+        return data
+
+
+class RedactionSettings(BaseModel):
+    """Output redaction configuration (terminal, logs, and user-sensitive identifiers)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    logs_enabled: bool | None = None
+    sensitive_names: list[str] = Field(default_factory=list)
+
+    @field_validator("enabled", "logs_enabled", mode="before")
+    @classmethod
+    def coerce_bool_fields(cls, v: Any) -> Any:
+        """Accept bools and env-style true/false strings; reject other values."""
+        if v is None:
+            return v
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str) and v.lower() in ("true", "false"):
+            return v.lower() == "true"
+        raise SettingsError("redaction boolean fields must be true or false")
+
+    @field_validator("sensitive_names", mode="before")
+    @classmethod
+    def coerce_sensitive_names(cls, v: Any) -> list[Any]:
+        """Accept a list or default to empty when omitted."""
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            raise SettingsError("redaction.sensitive_names must be a list")
+        return v
+
+    @field_validator("sensitive_names")
+    @classmethod
+    def normalize_sensitive_names(cls, v: list[str]) -> list[str]:
+        """Normalize identifiers to lowercase with hyphens and dots as underscores."""
+        if not all(isinstance(name, str) and name.strip() for name in v):
+            raise SettingsError("redaction.sensitive_names must be a list of non-empty strings")
+        return [name.lower().replace("-", "_").replace(".", "_") for name in v]
+
+    @model_validator(mode="after")
+    def inherit_logs_enabled(self) -> "RedactionSettings":
+        """When logs_enabled is omitted, inherit enabled."""
+        if self.logs_enabled is None:
+            self.logs_enabled = self.enabled
+        return self
 
 
 class NornFlowSettings(BaseSettings):
@@ -30,6 +102,9 @@ class NornFlowSettings(BaseSettings):
     2. Values from settings YAML file
     3. Environment variables (prefixed with NORNFLOW_SETTINGS_)
     4. Default values defined in this class
+
+    The 'packages' setting is excluded from environment variable override.
+    It must be set in the settings YAML file or via programmatic overrides.
 
     Note the careful terminology:
     - "Settings" refers to NornFlow's own configuration
@@ -51,6 +126,22 @@ class NornFlowSettings(BaseSettings):
         case_sensitive=True,
         extra="allow",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            _NornFlowEnvSettingsSource(settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
 
     nornir_config_file: str = Field(description="Path to Nornir configuration file (required)")
 
@@ -76,8 +167,9 @@ class NornFlowSettings(BaseSettings):
         default=[NORNFLOW_DEFAULT_J2_FILTERS_DIR],
         description="List of directories containing custom Jinja2 filter functions",
     )
-    imported_packages: list[str] = Field(
-        default_factory=list, description="List of Python packages to import for additional resources"
+    packages: list[PackageDescriptor] = Field(
+        default_factory=list,
+        description="List of NornFlow-compatible Python packages to load resources from",
     )
     processors: list[dict[str, Any]] = Field(
         default_factory=list, description="List of processor configurations with class and args"
@@ -92,9 +184,44 @@ class NornFlowSettings(BaseSettings):
     logger: dict[str, Any] = Field(
         default_factory=lambda: {**NORNFLOW_DEFAULT_LOGGER}, description="Logger configuration dictionary"
     )
+    redaction: RedactionSettings = Field(
+        default_factory=RedactionSettings,
+        description="Output redaction configuration",
+    )
 
     _base_dir: Path | None = PrivateAttr(default=None)
     _settings_file: str | None = PrivateAttr(default=None)
+
+    @field_validator("packages", mode="before")
+    @classmethod
+    def validate_packages(cls, v: Any) -> list[dict[str, Any]]:
+        """Normalize package entries — bare strings are expanded to full descriptor dicts."""
+        if not v:
+            return []
+
+        if not isinstance(v, list):
+            raise SettingsError("packages must be a list")
+
+        normalized = []
+        for item in v:
+            if isinstance(item, str):
+                normalized.append({"name": item})
+            elif isinstance(item, (dict, PackageDescriptor)):
+                normalized.append(item)
+            else:
+                raise SettingsError(f"Invalid package entry type: {type(item).__name__}")
+
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_no_duplicate_packages(self) -> "NornFlowSettings":
+        """Catch duplicate package names that would silently load resources twice."""
+        names = [p.name for p in self.packages]
+        seen = set()
+        duplicates = [n for n in names if n in seen or seen.add(n)]
+        if duplicates:
+            raise SettingsError(f"Duplicate package name(s) in 'packages': {sorted(set(duplicates))}")
+        return self
 
     @field_validator("processors", mode="before")
     @classmethod
@@ -112,10 +239,10 @@ class NornFlowSettings(BaseSettings):
                 validated.append({"class": item, "args": {}})
             elif isinstance(item, dict):
                 if "class" not in item:
-                    raise ValueError("Each processor dict must have a 'class' key")
+                    raise SettingsError("Each processor dict must have a 'class' key")
                 validated.append({"class": item["class"], "args": item.get("args", {})})
             else:
-                raise TypeError(f"Invalid processor type: {type(item).__name__}")
+                raise SettingsError(f"Invalid processor type: {type(item).__name__}")
 
         return validated
 
@@ -131,7 +258,7 @@ class NornFlowSettings(BaseSettings):
                 try:
                     return FailureStrategy(normalized)
                 except ValueError as e:
-                    raise ValueError(
+                    raise SettingsError(
                         f"Invalid failure strategy: {v}. "
                         f"Must be one of: {', '.join(s.value for s in FailureStrategy)}"
                     ) from e
@@ -151,6 +278,37 @@ class NornFlowSettings(BaseSettings):
         if not isinstance(merged["level"], str):
             raise SettingsError("logger.level must be a string")
 
+        return merged
+
+    @field_validator("redaction", mode="before")
+    @classmethod
+    def validate_redaction(cls, v: Any) -> Any:
+        """Validate redaction configuration, merging with defaults for missing keys.
+
+        Accepts 'enabled', 'logs_enabled', and 'sensitive_names'. When
+        'logs_enabled' is omitted it inherits the value of 'enabled'.
+        Unknown keys are rejected by RedactionSettings (extra='forbid'); via
+        NornFlowSettings.load() validation failures surface as SettingsError.
+        'sensitive_names' entries use the same segment-aware key matching as
+        built-in 'PROTECTED_KEYWORDS' once loaded (see 'nornflow.masking').
+
+        Args:
+            v: Raw value from settings source.
+
+        Returns:
+            Dict or RedactionSettings ready for model validation.
+
+        Raises:
+            SettingsError: If the value is not a dict.
+        """
+        if isinstance(v, RedactionSettings):
+            return v
+        if v is None:
+            v = {}
+        if not isinstance(v, dict):
+            raise SettingsError("redaction must be a dictionary")
+
+        merged = {**NORNFLOW_DEFAULT_REDACTION, **v}
         return merged
 
     def _resolve_path_field(self, field_name: str, key: str | None, base_dir: Path) -> None:
@@ -287,7 +445,11 @@ class NornFlowSettings(BaseSettings):
 
         settings_data = {**yaml_data, **overrides}
 
-        instance = cls(**settings_data)
+        try:
+            instance = cls(**settings_data)
+        except Exception as e:
+            raise SettingsError(f"Invalid settings in {resolved_file}: {e}") from e
+
         instance._base_dir = base_dir
         instance._settings_file = str(settings_path)
 
@@ -317,6 +479,21 @@ class NornFlowSettings(BaseSettings):
     def loaded_settings(self) -> dict[str, Any]:
         """Backward compatibility property for accessing settings as dict."""
         return self.as_dict
+
+    @property
+    def redaction_enabled(self) -> bool:
+        """Whether output redaction is enabled for terminal display surfaces."""
+        return self.redaction.enabled
+
+    @property
+    def redaction_logs_enabled(self) -> bool:
+        """Whether output redaction is enabled for log files and stderr log output."""
+        return bool(self.redaction.logs_enabled)
+
+    @property
+    def redaction_sensitive_names(self) -> frozenset[str]:
+        """User-declared sensitive identifiers (normalized lowercase)."""
+        return frozenset(self.redaction.sensitive_names)
 
     def __getattr__(self, name: str) -> Any:
         """

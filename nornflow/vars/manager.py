@@ -46,7 +46,7 @@ class HostNamespace:
         Retrieves an attribute (variable or data key) from the Nornir host's inventory.
 
         This method is called when an attribute is accessed on a HostNamespace
-        object (e.g., `host.some_attribute` in a Jinja2 template).
+        object (e.g., 'host.some_attribute' in a Jinja2 template).
 
         Args:
             name: The name of the attribute to retrieve.
@@ -75,9 +75,9 @@ class VariableLookupContext(dict):
     This class provides access to:
     - NornFlow Default Namespace variables: These are the variables loaded from various
       sources (CLI, runtime, inline, domain, default, environment) and are directly
-      accessible in templates (e.g., `{{ my_variable }}`).
+      accessible in templates (e.g., '{{ my_variable }}').
     - 'host.' namespace: Provides read-only access to Nornir inventory data for the
-      current host, facilitated by the `HostNamespace` class (e.g., `{{ host.name }}`).
+      current host, facilitated by the 'HostNamespace' class (e.g., '{{ host.name }}').
     """
 
     def __init__(
@@ -109,7 +109,7 @@ class NornFlowVariablesManager:
     during workflow execution.
 
     NornFlow Default Namespace Variable Precedence (Highest to Lowest):
-    1. Runtime Variables (dynamically set by the 'set' task or 'set_to' keyword)
+    1. Runtime Variables (dynamically set by the 'set' task or 'store_as' keyword)
     2. CLI Variables
     3. Inline Workflow Variables (defined in the `workflow.vars` section)
     4. Domain-specific Default Variables (from `{vars_dir}/{domain}/defaults.yaml`)
@@ -253,10 +253,10 @@ class NornFlowVariablesManager:
         """
         Extracts the domain name from a workflow's path.
         The domain is considered the first-level subdirectory under one of the
-        configured `workflow_roots` that contains the `workflow_path`.
+        configured 'workflow_roots' that contains the 'workflow_path'.
 
         Args:
-            workflow_path: The `pathlib.Path` to the workflow file.
+            workflow_path: The 'pathlib.Path' to the workflow file.
 
         Returns:
             The extracted domain name as a string, or an empty string if a domain

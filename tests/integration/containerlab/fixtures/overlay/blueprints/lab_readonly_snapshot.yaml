@@ -1,0 +1,14 @@
+description: >
+  Read-only snapshot for containerlab: version facts and LLDP neighbors.
+  Uses store_as to store results in runtime variables.
+
+tasks:
+  - name: nornflow_arista.get_facts
+    store_as:
+      facts: result
+
+  - name: nornflow_arista.get_lldp_neighbors
+    args:
+      detail: true
+    store_as:
+      lldp_neighbors: result

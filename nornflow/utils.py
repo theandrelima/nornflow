@@ -24,7 +24,7 @@ from nornflow.constants import (
     FailureStrategy,
     JINJA_PATTERN,
     NORNFLOW_SUPPORTED_YAML_EXTENSIONS,
-    PROTECTED_KEYWORDS,
+    REDACTED,
 )
 from nornflow.exceptions import (
     CoreError,
@@ -33,6 +33,7 @@ from nornflow.exceptions import (
     WorkflowError,
 )
 from nornflow.logger import logger
+from nornflow.masking import is_sensitive_key
 
 if TYPE_CHECKING:
     from nornflow.vars.manager import NornFlowVariablesManager
@@ -390,19 +391,27 @@ def check_for_jinja2_recursive(obj: Any, path: str) -> None:
             check_for_jinja2_recursive(item, f"{path}[{idx}]")
 
 
-def format_variable_value(key: str, value: Any) -> str:
+def format_variable_value(
+    key: str,
+    value: Any,
+    *,
+    redaction_enabled: bool = True,
+    sensitive_names: frozenset[str] | None = None,
+) -> str:
     """
-    Format a variable value for display, masking protected keywords.
+    Format a variable value for display, redacting protected and user-declared keys.
 
     Args:
         key: The variable name.
         value: The variable value.
+        redaction_enabled: When False, return the value without redaction.
+        sensitive_names: User-declared identifiers (same segment-aware rule as built-in keywords).
 
     Returns:
-        The formatted display string.
+        The formatted display string, with REDACTED substituted for sensitive values.
     """
-    if any(keyword in key.lower() for keyword in PROTECTED_KEYWORDS):
-        return "********"
+    if redaction_enabled and is_sensitive_key(key, sensitive_names):
+        return REDACTED
     display_value = str(value)
     if isinstance(value, tuple):
         display_value = display_value.replace("(", "[").replace(")", "]")
@@ -415,7 +424,12 @@ def _get_type_display(value: Any) -> str:
     return TYPE_DISPLAY_MAPPING.get(type_name, type_name)
 
 
-def _build_vars_section(vars_manager: "NornFlowVariablesManager | None") -> list[Any]:
+def _build_vars_section(
+    vars_manager: "NornFlowVariablesManager | None",
+    *,
+    redaction_enabled: bool = True,
+    sensitive_names: frozenset[str] | None = None,
+) -> list[Any]:
     """
     Build the variables section for the workflow overview panel.
 
@@ -451,7 +465,12 @@ def _build_vars_section(vars_manager: "NornFlowVariablesManager | None") -> list
         vars_table.add_row(
             source,
             key,
-            format_variable_value(key, value),
+            format_variable_value(
+                key,
+                value,
+                redaction_enabled=redaction_enabled,
+                sensitive_names=sensitive_names,
+            ),
             _get_type_display(value),
         )
 
@@ -475,6 +494,9 @@ def print_workflow_overview(
     inventory_filters: dict[str, Any],
     failure_strategy: FailureStrategy | None,
     vars_manager: "NornFlowVariablesManager | None" = None,
+    *,
+    redaction_enabled: bool = True,
+    sensitive_names: frozenset[str] | None = None,
 ) -> None:
     """
     Print a comprehensive workflow overview before execution using Rich.
@@ -486,6 +508,8 @@ def print_workflow_overview(
         inventory_filters: Dictionary of applied inventory filters.
         failure_strategy: The active failure handling strategy.
         vars_manager: Variables manager for assembly-time vars.
+        redaction_enabled: When False, sensitive variable values are shown in plain text.
+        sensitive_names: User-declared identifiers from 'redaction.sensitive_names'.
     """
     console = Console()
 
@@ -509,7 +533,13 @@ def print_workflow_overview(
     )
 
     elements: list[Any] = [table]
-    elements.extend(_build_vars_section(vars_manager))
+    elements.extend(
+        _build_vars_section(
+            vars_manager,
+            redaction_enabled=redaction_enabled,
+            sensitive_names=sensitive_names,
+        )
+    )
 
     panel = Panel(
         Group(*elements),

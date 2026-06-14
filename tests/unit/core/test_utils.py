@@ -733,19 +733,25 @@ class TestFormatVariableValue:
         """Test password is masked."""
         result = format_variable_value("password", "secret123")
 
-        assert result == "********"
+        assert result == "***REDACTED***"
+
+    def test_format_protected_password_no_redact(self):
+        """Test password is shown when redaction is disabled."""
+        result = format_variable_value("password", "secret123", redaction_enabled=False)
+
+        assert result == "secret123"
 
     def test_format_protected_token(self):
         """Test token is masked."""
         result = format_variable_value("api_token", "abc123")
 
-        assert result == "********"
+        assert result == "***REDACTED***"
 
     def test_format_protected_secret(self):
         """Test secret is masked."""
         result = format_variable_value("secret_key", "sensitive")
 
-        assert result == "********"
+        assert result == "***REDACTED***"
 
     def test_format_tuple_value(self):
         """Test tuple is formatted as list."""
@@ -757,7 +763,7 @@ class TestFormatVariableValue:
         """Test protection is case-insensitive."""
         result = format_variable_value("PASSWORD", "secret")
 
-        assert result == "********"
+        assert result == "***REDACTED***"
 
     def test_format_integer(self):
         """Test formatting integer value."""
@@ -787,7 +793,21 @@ class TestFormatVariableValue:
         """Test partial keyword match masks value."""
         result = format_variable_value("my_password_var", "value")
 
-        assert result == "********"
+        assert result == "***REDACTED***"
+
+    def test_format_user_sensitive_name_exact_match(self):
+        """User sensitive_names match declared identifiers exactly."""
+        names = frozenset(["credential_x"])
+        result = format_variable_value("credential_x", "lab-secret", sensitive_names=names)
+
+        assert result == "***REDACTED***"
+
+    def test_format_user_sensitive_name_segment_match(self):
+        """Listing 'pin' masks 'vault_pin' via segment-aware matching."""
+        names = frozenset(["pin"])
+        result = format_variable_value("vault_pin", "1234", sensitive_names=names)
+
+        assert result == "***REDACTED***"
 
 
 class TestPrintWorkflowOverview:

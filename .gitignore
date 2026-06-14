@@ -1,3 +1,12 @@
+# macOS
+.DS_Store
+
+# Cursor IDE
+.cursor/
+
+# Local architecture notes (not published docs)
+architectural_docs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -193,6 +202,9 @@ todo*
 
 # local jinja2 filters dir
 /j2_filters/
+
+# local hooks filters dir
+/hooks/
 
 # ruff
 .ruff*/

@@ -66,6 +66,7 @@ NORNFLOW_DEFAULT_BLUEPRINTS_DIR = "blueprints"
 NORNFLOW_DEFAULT_VARS_DIR = "vars"
 NORNFLOW_DEFAULT_J2_FILTERS_DIR = "j2_filters"
 NORNFLOW_DEFAULT_LOGGER = {"directory": ".nornflow/logs", "level": "INFO"}
+NORNFLOW_DEFAULT_REDACTION = {"enabled": True, "sensitive_names": []}
 
 NORNFLOW_SETTINGS_OPTIONAL = {
     "local_tasks": [NORNFLOW_DEFAULT_TASKS_DIR],
@@ -73,12 +74,13 @@ NORNFLOW_SETTINGS_OPTIONAL = {
     "local_filters": [NORNFLOW_DEFAULT_FILTERS_DIR],
     "local_hooks": [NORNFLOW_DEFAULT_HOOKS_DIR],
     "local_j2_filters": [NORNFLOW_DEFAULT_J2_FILTERS_DIR],
-    "imported_packages": [],
+    "packages": [],
     "processors": [],
     "vars_dir": NORNFLOW_DEFAULT_VARS_DIR,
     "failure_strategy": FailureStrategy.SKIP_FAILED,
     "dry_run": False,
     "logger": NORNFLOW_DEFAULT_LOGGER,
+    "redaction": NORNFLOW_DEFAULT_REDACTION,
 }
 
 # Kwargs that cannot be passed to NornFlow.__init__; they must be set via the settings YAML file.
@@ -90,8 +92,10 @@ NORNFLOW_INVALID_INIT_KWARGS = (
     "local_filters",
     "local_hooks",
     "local_j2_filters",
-    "imported_packages",
+    "packages",
     "logger",
+    # 'redaction' is settings-only; use '--no-redact' / 'no_redact=True' to disable terminal masking per run
+    "redaction",
 )
 
 # Supported extensions
@@ -100,88 +104,79 @@ NORNFLOW_SUPPORTED_YAML_EXTENSIONS = (".yaml", ".yml")
 # Default inventory filter keys
 JINJA_PATTERN = re.compile(r"({{.*?}}|{%-?.*?-%?})")
 
-# Keywords in variable names that should be masked in display
+# Output redaction — CLI warnings and masking engine
+REDACTION_FULL_DISABLED_WARNING = (
+    "Warning: All output redaction is disabled. Sensitive values may appear in terminal output "
+    "and log files."
+)
+# Terminal off, logs on (e.g. --no-redact with default settings).
+REDACTION_TERMINAL_DISABLED_WARNING = (
+    "Warning: Terminal output redaction is disabled. Sensitive values may appear in "
+    "terminal output. Log files remain redacted per settings."
+)
+# Terminal on, logs off (e.g. logs_enabled: false with enabled: true).
+REDACTION_LOGS_DISABLED_WARNING = (
+    "Warning: Log redaction is disabled. Sensitive values may appear in log files "
+    "and stderr log output."
+)
+
+REDACTED = "***REDACTED***"
+# Strings below this size always run the regex pass; larger strings use a keyword
+# substring pre-check first to avoid scanning huge blobs with no secrets.
+LARGE_TEXT_THRESHOLD = 8192
+
+# Protected keywords for output redaction (see nornflow.masking).
+#
+# Segment-aware matching: normalize the key (lowercase; '-' and '.' → '_'), then
+# redact when the full name or any '_'-delimited segment equals an entry below
+# (e.g. token → nautobot_token; key → api_key; secret → client_secret).
+#
+# Prefer short keywords over compound synonyms. List a compound only when it
+# cannot be inferred from segments (e.g. apikey, db_connection_string).
 PROTECTED_KEYWORDS = [
-    # Authentication
+    # Core secret-bearing keywords (match as full key or as a segment)
     "password",
     "passwd",
     "pwd",
+    "pass",
     "secret",
     "token",
-    "apikey",
-    "api_key",
-    "access_token",
-    "auth_token",
+    "key",
+    "credentials",
+    "code",
+    # Auth / session
     "authorization",
+    "auth",
     "jwt",
     "bearer",
+    "login",
+    "session",
     "sessionid",
-    "session_id",
-    # Cloud credentials
-    "aws_access_key_id",
-    "aws_secret_access_key",
-    "azure_client_secret",
-    "gcp_credentials",
-    "gcp_private_key",
-    "gcp_client_secret",
-    "gcp_token",
-    # Database
-    "db_password",
-    "db_pass",
-    "db_user",
-    "db_username",
-    "db_token",
-    "db_connection_string",
-    # SSH / TLS / Certificates
-    "ssh_key",
-    "private_key",
-    "tls_key",
+    # MFA
+    "otp",
+    "totp",
+    "hotp",
+    "2fa",
+    "mfa",
+    # TLS / crypto material
     "certificate",
     "cert",
     "pem",
     "pfx",
     "keystore",
-    # Environment variables
-    "env_secret",
-    "env_token",
-    "env_password",
-    "env_key",
-    # 2FA / MFA / OTP
-    "2fa_code",
-    "mfa_code",
-    "otp",
-    "one_time_password",
-    "verification_code",
-    "authenticator_code",
-    "totp",
-    "hotp",
-    "backup_code",
-    "recovery_code",
-    "sms_code",
-    "email_code",
-    "push_token",
-    "push_auth",
-    "security_code",
-    # Custom patterns
-    "client_secret",
-    "consumer_secret",
-    "app_secret",
-    "webhook_secret",
-    "signing_key",
-    "encryption_key",
-    "master_key",
-    "recovery_key",
-    "reset_token",
-    "magic_link",
-    # Config file keys
-    "config_secret",
-    "config_token",
-    "config_password",
-    "config_key",
-    # Generic
-    "key",
-    "secret",
-    "credentials",
+    # Identity / federation
     "identity",
-    "login",
+    # Non-segment spellings and exact-only compounds
+    "apikey",
+    "db_connection_string",
+    "magic_link",
+    "push_auth",
 ]
+
+# Catalog namespaces and bare-name resolution tiers (see nornflow.catalogs).
+BUILTIN_NAMESPACE = "nornflow"
+LOCAL_NAMESPACE = "local"
+TIER_BUILTIN = "builtin"
+TIER_LOCAL = "local"
+TIER_PACKAGE = "package"
+TIER_ORDER = (TIER_BUILTIN, TIER_LOCAL, TIER_PACKAGE)

@@ -1,0 +1,5 @@
+workflow:
+  name: Containerlab validate bad task
+  tasks:
+    - name: nornflow.this_task_does_not_exist
+      args: {}

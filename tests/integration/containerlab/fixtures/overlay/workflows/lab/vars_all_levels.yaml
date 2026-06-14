@@ -1,0 +1,29 @@
+workflow:
+  name: Lab vars all levels
+  description: >
+    Echo workflow exercising environment, global, domain, workflow, CLI, and runtime
+    variable sources plus package, builtin, and local Jinja2 filters.
+  vars:
+    workflow_marker: WORKFLOW_OK
+    override_var: WORKFLOW_OK
+    cli_marker: UNSET
+  tasks:
+    - name: nornflow.set
+      args:
+        runtime_marker: RUNTIME_OK
+        override_var: RUNTIME_OK
+
+    - name: nornflow.echo
+      args:
+        msg: >-
+          env={{ env_marker }}
+          global={{ global_marker }}
+          domain={{ domain_marker }}
+          workflow={{ workflow_marker }}
+          cli={{ cli_marker }}
+          runtime={{ runtime_marker }}
+          override={{ override_var }}
+          host={{ host.name }}
+          j2_package={{ '10,20' | nornflow_arista.eos_vlan_expand | join('-') }}
+          j2_builtin={{ 'runtime_marker' | is_set }}
+          j2_local={{ 'vars' | lab_prefix }}

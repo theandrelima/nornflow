@@ -1,18 +1,18 @@
 [project]
 name = "nornflow"
-version = "0.8.0"
+version = "0.9.0"
 description = "A workflow orchestration tool for network automation built around Nornir."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
     { name = "Andre Lima"}
 ]
-license = { text = "GPL-3.0-or-later" }
+license = { text = "MIT" }
 dependencies = [
     "jmespath>=1.0.1",
     "nornir>=3.5.0",
     "nornir-utils>=0.2.0",
-    "pydantic-serdes>=1.0.4",
+    "pydantic-serdes>=1.0.5",
     "pydantic-settings>=2.12.0",
     "pytest>=8.3.4",
     "pyyaml>=6.0.2",
@@ -20,6 +20,10 @@ dependencies = [
     "termcolor>=2.5.0",
     "typer>=0.15.1",
 ]
+
+[project.urls]
+Repository = "https://github.com/theandrelima/nornflow"
+Documentation = "https://github.com/theandrelima/nornflow/tree/main/docs"
 
 [build-system]
 requires = ["hatchling>=1.17.0"]
@@ -37,7 +41,6 @@ include = ["nornflow*"]
 
 [project.optional-dependencies]
 dev = [
-    "black>=25.12.0",
     "mypy>=1.15.0",
     "ruff>=0.15.1",
     "pytest-cov>=6.0.0",
@@ -52,7 +55,8 @@ manual-tests = [
 [tool.ruff]
 line-length = 110
 target-version = "py310"
-exclude = ["tests/*", "nornflow/cli/tests/*", "nornflow/vars/tests/*", "debug_*.py"]
+src = ["nornflow"]
+exclude = ["tests/*", "debug_*.py"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -108,9 +112,11 @@ combine-as-imports = true
 no-lines-before = ["local-folder"]
 known-first-party = ["nornflow"]
 
-[tool.black]
-line-length = 110
-extend-exclude = '(^|/)tests/|(^|/)debug_.*\.py$'
-
 [project.scripts]
 nornflow = "nornflow.cli.entrypoint:app"
+
+[tool.pytest.ini_options]
+markers = [
+    "containerlab: live OrbStack/cEOS lab tests (requires NORNFLOW_LAB=1)",
+]
+addopts = "-m 'not containerlab'"

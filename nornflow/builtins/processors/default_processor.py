@@ -9,6 +9,7 @@ from nornir.core.processor import Processor
 from nornir.core.task import Result, Task
 
 from nornflow.builtins.constants import SILENT_SKIP_FLAG
+from nornflow.masking import mask_for_display
 
 # Initialize colorama
 init(autoreset=True)
@@ -29,9 +30,20 @@ class DefaultNornFlowProcessor(Processor):
 
     supports_shush_hook = True
 
-    def __init__(self):
-        """Initialize processor with tracking variables for timing and statistics."""
+    def __init__(
+        self,
+        redaction_enabled: bool = True,
+        sensitive_names: frozenset[str] | None = None,
+    ):
+        """Initialize processor with tracking variables for timing and statistics.
+
+        Args:
+            redaction_enabled: When True, sensitive values in task output are redacted.
+            sensitive_names: User-declared identifiers from 'redaction.sensitive_names'.
+        """
         super().__init__()
+        self.redaction_enabled = redaction_enabled
+        self.sensitive_names = sensitive_names
 
         # Dictionary to track start times for each (task_name, host) pair for timing calculations
         self.start_times = {}
@@ -101,7 +113,13 @@ class DefaultNornFlowProcessor(Processor):
             Formatted output string with appropriate styling
         """
         if not suppress_output and result.result:
-            return f"\n{Fore.WHITE}Output:\n{result.result}"
+            display = mask_for_display(
+                result.result,
+                reveal=not self.redaction_enabled,
+                sensitive_names=self.sensitive_names,
+            )
+            output = str(display)
+            return f"\n{Fore.WHITE}Output:\n{output}"
         if suppress_output:
             return f"\n{Fore.WHITE}Output: {Style.DIM}[Shushed!]{Style.RESET_ALL}"
         return ""

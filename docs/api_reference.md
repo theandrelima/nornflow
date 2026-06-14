@@ -6,6 +6,7 @@
 - [NornFlowBuilder Class](#nornflowbuilder-class)
 - [NornFlowSettings Class](#nornflowsettings-class)
 - [NornirManager Class](#nornirmanager-class)
+- [Catalog System](#catalog-system)
 - [Model Classes](#model-classes)
 - [Hook Classes](#hook-classes)
 - [Variable System Classes](#variable-system-classes)
@@ -258,6 +259,33 @@ Apply processors to the Nornir instance.
 #### `set_dry_run(dry_run: bool) -> None`
 Set dry-run mode for the Nornir instance.
 
+## Catalog System
+
+NornFlow uses typed catalog registries to manage all discovered assets. Every asset type (tasks, workflows, blueprints, filters, hooks, J2 filters, and processors) is registered into a catalog during initialization. All catalog types enforce the same registration rules.
+
+### Catalog Types
+
+| Catalog | Type | Assets |
+|---------|------|--------|
+| `CallableCatalog` | Python callables | Tasks, filters, J2 filters |
+| `ClassCatalog` | Python classes | Hooks, Processors |
+| `FileCatalog` | File paths | Workflows, Blueprints |
+
+### Universal Registration Rules
+
+Catalog assets are registered under qualified keys and resolved through `Catalog.resolve()`:
+
+- **Namespaces:** `nornflow` (built-ins), `local` (local directories), `<package_name>` (imported packages)
+- **Bare references:** tier priority: built-in > local > package (single owner)
+- **Qualified references:** exact match on `namespace.name`; never ambiguous
+- **Collisions:** tracked at load time, shown in `nornflow show`; never fail initialization
+- **Ambiguity errors:** `AssetAmbiguityError` when a bare reference is same-tier ambiguous at resolve time
+- **Missing references:** `AssetNotFoundError` when no matching asset exists
+
+Loading order: built-ins → local → packages (in `packages` list order).
+
+See the [Packages Guide: Loading Order and Precedence](./packages_guide.md#loading-order-and-precedence) for diagrams and examples.
+
 ## Model Classes
 
 NornFlow uses Pydantic-Serdes models for data validation and serialization. These models represent the structure of workflows and tasks.
@@ -367,64 +395,165 @@ from nornflow.models import TaskModel
 task = TaskModel(
     name="netmiko_send_command",
     args={"command_string": "show version"},
-    set_to="version_output"
+    store_as="version_output"
 )
 ```
 
 **Key Fields:**
 - `name`: Task name from catalog (required)
 - `args`: Task arguments (optional)
-- `set_to`: Variable storage configuration (optional hook)
+- `store_as`: Variable storage configuration (optional hook)
 - `if`: Conditional execution hook (optional hook)
 - `shush`: Output suppression hook (optional hook)
+- `single`: Single-host execution hook (optional hook)
 - Other hook configurations as needed
 
 ## Hook Classes
 
 Hooks extend task behavior without modifying task code. They implement the Nornir Processor protocol and are automatically registered when imported.
 
-### BaseHook
+### Hook
 
-Base class for all hooks, implementing the Nornir Processor protocol.
+Base class for all hooks, providing automatic registration, lifecycle method delegation, and context injection.
 
 ```python
-from nornflow.hooks import BaseHook
+from nornflow.hooks import Hook
 from nornir.core.task import Task
+from nornir.core.inventory import Host
 from typing import Any
 
-class MyCustomHook(BaseHook):
-    """Custom hook implementation."""
+class MyCustomHook(Hook):
+    hook_name = "my_custom"       # Required: defines the YAML key that activates this hook
+    run_once_per_task = False     # False = runs per host (default); True = runs once for the task
     
     def __init__(self, value: Any):
-        self.value = value
+        super().__init__(value)
     
     def task_started(self, task: Task) -> None:
-        """Called when task starts."""
+        """Called once when the task starts, before any host executes."""
         pass
     
     def task_instance_started(self, task: Task, host: Host) -> None:
-        """Called when task starts on a specific host."""
+        """Called before the task executes on each host."""
         pass
     
-    def task_instance_completed(self, task: Task, host: Host, result: Result) -> None:
-        """Called when task completes on a specific host."""
+    def task_instance_completed(self, task: Task, host: Host, result: Any) -> None:
+        """Called after the task executes on each host."""
+        pass
+    
+    def task_completed(self, task: Task, result: Any) -> None:
+        """Called once when the task completes, after all hosts."""
         pass
 ```
+
+**Key class attributes:**
+
+| Attribute | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `hook_name` | `str` | **Yes** | The YAML key that activates this hook (e.g., `"if"`, `"store_as"`). Without this, the class is never registered. |
+| `run_once_per_task` | `bool` | No (default `False`) | If `True`, hook logic runs only for the first host per task; subsequent hosts skip execution. Use for task-wide concerns (e.g., suppressing output, logging). If `False`, runs independently per host. |
+| `requires_deferred_templates` | `bool` | No (default `False`) | If `True`, signals `NornFlowVariableProcessor` to defer resolution of task argument templates until after the hook's pre-execution logic completes. See [Hook-Driven Template Resolution](./hooks_guide.md#hook-driven-template-resolution). |
+
+**Lifecycle methods** (override only what you need; the base class provides empty default implementations for all):
+
+| Method | Scope | Description |
+|--------|-------|-------------|
+| `task_started(task)` | Once per task | Called before any host executes |
+| `task_completed(task, result)` | Once per task | Called after all hosts complete |
+| `task_instance_started(task, host)` | Per host | Called before task executes on a specific host |
+| `task_instance_completed(task, host, result)` | Per host | Called after task executes on a specific host |
+| `subtask_instance_started(task, host)` | Per host | Called before a subtask executes |
+| `subtask_instance_completed(task, host, result)` | Per host | Called after a subtask completes |
+
+**Context access:**
+
+Inside any lifecycle method, `self.context` provides access to NornFlow runtime components:
+
+```python
+def task_instance_started(self, task: Task, host: Host) -> None:
+    vars_manager = self.context.get("vars_manager")
+    task_model = self.context.get("task_model")
+    tasks_catalog = self.context.get("tasks_catalog")
+    filters_catalog = self.context.get("filters_catalog")
+    nornir_manager = self.context.get("nornir_manager")
+```
+
+### Jinja2ResolvableMixin
+
+Optional mixin that adds automatic Jinja2 template resolution to a hook's configured value. Combine with `Hook` when your hook should accept both static values and `{{ ... }}` expressions from YAML.
+
+```python
+from nornflow.hooks import Hook, Jinja2ResolvableMixin
+
+class MyConditionalHook(Hook, Jinja2ResolvableMixin):
+    hook_name = "my_hook"
+    run_once_per_task = False
+    
+    def task_instance_started(self, task: Task, host: Host) -> None:
+        # Resolves Jinja2 if present, returns static value otherwise
+        condition = self.get_resolved_value(task, host=host, as_bool=True, default=False)
+        
+        if condition:
+            ...
+```
+
+**`get_resolved_value()` signature:**
+
+```python
+def get_resolved_value(
+    self,
+    task: Task,
+    host: Host | None = None,
+    as_bool: bool = False,
+    default: Any = None
+) -> Any
+```
+
+- If `self.value` is falsy → returns `default`
+- If `self.value` contains Jinja2 markers (`{{`, `{%`, `{#`) → resolves via NornFlow variable system
+- Otherwise → returns `self.value` as-is
+- If `as_bool=True` → converts result to boolean using NornFlow's truthy string set (`"true"`, `"yes"`, `"1"`, `"on"`, `"y"`, `"t"`, `"enabled"`)
+
+The mixin also automatically validates Jinja2 expression syntax during workflow preparation (when markers are detected). Override `execute_hook_validations()` to add hook-specific constraints. Always call `super().execute_hook_validations(task_model)` first to preserve mixin validation.
 
 ### Hook Registration
 
-Hooks are automatically registered when their class is defined:
+Registration is automatic: it happens at import time via `__init_subclass__` when Python loads a class that inherits from `Hook` and defines `hook_name`:
 
 ```python
 # hooks/my_hook.py
-from nornflow.hooks import BaseHook
+from nornflow.hooks import Hook
 
-class MyHook(BaseHook):
-    """Automatically registered when this file is imported."""
-    pass
+class MyHook(Hook):
+    hook_name = "my_hook"  # Registered immediately when this module is imported
 ```
 
-NornFlow discovers hooks by importing all Python files in configured hook directories.
+For NornFlow to import your hook module, place it in a directory covered by `local_hooks` in `nornflow.yaml`:
+
+```yaml
+# nornflow.yaml
+local_hooks:
+  - "hooks"
+  - "custom_extensions/hooks"
+```
+
+NornFlow recursively scans all configured directories for `.py` files and imports them during initialization. See the [Hooks Guide](./hooks_guide.md#hook-discovery-and-loading) for full details.
+
+**Hook-specific registration constraint:**
+- Hook subclasses that do not define `hook_name` as a non-empty string raise `HookRegistrationError` at class definition time
+
+**Built-in hook catalog (YAML key → class):**
+
+| YAML key | Class | Summary |
+|----------|-------|---------|
+| `if` | `IfHook` | Conditional task execution per host |
+| `store_as` | `StoreAsHook` | Store task return value or extracted fields as runtime variables |
+| `shush` | `ShushHook` | Suppress task output display |
+| `single` | `SingleHook` | Run task on one host only |
+
+See the [Hooks Guide](./hooks_guide.md#nornflows-built-in-hooks) for configuration examples.
+
+Built-in protection and non-builtin override behavior follow the [universal registration rules](#universal-registration-rules) that apply to all asset types.
 
 ## Variable System Classes
 
@@ -548,10 +677,12 @@ processors:
 ```
 
 Features:
-- Formatted task output
+- Formatted task output (with terminal redaction when `redaction.enabled` is true)
 - Progress indicators
 - Result summaries
 - Support for the `shush` hook
+
+NornFlow passes `redaction_enabled` and `sensitive_names` into this processor at runtime. If you omit it from the [`processors`](./nornflow_settings.md#processors) list without substituting a processor that applies the same masking, `nornflow run` may print sensitive task output in plain text. See [Processors and `nornflow run` task output](./nornflow_settings.md#processors-and-nornflow-run-task-output).
 
 ### NornFlowFailureStrategyProcessor
 
@@ -604,20 +735,68 @@ logger.set_execution_context(
     execution_name="my_workflow",
     execution_type="workflow",
     log_dir=".nornflow/logs",
-    log_level="INFO"
+    log_level="INFO",
+    logs_redaction_enabled=True,
 )
 ```
 
-### Sensitive Data Sanitization
+Log redaction follows `redaction.logs_enabled` in settings only; `--no-redact` does not affect logs. NornFlow passes `logs_redaction_enabled` when initializing the logger.
 
-NornFlow Logger attempts to saniteze log messages to hid sensitive data. This is a best effort endeavour, and will only work for data explicitly related to what is considered a protected keyword.  
-> Note: `PROTECTED_KEYWORDS` can be found in [constants.py](../nornflow/constants.py)
+### Output Redaction
+
+NornFlow redacts sensitive values before they reach the terminal or log files. Settings are controlled by [`redaction`](./nornflow_settings.md#redaction) in `nornflow.yaml`; the implementation lives in `nornflow.masking`:
+
 ```python
-from nornflow.logger import sanitize_log_message
+from nornflow.masking import mask_text, mask_structure, mask_for_display
 
-# Values after keywords like 'password', 'secret', 'token' are redacted
-sanitize_log_message("password=secret123")  # "password=***REDACTED***"
+# Redact key=value / key: value patterns in free-form strings
+mask_text("token=abc123")          # "token=***REDACTED***"
+mask_text("nautobot_token=abc")    # segment boundary before token
+mask_text("password: hunter2")    # "password: ***REDACTED***"
+mask_text("db-connection-string=x")  # hyphen/dot surface forms match underscore keywords
+mask_text("monkey=abc")            # unchanged; key not at a segment boundary
+
+# Redact sensitive keys in nested dicts / lists
+mask_structure({"nautobot_token": "abc", "host": "router1"})
+# {"nautobot_token": "***REDACTED***", "host": "router1"}
+
+# Dispatch automatically: str → mask_text, dict/list → mask_structure
+mask_for_display({"api_key": "s3cr3t"})
+# {"api_key": "***REDACTED***"}
 ```
+
+The placeholder is always `***REDACTED***`. Built-in [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) and user `redaction.sensitive_names` share one segment-aware key rule on structured data (`mask_structure`). On unstructured strings (`mask_text`), redaction applies only to `key=value` / `key: value` patterns; each keyword is matched in underscore, hyphen, and dot surface forms (e.g. `api_key`, `api-key`, `api.key`), and only at key boundaries (start of the key or after `_`, `-`, `.`, or a non-alphanumeric character, so `token` matches `nautobot_token=` but not `monkey=`). Large strings use the same surface forms in a substring pre-check before regex. See [Matching rules](./nornflow_settings.md#matching-rules) in the settings guide.
+
+Pass `sensitive_names=` to helpers when masking outside NornFlow runtime; at runtime use `NornFlow.redaction_sensitive_names` (wired into show, overview, processors, and logs).
+
+**Runtime surfaces during `nornflow run`:**
+
+| Surface | Depends on user `processors`? |
+|---------|-------------------------------|
+| Task stdout / formatted result output | **Yes** (default: `DefaultNornFlowProcessor`) |
+| Workflow overview vars | No |
+| Failure-strategy error panels | No (system `NornFlowFailureStrategyProcessor`) |
+| Log files | No (logger + `redaction.logs_enabled`) |
+
+See [Processors and `nornflow run` task output](./nornflow_settings.md#processors-and-nornflow-run-task-output) for configuration implications.
+
+All redaction helpers accept a `reveal=True` keyword argument to bypass redaction programmatically:
+
+```python
+mask_text("password=hunter2", reveal=True)  # "password=hunter2"
+```
+
+At runtime, `NornFlow.redaction_enabled` governs terminal surfaces; `NornFlow.logs_redaction_enabled` governs log files and stderr log output. The former respects `--no-redact`; the latter follows `redaction.logs_enabled` in settings only.
+
+| Control | Scope |
+|---------|-------|
+| `--no-redact` | Terminal only, for that CLI invocation |
+| `redaction.enabled` | Terminal surfaces |
+| `redaction.logs_enabled` | Log files and stderr log handler (`logs_enabled` inherits `enabled` when omitted) |
+
+`nornflow show` and `nornflow run` emit a yellow warning when redaction is partially or fully disabled (full, terminal-only, or logs-only; see [CLI warnings](./nornflow_settings.md#cli-warnings) in the settings guide).
+
+To disable all redaction via settings, set `redaction.enabled: false`. To disable logs only, set `redaction.logs_enabled: false`. See [NornFlow Settings: redaction](./nornflow_settings.md#redaction).
 
 <div align="center">
   
