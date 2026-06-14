@@ -74,7 +74,7 @@ class MicrosecondFormatter(logging.Formatter):
         Args:
             fmt: Log format string.
             datefmt: Optional strftime format for timestamps.
-            redaction_enabled: When True, apply mask_text to log message content.
+            redaction_enabled: When True, apply mask_text to the rendered log line.
             sensitive_names: User-declared identifiers for text redaction.
         """
         super().__init__(fmt, datefmt)
@@ -89,16 +89,10 @@ class MicrosecondFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Format the log record, redacting sensitive content when enabled."""
-        reveal = not self.redaction_enabled
-        record.msg = mask_text(str(record.msg), reveal=reveal, sensitive_names=self.sensitive_names)
-        if record.args:
-            record.args = tuple(
-                mask_text(arg, reveal=reveal, sensitive_names=self.sensitive_names)
-                if isinstance(arg, str)
-                else arg
-                for arg in record.args
-            )
-        return super().format(record)
+        formatted = super().format(record)
+        if self.redaction_enabled:
+            formatted = mask_text(formatted, sensitive_names=self.sensitive_names)
+        return formatted
 
 
 class NornFlowLogger:

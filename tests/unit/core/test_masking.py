@@ -211,6 +211,37 @@ class TestMicrosecondFormatter:
         assert "lab-secret" not in result
         assert REDACTED in result
 
+    def test_format_masks_interpolated_args(self):
+        """Redact secrets passed as logging format args after interpolation."""
+        formatter = MicrosecondFormatter("%(message)s")
+        record = logging.LogRecord(
+            name="nornflow",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="password=%s",
+            args=("secret123",),
+            exc_info=None,
+        )
+        result = formatter.format(record)
+        assert "secret123" not in result
+        assert REDACTED in result
+
+    def test_format_does_not_mutate_log_record(self):
+        formatter = MicrosecondFormatter("%(message)s")
+        record = logging.LogRecord(
+            name="nornflow",
+            level=logging.ERROR,
+            pathname="",
+            lineno=0,
+            msg="password=%s",
+            args=("secret123",),
+            exc_info=None,
+        )
+        formatter.format(record)
+        assert record.msg == "password=%s"
+        assert record.args == ("secret123",)
+
 
 class TestMaskStructure:
     """Tests for mask_structure."""

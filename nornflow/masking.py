@@ -126,30 +126,32 @@ def is_sensitive_key(key: str, sensitive_names: frozenset[str] | None = None) ->
 
 
 def mask_text(
-    text: str,
+    text: Any,
     *,
     reveal: bool = False,
     sensitive_names: frozenset[str] | None = None,
-) -> str:
+) -> Any:
     """Redact sensitive key=value / key: value patterns from an unstructured string.
 
     Regex-based best-effort pass suitable for log lines, task output, and error
     messages. Matches built-in 'PROTECTED_KEYWORDS' and user 'sensitive_names'.
     Keywords must start at a key boundary (not inside a longer alphanumeric run).
 
+    Non-string inputs are returned unchanged (no-op passthrough).
+
     Strings at or above LARGE_TEXT_THRESHOLD skip regex unless a keyword surface
     form (underscore, hyphen, or dot) appears as a substring; the pre-check uses
     the same variants as the compiled pattern.
 
     Args:
-        text: The string to sanitize.
+        text: The string to sanitize (non-str values are returned unchanged).
         reveal: If True, return the string unchanged (zero processing).
         sensitive_names: Optional user-declared identifiers to include in the regex.
 
     Returns:
-        String with sensitive values replaced by REDACTED, or the original string
-        if reveal is True, input is not a str, or a large string contains no keyword
-        variants.
+        String with sensitive values replaced by REDACTED, the original string
+        if reveal is True or a large string contains no keyword variants, or the
+        input unchanged when it is not a str.
     """
     if reveal or not isinstance(text, str) or not text:
         return text
