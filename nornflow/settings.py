@@ -2,8 +2,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from typing_extensions import Self
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, PrivateAttr
 from pydantic_serdes.utils import load_file_to_dict
 from pydantic_settings import (
@@ -88,7 +86,7 @@ class RedactionSettings(BaseModel):
         return [name.lower().replace("-", "_").replace(".", "_") for name in v]
 
     @model_validator(mode="after")
-    def inherit_logs_enabled(self) -> Self:
+    def inherit_logs_enabled(self) -> "RedactionSettings":
         """When logs_enabled is omitted, inherit enabled."""
         if self.logs_enabled is None:
             self.logs_enabled = self.enabled
