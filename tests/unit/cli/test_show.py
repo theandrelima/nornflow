@@ -630,7 +630,7 @@ class TestNoRedact:
     @patch("nornflow.cli.show.NornFlowBuilder")
     @patch("nornflow.cli.show.show_nornflow_settings")
     def test_show_no_redact_passes_kwarg_to_builder(self, mock_show_settings, mock_builder):
-        """--no-redact must disable redaction on the NornFlow instance (terminal and logs)."""
+        """--no-redact must disable terminal redaction only; logs follow settings."""
         mock_nornflow = MagicMock()
         mock_nornflow.redaction_enabled = False
         mock_nornflow.logs_redaction_enabled = True

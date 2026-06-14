@@ -2,6 +2,7 @@ import os
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from nornflow.constants import NORNFLOW_SETTINGS_MANDATORY, NORNFLOW_SETTINGS_OPTIONAL
 from nornflow.exceptions import SettingsError
@@ -352,11 +353,11 @@ class TestRedactionSettings:
         assert settings.redaction_logs_enabled is False
 
     def test_redaction_unknown_key_raises(self):
-        """Unknown keys under redaction must raise SettingsError."""
+        """Unknown keys under redaction are rejected by RedactionSettings (extra='forbid')."""
         settings_dict = make_valid_settings_dict()
         settings_dict["redaction"] = {"enabled": True, "extra": True}
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError, match="extra"):
             NornFlowSettings(**settings_dict)
 
     def test_redaction_logs_enabled_non_bool_raises(self):
