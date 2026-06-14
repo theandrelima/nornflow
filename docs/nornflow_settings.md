@@ -304,7 +304,7 @@ This means even if you set `NORNFLOW_SETTINGS_failure_strategy="fail-fast"`, pas
 
 ### `redaction`
 
-Controls where NornFlow redacts sensitive values before they reach an operator. Redaction is **best-effort**: it matches key names and `key=value` / `key: value` patterns in unstructured text. It is not a secrets manager. Users should always strive to make their workflows (and underlying task logic) hide/not print clear-text sensitive values. **This seetings aids in that purpose only.** 
+Controls where NornFlow redacts sensitive values before they reach an operator. Redaction is **best-effort**: it matches key names and `key=value` / `key: value` patterns in unstructured text. It is not a secrets manager. Users should always strive to make their workflows (and underlying task logic) hide/not print clear-text sensitive values. **This setting aids in that purpose only.** 
 
 - **Type**: `dict` — `enabled`, `logs_enabled`, and `sensitive_names` are accepted; unknown keys raise a settings error.
 - **Default**: `{"enabled": true, "logs_enabled": true, "sensitive_names": []}` when the section is omitted (***NOTE***:*`logs_enabled` inherits `enabled`* if omitted).
@@ -372,7 +372,28 @@ redaction:
     - vendor_pin
 ```
 
-`sensitive_names` entries are merged with [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) and use the **same segment-aware rule**: a listed name matches that full key and any key containing it as an `_`-delimited segment (e.g. `pin` matches `vault_pin`; `token` matches `nautobot_token`). Listing a very short name may redact more keys than you intend — prefer full identifiers such as `vendor_pin` over `pin`.
+`sensitive_names` entries are merged with [`PROTECTED_KEYWORDS`](../nornflow/constants.py#L129) and use the **same segment-aware rule** on structured data: normalize the key (lowercase; `-` and `.` → `_`), then match if the full normalized name or any `_`-delimited segment equals a keyword (e.g. `pin` matches `vault_pin`; `token` matches `nautobot_token`). Listing a very short name may redact more keys than you intend — prefer full identifiers such as `vendor_pin` over `pin`.
+
+#### Matching rules
+
+Redaction uses two complementary paths (see [`nornflow.masking`](./api_reference.md#output-redaction)):
+
+| Surface | Helper | What matches |
+|---------|--------|--------------|
+| Structured keys (show tables, overview vars, nested dicts) | `mask_structure` | Segment-aware key names after normalization (above) |
+| Unstructured text (task stdout, log lines, errors) | `mask_text` | `key=value` and `key: value` patterns only — not bare words in prose |
+
+For unstructured text, each built-in keyword and `sensitive_names` entry is matched in **three surface forms**: underscores, hyphens, and dots. For example, `db_connection_string` also matches `db-connection-string=...` and `db.connection.string: ...` in log or task output. Structured key matching already normalizes `-` and `.` to `_`; `mask_text` applies the equivalent at the text-pattern layer so both paths stay aligned.
+
+**Examples (`mask_text`):**
+
+```
+token=abc123              → token=***REDACTED***
+api-key=abc123            → api-key=***REDACTED***     (matches api_key)
+db-connection-string=x    → db-connection-string=***REDACTED***
+```
+
+**Large strings (`mask_text` performance):** Strings at or above 8192 bytes (`LARGE_TEXT_THRESHOLD`) skip the regex pass unless a keyword surface form appears anywhere in the text. The pre-check uses the **same underscore, hyphen, and dot variants** as the regex — so a secret at the end of a huge blob such as `db-connection-string=...` is still detected and redacted. Blobs with no keyword variants are returned unchanged without running regex.
 
 #### Environment variables
 
