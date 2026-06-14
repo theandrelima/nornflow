@@ -31,8 +31,17 @@ class TestIsSensitiveKey:
         assert is_sensitive_key("api_key") is True
 
     def test_compound_keyword_exact_match(self):
-        """Compound keyword 'db_connection_string' must match via exact lookup."""
+        """db_connection_string has no segment atom; listed as an exact-only compound."""
         assert is_sensitive_key("db_connection_string") is True
+
+    def test_segment_atoms_cover_former_compounds(self):
+        """Segment atoms replace redundant compound PROTECTED_KEYWORDS entries."""
+        assert is_sensitive_key("config_token") is True
+        assert is_sensitive_key("client_secret") is True
+        assert is_sensitive_key("encryption_key") is True
+        assert is_sensitive_key("db_pass") is True
+        assert is_sensitive_key("verification_code") is True
+        assert is_sensitive_key("aws_secret_access_key") is True
 
     def test_no_false_positive_monkey(self):
         """'monkey' must not match keyword 'key' — segment 'monkey' != 'key'."""

@@ -125,90 +125,52 @@ REDACTED = "***REDACTED***"
 # substring pre-check first to avoid scanning huge blobs with no secrets.
 LARGE_TEXT_THRESHOLD = 8192
 
-# Keywords in variable names that should be masked in display
+# Segment atoms and exact-only keys for output redaction (see nornflow.masking).
+#
+# Segment-aware matching: normalize the key (lowercase; '-' and '.' → '_'), then
+# redact when the full name or any '_'-delimited segment equals an entry below
+# (e.g. token → nautobot_token; key → api_key; secret → client_secret).
+#
+# Prefer short segment atoms over compound synonyms. List a compound only when it
+# cannot be inferred from segments (e.g. apikey, db_connection_string).
 PROTECTED_KEYWORDS = [
-    # Authentication
+    # Core secret-bearing segments
     "password",
     "passwd",
     "pwd",
+    "pass",
     "secret",
     "token",
-    "apikey",
-    "api_key",
-    "access_token",
-    "auth_token",
+    "key",
+    "credentials",
+    "code",
+    # Auth / session
     "authorization",
+    "auth",
     "jwt",
     "bearer",
+    "login",
+    "session",
     "sessionid",
-    "session_id",
-    # Cloud credentials
-    "aws_access_key_id",
-    "aws_secret_access_key",
-    "azure_client_secret",
-    "gcp_credentials",
-    "gcp_private_key",
-    "gcp_client_secret",
-    "gcp_token",
-    # Database
-    "db_password",
-    "db_pass",
-    "db_user",
-    "db_username",
-    "db_token",
-    "db_connection_string",
-    # SSH / TLS / Certificates
-    "ssh_key",
-    "private_key",
-    "tls_key",
+    # MFA
+    "otp",
+    "totp",
+    "hotp",
+    "2fa",
+    "mfa",
+    # TLS / crypto material
     "certificate",
     "cert",
     "pem",
     "pfx",
     "keystore",
-    # Environment variables
-    "env_secret",
-    "env_token",
-    "env_password",
-    "env_key",
-    # 2FA / MFA / OTP
-    "2fa_code",
-    "mfa_code",
-    "otp",
-    "one_time_password",
-    "verification_code",
-    "authenticator_code",
-    "totp",
-    "hotp",
-    "backup_code",
-    "recovery_code",
-    "sms_code",
-    "email_code",
-    "push_token",
-    "push_auth",
-    "security_code",
-    # Custom patterns
-    "client_secret",
-    "consumer_secret",
-    "app_secret",
-    "webhook_secret",
-    "signing_key",
-    "encryption_key",
-    "master_key",
-    "recovery_key",
-    "reset_token",
-    "magic_link",
-    # Config file keys
-    "config_secret",
-    "config_token",
-    "config_password",
-    "config_key",
-    # Generic
-    "key",
-    "secret",
-    "credentials",
+    # Identity / federation
     "identity",
-    "login",
+    # Non-segment spellings and exact-only compounds
+    "apikey",
+    "db_connection_string",
+    "magic_link",
+    "push_auth",
 ]
 
 # Catalog namespaces and bare-name resolution tiers (see nornflow.catalogs).
