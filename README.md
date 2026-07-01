@@ -11,9 +11,6 @@
 [![Linter: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Installer: uv](https://img.shields.io/badge/installer-uv-blue)](https://github.com/astral-sh/uv)
 
-
-> **NornFlow is currently in pre-release.**
-
 ## What is NornFlow?
 NornFlow is a lightweight workflow orchestration framework built on top of [Nornir](https://github.com/nornir-automation/nornir), bringing structure and predictability to network automation projects.
 
