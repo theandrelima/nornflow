@@ -33,7 +33,7 @@ def main(
 # Register subcommands
 app.command()(init.init)
 app.command()(run.run)
-app.command()(show.show)
+app.command(context_settings={"help_option_names": ["--help"]})(show.show)
 app.command()(validate.validate)
 
 if __name__ == "__main__":
