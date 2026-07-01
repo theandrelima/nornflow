@@ -27,25 +27,24 @@ from nornflow.masking import mask_structure
 app = typer.Typer()
 
 
-@app.command()
+@app.command(context_settings={"help_option_names": ["--help"]})
 def show(  # noqa: PLR0912
     ctx: typer.Context,
-    catalog: bool = typer.Option(
-        False,
-        "--catalog",
-        "-c",
-        help="Display the task, workflow, and filter catalogs (legacy option)",
-        hidden=True,
-    ),
     catalogs: bool = typer.Option(
-        False, "--catalogs", help="Display all catalogs: tasks, filters, workflows, and blueprints"
+        False,
+        "--catalogs",
+        "-c",
+        help=(
+            "Display all catalogs: tasks, filters, workflows, blueprints, "
+            "j2-filters, and hooks"
+        ),
     ),
     tasks: bool = typer.Option(False, "--tasks", "-t", help="Display the task catalog"),
     filters: bool = typer.Option(False, "--filters", "-f", help="Display the filter catalog"),
     workflows: bool = typer.Option(False, "--workflows", "-w", help="Display the workflow catalog"),
     blueprints: bool = typer.Option(False, "--blueprints", "-b", help="Display the blueprint catalog"),
     j2_filters: bool = typer.Option(False, "--j2-filters", "-j", help="Display the Jinja2 filters catalog"),
-    hooks: bool = typer.Option(False, "--hooks", help="Display the hooks catalog"),
+    hooks: bool = typer.Option(False, "--hooks", "-h", help="Display the hooks catalog"),
     settings: bool = typer.Option(False, "--settings", "-s", help="Display current NornFlow Settings"),
     nornir_configs: bool = typer.Option(
         False, "--nornir-configs", "-n", help="Display current Nornir Configs"
@@ -65,11 +64,9 @@ def show(  # noqa: PLR0912
         print_nox()
         return
 
-    show_all_catalogs = catalog or catalogs
-
     if not any(
         [
-            show_all_catalogs,
+            catalogs,
             tasks,
             filters,
             workflows,
@@ -117,7 +114,7 @@ def show(  # noqa: PLR0912
             show_nornflow_settings(nornflow, redaction_enabled=redaction_enabled)
             show_nornir_configs(nornflow, redaction_enabled=redaction_enabled)
         else:
-            if show_all_catalogs:
+            if catalogs:
                 show_tasks_catalog(nornflow)
                 show_filters_catalog(nornflow)
                 show_workflows_catalog(nornflow)
