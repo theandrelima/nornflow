@@ -4,7 +4,9 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 import typer
 import yaml
+from typer.testing import CliRunner
 
+from nornflow.cli.entrypoint import app
 from nornflow.cli.show import (
     get_catalog_table_headers,
     render_blueprints_catalog_table_data,
@@ -56,7 +58,7 @@ class TestShowCommand:
         mock_ctx = MagicMock()
         mock_ctx.obj = {}
 
-        show(mock_ctx, catalog=False, catalogs=False, tasks=False, filters=False,
+        show(mock_ctx, catalogs=False, tasks=False, filters=False,
              workflows=False, settings=False, nornir_configs=False, all=True, no_redact=False)
 
         mock_show_tasks.assert_called_once_with(mock_nornflow)
@@ -72,11 +74,11 @@ class TestShowCommand:
     @patch("nornflow.cli.show.show_workflows_catalog")
     @patch("nornflow.cli.show.show_nornflow_settings")
     @patch("nornflow.cli.show.show_nornir_configs")
-    def test_show_catalog_flag(
+    def test_show_catalogs_flag(
         self, mock_show_nornir_configs, mock_show_settings, mock_show_workflows,
         mock_show_filters, mock_show_tasks, mock_builder
     ):
-        """Test 'show' with --catalog flag displays only catalog."""
+        """Test 'show' with --catalogs flag displays all catalogs."""
         mock_nornflow = MagicMock()
         mock_builder_instance = MagicMock()
         mock_builder.return_value = mock_builder_instance
@@ -84,7 +86,7 @@ class TestShowCommand:
         mock_ctx = MagicMock()
         mock_ctx.obj = {}
 
-        show(mock_ctx, catalog=True, catalogs=False, tasks=False, filters=False,
+        show(mock_ctx, catalogs=True, tasks=False, filters=False,
              workflows=False, settings=False, nornir_configs=False, all=False)
 
         mock_show_tasks.assert_called_once_with(mock_nornflow)
@@ -113,7 +115,7 @@ class TestShowCommand:
         mock_ctx = MagicMock()
         mock_ctx.obj = {}
 
-        show(mock_ctx, catalog=False, catalogs=False, tasks=False, filters=False,
+        show(mock_ctx, catalogs=False, tasks=False, filters=False,
              workflows=False, settings=True, nornir_configs=False, all=False, no_redact=False)
 
         mock_show_tasks.assert_not_called()
@@ -142,7 +144,7 @@ class TestShowCommand:
         mock_ctx = MagicMock()
         mock_ctx.obj = {}
 
-        show(mock_ctx, catalog=False, catalogs=False, tasks=False, filters=False,
+        show(mock_ctx, catalogs=False, tasks=False, filters=False,
              workflows=False, settings=False, nornir_configs=True, all=False, no_redact=False)
 
         mock_show_tasks.assert_not_called()
@@ -169,7 +171,7 @@ class TestShowCommand:
         mock_ctx = MagicMock()
         mock_ctx.obj = {"settings": "custom_settings.yaml"}
 
-        show(mock_ctx, catalog=False, catalogs=False, tasks=False, filters=False,
+        show(mock_ctx, catalogs=False, tasks=False, filters=False,
              workflows=False, settings=False, nornir_configs=False, all=True)
 
         mock_builder_instance.with_settings_path.assert_called_once_with("custom_settings.yaml")
@@ -186,7 +188,7 @@ class TestShowCommand:
         mock_ctx.obj = {}
     
         with pytest.raises(typer.BadParameter):
-            show(mock_ctx, catalog=False, catalogs=False, tasks=False, filters=False,
+            show(mock_ctx, catalogs=False, tasks=False, filters=False,
                  workflows=False, blueprints=False, j2_filters=False, hooks=False, settings=False, nornir_configs=False, all=False)
 
     @patch("nornflow.cli.show.NornFlowBuilder")
@@ -206,7 +208,7 @@ class TestShowCommand:
         with patch("nornflow.cli.show.typer") as mock_typer:
             mock_typer.Exit = MockExit
             with pytest.raises(MockExit) as exc_info:
-                show(mock_ctx, catalog=False, catalogs=False, tasks=False, filters=False,
+                show(mock_ctx, catalogs=False, tasks=False, filters=False,
                      workflows=False, settings=True, nornir_configs=False, all=False)
 
             assert exc_info.value.code == 2
@@ -228,7 +230,7 @@ class TestShowCommand:
         with patch("nornflow.cli.show.typer") as mock_typer:
             mock_typer.Exit = MockExit
             with pytest.raises(MockExit) as exc_info:
-                show(mock_ctx, catalog=False, catalogs=False, tasks=False, filters=False,
+                show(mock_ctx, catalogs=False, tasks=False, filters=False,
                      workflows=False, settings=True, nornir_configs=False, all=False)
 
             assert exc_info.value.code == 2
@@ -250,7 +252,7 @@ class TestShowCommand:
         with patch("nornflow.cli.show.typer") as mock_typer:
             mock_typer.Exit = MockExit
             with pytest.raises(MockExit) as exc_info:
-                show(mock_ctx, catalog=False, catalogs=False, tasks=False, filters=False,
+                show(mock_ctx, catalogs=False, tasks=False, filters=False,
                      workflows=False, settings=True, nornir_configs=False, all=False)
 
             assert exc_info.value.code == 2
@@ -642,7 +644,6 @@ class TestNoRedact:
 
         show(
             mock_ctx,
-            catalog=False,
             catalogs=False,
             tasks=False,
             filters=False,
@@ -655,3 +656,54 @@ class TestNoRedact:
 
         mock_builder_instance.with_kwargs.assert_called_once_with(no_redact=True)
         mock_show_settings.assert_called_once_with(mock_nornflow, redaction_enabled=False)
+
+
+class TestShowCliShortOptions:
+    """CLI short-option coverage for nornflow show."""
+
+    @pytest.fixture
+    def runner(self) -> CliRunner:
+        return CliRunner()
+
+    def test_show_help_lists_catalogs_and_hooks_short_options(self, runner: CliRunner) -> None:
+        """--help documents -c for --catalogs and -h for --hooks."""
+        result = runner.invoke(app, ["show", "--help"])
+        assert result.exit_code == 0
+        assert "--catalogs" in result.output and "-c" in result.output
+        assert "--hooks" in result.output and "-h" in result.output
+
+    @patch("nornflow.cli.show.show_hooks_catalog")
+    @patch("nornflow.cli.show.NornFlowBuilder")
+    def test_show_hooks_short_option(
+        self, mock_builder: MagicMock, mock_hooks: MagicMock, runner: CliRunner
+    ) -> None:
+        """-h selects the hooks catalog instead of showing command help."""
+        mock_nornflow = MagicMock()
+        mock_nornflow.redaction_enabled = True
+        mock_nornflow.logs_redaction_enabled = True
+        mock_builder_instance = MagicMock()
+        mock_builder.return_value = mock_builder_instance
+        mock_builder_instance.build.return_value = mock_nornflow
+
+        result = runner.invoke(app, ["show", "-h"])
+
+        assert result.exit_code == 0
+        mock_hooks.assert_called_once_with(mock_nornflow)
+
+    @patch("nornflow.cli.show.show_tasks_catalog")
+    @patch("nornflow.cli.show.NornFlowBuilder")
+    def test_show_catalogs_short_option(
+        self, mock_builder: MagicMock, mock_tasks: MagicMock, runner: CliRunner
+    ) -> None:
+        """-c selects --catalogs."""
+        mock_nornflow = MagicMock()
+        mock_nornflow.redaction_enabled = True
+        mock_nornflow.logs_redaction_enabled = True
+        mock_builder_instance = MagicMock()
+        mock_builder.return_value = mock_builder_instance
+        mock_builder_instance.build.return_value = mock_nornflow
+
+        result = runner.invoke(app, ["show", "-c"])
+
+        assert result.exit_code == 0
+        mock_tasks.assert_called_once_with(mock_nornflow)
