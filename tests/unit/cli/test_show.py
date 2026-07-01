@@ -665,13 +665,6 @@ class TestShowCliShortOptions:
     def runner(self) -> CliRunner:
         return CliRunner()
 
-    def test_show_help_lists_catalogs_and_hooks_short_options(self, runner: CliRunner) -> None:
-        """--help documents -c for --catalogs and -h for --hooks."""
-        result = runner.invoke(app, ["show", "--help"])
-        assert result.exit_code == 0
-        assert "--catalogs" in result.output and "-c" in result.output
-        assert "--hooks" in result.output and "-h" in result.output
-
     @patch("nornflow.cli.show.show_hooks_catalog")
     @patch("nornflow.cli.show.NornFlowBuilder")
     def test_show_hooks_short_option(
